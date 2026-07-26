@@ -40,6 +40,8 @@ export default function Layout({ children, fullBleed }) {
   const [pendingSuggestions, setPendingSuggestions] = useState(0);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [openProfileId, setOpenProfileId] = useState(null);
+  const [draggedNavId, setDraggedNavId] = useState(null);
+  const [navOrderOverride, setNavOrderOverride] = useState(null);
 
   useEffect(() => {
     function handler(e) { setOpenProfileId(e.detail); }
@@ -111,6 +113,43 @@ export default function Layout({ children, fullBleed }) {
     return () => { mounted = false; clearInterval(interval); };
   }, [router.asPath]);
 
+  useEffect(() => {
+    if (profile?.sidebar_prefs?.order && !navOrderOverride) {
+      setNavOrderOverride(profile.sidebar_prefs.order);
+    }
+  }, [profile]);
+
+  function sortedNav(items) {
+    const order = navOrderOverride;
+    if (!order || !order.length) return items;
+    const byId = new Map(items.map((it) => [it.id, it]));
+    const ordered = order.map((id) => byId.get(id)).filter(Boolean);
+    const remaining = items.filter((it) => !order.includes(it.id));
+    return [...ordered, ...remaining];
+  }
+
+  async function persistNavOrder(newOrder) {
+    setNavOrderOverride(newOrder);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const sidebar_prefs = { order: newOrder };
+    patchCachedProfile({ sidebar_prefs });
+    await supabase.from("profiles").update({ sidebar_prefs }).eq("id", session.user.id);
+  }
+
+  function handleNavDrop(targetId, visibleItems) {
+    if (!draggedNavId || draggedNavId === targetId) { setDraggedNavId(null); return; }
+    const currentIds = visibleItems.map((it) => it.id);
+    const fromIdx = currentIds.indexOf(draggedNavId);
+    const toIdx = currentIds.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) { setDraggedNavId(null); return; }
+    const reordered = [...currentIds];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedNavId);
+    setDraggedNavId(null);
+    persistNavOrder(reordered);
+  }
+
   async function handleLogout() {
     cachedProfile = null;
     cachedNavItems = null;
@@ -181,31 +220,40 @@ export default function Layout({ children, fullBleed }) {
           {quoteOfTheDay().author && <p className="text-[10px] text-[#5A5F72] mt-0.5">— {quoteOfTheDay().author}</p>}
         </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-1">
-          {navItems.filter((n) => !n.requires_manager || profile?.role === "manager").map((item) => {
-            const route = item.is_builtin ? item.route : `/folder/${item.id}`;
-            const badgeCount = item.key === "community" ? unreadCommunity
-              : item.key === "messages" ? unreadMessages
-              : item.key === "members" ? pendingFriendRequests
-              : item.key === "admin" ? pendingApprovals
-              : item.key === "admin-suggestions" ? pendingSuggestions
-              : 0;
-            return (
-              <button
-                key={item.id}
-                onClick={() => router.push(route)}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full ${
-                  router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
-                }`}
-              >
-                <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
-                {badgeCount > 0 && (
-                  <span className="badge-count">
-                    {badgeCount > 9 ? "9+" : badgeCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {(() => {
+            const visibleItems = sortedNav(navItems.filter((n) => !n.requires_manager || profile?.role === "manager"));
+            return visibleItems.map((item) => {
+              const route = item.is_builtin ? item.route : `/folder/${item.id}`;
+              const badgeCount = item.key === "community" ? unreadCommunity
+                : item.key === "messages" ? unreadMessages
+                : item.key === "members" ? pendingFriendRequests
+                : item.key === "admin" ? pendingApprovals
+                : item.key === "admin-suggestions" ? pendingSuggestions
+                : 0;
+              return (
+                <button
+                  key={item.id}
+                  draggable
+                  onDragStart={() => setDraggedNavId(item.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleNavDrop(item.id, visibleItems)}
+                  onClick={() => router.push(route)}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
+                    draggedNavId === item.id ? "opacity-40" : ""
+                  } ${
+                    router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                  }`}
+                >
+                  <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
+                  {badgeCount > 0 && (
+                    <span className="badge-count">
+                      {badgeCount > 9 ? "9+" : badgeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            });
+          })()}
         </div>
         <button onClick={() => router.push("/profile")} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surfaceRaised text-left mb-1">
           <Avatar name={profile?.full_name || "?"} src={profile?.avatar_url} size={30} />
