@@ -9,6 +9,7 @@ const NAV = [
   { id: "/roleplay", label: "Rollenspiel", icon: "chat" },
   { id: "/knowledge", label: "Wissensdatenbank", icon: "library" },
   { id: "/manager", label: "Team (Manager)", icon: "users" },
+  { id: "/admin", label: "Nutzerverwaltung", icon: "lock" },
 ];
 
 export default function Layout({ children }) {
@@ -56,7 +57,7 @@ export default function Layout({ children }) {
           HB Sales <span className="text-amber">Academy</span>
         </div>
         <div className="text-[11px] text-textMuted px-2.5 pb-5 uppercase tracking-wide">Vertriebspsychologie</div>
-        {NAV.filter((n) => n.id !== "/manager" || profile?.role === "manager").map((item) => (
+        {NAV.filter((n) => (n.id !== "/manager" && n.id !== "/admin") || profile?.role === "manager").map((item) => (
           <button
             key={item.id}
             onClick={() => router.push(item.id)}

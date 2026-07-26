@@ -33,22 +33,31 @@ App läuft auf `http://localhost:3000`. Registrieren, loslegen.
 ### 4. Deployment (Vercel, kostenlos)
 1. Projekt zu GitHub pushen.
 2. Auf [vercel.com](https://vercel.com) importieren.
-3. Unter **Environment Variables** die drei Werte aus `.env.example` eintragen.
+3. Unter **Environment Variables** die vier Werte aus `.env.example` eintragen (inkl. `SUPABASE_SERVICE_ROLE_KEY`, nötig für die Nutzerverwaltung).
 4. Deploy. Fertig — die App läuft dauerhaft online, Teammitglieder können sich von überall einloggen.
 
-## Manager-Rolle einrichten
+## Erste Manager-Rolle einrichten
 
-Es gibt aktuell keine UI dafür (bewusst einfach gehalten) — im Supabase SQL-Editor:
+Die Nutzerverwaltung (`/admin`, siehe unten) ist nur für Konten mit der Rolle `manager` sichtbar. Da ganz am Anfang noch niemand Manager ist, muss die allererste Person einmalig per SQL befördert werden — danach läuft alles Weitere über die UI.
 
 ```sql
--- Jemanden zum Manager machen
-update profiles set role = 'manager' where id = '<uuid-des-managers>';
-
--- Team-Mitglieder zuordnen
-update profiles set manager_id = '<uuid-des-managers>' where id = '<uuid-des-mitarbeiters>';
+update profiles set role = 'manager' where id = '<deine-uuid>';
 ```
 
-Die User-IDs findest du unter **Authentication → Users** in Supabase. Der Manager sieht danach unter "Team (Manager)" den Fortschritt aller zugeordneten Mitarbeiter — Row-Level-Security sorgt dafür, dass er wirklich nur sein eigenes Team sieht.
+Die eigene User-ID findest du unter **Authentication → Users** in Supabase.
+
+## Nutzerverwaltung (`/admin`)
+
+Für jedes Konto mit der Rolle `manager` erscheint in der Sidebar der Punkt "Nutzerverwaltung". Dort lässt sich, ohne SQL:
+
+- eine Liste **aller** registrierten Nutzer einsehen (Name, E-Mail, Rolle, Team-Zugehörigkeit)
+- jemandem die **Manager-Rolle geben oder entziehen**
+- Nutzer dem **eigenen Team hinzufügen oder daraus entfernen** (steuert, wer in "Team (Manager)" auftaucht)
+- ein Konto **vollständig löschen** (inkl. aller Quiz-/Prüfungs-/Rollenspiel-Daten, mit Sicherheitsabfrage)
+
+Diese Funktionen laufen serverseitig über den `SUPABASE_SERVICE_ROLE_KEY` und sind auf Konten mit `role = 'manager'` beschränkt — ein normaler Nutzer kann `/admin` nicht aufrufen. Ein Manager kann sich selbst nicht versehentlich die Rolle entziehen oder das eigene Konto löschen (dafür bräuchte es einen zweiten Manager oder direkten SQL-Zugriff).
+
+Der Fortschritt der zugeordneten Team-Mitglieder bleibt weiterhin unter "Team (Manager)" sichtbar — Row-Level-Security sorgt dort dafür, dass jeder Manager nur sein eigenes Team sieht.
 
 ## Struktur
 
