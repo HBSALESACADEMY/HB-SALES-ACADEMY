@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import Icon from "./Icon";
 import Avatar from "./Avatar";
+import { quoteOfTheDay } from "../lib/quotes";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -22,6 +23,10 @@ const FALLBACK_NAV = [
 let cachedProfile = null;
 let cachedNavItems = null;
 
+export function patchCachedProfile(patch) {
+  cachedProfile = cachedProfile ? { ...cachedProfile, ...patch } : patch;
+}
+
 export default function Layout({ children, fullBleed }) {
   const router = useRouter();
   const [profile, setProfile] = useState(cachedProfile);
@@ -32,6 +37,7 @@ export default function Layout({ children, fullBleed }) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [pendingSuggestions, setPendingSuggestions] = useState(0);
+  const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -79,6 +85,10 @@ export default function Layout({ children, fullBleed }) {
         supabase.from("community_comments").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", session.user.id),
       ]);
       if (mounted) setUnreadCommunity((postCount || 0) + (commentCount || 0));
+
+      const { count: friendReqCount } = await supabase.from("friendships")
+        .select("id", { count: "exact", head: true }).eq("addressee_id", session.user.id).eq("status", "pending");
+      if (mounted) setPendingFriendRequests(friendReqCount || 0);
 
       if (me?.role === "manager") {
         const [{ count: approvalCount }, { count: suggestionCount }] = await Promise.all([
@@ -158,12 +168,16 @@ export default function Layout({ children, fullBleed }) {
             <Icon name="x" size={16} />
           </button>
         </div>
-        <div className="text-[11px] text-textMuted px-2.5 pb-4 uppercase tracking-wide">Vertriebspsychologie</div>
+        <div className="px-2.5 pb-4">
+          <p className="text-[11.5px] italic text-textMuted leading-snug">„{quoteOfTheDay().text}"</p>
+          {quoteOfTheDay().author && <p className="text-[10px] text-[#5A5F72] mt-0.5">— {quoteOfTheDay().author}</p>}
+        </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-1">
           {navItems.filter((n) => !n.requires_manager || profile?.role === "manager").map((item) => {
             const route = item.is_builtin ? item.route : `/folder/${item.id}`;
             const badgeCount = item.key === "community" ? unreadCommunity
               : item.key === "messages" ? unreadMessages
+              : item.key === "members" ? pendingFriendRequests
               : item.key === "admin" ? pendingApprovals
               : item.key === "admin-suggestions" ? pendingSuggestions
               : 0;

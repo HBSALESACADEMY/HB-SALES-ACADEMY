@@ -19,7 +19,7 @@ export default function Members() {
     setSelfId(session.user.id);
 
     const [{ data: profiles }, { data: fr }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, avatar_url, bio").eq("status", "approved").neq("id", session.user.id).order("full_name"),
+      supabase.from("profiles").select("id, full_name, avatar_url, bio, company_name, role_title, website, instagram, linkedin").eq("status", "approved").neq("id", session.user.id).order("full_name"),
       supabase.from("friendships").select("*").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
     ]);
     setMembers(profiles || []);
@@ -67,7 +67,19 @@ export default function Members() {
               <Avatar name={m.full_name || "?"} src={m.avatar_url} size={44} />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-white text-sm">{m.full_name || "Unbenannt"}</div>
+                {(m.role_title || m.company_name) && (
+                  <div className="text-xs text-textMuted truncate">
+                    {[m.role_title, m.company_name].filter(Boolean).join(" · ")}
+                  </div>
+                )}
                 {m.bio && <div className="text-xs text-textMuted truncate">{m.bio}</div>}
+                {(m.website || m.instagram || m.linkedin) && (
+                  <div className="flex items-center gap-2.5 mt-1">
+                    {m.website && <a href={m.website.startsWith("http") ? m.website : `https://${m.website}`} target="_blank" rel="noreferrer" className="text-[11px] text-amber hover:underline">Webseite</a>}
+                    {m.instagram && <a href={`https://instagram.com/${m.instagram.replace("@", "")}`} target="_blank" rel="noreferrer" className="text-[11px] text-amber hover:underline">Instagram</a>}
+                    {m.linkedin && <a href={m.linkedin.startsWith("http") ? m.linkedin : `https://${m.linkedin}`} target="_blank" rel="noreferrer" className="text-[11px] text-amber hover:underline">LinkedIn</a>}
+                  </div>
+                )}
               </div>
 
               {!rel && (
