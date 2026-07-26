@@ -15,11 +15,17 @@ const FALLBACK_NAV = [
   { id: "admin", label: "Nutzerverwaltung", icon: "lock", route: "/admin", is_builtin: true, requires_manager: true },
 ];
 
+// Modul-Level-Cache: überlebt Seitenwechsel (Next.js Client-Navigation), nicht aber
+// einen echten Browser-Reload. Verhindert, dass bei jedem Klick in der Sidebar die
+// komplette Ansicht kurz durch einen Ladebildschirm ersetzt wird.
+let cachedProfile = null;
+let cachedNavItems = null;
+
 export default function Layout({ children, fullBleed }) {
   const router = useRouter();
-  const [profile, setProfile] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [navItems, setNavItems] = useState(FALLBACK_NAV);
+  const [profile, setProfile] = useState(cachedProfile);
+  const [loadingAuth, setLoadingAuth] = useState(!cachedProfile);
+  const [navItems, setNavItems] = useState(cachedNavItems || FALLBACK_NAV);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [unreadCommunity, setUnreadCommunity] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -40,7 +46,8 @@ export default function Layout({ children, fullBleed }) {
       const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
       if (mounted) {
         setProfile(data);
-        if (nav && nav.length) setNavItems(nav);
+        cachedProfile = data;
+        if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
         setLoadingAuth(false);
       }
     }
@@ -76,6 +83,8 @@ export default function Layout({ children, fullBleed }) {
   }, [router.asPath]);
 
   async function handleLogout() {
+    cachedProfile = null;
+    cachedNavItems = null;
     await supabase.auth.signOut();
     router.replace("/login");
   }
@@ -114,7 +123,7 @@ export default function Layout({ children, fullBleed }) {
   return (
     <div className="flex flex-col md:flex-row h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
       {/* Mobile top bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[#14161F] flex-shrink-0">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[#12141C] flex-shrink-0">
         <img src="/logo.svg" alt="HB Sales Academy" className="h-7 w-auto" />
         <button onClick={() => setMobileNavOpen(true)} className="text-white p-1.5 -mr-1.5" aria-label="Menü öffnen">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
@@ -128,7 +137,7 @@ export default function Layout({ children, fullBleed }) {
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50 w-[230px] flex-shrink-0
-        bg-gradient-to-b from-[#14161F] to-[#0F1117] border-r border-line px-3.5 py-6 flex flex-col gap-1
+        bg-gradient-to-b from-[#181A28] to-[#0A0C13] border-r border-line px-3.5 py-6 flex flex-col gap-1
         transition-transform duration-200 md:translate-x-0
         ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
@@ -148,7 +157,7 @@ export default function Layout({ children, fullBleed }) {
                 key={item.id}
                 onClick={() => router.push(route)}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full ${
-                  router.asPath === route ? "bg-gradient-to-r from-amber/15 to-transparent text-amber shadow-[inset_2px_0_0_#F0B23E]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                  router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
                 }`}
               >
                 <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
@@ -175,7 +184,7 @@ export default function Layout({ children, fullBleed }) {
           <Icon name="logout" size={15} /> Abmelden
         </button>
       </aside>
-      <main className={`flex-1 overflow-y-auto ${fullBleed ? "p-3" : "p-4 md:p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(240,178,62,.06), transparent), radial-gradient(500px 260px at 0% 100%, rgba(63,191,166,.05), transparent)" }}>
+      <main key={router.asPath} className={`flex-1 overflow-y-auto animate-fadein ${fullBleed ? "p-3" : "p-4 md:p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(232,54,143,.09), transparent), radial-gradient(500px 260px at 0% 100%, rgba(123,47,247,.07), transparent)" }}>
         {typeof children === "function" ? children(profile) : children}
       </main>
     </div>

@@ -40,7 +40,8 @@ export default function Dashboard() {
     <Layout>
       {(profile) => (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
+          <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
+          <div className="brand-stripe w-16 mb-3" />
           <p className="text-textMuted text-sm mb-6">Dein Überblick über Fortschritt und nächste Schritte.</p>
 
           {loading ? (
@@ -55,7 +56,7 @@ export default function Dashboard() {
               </div>
 
               <div className="card mb-5">
-                <div className="flex items-center gap-2 mb-3"><Icon name="award" color="#F0B23E" /><strong className="text-sm">Kurs-Übersicht</strong></div>
+                <div className="flex items-center gap-2 mb-3"><Icon name="award" color="#E8368F" /><strong className="text-sm">Kurs-Übersicht</strong></div>
                 <div className="flex flex-col gap-2">
                   {COURSES.map((c) => {
                     const doneCount = c.modules.filter((m) => doneModuleIds.has(m.id)).length;
@@ -72,7 +73,7 @@ export default function Dashboard() {
               </div>
 
               <div className="card">
-                <div className="flex items-center gap-2 mb-3"><Icon name="target" color="#F0B23E" /><strong className="text-sm">Nächster Schritt</strong></div>
+                <div className="flex items-center gap-2 mb-3"><Icon name="target" color="#E8368F" /><strong className="text-sm">Nächster Schritt</strong></div>
                 {nextCourse ? (
                   <>
                     <p className="text-sm text-textMuted mb-3">Weiter mit: <strong className="text-white">{nextCourse.title}</strong> – {nextCourse.desc}</p>

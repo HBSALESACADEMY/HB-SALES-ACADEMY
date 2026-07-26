@@ -36,8 +36,8 @@ export default async function handler(req, res) {
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-    const bg = rgb(0x0f / 255, 0x11 / 255, 0x17 / 255);
-    const amber = rgb(0xf0 / 255, 0xb2 / 255, 0x3e / 255);
+    const bg = rgb(0x0a / 255, 0x0c / 255, 0x13 / 255);
+    const amber = rgb(0xe8 / 255, 0x36 / 255, 0x8f / 255);
     const white = rgb(0.95, 0.95, 0.96);
     const muted = rgb(0.57, 0.58, 0.62);
 

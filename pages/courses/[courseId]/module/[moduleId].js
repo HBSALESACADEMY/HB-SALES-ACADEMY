@@ -110,8 +110,8 @@ export default function ModuleRunner() {
                 <button key={i} className={cls} onClick={() => chooseOption(i)} style={selected !== null && i === shuffled.correctShuffledIndex ? { background: "rgba(63,191,166,.12)" } : selected !== null && i === selected ? { background: "rgba(229,113,106,.12)" } : {}}>
                   <span className="flex justify-between items-center">
                     {opt}
-                    {selected !== null && i === shuffled.correctShuffledIndex && <Icon name="check" size={16} color="#3FBFA6" />}
-                    {selected !== null && i === selected && i !== shuffled.correctShuffledIndex && <Icon name="x" size={16} color="#E5716A" />}
+                    {selected !== null && i === shuffled.correctShuffledIndex && <Icon name="check" size={16} color="#00E5C7" />}
+                    {selected !== null && i === selected && i !== shuffled.correctShuffledIndex && <Icon name="x" size={16} color="#FF4D6D" />}
                   </span>
                 </button>
               );

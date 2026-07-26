@@ -85,14 +85,14 @@ export default function ExamRunner() {
               const isCorrect = i === shuffled.correctShuffledIndex;
               const isSelected = i === selected;
               let style = {};
-              if (selected !== null && isCorrect) style = { background: "rgba(63,191,166,.12)", borderColor: "#3FBFA6" };
-              else if (selected !== null && isSelected) style = { background: "rgba(229,113,106,.12)", borderColor: "#E5716A" };
+              if (selected !== null && isCorrect) style = { background: "rgba(63,191,166,.12)", borderColor: "#00E5C7" };
+              else if (selected !== null && isSelected) style = { background: "rgba(229,113,106,.12)", borderColor: "#FF4D6D" };
               return (
                 <button key={i} className="block w-full text-left px-3.5 py-3 rounded-lg border border-line bg-surfaceRaised mb-2 text-sm" style={style} onClick={() => chooseOption(i)}>
                   <span className="flex justify-between items-center">
                     {opt}
-                    {selected !== null && isCorrect && <Icon name="check" size={16} color="#3FBFA6" />}
-                    {selected !== null && isSelected && !isCorrect && <Icon name="x" size={16} color="#E5716A" />}
+                    {selected !== null && isCorrect && <Icon name="check" size={16} color="#00E5C7" />}
+                    {selected !== null && isSelected && !isCorrect && <Icon name="x" size={16} color="#FF4D6D" />}
                   </span>
                 </button>
               );
@@ -126,7 +126,7 @@ export default function ExamRunner() {
           <h1 className="text-2xl font-display text-white mb-1">Prüfungsergebnis</h1>
           <div className="card max-w-xl">
             <div className="flex items-center gap-2.5 mb-3">
-              <Icon name="award" size={22} color={result.passed ? "#3FBFA6" : "#E5716A"} />
+              <Icon name="award" size={22} color={result.passed ? "#00E5C7" : "#FF4D6D"} />
               <span className="font-mono text-2xl font-bold">{result.combinedScore}%</span>
             </div>
             <p className="text-sm text-textMuted mb-3">
