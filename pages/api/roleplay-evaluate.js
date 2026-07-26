@@ -1,37 +1,23 @@
 import { requireUser } from "../../lib/supabaseServer";
-
-async function callClaude(system, messages, maxTokens) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, system, messages }),
-  });
-  if (!res.ok) throw new Error("Anthropic API error " + res.status + ": " + (await res.text()));
-  return res.json();
-}
+import { callAI } from "../../lib/aiClient";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const auth = await requireUser(req, res);
   if (!auth) return;
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: "ANTHROPIC_API_KEY fehlt." });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY fehlt." });
 
   try {
     const { personaId, scenarioId, difficulty, messages, detected } = req.body;
     const transcript = messages.map((m) => (m.role === "user" ? "Verkäufer" : "Kunde") + ": " + m.content).join("\n");
 
-    const data = await callClaude(
+    const raw = await callAI(
       "Du bist ein Trainer für Verkaufspsychologie. Bewerte das folgende Verkaufsgespräch auf Deutsch, konstruktiv und konkret. Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit den Feldern: " +
         '{"score": <Zahl 0-100>, "staerken": [<max 3 kurze Punkte>], "verbesserung": [<max 3 kurze Punkte>], "zusammenfassung": "<2-3 Sätze>"}. Kein Text außerhalb des JSON.',
       [{ role: "user", content: transcript }],
       500
     );
 
-    const raw = (data.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
     let evaluation;
     try {
       evaluation = JSON.parse(raw.replace(/```json|```/g, "").trim());
@@ -53,7 +39,6 @@ export default async function handler(req, res) {
     });
     if (insertError) console.error("insert roleplay_sessions failed:", insertError.message);
 
-    // Award XP
     const xpGain = 30;
     await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: xpGain }).catch(() => {});
 

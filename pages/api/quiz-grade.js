@@ -1,25 +1,12 @@
 import { requireUser } from "../../lib/supabaseServer";
+import { callAI } from "../../lib/aiClient";
 import { COURSES } from "../../lib/curriculum";
-
-async function callClaude(system, messages, maxTokens) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, system, messages }),
-  });
-  if (!res.ok) throw new Error("Anthropic API error " + res.status + ": " + (await res.text()));
-  return res.json();
-}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const auth = await requireUser(req, res);
   if (!auth) return;
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: "ANTHROPIC_API_KEY fehlt." });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY fehlt." });
 
   try {
     const { courseId, moduleId, answerText, mcScore, mcTotal } = req.body;
@@ -27,7 +14,7 @@ export default async function handler(req, res) {
     const mod = course && course.modules.find((m) => m.id === moduleId);
     if (!mod || !mod.open) return res.status(400).json({ error: "Modul/Frage nicht gefunden." });
 
-    const data = await callClaude(
+    const raw = await callAI(
       "Du bist ein strenger, aber fairer Trainer für Verkaufspsychologie. Du bewertest die Antwort eines Vertrieblers auf eine offene Fallstudien-Frage. " +
         "Bewertungskriterien (Rubrik): " + JSON.stringify(mod.open.keyPoints) + ". " +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt: " +
@@ -37,7 +24,6 @@ export default async function handler(req, res) {
       500
     );
 
-    const raw = (data.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
     let grading;
     try {
       grading = JSON.parse(raw.replace(/```json|```/g, "").trim());
