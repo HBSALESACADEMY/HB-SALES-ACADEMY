@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 
 export default function Leaderboard() {
@@ -34,6 +35,7 @@ export default function Leaderboard() {
             return (
               <div key={r.id} className={`card flex items-center gap-3.5 ${isSelf ? "border border-amber/40" : ""}`}>
                 <span className="w-7 text-center font-mono text-sm text-textMuted flex-shrink-0">{medal || i + 1}</span>
+                <Avatar name={r.full_name || "?"} size={32} />
                 <div className="flex-1">
                   <div className="font-semibold text-white text-sm">{r.full_name || "Unbenannt"}{isSelf && <span className="text-amber"> (Du)</span>}</div>
                   <div className="text-[11px] text-textMuted">Level {level}</div>

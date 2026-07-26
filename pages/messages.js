@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import Layout from "../components/Layout";
+import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 
 export default function Messages() {
@@ -69,9 +70,10 @@ export default function Messages() {
             const unread = unreadByContact[c.id] || 0;
             return (
               <button key={c.id} onClick={() => openThread(c)}
-                className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left text-sm ${selected?.id === c.id ? "bg-surfaceRaised text-white" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"}`}>
-                <span className="truncate">{c.full_name || "Unbenannt"}</span>
-                {unread > 0 && <span className="bg-coral text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{unread}</span>}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm ${selected?.id === c.id ? "bg-surfaceRaised text-white" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"}`}>
+                <Avatar name={c.full_name || "?"} size={28} />
+                <span className="truncate flex-1">{c.full_name || "Unbenannt"}</span>
+                {unread > 0 && <span className="badge-count">{unread}</span>}
               </button>
             );
           })}
@@ -83,8 +85,9 @@ export default function Messages() {
             <div className="flex-1 flex items-center justify-center text-textMuted text-sm">Wähle links eine Person aus.</div>
           ) : (
             <>
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-line flex-shrink-0">
+              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-line flex-shrink-0">
                 <button onClick={() => setShowList(true)} className="md:hidden text-textMuted">←</button>
+                <Avatar name={selected.full_name || "?"} size={28} />
                 <span className="font-semibold text-white text-sm">{selected.full_name || "Unbenannt"}</span>
               </div>
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
