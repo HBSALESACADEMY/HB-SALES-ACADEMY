@@ -5,13 +5,20 @@ import { PERSONAS, SCENARIOS, DIFFICULTY, PRINCIPLE_LIST } from "../../lib/perso
 // IMPORTANT: this route runs server-side (Vercel serverless function).
 // The Gemini API key lives only in process.env.GEMINI_API_KEY here —
 // it is never sent to or exposed in the browser.
+//
+// Persona-Antwort und Prinzipien-Erkennung laufen in EINER Anfrage statt zwei
+// parallelen — das halbiert den Verbrauch des kostenlosen Anfragen-Kontingents.
 
 function systemPromptFor(persona, scenarioId, difficulty) {
   const sc = SCENARIOS.find((s) => s.id === scenarioId);
   const diff = DIFFICULTY[difficulty] || DIFFICULTY.fortgeschritten;
   return (
     persona.base + " " + sc.context + diff.suffix +
-    " Antworte kurz, realistisch, ein bis zwei Sätze, auf Deutsch. Bleibe konsequent in der Rolle, du bist NICHT der Assistent, sondern der Kunde. Gib niemals zu erkennen, dass du eine KI bist."
+    " Antworte als der Kunde, kurz, realistisch, ein bis zwei Sätze, auf Deutsch. Bleibe konsequent in der Rolle, du bist NICHT der Assistent, sondern der Kunde. Gib niemals zu erkennen, dass du eine KI bist." +
+    " Analysiere zusätzlich NUR die letzte Nachricht des Verkäufers (die letzte 'user'-Nachricht) auf erkennbar verwendete Überzeugungsprinzipien aus dieser Liste: " +
+    JSON.stringify(PRINCIPLE_LIST) +
+    ". Antworte AUSSCHLIESSLICH als valides JSON-Objekt, kein Text davor oder danach: " +
+    '{"reply": "<deine Antwort als Kunde>", "detected": [<Liste erkannter Prinzipien aus der Liste oben, leeres Array falls keines eindeutig erkennbar>]}'
   );
 }
 
@@ -32,26 +39,20 @@ export default async function handler(req, res) {
 
     const apiMessages = [...(history || []), { role: "user", content: message }];
 
-    const [replyText, detectRaw] = await Promise.all([
-      callAI(systemPromptFor(persona, scenarioId, difficulty), apiMessages, 300),
-      callAI(
-        "Analysiere NUR die folgende einzelne Verkäufer-Nachricht. Gib ausschließlich ein valides JSON-Array von Strings zurück mit erkennbar verwendeten Prinzipien aus dieser Liste: " +
-          JSON.stringify(PRINCIPLE_LIST) +
-          ". Falls keines eindeutig erkennbar ist, gib [] zurück. Keine Erklärung, nur das JSON-Array.",
-        [{ role: "user", content: message }],
-        150
-      ),
-    ]);
+    const raw = await callAI(systemPromptFor(persona, scenarioId, difficulty), apiMessages, 400);
 
+    let reply = "...";
     let detected = [];
     try {
-      const parsed = JSON.parse(detectRaw.replace(/```json|```/g, "").trim());
-      if (Array.isArray(parsed)) detected = parsed;
+      const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+      reply = parsed.reply || reply;
+      if (Array.isArray(parsed.detected)) detected = parsed.detected;
     } catch (e) {
-      detected = [];
+      // Falls das Modell doch mal kein reines JSON liefert, den Rohtext als Antwort nehmen.
+      reply = raw || reply;
     }
 
-    return res.status(200).json({ reply: replyText || "...", detected });
+    return res.status(200).json({ reply, detected });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e.message || "Unbekannter Fehler." });
