@@ -1,0 +1,102 @@
+import { useEffect, useState } from "react";
+import Layout from "../components/Layout";
+import Icon from "../components/Icon";
+import { supabase } from "../lib/supabaseClient";
+import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function pickTodaysQuestion() {
+  const all = [];
+  COURSES.forEach((c) => allMcQuestionsOfCourse(c).forEach((q) => all.push(q)));
+  const dayNum = Math.floor(Date.now() / 86400000); // stabil pro Kalendertag, weltweit gleiche Frage
+  return all[dayNum % all.length];
+}
+
+export default function DailyChallenge() {
+  const [streak, setStreak] = useState(0);
+  const [alreadyDone, setAlreadyDone] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const question = pickTodaysQuestion();
+
+  useEffect(() => {
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: profile } = await supabase.from("profiles").select("streak_count, last_challenge_date").eq("id", session.user.id).maybeSingle();
+      setStreak(profile?.streak_count || 0);
+      const { data: existing } = await supabase.from("daily_challenge_completions")
+        .select("*").eq("user_id", session.user.id).eq("challenge_date", todayStr()).maybeSingle();
+      if (existing) { setAlreadyDone(true); setSelected(existing.correct ? question.correct : -1); setRevealed(true); }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  async function submit(idx) {
+    if (alreadyDone) return;
+    setSelected(idx);
+    setRevealed(true);
+    const correct = idx === question.correct;
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: profile } = await supabase.from("profiles").select("streak_count, last_challenge_date, xp").eq("id", session.user.id).maybeSingle();
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    let newStreak = 1;
+    if (profile?.last_challenge_date === yesterday) newStreak = (profile.streak_count || 0) + 1;
+    else if (profile?.last_challenge_date === todayStr()) newStreak = profile.streak_count || 1;
+
+    await supabase.from("daily_challenge_completions").insert({ user_id: session.user.id, challenge_date: todayStr(), correct });
+    await supabase.from("profiles").update({ streak_count: newStreak, last_challenge_date: todayStr() }).eq("id", session.user.id);
+    if (correct) { try { await supabase.rpc("increment_xp", { uid: session.user.id, amount: 15 }); } catch (e) {} }
+    setStreak(newStreak);
+    setAlreadyDone(true);
+  }
+
+  if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
+
+  return (
+    <Layout>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Tages-Challenge</h1>
+      <div className="brand-stripe w-16 mb-3" />
+      <p className="text-textMuted text-sm mb-6">Eine Frage pro Tag, für alle im Team gleich. Baue deine Serie auf!</p>
+
+      <div className="card mb-5 flex items-center gap-3">
+        <Icon name="flame" size={22} color="#E8368F" />
+        <div>
+          <div className="font-display text-xl font-bold text-white">{streak} {streak === 1 ? "Tag" : "Tage"}</div>
+          <div className="text-xs text-textMuted">aktuelle Serie</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <p className="text-white text-[15px] font-medium mb-4">{question.q}</p>
+        <div className="flex flex-col gap-2">
+          {question.options.map((opt, i) => {
+            let style = "border-line text-white";
+            if (revealed) {
+              if (i === question.correct) style = "border-teal bg-teal/10 text-teal";
+              else if (i === selected) style = "border-coral bg-coral/10 text-coral";
+              else style = "border-line text-textMuted opacity-60";
+            }
+            return (
+              <button key={i} disabled={revealed} onClick={() => submit(i)}
+                className={`text-left px-4 py-3 rounded-lg border text-sm transition ${style}`}>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+        {revealed && (
+          <p className="text-xs text-textMuted mt-4">
+            {alreadyDone && selected === question.correct ? "Heute schon geschafft — starke Leistung! Morgen geht's weiter." : alreadyDone ? "Heute schon beantwortet. Morgen gibt's die nächste Frage." : ""}
+          </p>
+        )}
+      </div>
+    </Layout>
+  );
+}
