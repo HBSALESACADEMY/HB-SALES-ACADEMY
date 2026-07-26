@@ -1,0 +1,40 @@
+<svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="neon1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7B2FF7"/>
+      <stop offset="50%" stop-color="#E8368F"/>
+      <stop offset="100%" stop-color="#FF6B35"/>
+    </linearGradient>
+    <linearGradient id="neon2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00E5C7"/>
+      <stop offset="100%" stop-color="#7B2FF7"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="600" height="240" fill="#0A0E17"/>
+
+  <!-- Abstrakte dynamische Pfeilform als Mark -->
+  <g transform="translate(30,40)">
+    <path d="M0 130 L55 130 L100 40 L130 90 L170 0 L170 30 L140 100 L105 55 L70 160 L0 160 Z"
+          fill="url(#neon1)" filter="url(#glow)"/>
+    <circle cx="170" cy="15" r="10" fill="#00E5C7" filter="url(#glow)"/>
+  </g>
+
+  <!-- Wortmarke: fett, modern, leicht schräg -->
+  <g transform="skewX(-6)">
+    <text x="235" y="115" font-family="'Arial Black', Arial, sans-serif" font-size="72" font-weight="900" fill="#FFFFFF" letter-spacing="-2">HB</text>
+  </g>
+
+  <text x="235" y="150" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="8" fill="url(#neon2)">SALES</text>
+  <text x="235" y="178" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="8" fill="#FFFFFF">ACADEMY</text>
+
+  <!-- Akzentlinie -->
+  <rect x="237" y="188" width="240" height="4" fill="url(#neon1)"/>
+</svg>
