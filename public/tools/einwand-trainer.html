@@ -5,22 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HB Sales Academy – Einwand-Trainer</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   :root{
-    --bg: #0a0a0a;
-    --panel: #141414;
-    --panel-2: #1b1b1b;
-    --line: #2a2a2a;
-    --gold: #c9a15c;
-    --gold-dim: #8a733f;
-    --white: #f5f5f5;
-    --muted: #8a8a8a;
-    --green: #4caf7d;
-    --red: #d9614f;
+    --bg: #0A0C13;
+    --panel: #14161F;
+    --panel-2: #1C1E2C;
+    --line: #262B3D;
+    --gold: #E8368F;
+    --gold-dim: #9C3E6E;
+    --white: #EDEDF4;
+    --muted: #90939F;
+    --green: #00E5C7;
+    --red: #FF4D6D;
+    --violet: #7B2FF7;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{
     margin:0; padding:0; background:var(--bg); color:var(--white);
-    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Inter', -apple-system, sans-serif;
     min-height:100%;
   }
   .wrap{
@@ -63,10 +65,11 @@
     color: var(--muted); cursor:pointer; border-radius: 8px;
     transition: color .2s ease;
   }
-  .mode-btn.active{ color: var(--bg); }
+  .mode-btn.active{ color: #fff; }
   .mode-slider{
     position:absolute; top:5px; left:5px; width:calc(50% - 5px); height:calc(100% - 10px);
-    background: var(--gold); border-radius: 8px;
+    background: linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%); border-radius: 8px;
+    box-shadow: 0 4px 12px -4px rgba(232,54,143,.5);
     transition: transform .25s cubic-bezier(.4,0,.2,1); z-index:1;
   }
   .mode-toggle[data-mode="entspannt"] .mode-slider{ transform: translateX(100%); }
@@ -108,9 +111,9 @@
     cursor:pointer;
   }
   .filter-btn.active{
-    background: var(--gold);
-    border-color: var(--gold);
-    color: var(--bg);
+    background: linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%);
+    border-color: transparent;
+    color: #fff;
     font-weight:600;
   }
 
@@ -222,10 +225,11 @@
   .next-btn{
     width: 100%;
     padding: 15px;
-    border-radius: 12px;
-    border: 1px solid var(--gold-dim);
-    background: var(--gold);
-    color: var(--bg);
+    border-radius: 9px;
+    border: none;
+    background: linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%);
+    box-shadow: 0 4px 16px -4px rgba(232,54,143,.5);
+    color: #fff;
     font-size: 14px;
     font-weight: 700;
     cursor:pointer;

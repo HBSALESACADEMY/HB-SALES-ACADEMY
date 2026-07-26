@@ -5,22 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HB Sales Academy – Call Tracker</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   :root{
-    --bg: #0a0a0a;
-    --panel: #141414;
-    --panel-2: #1b1b1b;
-    --line: #2a2a2a;
-    --gold: #c9a15c;
-    --gold-dim: #8a733f;
-    --white: #f5f5f5;
-    --muted: #8a8a8a;
-    --green: #4caf7d;
-    --red: #d9614f;
+    --bg: #0A0C13;
+    --panel: #14161F;
+    --panel-2: #1C1E2C;
+    --line: #262B3D;
+    --gold: #E8368F;
+    --gold-dim: #9C3E6E;
+    --white: #EDEDF4;
+    --muted: #90939F;
+    --green: #00E5C7;
+    --red: #FF4D6D;
+    --violet: #7B2FF7;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{
     margin:0; padding:0; background:var(--bg); color:var(--white);
-    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Inter', -apple-system, sans-serif;
     min-height:100%;
   }
   .wrap{
@@ -57,10 +59,11 @@
     color: var(--muted); cursor:pointer; border-radius: 8px;
     transition: color .2s ease;
   }
-  .view-tab.active{ color: var(--bg); }
+  .view-tab.active{ color: #fff; }
   .view-slider{
     position:absolute; top:5px; left:5px; width:calc(33.333% - 4px); height:calc(100% - 10px);
-    background: var(--gold); border-radius: 8px;
+    background: linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%); border-radius: 8px;
+    box-shadow: 0 4px 12px -4px rgba(232,54,143,.5);
     transition: transform .25s cubic-bezier(.4,0,.2,1); z-index:1;
   }
   .view-tabs[data-view="week"] .view-slider{ transform: translateX(101%); }
@@ -89,7 +92,8 @@
   @media (max-width: 480px){ .grid{ grid-template-columns: 1fr; } }
 
   .card{
-    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    background: linear-gradient(180deg, var(--panel) 0%, #10121A 100%); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
     padding: 18px 18px 16px; display:flex; flex-direction:column; gap: 10px;
     position: relative; overflow:hidden;
     transition: border-color .15s ease, transform .08s ease, background .15s ease;
@@ -98,7 +102,7 @@
   .card.readonly{ cursor: default; }
   .card.readonly:active{ transform:none; }
   .card:active{ transform: scale(0.98); }
-  .card:hover{ border-color: var(--gold-dim); }
+  .card:hover{ border-color: #4A3565; }
   .card.readonly:hover{ border-color: var(--line); }
 
   .card .accent{ position:absolute; left:0; top:0; bottom:0; width: 4px; }
@@ -118,9 +122,9 @@
     background: var(--panel-2); color: var(--muted); font-size: 20px;
     display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1;
   }
-  .minusbtn:hover{ color: var(--white); border-color: var(--gold-dim); }
+  .minusbtn:hover{ color: var(--white); border-color: #4A3565; }
   .card.readonly .minusbtn{ display:none; }
-  .tapHint{ font-size: 11px; color: #5a5a5a; letter-spacing: 0.05em; }
+  .tapHint{ font-size: 11px; color: #5A5F72; letter-spacing: 0.05em; }
 
   /* SUMMARY */
   .summary{
@@ -177,7 +181,7 @@
 
   .toast{
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
-    background: #1e1e1e; border: 1px solid var(--gold-dim); color: var(--white);
+    background: #1C1E2C; border: 1px solid var(--gold-dim); color: var(--white);
     padding: 10px 18px; border-radius: 10px; font-size: 13px; opacity: 0;
     pointer-events:none; transition: opacity .2s ease, transform .2s ease; z-index: 50;
   }
@@ -185,7 +189,7 @@
 
   .pulse{ animation: pulseAnim .28s ease; }
   @keyframes pulseAnim{
-    0%{ background: var(--panel); } 35%{ background: #202020; } 100%{ background: var(--panel); }
+    0%{ background: var(--panel); } 35%{ background: #1C1E2C; } 100%{ background: var(--panel); }
   }
 
   .loading-row{
