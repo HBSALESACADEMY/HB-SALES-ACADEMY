@@ -13,8 +13,9 @@ export default function ContentAdmin() {
   const [modulesByCourse, setModulesByCourse] = useState({});
   const [error, setError] = useState("");
 
-  const [newCourse, setNewCourse] = useState({ title: "", description: "", color: "amber" });
+  const [newCourse, setNewCourse] = useState({ title: "", description: "", color: "amber", navItemId: "" });
   const [creatingCourse, setCreatingCourse] = useState(false);
+  const [folders, setFolders] = useState([]);
 
   const [moduleDrafts, setModuleDrafts] = useState({}); // courseId -> { title, content, file, uploading }
 
@@ -33,6 +34,10 @@ export default function ContentAdmin() {
     if (cErr) setError(cErr.message);
     setCourses(cs || []);
 
+    const { data: fld } = await supabase.from("nav_items").select("*").eq("is_builtin", false).order("order_index");
+    setFolders(fld || []);
+    setNewCourse((prev) => ({ ...prev, navItemId: prev.navItemId || (fld && fld[0] ? fld[0].id : "") }));
+
     const { data: ms } = await supabase.from("custom_modules").select("*").order("order_index");
     const grouped = {};
     (ms || []).forEach((m) => {
@@ -46,7 +51,7 @@ export default function ContentAdmin() {
   useEffect(() => { load(); }, []);
 
   async function createCourse() {
-    if (!newCourse.title.trim()) return;
+    if (!newCourse.title.trim() || !newCourse.navItemId) return;
     setCreatingCourse(true);
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
@@ -54,11 +59,12 @@ export default function ContentAdmin() {
       title: newCourse.title.trim(),
       description: newCourse.description.trim(),
       color: newCourse.color,
+      nav_item_id: newCourse.navItemId,
       order_index: courses.length,
       created_by: session.user.id,
     });
     if (err) setError(err.message);
-    else { setNewCourse({ title: "", description: "", color: "amber" }); await load(); }
+    else { setNewCourse({ title: "", description: "", color: "amber", navItemId: newCourse.navItemId }); await load(); }
     setCreatingCourse(false);
   }
 
@@ -131,7 +137,7 @@ export default function ContentAdmin() {
   return (
     <Layout>
       <h1 className="text-2xl font-display text-white mb-1">Inhalte verwalten</h1>
-      <p className="text-textMuted text-sm mb-6">Lege eigene Kurse mit Modulen an — Text und optional ein Video pro Modul. Erscheint für alle Nutzer unter "Eigene Inhalte".</p>
+      <p className="text-textMuted text-sm mb-6">Lege eigene Kurse mit Modulen an — Text und optional ein Video pro Modul. Jeder Kurs gehört zu einem Ordner, der als eigener Reiter in der Sidebar erscheint (Ordner anlegen unter "Navigation verwalten").</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -140,13 +146,20 @@ export default function ContentAdmin() {
         <div className="flex flex-col gap-2.5">
           <input className="input" placeholder="Titel" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} />
           <textarea className="input" placeholder="Kurzbeschreibung" rows={2} value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} />
+          {folders.length === 0 ? (
+            <p className="text-xs text-coral">Noch kein Ordner vorhanden. Leg zuerst unter "Navigation verwalten" einen Ordner an, bevor du einen Kurs erstellst.</p>
+          ) : (
+            <select className="input" value={newCourse.navItemId} onChange={(e) => setNewCourse({ ...newCourse, navItemId: e.target.value })}>
+              {folders.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          )}
           <div className="flex items-center gap-2">
             {COLORS.map((c) => (
               <button key={c} onClick={() => setNewCourse({ ...newCourse, color: c })}
                 className={`w-7 h-7 rounded-full border-2 ${newCourse.color === c ? "border-white" : "border-transparent"}`}
                 style={{ background: COLOR_HEX[c] }} title={c} />
             ))}
-            <button disabled={creatingCourse} onClick={createCourse} className="btn ml-auto disabled:opacity-40">Kurs anlegen</button>
+            <button disabled={creatingCourse || !newCourse.navItemId} onClick={createCourse} className="btn ml-auto disabled:opacity-40">Kurs anlegen</button>
           </div>
         </div>
       </div>
@@ -161,6 +174,7 @@ export default function ContentAdmin() {
                 <div>
                   <div className="font-display text-base font-semibold text-white">{c.title}</div>
                   <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-teal mt-1">{folders.find((f) => f.id === c.nav_item_id)?.label || "Ohne Ordner"}</div>
                 </div>
                 <button onClick={() => deleteCourse(c.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Kurs löschen</button>
               </div>

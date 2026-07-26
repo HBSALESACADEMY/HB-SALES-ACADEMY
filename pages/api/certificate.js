@@ -1,4 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import fs from "fs";
+import path from "path";
 import { requireUser } from "../../lib/supabaseServer";
 import { COURSES } from "../../lib/curriculum";
 
@@ -52,12 +54,21 @@ export default async function handler(req, res) {
       borderColor: amber, borderWidth: 0.75, color: undefined,
     });
 
+    const logoBytes = fs.readFileSync(path.join(process.cwd(), "public", "logo.png"));
+    const logoImage = await pdfDoc.embedPng(logoBytes);
+    const logoAspect = logoImage.width / logoImage.height;
+
     const centerText = (text, y, font, size, color) => {
       const textWidth = font.widthOfTextAtSize(text, size);
       page.drawText(text, { x: (width - textWidth) / 2, y, size, font, color });
     };
 
-    centerText("HB SALES ACADEMY", height - 110, fontBold, 22, amber);
+    const drawLogo = (y, drawHeight) => {
+      const drawWidth = drawHeight * logoAspect;
+      page.drawImage(logoImage, { x: (width - drawWidth) / 2, y, width: drawWidth, height: drawHeight });
+    };
+
+    drawLogo(height - 128, 46);
     centerText("Zertifikat", height - 150, fontBold, 34, white);
     centerText("über den erfolgreichen Abschluss des Kurses", height - 190, fontRegular, 13, muted);
     centerText(course.title, height - 230, fontBold, 26, amber);
@@ -81,7 +92,7 @@ export default async function handler(req, res) {
     );
 
     page.drawLine({ start: { x: width / 2 - 90, y: 90 }, end: { x: width / 2 + 90, y: 90 }, thickness: 1, color: amber });
-    centerText("HB Sales Academy", 72, fontRegular, 10, muted);
+    drawLogo(66, 20);
 
     const pdfBytes = await pdfDoc.save();
     res.setHeader("Content-Type", "application/pdf");

@@ -37,9 +37,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="card w-full max-w-sm">
-        <div className="font-display text-lg font-bold text-white mb-1">
-          HB Sales <span className="text-amber">Academy</span>
-        </div>
+        <img src="/logo.svg" alt="HB Sales Academy" className="h-10 w-auto mb-3" />
         <p className="text-textMuted text-sm mb-6">{mode === "login" ? "Melde dich an" : "Konto erstellen"}</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           {mode === "signup" && (
