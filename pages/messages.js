@@ -152,19 +152,28 @@ export default function Messages() {
   }
 
   async function startRecording() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    chunksRef.current = [];
-    recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
-    recorder.onstop = async () => {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-      const file = new File([blob], "sprachnachricht.webm", { type: "audio/webm" });
-      stream.getTracks().forEach((t) => t.stop());
-      await uploadAndSend(file, "audio", "🎤 Sprachnachricht");
-    };
-    recorder.start();
-    mediaRecorderRef.current = recorder;
-    setRecording(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferred = ["audio/webm", "audio/mp4", "audio/ogg"];
+      const mimeType = preferred.find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        const actualType = recorder.mimeType || mimeType || "audio/webm";
+        const ext = actualType.includes("mp4") ? "m4a" : actualType.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunksRef.current, { type: actualType });
+        stream.getTracks().forEach((t) => t.stop());
+        if (blob.size === 0) { setRecording(false); return; }
+        const file = new File([blob], `sprachnachricht.${ext}`, { type: actualType });
+        await uploadAndSend(file, "audio", "🎤 Sprachnachricht");
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+    } catch (e) {
+      alert("Mikrofon-Zugriff nicht möglich — bitte in den Browser-Einstellungen erlauben.");
+    }
   }
 
   function stopRecording() {

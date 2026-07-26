@@ -11,7 +11,7 @@ export default function Dashboard() {
   const [examResults, setExamResults] = useState([]);
   const [rpSessions, setRpSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hub, setHub] = useState({ unreadMessages: 0, unreadCommunity: 0, openDuels: 0, dueFlashcards: 0, pendingApprovals: 0, pendingSuggestions: 0, isManager: false });
+  const [hub, setHub] = useState({ unreadMessages: 0, unreadCommunity: 0, openDuels: 0, dueFlashcards: 0, pendingApprovals: 0, pendingSuggestions: 0, pendingFriendRequests: 0, isManager: false });
 
   useEffect(() => {
     async function load() {
@@ -36,6 +36,7 @@ export default function Dashboard() {
         { count: postCount }, { count: commentCount },
         { data: cards }, { data: progress },
         { data: myDuels },
+        { count: friendReqCount },
       ] = await Promise.all([
         supabase.from("direct_messages").select("id", { count: "exact", head: true }).eq("recipient_id", uid).is("read_at", null),
         supabase.from("community_posts").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", uid),
@@ -43,6 +44,7 @@ export default function Dashboard() {
         supabase.from("flashcards").select("id"),
         supabase.from("flashcard_progress").select("card_id, next_review_date").eq("user_id", uid),
         supabase.from("duels").select("*").or(`challenger_id.eq.${uid},opponent_id.eq.${uid}`),
+        supabase.from("friendships").select("id", { count: "exact", head: true }).eq("addressee_id", uid).eq("status", "pending"),
       ]);
 
       const today = new Date().toISOString().slice(0, 10);
@@ -70,6 +72,7 @@ export default function Dashboard() {
         unreadCommunity: (postCount || 0) + (commentCount || 0),
         openDuels, dueFlashcards,
         pendingApprovals, pendingSuggestions,
+        pendingFriendRequests: friendReqCount || 0,
         isManager: me?.role === "manager",
       });
     }
@@ -97,6 +100,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-5">
                 {[
                   { label: "Nachrichten", icon: "chat", route: "/messages", badge: hub.unreadMessages },
+                  { label: "Mitglieder", icon: "users", route: "/members", badge: hub.pendingFriendRequests },
                   { label: "Community", icon: "users", route: "/community", badge: hub.unreadCommunity },
                   { label: "Tages-Challenge", icon: "flame", route: "/daily-challenge", sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
                   { label: "Quiz-Duell", icon: "target", route: "/duel", badge: hub.openDuels },
