@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { openProfile } from "../lib/profileModalBus";
 
 export default function Community() {
   const router = useRouter();
@@ -202,7 +203,7 @@ export default function Community() {
           return (
             <div key={p.id} className="card">
               <div className="flex items-center justify-between mb-2.5">
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80" onClick={() => openProfile(p.user_id)}>
                   <Avatar name={authorName} src={profileMap[p.user_id]?.avatar} size={34} />
                   <div>
                     <div className="font-semibold text-white text-sm">{authorName}</div>
@@ -235,9 +236,11 @@ export default function Community() {
                 <div className="flex flex-col gap-2.5 mt-3 pt-3 border-t border-line">
                   {comments.map((c) => (
                     <div key={c.id} className="flex items-start gap-2">
-                      <Avatar name={profileMap[c.user_id]?.name || "?"} src={profileMap[c.user_id]?.avatar} size={22} />
+                      <button onClick={() => openProfile(c.user_id)} className="flex-shrink-0">
+                        <Avatar name={profileMap[c.user_id]?.name || "?"} src={profileMap[c.user_id]?.avatar} size={22} />
+                      </button>
                       <div className="text-xs">
-                        <span className="font-semibold text-white">{profileMap[c.user_id]?.name || "Unbenannt"}: </span>
+                        <span className="font-semibold text-white cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>{profileMap[c.user_id]?.name || "Unbenannt"}: </span>
                         <span className="text-textMuted">{c.content}</span>
                       </div>
                     </div>

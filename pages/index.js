@@ -98,20 +98,34 @@ export default function Dashboard() {
           ) : (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-5">
-                {[
-                  { label: "Nachrichten", icon: "chat", route: "/messages", badge: hub.unreadMessages },
-                  { label: "Mitglieder", icon: "users", route: "/members", badge: hub.pendingFriendRequests },
-                  { label: "Community", icon: "users", route: "/community", badge: hub.unreadCommunity },
-                  { label: "Tages-Challenge", icon: "flame", route: "/daily-challenge", sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
-                  { label: "Quiz-Duell", icon: "target", route: "/duel", badge: hub.openDuels },
-                  { label: "Flashcards", icon: "library", route: "/flashcards", sub: hub.dueFlashcards > 0 ? `${hub.dueFlashcards} fällig` : "Alles erledigt" },
-                  { label: "Simulator", icon: "chat", route: "/simulator" },
-                  { label: "Rangliste", icon: "award", route: "/leaderboard" },
-                  ...(hub.isManager ? [
-                    { label: "Freigaben", icon: "lock", route: "/admin", badge: hub.pendingApprovals },
-                    { label: "Wissens-Vorschläge", icon: "lock", route: "/admin/suggestions", badge: hub.pendingSuggestions },
-                  ] : []),
-                ].map((t) => (
+                {(() => {
+                  const allTiles = [
+                    { key: "messages", label: "Nachrichten", icon: "chat", route: "/messages", badge: hub.unreadMessages },
+                    { key: "members", label: "Mitglieder", icon: "users", route: "/members", badge: hub.pendingFriendRequests },
+                    { key: "community", label: "Community", icon: "users", route: "/community", badge: hub.unreadCommunity },
+                    { key: "daily-challenge", label: "Tages-Challenge", icon: "flame", route: "/daily-challenge", sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
+                    { key: "duel", label: "Quiz-Duell", icon: "target", route: "/duel", badge: hub.openDuels },
+                    { key: "flashcards", label: "Flashcards", icon: "library", route: "/flashcards", sub: hub.dueFlashcards > 0 ? `${hub.dueFlashcards} fällig` : "Alles erledigt" },
+                    { key: "simulator", label: "Simulator", icon: "chat", route: "/simulator" },
+                    { key: "leaderboard", label: "Rangliste", icon: "award", route: "/leaderboard" },
+                    ...(hub.isManager ? [
+                      { key: "admin", label: "Freigaben", icon: "lock", route: "/admin", badge: hub.pendingApprovals },
+                      { key: "admin-suggestions", label: "Wissens-Vorschläge", icon: "lock", route: "/admin/suggestions", badge: hub.pendingSuggestions },
+                    ] : []),
+                  ];
+                  const prefs = profile?.dashboard_prefs || {};
+                  const order = prefs.order || [];
+                  const hidden = new Set(prefs.hidden || []);
+                  const visible = allTiles.filter((t) => !hidden.has(t.key));
+                  visible.sort((a, b) => {
+                    const ia = order.indexOf(a.key), ib = order.indexOf(b.key);
+                    if (ia === -1 && ib === -1) return 0;
+                    if (ia === -1) return 1;
+                    if (ib === -1) return -1;
+                    return ia - ib;
+                  });
+                  return visible;
+                })().map((t) => (
                   <button key={t.route} onClick={() => router.push(t.route)}
                     className="card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-pointer">
                     <div className="flex items-center justify-between w-full">

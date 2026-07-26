@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { openProfile } from "../lib/profileModalBus";
 
 function formatPreviewTime(iso) {
   const d = new Date(iso);
@@ -223,8 +224,10 @@ export default function Messages() {
             <>
               <div className="flex items-center gap-2.5 px-4 py-3 border-b border-line flex-shrink-0">
                 <button onClick={() => setShowList(true)} className="md:hidden text-textMuted">←</button>
-                <Avatar name={selected.full_name || "?"} src={selected.avatar_url} size={30} />
-                <span className="font-semibold text-white text-sm">{selected.full_name || "Unbenannt"}</span>
+                <button onClick={() => openProfile(selected.id)} className="flex items-center gap-2.5 hover:opacity-80">
+                  <Avatar name={selected.full_name || "?"} src={selected.avatar_url} size={30} />
+                  <span className="font-semibold text-white text-sm">{selected.full_name || "Unbenannt"}</span>
+                </button>
               </div>
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
                 {thread.map((m) => {

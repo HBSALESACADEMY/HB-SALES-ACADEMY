@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import Icon from "./Icon";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
+import ProfileModal from "./ProfileModal";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -38,6 +39,13 @@ export default function Layout({ children, fullBleed }) {
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [pendingSuggestions, setPendingSuggestions] = useState(0);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
+  const [openProfileId, setOpenProfileId] = useState(null);
+
+  useEffect(() => {
+    function handler(e) { setOpenProfileId(e.detail); }
+    window.addEventListener("hb:open-profile", handler);
+    return () => window.removeEventListener("hb:open-profile", handler);
+  }, []);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -220,6 +228,7 @@ export default function Layout({ children, fullBleed }) {
       <main key={router.asPath} className={`flex-1 overflow-y-auto animate-fadein ${fullBleed ? "p-3" : "p-4 md:p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(232,54,143,.09), transparent), radial-gradient(500px 260px at 0% 100%, rgba(123,47,247,.07), transparent)" }}>
         {typeof children === "function" ? children(profile) : children}
       </main>
+      {openProfileId && <ProfileModal userId={openProfileId} onClose={() => setOpenProfileId(null)} />}
     </div>
   );
 }
