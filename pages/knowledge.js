@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import { supabase } from "../lib/supabaseClient";
 
 const KNOWLEDGE_BASE = [
   { tag: "Cialdini", title: "Reziprozität", body: "Wer zuerst gibt, erzeugt beim Gegenüber unbewusst das Bedürfnis, etwas zurückzugeben." },
@@ -24,7 +25,18 @@ const KNOWLEDGE_BASE = [
 
 export default function Knowledge() {
   const [query, setQuery] = useState("");
-  const filtered = KNOWLEDGE_BASE.filter((k) => k.title.toLowerCase().includes(query.toLowerCase()) || k.tag.toLowerCase().includes(query.toLowerCase()));
+  const [dynamicEntries, setDynamicEntries] = useState([]);
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from("kb_entries").select("*").eq("status", "approved").order("created_at", { ascending: false });
+      setDynamicEntries((data || []).map((e) => ({ tag: e.tag, title: e.title, body: e.body, isNew: e.source === "ai_roleplay" })));
+    }
+    load();
+  }, []);
+
+  const combined = [...dynamicEntries, ...KNOWLEDGE_BASE];
+  const filtered = combined.filter((k) => k.title.toLowerCase().includes(query.toLowerCase()) || k.tag.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <Layout>
@@ -38,7 +50,10 @@ export default function Knowledge() {
         {filtered.length === 0 && <p className="text-textMuted text-sm">Keine Treffer.</p>}
         {filtered.map((k, i) => (
           <div key={i} className="card">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-amber">{k.tag}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber">{k.tag}</span>
+              {k.isNew && <span className="text-[9px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1 py-0.5">Community</span>}
+            </div>
             <div className="font-display font-semibold text-[15px] text-white my-1.5">{k.title}</div>
             <div className="text-[13px] text-textMuted leading-relaxed">{k.body}</div>
           </div>

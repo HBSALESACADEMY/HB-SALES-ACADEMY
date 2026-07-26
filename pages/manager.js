@@ -6,6 +6,7 @@ import { COURSES } from "../lib/curriculum";
 
 export default function Manager() {
   const [team, setTeam] = useState([]);
+  const [principleCounts, setPrincipleCounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isManager, setIsManager] = useState(true);
 
@@ -18,6 +19,7 @@ export default function Manager() {
 
       const { data: members } = await supabase.from("profiles").select("*").eq("manager_id", session.user.id);
       const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);
+      const counts = {};
 
       const enriched = await Promise.all((members || []).map(async (m) => {
         const [{ data: qr }, { data: er }, { data: rp }] = await Promise.all([
@@ -28,9 +30,13 @@ export default function Manager() {
         const doneModules = new Set((qr || []).map((r) => r.module_id)).size;
         const avgMc = qr && qr.length ? Math.round(qr.reduce((s, r) => s + (r.mc_total ? r.mc_score / r.mc_total : 0), 0) / qr.length * 100) : null;
         const certs = (er || []).filter((r) => r.passed).length;
+        (rp || []).forEach((r) => {
+          (r.detected_principles || []).forEach((p) => { counts[p] = (counts[p] || 0) + 1; });
+        });
         return { ...m, doneModules, totalModules, avgMc, certs, roleplayCount: (rp || []).length };
       }));
       setTeam(enriched);
+      setPrincipleCounts(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6));
       setLoading(false);
     }
     load();
@@ -51,6 +57,26 @@ export default function Manager() {
     <Layout>
       <h1 className="text-2xl font-display text-white mb-1">Team-Übersicht</h1>
       <p className="text-textMuted text-sm mb-6">Fortschritt deiner zugeordneten Team-Mitglieder.</p>
+
+      {principleCounts.length > 0 && (
+        <div className="card mb-5">
+          <div className="font-semibold text-white text-sm mb-3">Team-Insights: meistgenutzte Prinzipien im Rollenspiel</div>
+          <div className="flex flex-col gap-2">
+            {principleCounts.map(([name, count]) => {
+              const max = principleCounts[0][1];
+              return (
+                <div key={name} className="flex items-center gap-3">
+                  <span className="text-xs w-40 flex-shrink-0 truncate">{name}</span>
+                  <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
+                    <div className="h-full bg-teal" style={{ width: `${(count / max) * 100}%` }} />
+                  </div>
+                  <span className="font-mono text-xs text-textMuted w-6 text-right">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {team.length === 0 ? (
         <p className="text-textMuted text-sm">Noch keine Team-Mitglieder zugeordnet. Siehe README, um Reps über <code>manager_id</code> zuzuordnen.</p>
       ) : (
