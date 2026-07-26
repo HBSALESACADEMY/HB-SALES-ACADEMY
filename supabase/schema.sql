@@ -6,6 +6,8 @@ create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
   role text not null default 'rep' check (role in ('rep', 'manager')),
+  is_admin boolean not null default false,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   manager_id uuid references profiles(id) on delete set null,
   xp integer not null default 0,
   created_at timestamptz not null default now()

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volk Web – Einwand-Trainer</title>
+<style>
+  :root{
+    --bg: #0a0a0a;
+    --panel: #141414;
+    --panel-2: #1b1b1b;
+    --line: #2a2a2a;
+    --gold: #c9a15c;
+    --gold-dim: #8a733f;
+    --white: #f5f5f5;
+    --muted: #8a8a8a;
+    --green: #4caf7d;
+    --red: #d9614f;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; background:var(--bg); color:var(--white);
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    min-height:100%;
+  }
+  .wrap{
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  header{ text-align:center; padding: 10px 0 20px; }
+  .logo{
+    width: 200px;
+    max-width: 55%;
+    height:auto;
+    display:block;
+    margin: 0 auto 12px;
+    filter: drop-shadow(0 0 22px rgba(201,161,92,0.15));
+  }
+  .subtitle{
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .rule{
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim) 20%, var(--gold) 50%, var(--gold-dim) 80%, transparent);
+    margin: 20px 0;
+  }
+
+  /* MODE TOGGLE */
+  .mode-toggle{
+    display:flex; align-items:center; gap:0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 5px; margin-bottom: 18px; position:relative;
+  }
+  .mode-btn{
+    flex:1; position:relative; z-index:2; background:none; border:none;
+    padding: 11px 12px; font-size: 13px; font-weight:600;
+    color: var(--muted); cursor:pointer; border-radius: 8px;
+    transition: color .2s ease;
+  }
+  .mode-btn.active{ color: var(--bg); }
+  .mode-slider{
+    position:absolute; top:5px; left:5px; width:calc(50% - 5px); height:calc(100% - 10px);
+    background: var(--gold); border-radius: 8px;
+    transition: transform .25s cubic-bezier(.4,0,.2,1); z-index:1;
+  }
+  .mode-toggle[data-mode="entspannt"] .mode-slider{ transform: translateX(100%); }
+
+  /* STATS BAR */
+  .statsbar{
+    display:flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-chip{
+    flex:1;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align:center;
+  }
+  .stat-chip .num{ font-size: 20px; font-weight:800; }
+  .stat-chip .lbl{ font-size: 10.5px; color: var(--muted); letter-spacing:.04em; text-transform:uppercase; margin-top:2px; }
+  .stat-chip[data-kind="practice"] .num{ color: var(--red); }
+  .stat-chip[data-kind="learned"] .num{ color: var(--green); }
+  .stat-chip[data-kind="total"] .num{ color: var(--gold); }
+
+  /* CATEGORY FILTER */
+  .filters{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .filter-btn{
+    font-size: 12px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 7px 13px;
+    border-radius: 20px;
+    cursor:pointer;
+  }
+  .filter-btn.active{
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--bg);
+    font-weight:600;
+  }
+
+  /* CARD */
+  .card-area{
+    min-height: 320px;
+    display:flex;
+    flex-direction:column;
+  }
+  .prompt-tag{
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .cat-badge{
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--gold);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .bubble-card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--gold);
+    border-radius: 14px;
+    padding: 22px 20px;
+    margin-bottom: 14px;
+  }
+  .bubble-who{
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .bubble-text{
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .answer-card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--green);
+    border-radius: 14px;
+    padding: 22px 20px;
+    margin-bottom: 14px;
+    display:none;
+  }
+  .answer-card.show{ display:block; }
+  .bubble-text.answer{ font-size: 15px; font-weight: 400; color: var(--white); }
+  .tip-line{
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--gold-dim);
+  }
+  .tip-line b{ color: var(--gold); font-weight:600; }
+
+  .reveal-btn{
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px dashed var(--gold-dim);
+    background: var(--panel-2);
+    color: var(--gold);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .reveal-btn:hover{ border-style: solid; }
+
+  .rate-row{
+    display:flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .rate-btn{
+    flex:1;
+    padding: 14px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 4px;
+  }
+  .rate-btn.practice{ border-color: rgba(217,97,79,0.4); color: var(--red); }
+  .rate-btn.learned{ border-color: rgba(76,175,125,0.4); color: var(--green); }
+  .rate-btn:active{ transform: scale(0.98); }
+
+  .next-btn{
+    width: 100%;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--gold-dim);
+    background: var(--gold);
+    color: var(--bg);
+    font-size: 14px;
+    font-weight: 700;
+    cursor:pointer;
+    margin-top: 4px;
+  }
+  .next-btn:active{ transform: scale(0.98); }
+  .next-btn:disabled{
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .empty-msg{
+    text-align:center;
+    color: var(--muted);
+    font-size: 13.5px;
+    padding: 40px 10px;
+  }
+
+  .reset-row{
+    margin-top: 24px;
+    text-align:center;
+  }
+  #resetProgress{
+    background:none;
+    border:none;
+    color: var(--muted);
+    font-size: 12px;
+    cursor:pointer;
+    text-decoration: underline;
+  }
+  #resetProgress:hover{ color: var(--white); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img class="logo" alt="Volk Web" src="data:image/png;base64,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">
+    <div class="subtitle">Einwand-Trainer</div>
+  </header>
+
+  <div class="rule"></div>
+
+  <div class="mode-toggle" id="modeToggle" data-mode="professionell">
+    <div class="mode-slider"></div>
+    <button class="mode-btn active" data-mode="professionell" type="button">Professionell (Sie)</button>
+    <button class="mode-btn" data-mode="entspannt" type="button">Entspannt (Du)</button>
+  </div>
+
+  <div class="statsbar">
+    <div class="stat-chip" data-kind="total"><div class="num" id="statTotal">0</div><div class="lbl">Geübt</div></div>
+    <div class="stat-chip" data-kind="learned"><div class="num" id="statLearned">0</div><div class="lbl">Sicher</div></div>
+    <div class="stat-chip" data-kind="practice"><div class="num" id="statPractice">0</div><div class="lbl">Üben</div></div>
+  </div>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="card-area" id="cardArea"></div>
+
+  <div class="reset-row">
+    <button id="resetProgress">Lernfortschritt zurücksetzen</button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // Polyfill für window.storage (localStorage-basiert, browserlokal je Gerät)
+  if (!window.storage) {
+    window.storage = {
+      async get(key){ const v = localStorage.getItem("hb_et_"+key); return v !== null ? { key, value: v } : null; },
+      async set(key, value){ localStorage.setItem("hb_et_"+key, value); return { key, value }; },
+      async delete(key){ localStorage.removeItem("hb_et_"+key); return { key, deleted: true }; },
+      async list(prefix){
+        const keys = [];
+        for (let i=0;i<localStorage.length;i++){
+          const k = localStorage.key(i);
+          if (k && k.startsWith("hb_et_"+(prefix||""))) keys.push(k.replace("hb_et_",""));
+        }
+        return { keys };
+      }
+    };
+  }
+})();
+</script>
+<script>
+(function(){
+
+  // Einwände aus dem Fast Page Konzept — Sie/Du, mit Kategorie und Tipp
+  const OBJECTIONS = [
+    { id:1, cat:"preis",
+      q_pro:`„Ich bin sowieso voll ausgelastet, brauche keine neuen Kunden.“`,
+      a_pro:`Das freut mich für Sie — viele Betriebe wären froh, so gut zu laufen. Darf ich fragen: ist das schon länger so, oder gerade saisonal viel los? Wenn's schon immer so ist: genau dann lohnt sich eine gute Website am meisten — Sie können sich dann die besten Aufträge aussuchen, statt jeden Anruf anzunehmen. Wenn's saisonal ist: dann macht's erst recht Sinn, jetzt vorzusorgen, damit im ruhigeren Monat trotzdem das Telefon klingelt.`,
+      q_ent:`„Bin eh voll ausgelastet, brauch keine neuen Kunden.“`,
+      a_ent:`Cool, läuft bei dir richtig gut. Ist das schon immer so oder grad nur viel los? Wenn's immer so ist: genau dann lohnt sich 'ne gute Seite am meisten — du kannst dir dann die besten Aufträge aussuchen. Wenn's saisonal ist: dann lohnt's sich erst recht, jetzt für die ruhigeren Monate vorzusorgen.`,
+      tip:`Nie die Auslastung anzweifeln — auf Auswahl/Zukunftssicherung umlenken.` },
+    { id:2, cat:"preis",
+      q_pro:`„990 € ist mir zu teuer.“`,
+      a_pro:`Verstehe ich total. Deswegen ist das Ganze ja auch ohne Risiko: Sie sehen die fertige Vorschau zuerst und zahlen nur, wenn sie Ihnen wirklich gefällt. Sie verlieren nichts außer 10 bis 15 Minuten.`,
+      q_ent:`„990 € ist mir zu teuer.“`,
+      a_ent:`Versteh ich. Deswegen ist's ja auch ohne Risiko — du siehst die fertige Vorschau zuerst und zahlst nur, wenn sie dir wirklich gefällt. Du verlierst nix außer 10-15 Minuten.`,
+      tip:`Preis nie verteidigen — auf das Nullrisiko der Vorschau zurücklenken.` },
+    { id:3, cat:"skepsis",
+      q_pro:`„Was ist der Haken — warum sollte das kostenlos sein, wenn's mir nicht gefällt?“`,
+      a_pro:`Verständliche Frage. Der Haken ist: wir bauen die Vorschau vorab auf eigenes Risiko, weil wir überzeugt sind, dass sie überzeugt. Gefällt sie Ihnen nicht, war das unsere Arbeit umsonst, nicht Ihre — das ist unser Anreiz, wirklich gute Arbeit abzuliefern.`,
+      q_ent:`„Was ist der Haken, wieso soll das umsonst sein, wenn's mir nicht gefällt?“`,
+      a_ent:`Faire Frage. Der Haken ist: wir bauen die Vorschau auf eigenes Risiko, weil wir wissen, dass sie überzeugt. Gefällt sie dir nicht, war's unsere Zeit, nicht deine — genau deswegen liefern wir auch wirklich gute Arbeit ab.`,
+      tip:`Transparenz schlägt Rechtfertigung — das Risiko liegt bewusst bei euch, nicht beim Lead.` },
+    { id:4, cat:"skepsis",
+      q_pro:`„Woher haben Sie meine Nummer, wie kommen Sie auf mich?“`,
+      a_pro:`Ganz einfach: ich habe nach Betrieben Ihres Gewerks in Ihrer Region gesucht, und Sie sind mit guten Bewertungen gelistet. Deswegen der Anruf — bei der Sichtbarkeit Ihrer Website ist noch Luft nach oben.`,
+      q_ent:`„Woher hast du meine Nummer?“`,
+      a_ent:`Ganz easy, hab nach Betrieben in deinem Gewerk bei euch in der Gegend gesucht, da bist du mit guten Bewertungen gelistet. Deswegen der Anruf — bei der Website ist noch Luft nach oben.`,
+      tip:`Kurz, ehrlich, direkt zurück zum Nutzen.` },
+    { id:5, cat:"skepsis",
+      q_pro:`„Ich hatte schon mal eine schlechte Erfahrung mit einer Agentur/einem Webdesigner.“`,
+      a_pro:`Das tut mir leid, das kommt leider öfter vor. Was genau ist da schiefgelaufen? Bei uns zahlen Sie ohnehin erst, wenn Sie die fertige Vorschau gesehen haben und sie Ihnen gefällt — das Risiko einer bösen Überraschung entfällt damit.`,
+      q_ent:`„Hatte schon mal 'ne miese Erfahrung mit 'ner Agentur.“`,
+      a_ent:`Tut mir leid, hört man leider öfter. Was ist denn schiefgelaufen? Bei uns zahlst du eh erst, wenn du die fertige Vorschau gesehen hast und sie dir gefällt — böse Überraschungen fallen damit flach.`,
+      tip:`Erst zuhören, dann den Unterschied zum eigenen Risk-Reversal-Modell ziehen.` },
+    { id:6, cat:"vorhanden",
+      q_pro:`„Ich habe schon eine Website.“`,
+      a_pro:`Gut zu wissen — dann geht's nur noch um die Frage, ob sie auf dem aktuellen Stand ist: mobil gut bedienbar, schnell, professionell wirkend. Genau das schauen wir uns in der Vorschau gemeinsam an — passt eh schon alles, ändert sich für Sie nichts, wenn nicht, sehen Sie schwarz auf weiß den Unterschied.`,
+      q_ent:`„Hab schon 'ne Website.“`,
+      a_ent:`Gut zu wissen — dann geht's nur noch drum, ob die auf dem neusten Stand ist: mobil, schnell, professionell. Genau das schauen wir uns in der Vorschau an — passt eh alles, ändert sich nix für dich, wenn nicht, siehst du den Unterschied schwarz auf weiß.`,
+      tip:`Bestehende Website nie schlechtmachen — auf Vergleich in der Vorschau verweisen.` },
+    { id:7, cat:"vorhanden",
+      q_pro:`„Ich habe schon jemanden, der meine Website macht.“`,
+      a_pro:`Schön, dass Sie sich schon kümmern. Wie zufrieden sind Sie mit dem Ergebnis, merken Sie das an mehr Anfragen? Die Vorschau kostet Sie nichts, ein Vergleich schadet also sicher nicht.`,
+      q_ent:`„Hab schon wen, der meine Seite macht.“`,
+      a_ent:`Schön, kümmerst du dich schon drum. Bist du zufrieden, merkst du das an mehr Anfragen? Die Vorschau kostet dich nix, schaden kann ein Vergleich also nicht.`,
+      tip:`Nie gegen bestehenden Dienstleister schießen — Ergebnis hinterfragen.` },
+    { id:8, cat:"zeit",
+      q_pro:`„Ich habe gerade keine Zeit.“`,
+      a_pro:`Verstehe, deswegen dauert der Termin auch bewusst nur 10 bis 15 Minuten, und Sie müssen sich auf gar nichts vorbereiten. Passt es Ihnen eher [Tag A] oder [Tag B]?`,
+      q_ent:`„Grad keine Zeit.“`,
+      a_ent:`Kein Ding, dauert eh nur 10-15 Minuten, musst dich auf nix vorbereiten. Passt dir [Tag A] oder [Tag B] besser?`,
+      tip:`Kürze betonen, dann direkt zurück zur Terminfrage.` },
+    { id:9, cat:"zeit",
+      q_pro:`„Schicken Sie mir das per E-Mail/WhatsApp.“`,
+      a_pro:`Mache ich gerne zusätzlich, aber die Vorschau selbst zeigt sich erst richtig im gemeinsamen Gespräch — da können wir auch direkt Anpassungswünsche besprechen. Passt Ihnen eher [Tag A] oder [Tag B] für die 10 Minuten?`,
+      q_ent:`„Schick mir das per WhatsApp.“`,
+      a_ent:`Mach ich dir gerne zusätzlich, aber die Vorschau zeigt sich am besten live, da können wir auch gleich Wünsche besprechen. Passt dir [Tag A] oder [Tag B]?`,
+      tip:`E-Mail-Wunsch ist meist ein sanftes Nein — freundlich zurück zum Termin lenken.` },
+    { id:10, cat:"zeit",
+      q_pro:`„Rufen Sie mich in ein paar Wochen nochmal an.“`,
+      a_pro:`Mache ich gerne — bis dahin verändert sich an der Sichtbarkeit Ihres Betriebs online aber nichts. Wenn wir uns die fertige Vorschau jetzt kurz anschauen, wissen Sie wenigstens, wo Sie stehen, ganz unverbindlich.`,
+      q_ent:`„Meld dich in 'n paar Wochen nochmal.“`,
+      a_ent:`Mach ich, aber bis dahin ändert sich online nix bei dir. Lass uns die fertige Vorschau lieber jetzt kurz anschauen, dann weißt du wenigstens, wo du stehst — ganz unverbindlich.`,
+      tip:`Aufschub-Kosten benennen, dann Termin trotzdem anbieten.` },
+    { id:11, cat:"zeit",
+      q_pro:`„Können wir das nicht einfach gleich jetzt machen?“`,
+      a_pro:`Das würde ich liebend gern, aber die Vorschau wird extra für Sie individuell gebaut — dafür brauchen wir ein kleines Zeitfenster. Passt es Ihnen daher eher [nächstmöglicher Slot] oder lieber [späterer Termin]?`,
+      q_ent:`„Können wir das nicht einfach gleich jetzt machen?“`,
+      a_ent:`Würd ich liebend gern, aber die Vorschau wird extra für dich gebaut, dafür brauchen wir ein kleines Zeitfenster. Passt dir eher [nächstmöglicher Slot] oder [späterer Termin]?`,
+      tip:`Nie sofort anbieten — die 6-Stunden-Regel gilt auch bei Drängen.` },
+    { id:12, cat:"entscheidung",
+      q_pro:`„Ich muss das erst mit meinem Partner/meiner Partnerin besprechen.“`,
+      a_pro:`Absolut nachvollziehbar. Wäre es sinnvoll, wenn er/sie beim Termin gleich mit dabei ist, damit alle Fragen direkt geklärt sind?`,
+      q_ent:`„Muss ich erst mit meinem Partner besprechen.“`,
+      a_ent:`Klar, macht Sinn. Wäre es einfach, wenn er/sie beim Termin mit dabei ist? Dann ist das direkt geklärt.`,
+      tip:`Partner aktiv in den Termin einladen statt Einwand nur zu akzeptieren.` },
+    { id:13, cat:"entscheidung",
+      q_pro:`„Ich glaube nicht an Online-Marketing, meine Kunden kommen eh über Mundpropaganda.“`,
+      a_pro:`Das ist bei vielen Handwerksbetrieben tatsächlich die Haupt-Quelle. Trotzdem schauen die meisten neuen Kunden vorher kurz bei Google nach, ob es Sie überhaupt gibt und wie Sie wirken — die Website ergänzt die Mundpropaganda, sie ersetzt sie nicht.`,
+      q_ent:`„Glaub nicht an Online-Kram, meine Kunden kommen eh über Mundpropaganda.“`,
+      a_ent:`Ist bei vielen im Handwerk tatsächlich die Haupt-Quelle. Trotzdem schauen die meisten kurz bei Google, ob's dich gibt und wie du wirkst — die Website ergänzt die Mundpropaganda, ersetzt sie nicht.`,
+      tip:`Mundpropaganda nie kleinreden — als Ergänzung positionieren, nicht als Konkurrenz.` },
+    { id:14, cat:"entscheidung",
+      q_pro:`„Ich muss erst überlegen.“`,
+      a_pro:`Klar, das ist keine spontane Entscheidung. Was macht Sie konkret noch unsicher — die Optik, der Preis, oder eher der Zeitpunkt? Dann kann ich gezielt darauf eingehen.`,
+      q_ent:`„Muss ich erst überlegen.“`,
+      a_ent:`Klar, keine spontane Sache. Was macht dich noch unsicher — Optik, Preis oder Timing? Dann reden wir gezielt darüber.`,
+      tip:`'Überlegen' konkretisieren lassen, dann gezielt behandeln.` }
+  ];
+
+  const CAT_LABELS = {
+    preis:"Preis & Auslastung", skepsis:"Skepsis & Vertrauen", vorhanden:"Bereits vorhanden",
+    zeit:"Zeit & Aufschub", entscheidung:"Entscheidung"
+  };
+
+  const STORAGE_KEY = "objection_trainer_progress";
+
+  // progress[id] = "learned" | "practice" | undefined (noch nicht bewertet)
+  let progress = {};
+  let mode = "professionell";
+  let currentCat = "all";
+  let currentItem = null;
+  let revealed = false;
+
+  const cardArea = document.getElementById("cardArea");
+  const modeToggle = document.getElementById("modeToggle");
+  const filtersEl = document.getElementById("filters");
+
+  function buildFilters(){
+    const cats = ["all", ...Object.keys(CAT_LABELS)];
+    filtersEl.innerHTML = cats.map(c => {
+      const label = c === "all" ? "Alle" : CAT_LABELS[c];
+      return `<button class="filter-btn ${c==='all'?'active':''}" data-cat="${c}">${label}</button>`;
+    }).join("");
+  }
+
+  filtersEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".filter-btn");
+    if (!btn) return;
+    filtersEl.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentCat = btn.dataset.cat;
+    pickNext();
+  });
+
+  modeToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest(".mode-btn");
+    if (!btn) return;
+    mode = btn.dataset.mode;
+    modeToggle.dataset.mode = mode;
+    modeToggle.querySelectorAll(".mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+    renderCurrent();
+  });
+
+  function pool(){
+    return OBJECTIONS.filter(o => currentCat === "all" || o.cat === currentCat);
+  }
+
+  function weightOf(item){
+    const status = progress[item.id];
+    if (status === "practice") return 4;
+    if (status === "learned") return 1;
+    return 2; // noch nicht bewertet
+  }
+
+  function pickNext(){
+    const items = pool();
+    if (items.length === 0){
+      currentItem = null;
+      renderEmpty();
+      return;
+    }
+    // gewichtete Zufallsauswahl, vermeidet direkte Wiederholung wenn möglich
+    let candidates = items;
+    if (items.length > 1 && currentItem){
+      candidates = items.filter(i => i.id !== currentItem.id);
+      if (candidates.length === 0) candidates = items;
+    }
+    const weights = candidates.map(weightOf);
+    const totalWeight = weights.reduce((a,b)=>a+b,0);
+    let r = Math.random() * totalWeight;
+    let chosen = candidates[0];
+    for (let i=0;i<candidates.length;i++){
+      r -= weights[i];
+      if (r <= 0){ chosen = candidates[i]; break; }
+    }
+    currentItem = chosen;
+    revealed = false;
+    renderCurrent();
+  }
+
+  function renderEmpty(){
+    cardArea.innerHTML = `<div class="empty-msg">Keine Einwände in dieser Kategorie.</div>`;
+  }
+
+  function renderCurrent(){
+    if (!currentItem){ renderEmpty(); return; }
+    const q = mode === "professionell" ? currentItem.q_pro : currentItem.q_ent;
+    const a = mode === "professionell" ? currentItem.a_pro : currentItem.a_ent;
+
+    cardArea.innerHTML = `
+      <div class="prompt-tag">
+        <span>Kunde sagt</span>
+        <span class="cat-badge">${CAT_LABELS[currentItem.cat]}</span>
+      </div>
+      <div class="bubble-card">
+        <div class="bubble-who">Einwand</div>
+        <div class="bubble-text">${q}</div>
+      </div>
+
+      <button class="reveal-btn" id="revealBtn" ${revealed ? "style='display:none;'" : ""}>Antwort aufdecken</button>
+
+      <div class="answer-card ${revealed ? 'show' : ''}" id="answerCard">
+        <div class="bubble-who">Musterantwort</div>
+        <div class="bubble-text answer">${a}</div>
+        <div class="tip-line"><b>Tipp:</b> ${currentItem.tip}</div>
+      </div>
+
+      <div class="rate-row" id="rateRow" style="${revealed ? '' : 'display:none;'}">
+        <button class="rate-btn practice" data-rate="practice">😬 Muss ich üben</button>
+        <button class="rate-btn learned" data-rate="learned">✅ Kannte ich</button>
+      </div>
+
+      <button class="next-btn" id="nextBtn" ${revealed ? "" : "disabled"}>Nächster Einwand</button>
+    `;
+
+    const revealBtn = document.getElementById("revealBtn");
+    if (revealBtn){
+      revealBtn.addEventListener("click", () => {
+        revealed = true;
+        renderCurrent();
+      });
+    }
+
+    const rateRow = document.getElementById("rateRow");
+    if (rateRow){
+      rateRow.querySelectorAll(".rate-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          progress[currentItem.id] = btn.dataset.rate;
+          persistProgress();
+          renderStats();
+          pickNext();
+        });
+      });
+    }
+
+    const nextBtn = document.getElementById("nextBtn");
+    if (nextBtn && !nextBtn.disabled){
+      nextBtn.addEventListener("click", pickNext);
+    }
+  }
+
+  function renderStats(){
+    const ids = OBJECTIONS.map(o => o.id);
+    let learned = 0, practice = 0, total = 0;
+    ids.forEach(id => {
+      const s = progress[id];
+      if (s === "learned"){ learned++; total++; }
+      else if (s === "practice"){ practice++; total++; }
+    });
+    document.getElementById("statTotal").textContent = total;
+    document.getElementById("statLearned").textContent = learned;
+    document.getElementById("statPractice").textContent = practice;
+  }
+
+  async function persistProgress(){
+    try{
+      await window.storage.set(STORAGE_KEY, JSON.stringify(progress));
+    }catch(err){
+      console.error("Speichern fehlgeschlagen:", err);
+    }
+  }
+
+  async function loadProgress(){
+    try{
+      const res = await window.storage.get(STORAGE_KEY);
+      if (res && res.value){
+        progress = JSON.parse(res.value) || {};
+      }
+    }catch(err){
+      progress = {};
+    }
+    renderStats();
+  }
+
+  document.getElementById("resetProgress").addEventListener("click", async () => {
+    if (!confirm("Lernfortschritt wirklich komplett zurücksetzen?")) return;
+    progress = {};
+    await persistProgress();
+    renderStats();
+    pickNext();
+  });
+
+  buildFilters();
+  loadProgress().then(pickNext);
+
+})();
+</script>
+</body>
+</html>

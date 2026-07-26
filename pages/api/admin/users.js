@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { client, user } = auth;
 
-  const { data: me } = await client.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const { data: me } = await client.from("profiles").select("role, is_admin").eq("id", user.id).maybeSingle();
   if (!me || me.role !== "manager") {
     return res.status(403).json({ error: "Nur Manager können die Nutzerverwaltung sehen." });
   }
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     const emailById = new Map(authList.users.map((u) => [u.id, u.email]));
     const users = (profiles || []).map((p) => ({ ...p, email: emailById.get(p.id) || null }));
 
-    return res.status(200).json({ users, selfId: user.id });
+    return res.status(200).json({ users, selfId: user.id, isAdmin: !!me.is_admin });
   } catch (e) {
     return res.status(500).json({ error: e.message || "Fehler beim Laden der Nutzer." });
   }

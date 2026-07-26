@@ -9,6 +9,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [selfId, setSelfId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -25,9 +26,10 @@ export default function Admin() {
       return;
     }
     try {
-      const { users, selfId } = await apiGet("/api/admin/users");
+      const { users, selfId, isAdmin } = await apiGet("/api/admin/users");
       setUsers(users);
       setSelfId(selfId);
+      setIsAdmin(!!isAdmin);
     } catch (e) {
       setError(e.message);
     }
@@ -79,8 +81,33 @@ export default function Admin() {
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
+      {users.some((u) => u.status === "pending") && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-white mb-2.5">Ausstehende Registrierungen</h2>
+          <div className="flex flex-col gap-2.5">
+            {users.filter((u) => u.status === "pending").map((u) => {
+              const busy = busyId === u.id;
+              return (
+                <div key={u.id} className="card flex items-center gap-4 flex-wrap border border-amber/30">
+                  <div className="flex-1 min-w-[180px]">
+                    <div className="font-semibold text-white text-sm">{u.full_name || "Unbenannt"}</div>
+                    <div className="text-xs text-textMuted mt-1">{u.email || "–"}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button disabled={busy} onClick={() => runAction(u.id, "approve")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Genehmigen</button>
+                    <button disabled={busy} onClick={() => runAction(u.id, "reject")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-sm font-semibold text-white mb-2.5">Alle Konten</h2>
+
       <div className="flex flex-col gap-2.5">
-        {users.map((u) => {
+        {users.filter((u) => u.status !== "pending").map((u) => {
           const isSelf = u.id === selfId;
           const inMyTeam = u.manager_id === selfId;
           const busy = busyId === u.id;
@@ -94,13 +121,15 @@ export default function Admin() {
                   {u.full_name || "Unbenannt"}
                   {isSelf && <span className="text-[10px] uppercase tracking-wide text-textMuted border border-line rounded px-1.5 py-0.5">Du</span>}
                   {u.role === "manager" && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Manager</span>}
+                  {u.is_admin && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Admin</span>}
+                  {u.status === "rejected" && <span className="text-[10px] uppercase tracking-wide text-coral border border-coral/40 rounded px-1.5 py-0.5">Abgelehnt</span>}
                   {inMyTeam && <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">In deinem Team</span>}
                 </div>
                 <div className="text-xs text-textMuted mt-1">{u.email || "–"}</div>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {u.role === "manager" ? (
+                {isAdmin && (u.role === "manager" ? (
                   <button disabled={isSelf || busy} onClick={() => runAction(u.id, "remove_manager")}
                     className="btn-ghost text-xs disabled:opacity-40" title={isSelf ? "Du kannst dir nicht selbst die Rolle entziehen" : ""}>
                     Manager-Rechte entziehen
@@ -109,7 +138,7 @@ export default function Admin() {
                   <button disabled={busy} onClick={() => runAction(u.id, "make_manager")} className="btn-ghost text-xs disabled:opacity-40">
                     Zum Manager machen
                   </button>
-                )}
+                ))}
 
                 {!isSelf && (inMyTeam ? (
                   <button disabled={busy} onClick={() => runAction(u.id, "remove_from_team")} className="btn-ghost text-xs disabled:opacity-40">

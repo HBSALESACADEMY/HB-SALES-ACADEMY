@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volk Web – Call Tracker</title>
+<style>
+  :root{
+    --bg: #0a0a0a;
+    --panel: #141414;
+    --panel-2: #1b1b1b;
+    --line: #2a2a2a;
+    --gold: #c9a15c;
+    --gold-dim: #8a733f;
+    --white: #f5f5f5;
+    --muted: #8a8a8a;
+    --green: #4caf7d;
+    --red: #d9614f;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; background:var(--bg); color:var(--white);
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    min-height:100%;
+  }
+  .wrap{
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* HEADER / LOGO */
+  header{ text-align:center; padding: 10px 0 26px; position:relative; }
+  .logo{
+    width: 220px; max-width: 60%; height:auto; display:block; margin: 0 auto 14px;
+    filter: drop-shadow(0 0 22px rgba(201,161,92,0.15));
+  }
+  .subtitle{
+    color: var(--muted); font-size: 12px; letter-spacing: 0.22em;
+    text-transform: uppercase; margin-top: 2px;
+  }
+  .rule{
+    width: 100%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim) 20%, var(--gold) 50%, var(--gold-dim) 80%, transparent);
+    margin: 22px 0;
+  }
+
+  /* VIEW TABS */
+  .view-tabs{
+    display:flex; gap:0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 5px; margin-bottom: 18px; position:relative;
+  }
+  .view-tab{
+    flex:1; position:relative; z-index:2; background:none; border:none;
+    padding: 11px 8px; font-size: 13px; font-weight:600;
+    color: var(--muted); cursor:pointer; border-radius: 8px;
+    transition: color .2s ease;
+  }
+  .view-tab.active{ color: var(--bg); }
+  .view-slider{
+    position:absolute; top:5px; left:5px; width:calc(33.333% - 4px); height:calc(100% - 10px);
+    background: var(--gold); border-radius: 8px;
+    transition: transform .25s cubic-bezier(.4,0,.2,1); z-index:1;
+  }
+  .view-tabs[data-view="week"] .view-slider{ transform: translateX(101%); }
+  .view-tabs[data-view="month"] .view-slider{ transform: translateX(202%); }
+
+  /* DATE / TOTAL BAR */
+  .statusbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; margin-bottom: 20px; font-size: 13px; color: var(--muted);
+  }
+  .statusbar b{ color: var(--white); font-weight:600; }
+  #dateLabel{ text-transform: capitalize; }
+
+  .readonly-note{
+    font-size: 11.5px;
+    color: var(--gold-dim);
+    text-align:center;
+    margin: -8px 0 16px;
+    display:none;
+  }
+  .readonly-note.show{ display:block; }
+
+  /* GRID OF COUNTERS */
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 480px){ .grid{ grid-template-columns: 1fr; } }
+
+  .card{
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 18px 16px; display:flex; flex-direction:column; gap: 10px;
+    position: relative; overflow:hidden;
+    transition: border-color .15s ease, transform .08s ease, background .15s ease;
+    cursor:pointer; user-select:none;
+  }
+  .card.readonly{ cursor: default; }
+  .card.readonly:active{ transform:none; }
+  .card:active{ transform: scale(0.98); }
+  .card:hover{ border-color: var(--gold-dim); }
+  .card.readonly:hover{ border-color: var(--line); }
+
+  .card .accent{ position:absolute; left:0; top:0; bottom:0; width: 4px; }
+  .card[data-kind="neutral"] .accent{ background: var(--gold); }
+  .card[data-kind="positive"] .accent{ background: var(--green); }
+  .card[data-kind="negative"] .accent{ background: var(--red); }
+
+  .card .label{ font-size: 13px; letter-spacing: 0.03em; color: var(--muted); font-weight: 500; }
+  .card .count-row{ display:flex; align-items:center; justify-content:space-between; }
+  .card .count{ font-size: 42px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .card[data-kind="positive"] .count{ color: var(--green); }
+  .card[data-kind="negative"] .count{ color: var(--red); }
+
+  .card .btnrow{ display:flex; gap:8px; }
+  .minusbtn{
+    width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--muted); font-size: 20px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1;
+  }
+  .minusbtn:hover{ color: var(--white); border-color: var(--gold-dim); }
+  .card.readonly .minusbtn{ display:none; }
+  .tapHint{ font-size: 11px; color: #5a5a5a; letter-spacing: 0.05em; }
+
+  /* SUMMARY */
+  .summary{
+    margin-top: 22px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px 20px;
+  }
+  .summary h3{
+    margin: 0 0 12px; font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--gold); font-weight:700;
+  }
+  .summary-row{
+    display:flex; justify-content: space-between; padding: 7px 0;
+    border-bottom: 1px solid var(--line); font-size: 14px;
+  }
+  .summary-row:last-child{ border-bottom:none; }
+  .summary-row span:last-child{ font-weight:700; }
+
+  /* REASON BREAKDOWN */
+  .reasons{
+    margin-top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px 20px;
+  }
+  .reasons h3{
+    margin: 0 0 4px; font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--gold); font-weight:700;
+  }
+  .reasons .sub{ font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .reason-row{ margin-bottom: 12px; }
+  .reason-row:last-child{ margin-bottom:0; }
+  .reason-top{ display:flex; justify-content:space-between; font-size: 13px; margin-bottom: 6px; }
+  .reason-top .name{ color: var(--white); }
+  .reason-top .stat{ color: var(--muted); }
+  .bar-track{
+    height: 8px; background: var(--panel-2); border-radius: 6px;
+    overflow:hidden; border: 1px solid var(--line);
+  }
+  .bar-fill{
+    height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--red));
+    border-radius: 6px; transition: width .3s ease; width: 0%;
+  }
+  .reasons-empty{ font-size: 13px; color: var(--muted); text-align:center; padding: 6px 0 2px; }
+
+  /* ACTIONS */
+  .actions{ display:flex; gap: 10px; margin-top: 20px; }
+  .actions button{
+    flex:1; padding: 13px 10px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--white); font-size: 13px; font-weight:600;
+    letter-spacing:0.03em; cursor:pointer;
+  }
+  #resetBtn{ border-color: rgba(217,97,79,0.35); color: var(--red); }
+  #resetBtn:disabled{ opacity: 0.3; cursor: default; }
+  #copyBtn{ border-color: var(--gold-dim); color: var(--gold); }
+  .actions button:active{ transform: scale(0.98); }
+
+  .toast{
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1e1e1e; border: 1px solid var(--gold-dim); color: var(--white);
+    padding: 10px 18px; border-radius: 10px; font-size: 13px; opacity: 0;
+    pointer-events:none; transition: opacity .2s ease, transform .2s ease; z-index: 50;
+  }
+  .toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .pulse{ animation: pulseAnim .28s ease; }
+  @keyframes pulseAnim{
+    0%{ background: var(--panel); } 35%{ background: #202020; } 100%{ background: var(--panel); }
+  }
+
+  .loading-row{
+    text-align:center; color: var(--muted); font-size: 13px; padding: 30px 0;
+  }
+  .spinner{
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--gold);
+    animation: spin .7s linear infinite; margin: 0 auto 10px;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  /* MODAL */
+  .modal-overlay{
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+    display:none; align-items:flex-end; justify-content:center; z-index: 100;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.show{ display:flex; }
+  @media (min-width: 560px){ .modal-overlay{ align-items:center; } }
+  .modal{
+    background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--red);
+    border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; padding: 22px 20px 26px;
+    animation: slideUp .22s ease;
+  }
+  @media (min-width: 560px){ .modal{ border-radius: 16px; } }
+  @keyframes slideUp{ from{ transform: translateY(24px); opacity: 0; } to{ transform: translateY(0); opacity: 1; } }
+  .modal h4{ margin: 0 0 3px; font-size: 15px; font-weight:700; }
+  .modal .modal-sub{ font-size: 12.5px; color: var(--muted); margin-bottom: 16px; }
+  .reason-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .reason-btn{
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--white);
+    border-radius: 10px; padding: 13px 10px; font-size: 13px; text-align:left;
+    cursor:pointer; line-height:1.3;
+  }
+  .reason-btn:hover{ border-color: var(--red); }
+  .reason-btn:active{ transform: scale(0.98); }
+  .modal-skip{
+    display:block; width:100%; margin-top: 14px; background:none; border:none;
+    color: var(--muted); font-size: 12.5px; text-align:center; cursor:pointer; padding: 6px;
+  }
+  .modal-skip:hover{ color: var(--white); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img class="logo" alt="Volk Web" src="data:image/png;base64,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">
+    <div class="subtitle">Cold Call Tracker</div>
+  </header>
+
+  <div class="rule"></div>
+
+  <div class="view-tabs" id="viewTabs" data-view="today">
+    <div class="view-slider"></div>
+    <button class="view-tab active" data-view="today" type="button">Heute</button>
+    <button class="view-tab" data-view="week" type="button">Woche</button>
+    <button class="view-tab" data-view="month" type="button">Monat</button>
+  </div>
+
+  <div class="statusbar">
+    <div id="dateLabel">–</div>
+    <div id="totalLabel">Anwahlen: <b id="totalToday">0</b></div>
+  </div>
+  <div class="readonly-note" id="readonlyNote">Nur-Ansicht — Zählen geht nur im Tab "Heute"</div>
+
+  <div class="grid" id="cardGrid"></div>
+
+  <div class="summary">
+    <h3>Zusammenfassung</h3>
+    <div class="summary-row"><span>Erreichbarkeitsquote</span><span id="reachRate">0%</span></div>
+    <div class="summary-row"><span>Abschlussquote (von Anrufen)</span><span id="closeRate">0%</span></div>
+    <div class="summary-row"><span>Positive Quote (von erreichten)</span><span id="posRate">0%</span></div>
+  </div>
+
+  <div class="reasons">
+    <h3>Einwand-Verteilung</h3>
+    <div class="sub">Prozentualer Anteil der Gründe bei negativen Anrufen</div>
+    <div id="reasonBars"></div>
+    <div class="reasons-empty" id="reasonsEmpty">Noch keine negativen Anrufe mit Grund erfasst.</div>
+  </div>
+
+  <div class="actions">
+    <button id="copyBtn">Bericht kopieren</button>
+    <button id="resetBtn">Tag zurücksetzen</button>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="reasonModal">
+  <div class="modal">
+    <h4>Was war der Grund?</h4>
+    <div class="modal-sub">Einmal antippen, zählt automatisch mit</div>
+    <div class="reason-grid" id="reasonButtons"></div>
+    <button class="modal-skip" id="modalSkip">Ohne Angabe zählen</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  // Polyfill für window.storage (localStorage-basiert, browserlokal je Gerät)
+  if (!window.storage) {
+    window.storage = {
+      async get(key){ const v = localStorage.getItem("hb_ct_"+key); return v !== null ? { key, value: v } : null; },
+      async set(key, value){ localStorage.setItem("hb_ct_"+key, value); return { key, value }; },
+      async delete(key){ localStorage.removeItem("hb_ct_"+key); return { key, deleted: true }; },
+      async list(prefix){
+        const keys = [];
+        for (let i=0;i<localStorage.length;i++){
+          const k = localStorage.key(i);
+          if (k && k.startsWith("hb_ct_"+(prefix||""))) keys.push(k.replace("hb_ct_",""));
+        }
+        return { keys };
+      }
+    };
+  }
+})();
+</script>
+<script>
+(function(){
+    const FIELDS = [
+    { key: "anwahlen",  label: "Anwahlen",            kind: "neutral"  },
+    { key: "erreicht",  label: "Ans Telefon gegangen", kind: "neutral"  },
+    { key: "nicht",     label: "Nicht erreicht",       kind: "neutral"  },
+    { key: "termin",    label: "Terminiert",           kind: "positive" },
+    { key: "positiv",   label: "Positive Anrufe",      kind: "positive" },
+    { key: "negativ",   label: "Negative Anrufe",      kind: "negative" }
+  ];
+
+  const REASONS = [
+    { key: "preis",       label: "Preis & Auslastung" },
+    { key: "skepsis",     label: "Skepsis & Vertrauen" },
+    { key: "vorhanden",   label: "Bereits vorhanden" },
+    { key: "zeit",        label: "Zeit & Aufschub" },
+    { key: "entscheidung",label: "Entscheidung" },
+    { key: "sonstiges",   label: "Sonstiges" }
+  ];
+
+  const KEY_PREFIX = "callstats:";
+
+  function pad2(n){ return String(n).padStart(2, "0"); }
+  function dateKeyOf(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+  function todayKey(){ return KEY_PREFIX + dateKeyOf(new Date()); }
+
+  function startOfWeek(d){
+    const day = (d.getDay() + 6) % 7; // Montag = 0
+    const monday = new Date(d);
+    monday.setHours(0,0,0,0);
+    monday.setDate(d.getDate() - day);
+    return monday;
+  }
+  function endOfWeek(d){
+    const monday = startOfWeek(d);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23,59,59,999);
+    return sunday;
+  }
+  function startOfMonth(d){ const s = new Date(d.getFullYear(), d.getMonth(), 1); s.setHours(0,0,0,0); return s; }
+  function endOfMonth(d){ const e = new Date(d.getFullYear(), d.getMonth()+1, 0); e.setHours(23,59,59,999); return e; }
+
+  function zeroCounts(){ const o = {}; FIELDS.forEach(f => o[f.key]=0); return o; }
+  function zeroReasons(){ const o = {}; REASONS.forEach(r => o[r.key]=0); return o; }
+
+  function fmtShort(d){
+    return d.toLocaleDateString("de-DE", { day:"2-digit", month:"2-digit" });
+  }
+
+  function todayFullLabel(){
+    return new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  }
+  function weekLabel(){
+    const now = new Date();
+    const s = startOfWeek(now), e = endOfWeek(now);
+    return `Woche: ${fmtShort(s)} – ${fmtShort(e)}`;
+  }
+  function monthLabel(){
+    const now = new Date();
+    return now.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  }
+
+  // Heutige, editierbare Daten
+  let todayCounts = zeroCounts();
+  let todayReasons = zeroReasons();
+
+  // Aktuell angezeigte Daten (Referenz je nach Tab)
+  let activeCounts = todayCounts;
+  let activeReasons = todayReasons;
+  let currentView = "today";
+
+  const grid = document.getElementById("cardGrid");
+  const toastEl = document.getElementById("toast");
+  const STORAGE_KEY = todayKey();
+  const modal = document.getElementById("reasonModal");
+  const reasonButtonsEl = document.getElementById("reasonButtons");
+  const viewTabs = document.getElementById("viewTabs");
+  const readonlyNote = document.getElementById("readonlyNote");
+  const resetBtn = document.getElementById("resetBtn");
+  const totalLabelEl = document.getElementById("totalLabel");
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toastEl.classList.remove("show"), 1800);
+  }
+
+  function buildCards(){
+    grid.innerHTML = "";
+    FIELDS.forEach(f => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.dataset.kind = f.kind;
+      card.dataset.key = f.key;
+      card.innerHTML = `
+        <div class="accent"></div>
+        <div class="label">${f.label}</div>
+        <div class="count-row">
+          <div class="count" id="count-${f.key}">0</div>
+          <div class="btnrow">
+            <div class="minusbtn" data-action="minus" data-key="${f.key}">–</div>
+          </div>
+        </div>
+        <div class="tapHint">Tippen zum Zählen</div>
+      `;
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".minusbtn")) return;
+        if (currentView !== "today"){
+          showToast('Zählen geht nur im Tab "Heute"');
+          return;
+        }
+        if (f.key === "negativ"){
+          openReasonModal(card);
+          return;
+        }
+        todayCounts[f.key] += 1;
+        renderCount(f.key);
+        persist();
+        pulseCard(card);
+      });
+      grid.appendChild(card);
+    });
+
+    grid.querySelectorAll(".minusbtn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (currentView !== "today") return;
+        const key = btn.dataset.key;
+        todayCounts[key] = Math.max(0, todayCounts[key] - 1);
+        renderCount(key);
+        persist();
+      });
+    });
+  }
+
+  function pulseCard(card){
+    card.classList.remove("pulse");
+    void card.offsetWidth;
+    card.classList.add("pulse");
+  }
+
+  function buildReasonButtons(){
+    reasonButtonsEl.innerHTML = "";
+    REASONS.forEach(r => {
+      const btn = document.createElement("button");
+      btn.className = "reason-btn";
+      btn.textContent = r.label;
+      btn.addEventListener("click", () => {
+        todayReasons[r.key] += 1;
+        todayCounts.negativ += 1;
+        renderCount("negativ");
+        renderReasons();
+        persist();
+        closeReasonModal();
+        showToast("Erfasst: " + r.label);
+      });
+      reasonButtonsEl.appendChild(btn);
+    });
+  }
+
+  let activeNegativeCard = null;
+  function openReasonModal(card){
+    activeNegativeCard = card;
+    modal.classList.add("show");
+  }
+  function closeReasonModal(){
+    modal.classList.remove("show");
+    if (activeNegativeCard){ pulseCard(activeNegativeCard); activeNegativeCard = null; }
+  }
+  document.getElementById("modalSkip").addEventListener("click", () => {
+    todayReasons.sonstiges += 1;
+    todayCounts.negativ += 1;
+    renderCount("negativ");
+    renderReasons();
+    persist();
+    closeReasonModal();
+  });
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeReasonModal(); });
+
+  function renderCount(key){
+    const el = document.getElementById(`count-${key}`);
+    if (el) el.textContent = activeCounts[key];
+    renderSummary();
+  }
+  function renderAllCounts(){
+    FIELDS.forEach(f => {
+      const el = document.getElementById(`count-${f.key}`);
+      if (el) el.textContent = activeCounts[f.key];
+    });
+    renderSummary();
+  }
+
+  function renderSummary(){
+    totalLabelEl.innerHTML = (currentView === "today" ? "Anwahlen heute: " : "Anwahlen gesamt: ") + `<b id="totalToday">${activeCounts.anwahlen}</b>`;
+
+    const reachRate = activeCounts.anwahlen > 0 ? Math.round((activeCounts.erreicht / activeCounts.anwahlen) * 100) : 0;
+    const closeRate = activeCounts.anwahlen > 0 ? Math.round((activeCounts.termin / activeCounts.anwahlen) * 100) : 0;
+    const posBase = activeCounts.positiv + activeCounts.negativ;
+    const posRate = posBase > 0 ? Math.round((activeCounts.positiv / posBase) * 100) : 0;
+
+    document.getElementById("reachRate").textContent = reachRate + "%";
+    document.getElementById("closeRate").textContent = closeRate + "%";
+    document.getElementById("posRate").textContent = posRate + "%";
+  }
+
+  function renderReasons(){
+    const total = REASONS.reduce((sum, r) => sum + activeReasons[r.key], 0);
+    const container = document.getElementById("reasonBars");
+    const emptyEl = document.getElementById("reasonsEmpty");
+
+    if (total === 0){
+      container.innerHTML = "";
+      emptyEl.style.display = "block";
+      return;
+    }
+    emptyEl.style.display = "none";
+
+    const sorted = [...REASONS].sort((a,b) => activeReasons[b.key] - activeReasons[a.key]);
+    container.innerHTML = sorted.map(r => {
+      const count = activeReasons[r.key];
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      return `
+        <div class="reason-row">
+          <div class="reason-top"><span class="name">${r.label}</span><span class="stat">${count} · ${pct}%</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        </div>`;
+    }).join("");
+  }
+
+  async function persist(){
+    try{
+      await window.storage.set(STORAGE_KEY, JSON.stringify({ counts: todayCounts, reasons: todayReasons }));
+    }catch(err){ console.error("Speichern fehlgeschlagen:", err); }
+  }
+
+  async function loadToday(){
+    try{
+      const res = await window.storage.get(STORAGE_KEY);
+      if (res && res.value){
+        const saved = JSON.parse(res.value);
+        const savedCounts = saved.counts || saved;
+        FIELDS.forEach(f => { todayCounts[f.key] = typeof savedCounts[f.key] === "number" ? savedCounts[f.key] : 0; });
+        if (saved.reasons){
+          REASONS.forEach(r => { todayReasons[r.key] = typeof saved.reasons[r.key] === "number" ? saved.reasons[r.key] : 0; });
+        }
+      }
+    }catch(err){ /* kein Eintrag für heute */ }
+  }
+
+  async function fetchAggregate(rangeStart, rangeEnd){
+    const agg = { counts: zeroCounts(), reasons: zeroReasons() };
+    let listRes;
+    try{
+      listRes = await window.storage.list(KEY_PREFIX);
+    }catch(err){
+      return agg;
+    }
+    const keys = (listRes && listRes.keys) ? listRes.keys : [];
+    const relevant = keys.filter(k => {
+      const datePart = k.replace(KEY_PREFIX, "");
+      const d = new Date(datePart + "T12:00:00");
+      return !isNaN(d) && d >= rangeStart && d <= rangeEnd;
+    });
+
+    for (const k of relevant){
+      try{
+        const res = await window.storage.get(k);
+        if (res && res.value){
+          const parsed = JSON.parse(res.value);
+          const c = parsed.counts || parsed;
+          const r = parsed.reasons || {};
+          FIELDS.forEach(f => { agg.counts[f.key] += (typeof c[f.key] === "number" ? c[f.key] : 0); });
+          REASONS.forEach(rr => { agg.reasons[rr.key] += (typeof r[rr.key] === "number" ? r[rr.key] : 0); });
+        }
+      }catch(err){ /* einzelner Tag nicht lesbar, überspringen */ }
+    }
+    return agg;
+  }
+
+  function setLoading(isLoading){
+    if (isLoading){
+      grid.innerHTML = `<div class="loading-row" style="grid-column:1/-1;"><div class="spinner"></div>Lade Zeitraum…</div>`;
+    }
+  }
+
+  function applyReadonlyState(){
+    const isToday = currentView === "today";
+    readonlyNote.classList.toggle("show", !isToday);
+    resetBtn.disabled = !isToday;
+    grid.querySelectorAll(".card").forEach(card => card.classList.toggle("readonly", !isToday));
+  }
+
+  async function switchView(view){
+    currentView = view;
+    viewTabs.dataset.view = view;
+    viewTabs.querySelectorAll(".view-tab").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+
+    if (view === "today"){
+      activeCounts = todayCounts;
+      activeReasons = todayReasons;
+      document.getElementById("dateLabel").textContent = todayFullLabel();
+      buildCards();
+      applyReadonlyState();
+      renderAllCounts();
+      renderReasons();
+      return;
+    }
+
+    document.getElementById("dateLabel").textContent = view === "week" ? weekLabel() : monthLabel();
+    setLoading(true);
+    const now = new Date();
+    const range = view === "week" ? [startOfWeek(now), endOfWeek(now)] : [startOfMonth(now), endOfMonth(now)];
+    const agg = await fetchAggregate(range[0], range[1]);
+    activeCounts = agg.counts;
+    activeReasons = agg.reasons;
+    buildCards();
+    applyReadonlyState();
+    renderAllCounts();
+    renderReasons();
+  }
+
+  viewTabs.addEventListener("click", (e) => {
+    const btn = e.target.closest(".view-tab");
+    if (!btn) return;
+    switchView(btn.dataset.view);
+  });
+
+  function buildReport(){
+    const total = REASONS.reduce((sum, r) => sum + activeReasons[r.key], 0);
+    const rangeLabel = currentView === "today" ? todayFullLabel() : (currentView === "week" ? weekLabel() : monthLabel());
+    const lines = [
+      `Volk Web – Bericht (${rangeLabel})`,
+      ``,
+      `Anwahlen: ${activeCounts.anwahlen}`,
+      `Ans Telefon gegangen: ${activeCounts.erreicht}`,
+      `Nicht erreicht: ${activeCounts.nicht}`,
+      `Terminiert: ${activeCounts.termin}`,
+      `Positive Anrufe: ${activeCounts.positiv}`,
+      `Negative Anrufe: ${activeCounts.negativ}`,
+    ];
+    if (total > 0){
+      lines.push(``, `Einwand-Verteilung:`);
+      [...REASONS].sort((a,b) => activeReasons[b.key] - activeReasons[a.key]).forEach(r => {
+        const pct = Math.round((activeReasons[r.key] / total) * 100);
+        lines.push(`  ${r.label}: ${activeReasons[r.key]} (${pct}%)`);
+      });
+    }
+    return lines.join("\n");
+  }
+
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    const text = buildReport();
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast("Bericht kopiert");
+    }catch(err){ showToast("Kopieren nicht möglich"); }
+  });
+
+  resetBtn.addEventListener("click", async () => {
+    if (currentView !== "today") return;
+    if (!confirm("Wirklich alle heutigen Zähler und Einwand-Gründe auf 0 zurücksetzen?")) return;
+    FIELDS.forEach(f => todayCounts[f.key] = 0);
+    REASONS.forEach(r => todayReasons[r.key] = 0);
+    renderAllCounts();
+    renderReasons();
+    await persist();
+    showToast("Tag zurückgesetzt");
+  });
+
+  async function init(){
+    document.getElementById("dateLabel").textContent = todayFullLabel();
+    buildCards();
+    buildReasonButtons();
+    await loadToday();
+    applyReadonlyState();
+    renderAllCounts();
+    renderReasons();
+  }
+
+  init();
+
+})();
+</script>
+</body>
+</html>
