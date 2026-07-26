@@ -21,6 +21,8 @@ export default function Layout({ children, fullBleed }) {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [navItems, setNavItems] = useState(FALLBACK_NAV);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [unreadCommunity, setUnreadCommunity] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -48,6 +50,30 @@ export default function Layout({ children, fullBleed }) {
     });
     return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, [router]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadUnread() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { count: msgCount } = await supabase.from("direct_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", session.user.id).is("read_at", null);
+      if (mounted) setUnreadMessages(msgCount || 0);
+
+      const { data: me } = await supabase.from("profiles").select("last_seen_community_at").eq("id", session.user.id).maybeSingle();
+      const since = me?.last_seen_community_at || new Date(0).toISOString();
+      const [{ count: postCount }, { count: commentCount }] = await Promise.all([
+        supabase.from("community_posts").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", session.user.id),
+        supabase.from("community_comments").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", session.user.id),
+      ]);
+      if (mounted) setUnreadCommunity((postCount || 0) + (commentCount || 0));
+    }
+    loadUnread();
+    const interval = setInterval(loadUnread, 20000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, [router.asPath]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -116,6 +142,7 @@ export default function Layout({ children, fullBleed }) {
         <div className="flex-1 overflow-y-auto flex flex-col gap-1">
           {navItems.filter((n) => !n.requires_manager || profile?.role === "manager").map((item) => {
             const route = item.is_builtin ? item.route : `/folder/${item.id}`;
+            const badgeCount = item.key === "community" ? unreadCommunity : item.key === "messages" ? unreadMessages : 0;
             return (
               <button
                 key={item.id}
@@ -124,7 +151,12 @@ export default function Layout({ children, fullBleed }) {
                   router.asPath === route ? "bg-gradient-to-r from-amber/15 to-transparent text-amber shadow-[inset_2px_0_0_#F0B23E]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
                 }`}
               >
-                <Icon name={item.icon} /> {item.label}
+                <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
+                {badgeCount > 0 && (
+                  <span className="bg-coral text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">
+                    {badgeCount > 9 ? "9+" : badgeCount}
+                  </span>
+                )}
               </button>
             );
           })}

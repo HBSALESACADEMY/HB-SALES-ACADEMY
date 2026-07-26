@@ -45,6 +45,8 @@ export default function Community() {
 
     setPosts(posts || []);
     setLoading(false);
+
+    await supabase.from("profiles").update({ last_seen_community_at: new Date().toISOString() }).eq("id", session.user.id);
   }
 
   useEffect(() => { load(); }, []);
