@@ -1,0 +1,47 @@
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import Layout from "../../components/Layout";
+import { supabase } from "../../lib/supabaseClient";
+
+export default function CustomCourseDetail() {
+  const router = useRouter();
+  const { id } = router.query;
+  const [course, setCourse] = useState(null);
+  const [modules, setModules] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    async function load() {
+      const { data: c } = await supabase.from("custom_courses").select("*").eq("id", id).maybeSingle();
+      const { data: ms } = await supabase.from("custom_modules").select("*").eq("course_id", id).order("order_index");
+      setCourse(c);
+      setModules(ms || []);
+      setLoading(false);
+    }
+    load();
+  }, [id]);
+
+  if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
+  if (!course) return <Layout><p className="text-textMuted text-sm">Kurs nicht gefunden.</p></Layout>;
+
+  return (
+    <Layout>
+      <h1 className="text-2xl font-display text-white mb-1">{course.title}</h1>
+      <p className="text-textMuted text-sm mb-6">{course.description}</p>
+
+      <div className="flex flex-col gap-4">
+        {modules.map((m) => (
+          <div key={m.id} className="card">
+            <div className="font-display text-base font-semibold text-white mb-2">{m.title}</div>
+            {m.video_url && (
+              <video controls className="w-full rounded-lg mb-3" src={m.video_url} />
+            )}
+            {m.content && <p className="text-sm text-textMuted whitespace-pre-wrap">{m.content}</p>}
+          </div>
+        ))}
+        {modules.length === 0 && <p className="text-textMuted text-sm">Noch keine Module in diesem Kurs.</p>}
+      </div>
+    </Layout>
+  );
+}

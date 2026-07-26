@@ -1,0 +1,197 @@
+import { useEffect, useState } from "react";
+import Layout from "../../components/Layout";
+import Icon from "../../components/Icon";
+import { supabase } from "../../lib/supabaseClient";
+
+const COLORS = ["amber", "teal", "coral", "violet"];
+const COLOR_HEX = { amber: "#F0B23E", teal: "#3FBFA6", coral: "#E5716A", violet: "#9E8CF0" };
+
+export default function ContentAdmin() {
+  const [isManager, setIsManager] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState([]);
+  const [modulesByCourse, setModulesByCourse] = useState({});
+  const [error, setError] = useState("");
+
+  const [newCourse, setNewCourse] = useState({ title: "", description: "", color: "amber" });
+  const [creatingCourse, setCreatingCourse] = useState(false);
+
+  const [moduleDrafts, setModuleDrafts] = useState({}); // courseId -> { title, content, file, uploading }
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
+    if (!me || me.role !== "manager") {
+      setIsManager(false);
+      setLoading(false);
+      return;
+    }
+    const { data: cs, error: cErr } = await supabase.from("custom_courses").select("*").order("order_index");
+    if (cErr) setError(cErr.message);
+    setCourses(cs || []);
+
+    const { data: ms } = await supabase.from("custom_modules").select("*").order("order_index");
+    const grouped = {};
+    (ms || []).forEach((m) => {
+      grouped[m.course_id] = grouped[m.course_id] || [];
+      grouped[m.course_id].push(m);
+    });
+    setModulesByCourse(grouped);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function createCourse() {
+    if (!newCourse.title.trim()) return;
+    setCreatingCourse(true);
+    setError("");
+    const { data: { session } } = await supabase.auth.getSession();
+    const { error: err } = await supabase.from("custom_courses").insert({
+      title: newCourse.title.trim(),
+      description: newCourse.description.trim(),
+      color: newCourse.color,
+      order_index: courses.length,
+      created_by: session.user.id,
+    });
+    if (err) setError(err.message);
+    else { setNewCourse({ title: "", description: "", color: "amber" }); await load(); }
+    setCreatingCourse(false);
+  }
+
+  async function deleteCourse(id) {
+    setError("");
+    const { error: err } = await supabase.from("custom_courses").delete().eq("id", id);
+    if (err) setError(err.message);
+    else await load();
+  }
+
+  function setDraft(courseId, patch) {
+    setModuleDrafts((prev) => ({ ...prev, [courseId]: { ...prev[courseId], ...patch } }));
+  }
+
+  async function addModule(courseId) {
+    const draft = moduleDrafts[courseId] || {};
+    if (!draft.title?.trim()) return;
+    setDraft(courseId, { uploading: true });
+    setError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      let videoUrl = null;
+
+      if (draft.file) {
+        const ext = draft.file.name.split(".").pop();
+        const path = `${courseId}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("course-videos").upload(path, draft.file);
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("course-videos").getPublicUrl(path);
+        videoUrl = pub.publicUrl;
+      }
+
+      const existing = modulesByCourse[courseId] || [];
+      const { error: insErr } = await supabase.from("custom_modules").insert({
+        course_id: courseId,
+        title: draft.title.trim(),
+        content: draft.content?.trim() || null,
+        video_url: videoUrl,
+        order_index: existing.length,
+        created_by: session.user.id,
+      });
+      if (insErr) throw insErr;
+
+      setModuleDrafts((prev) => ({ ...prev, [courseId]: { title: "", content: "", file: null, uploading: false } }));
+      await load();
+    } catch (e) {
+      setError(e.message || "Fehler beim Hinzufügen des Moduls.");
+      setDraft(courseId, { uploading: false });
+    }
+  }
+
+  async function deleteModule(id) {
+    setError("");
+    const { error: err } = await supabase.from("custom_modules").delete().eq("id", id);
+    if (err) setError(err.message);
+    else await load();
+  }
+
+  if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
+
+  if (!isManager) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-display text-white mb-1">Inhalte verwalten</h1>
+        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <h1 className="text-2xl font-display text-white mb-1">Inhalte verwalten</h1>
+      <p className="text-textMuted text-sm mb-6">Lege eigene Kurse mit Modulen an — Text und optional ein Video pro Modul. Erscheint für alle Nutzer unter "Eigene Inhalte".</p>
+
+      {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
+
+      <div className="card mb-6">
+        <div className="font-semibold text-white text-sm mb-3">Neuen Kurs anlegen</div>
+        <div className="flex flex-col gap-2.5">
+          <input className="input" placeholder="Titel" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} />
+          <textarea className="input" placeholder="Kurzbeschreibung" rows={2} value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} />
+          <div className="flex items-center gap-2">
+            {COLORS.map((c) => (
+              <button key={c} onClick={() => setNewCourse({ ...newCourse, color: c })}
+                className={`w-7 h-7 rounded-full border-2 ${newCourse.color === c ? "border-white" : "border-transparent"}`}
+                style={{ background: COLOR_HEX[c] }} title={c} />
+            ))}
+            <button disabled={creatingCourse} onClick={createCourse} className="btn ml-auto disabled:opacity-40">Kurs anlegen</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        {courses.map((c) => {
+          const mods = modulesByCourse[c.id] || [];
+          const draft = moduleDrafts[c.id] || { title: "", content: "", file: null };
+          return (
+            <div key={c.id} className="card">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <div className="font-display text-base font-semibold text-white">{c.title}</div>
+                  <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
+                </div>
+                <button onClick={() => deleteCourse(c.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Kurs löschen</button>
+              </div>
+
+              <div className="flex flex-col gap-2 mb-3">
+                {mods.map((m) => (
+                  <div key={m.id} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2">
+                    <Icon name="book" size={14} />
+                    <span className="text-sm flex-1">{m.title}</span>
+                    {m.video_url && <span className="text-[10px] uppercase text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
+                    <button onClick={() => deleteModule(m.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                  </div>
+                ))}
+                {mods.length === 0 && <p className="text-xs text-textMuted">Noch keine Module.</p>}
+              </div>
+
+              <div className="border-t border-line pt-3 flex flex-col gap-2">
+                <input className="input" placeholder="Modultitel" value={draft.title || ""} onChange={(e) => setDraft(c.id, { title: e.target.value })} />
+                <textarea className="input" placeholder="Inhalt / Beschreibung" rows={2} value={draft.content || ""} onChange={(e) => setDraft(c.id, { content: e.target.value })} />
+                <div className="flex items-center gap-2">
+                  <input type="file" accept="video/*" onChange={(e) => setDraft(c.id, { file: e.target.files[0] })} className="text-xs text-textMuted flex-1" />
+                  <button disabled={draft.uploading} onClick={() => addModule(c.id)} className="btn disabled:opacity-40">
+                    {draft.uploading ? "Lädt hoch..." : "Modul hinzufügen"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {courses.length === 0 && <p className="text-textMuted text-sm">Noch keine eigenen Kurse angelegt.</p>}
+      </div>
+    </Layout>
+  );
+}

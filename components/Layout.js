@@ -6,12 +6,14 @@ import Icon from "./Icon";
 const NAV = [
   { id: "/", label: "Dashboard", icon: "dashboard" },
   { id: "/courses", label: "Kurse", icon: "book" },
+  { id: "/custom-courses", label: "Eigene Inhalte", icon: "award" },
   { id: "/roleplay", label: "Rollenspiel", icon: "chat" },
   { id: "/call-tracker", label: "Call Tracker", icon: "target" },
   { id: "/einwand-trainer", label: "Einwand-Trainer", icon: "flame" },
   { id: "/knowledge", label: "Wissensdatenbank", icon: "library" },
   { id: "/manager", label: "Team (Manager)", icon: "users" },
   { id: "/admin", label: "Nutzerverwaltung", icon: "lock" },
+  { id: "/admin/content", label: "Inhalte verwalten", icon: "book" },
 ];
 
 export default function Layout({ children, fullBleed }) {
@@ -83,7 +85,7 @@ export default function Layout({ children, fullBleed }) {
           HB Sales <span className="text-amber">Academy</span>
         </div>
         <div className="text-[11px] text-textMuted px-2.5 pb-5 uppercase tracking-wide">Vertriebspsychologie</div>
-        {NAV.filter((n) => (n.id !== "/manager" && n.id !== "/admin") || profile?.role === "manager").map((item) => (
+        {NAV.filter((n) => !["/manager", "/admin", "/admin/content"].includes(n.id) || profile?.role === "manager").map((item) => (
           <button
             key={item.id}
             onClick={() => router.push(item.id)}
