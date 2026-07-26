@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import Icon from "./Icon";
+import Avatar from "./Avatar";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -184,6 +185,10 @@ export default function Layout({ children, fullBleed }) {
             );
           })}
         </div>
+        <button onClick={() => router.push("/profile")} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surfaceRaised text-left mb-1">
+          <Avatar name={profile?.full_name || "?"} src={profile?.avatar_url} size={30} />
+          <span className="text-[13px] font-medium text-white truncate flex-1">{profile?.full_name || "Mein Profil"}</span>
+        </button>
         <div className="mt-auto flex flex-col gap-1.5 p-2.5 bg-surface border border-line rounded-lg text-xs">
           <div className="flex justify-between">
             <span>Level {level}</span>

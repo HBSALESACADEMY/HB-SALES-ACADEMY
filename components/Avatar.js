@@ -13,7 +13,17 @@ function initialsFor(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export default function Avatar({ name = "?", size = 32 }) {
+export default function Avatar({ name = "?", size = 32, src = null }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size, boxShadow: "0 2px 8px -2px rgba(0,0,0,.4)" }}
+      />
+    );
+  }
   return (
     <span
       className="avatar"

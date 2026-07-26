@@ -10,7 +10,7 @@ export default function Community() {
   const [groups, setGroups] = useState([]);
   const [activeGroup, setActiveGroup] = useState("all"); // "all" | group.id
   const [posts, setPosts] = useState([]);
-  const [profileNames, setProfileNames] = useState({});
+  const [profileMap, setProfileMap] = useState({});
   const [commentsByPost, setCommentsByPost] = useState({});
   const [kudosByPost, setKudosByPost] = useState({});
   const [newPost, setNewPost] = useState("");
@@ -36,14 +36,14 @@ export default function Community() {
       supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(80),
       supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
       supabase.from("community_kudos").select("*"),
-      supabase.from("profiles").select("id, full_name").eq("status", "approved"),
+      supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved"),
     ]);
 
     setGroups(groups || []);
 
     const names = {};
-    (profiles || []).forEach((p) => { names[p.id] = p.full_name || "Unbenannt"; });
-    setProfileNames(names);
+    (profiles || []).forEach((p) => { names[p.id] = { name: p.full_name || "Unbenannt", avatar: p.avatar_url }; });
+    setProfileMap(names);
 
     const cByPost = {};
     (comments || []).forEach((c) => { cByPost[c.post_id] = cByPost[c.post_id] || []; cByPost[c.post_id].push(c); });
@@ -192,12 +192,12 @@ export default function Community() {
         {visiblePosts.map((p) => {
           const kudos = kudosByPost[p.id] || { count: 0, mine: false };
           const comments = commentsByPost[p.id] || [];
-          const authorName = profileNames[p.user_id] || "Unbenannt";
+          const authorName = profileMap[p.user_id]?.name || "Unbenannt";
           return (
             <div key={p.id} className="card">
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2.5">
-                  <Avatar name={authorName} size={34} />
+                  <Avatar name={authorName} src={profileMap[p.user_id]?.avatar} size={34} />
                   <div>
                     <div className="font-semibold text-white text-sm">{authorName}</div>
                     <div className="text-[11px] text-textMuted">{new Date(p.created_at).toLocaleString("de-DE")}</div>
@@ -229,9 +229,9 @@ export default function Community() {
                 <div className="flex flex-col gap-2.5 mt-3 pt-3 border-t border-line">
                   {comments.map((c) => (
                     <div key={c.id} className="flex items-start gap-2">
-                      <Avatar name={profileNames[c.user_id] || "?"} size={22} />
+                      <Avatar name={profileMap[c.user_id]?.name || "?"} src={profileMap[c.user_id]?.avatar} size={22} />
                       <div className="text-xs">
-                        <span className="font-semibold text-white">{profileNames[c.user_id] || "Unbenannt"}: </span>
+                        <span className="font-semibold text-white">{profileMap[c.user_id]?.name || "Unbenannt"}: </span>
                         <span className="text-textMuted">{c.content}</span>
                       </div>
                     </div>
