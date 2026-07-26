@@ -20,6 +20,11 @@ export default function Layout({ children, fullBleed }) {
   const [profile, setProfile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [navItems, setNavItems] = useState(FALLBACK_NAV);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [router.asPath]);
 
   useEffect(() => {
     let mounted = true;
@@ -81,26 +86,49 @@ export default function Layout({ children, fullBleed }) {
   const into = (profile?.xp || 0) % 150;
 
   return (
-    <div className="flex h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
-      <aside className="w-[230px] flex-shrink-0 bg-gradient-to-b from-[#14161F] to-[#0F1117] border-r border-line px-3.5 py-6 flex flex-col gap-1">
-        <div className="px-2.5 pb-1.5">
+    <div className="flex flex-col md:flex-row h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
+      {/* Mobile top bar */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[#14161F] flex-shrink-0">
+        <img src="/logo.svg" alt="HB Sales Academy" className="h-7 w-auto" />
+        <button onClick={() => setMobileNavOpen(true)} className="text-white p-1.5 -mr-1.5" aria-label="Menü öffnen">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+        </button>
+      </div>
+
+      {/* Backdrop for mobile drawer */}
+      {mobileNavOpen && (
+        <div className="md:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileNavOpen(false)} />
+      )}
+
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-50 w-[230px] flex-shrink-0
+        bg-gradient-to-b from-[#14161F] to-[#0F1117] border-r border-line px-3.5 py-6 flex flex-col gap-1
+        transition-transform duration-200 md:translate-x-0
+        ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
+        <div className="flex items-center justify-between px-2.5 pb-1.5">
           <img src="/logo.svg" alt="HB Sales Academy" className="h-8 w-auto" />
+          <button onClick={() => setMobileNavOpen(false)} className="md:hidden text-textMuted p-1" aria-label="Menü schließen">
+            <Icon name="x" size={16} />
+          </button>
         </div>
         <div className="text-[11px] text-textMuted px-2.5 pb-5 uppercase tracking-wide">Vertriebspsychologie</div>
-        {navItems.filter((n) => !n.requires_manager || profile?.role === "manager").map((item) => {
-          const route = item.is_builtin ? item.route : `/folder/${item.id}`;
-          return (
-            <button
-              key={item.id}
-              onClick={() => router.push(route)}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full ${
-                router.asPath === route ? "bg-gradient-to-r from-amber/15 to-transparent text-amber shadow-[inset_2px_0_0_#F0B23E]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
-              }`}
-            >
-              <Icon name={item.icon} /> {item.label}
-            </button>
-          );
-        })}
+        <div className="flex-1 overflow-y-auto flex flex-col gap-1">
+          {navItems.filter((n) => !n.requires_manager || profile?.role === "manager").map((item) => {
+            const route = item.is_builtin ? item.route : `/folder/${item.id}`;
+            return (
+              <button
+                key={item.id}
+                onClick={() => router.push(route)}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full ${
+                  router.asPath === route ? "bg-gradient-to-r from-amber/15 to-transparent text-amber shadow-[inset_2px_0_0_#F0B23E]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                }`}
+              >
+                <Icon name={item.icon} /> {item.label}
+              </button>
+            );
+          })}
+        </div>
         <div className="mt-auto flex flex-col gap-1.5 p-2.5 bg-surface border border-line rounded-lg text-xs">
           <div className="flex justify-between">
             <span>Level {level}</span>
@@ -115,7 +143,7 @@ export default function Layout({ children, fullBleed }) {
           <Icon name="logout" size={15} /> Abmelden
         </button>
       </aside>
-      <main className={`flex-1 overflow-y-auto ${fullBleed ? "p-3" : "p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(240,178,62,.06), transparent), radial-gradient(500px 260px at 0% 100%, rgba(63,191,166,.05), transparent)" }}>
+      <main className={`flex-1 overflow-y-auto ${fullBleed ? "p-3" : "p-4 md:p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(240,178,62,.06), transparent), radial-gradient(500px 260px at 0% 100%, rgba(63,191,166,.05), transparent)" }}>
         {typeof children === "function" ? children(profile) : children}
       </main>
     </div>

@@ -47,7 +47,7 @@ export default function Dashboard() {
             <p className="text-textMuted text-sm">Lädt...</p>
           ) : (
             <>
-              <div className="grid grid-cols-4 gap-3.5 mb-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
                 <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-white font-mono">{doneModuleIds.size}/{totalModules}</div></div>
                 <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-white font-mono">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
                 <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Zertifikate</div><div className="text-2xl font-display font-bold text-white font-mono">{certCount}/{COURSES.length}</div></div>

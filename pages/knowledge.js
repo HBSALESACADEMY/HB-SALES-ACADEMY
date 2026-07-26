@@ -34,7 +34,7 @@ export default function Knowledge() {
         <Icon name="search" size={15} />
         <input className="bg-transparent border-none outline-none text-sm flex-1 text-white" placeholder="Suche..." value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
-      <div className="grid grid-cols-2 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {filtered.length === 0 && <p className="text-textMuted text-sm">Keine Treffer.</p>}
         {filtered.map((k, i) => (
           <div key={i} className="card">

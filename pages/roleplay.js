@@ -119,7 +119,7 @@ export default function Roleplay() {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {PERSONAS.map((p) => (
             <div key={p.id} className="card cursor-pointer hover:-translate-y-0.5 hover:shadow-xl transition" style={{ borderLeft: `4px solid ${p.accent}` }} onClick={() => selectPersona(p)}>
               <div className="font-display font-semibold text-[15px] text-white">{p.name}</div>
@@ -183,7 +183,7 @@ export default function Roleplay() {
             <span className="font-mono text-xl font-bold text-white">{feedback.score !== null ? feedback.score + "%" : "–"}</span>
           </div>
           <p className="text-sm text-textMuted mb-3">{feedback.zusammenfassung}</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <strong className="text-xs text-teal block mb-1.5">Stärken</strong>
               <ul className="text-xs text-textMuted list-disc pl-4 space-y-1">
