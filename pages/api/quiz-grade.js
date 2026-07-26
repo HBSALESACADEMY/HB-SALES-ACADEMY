@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     });
     if (insertError) console.error("insert quiz_results failed:", insertError.message);
 
-    await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: 25 }).catch(() => {});
+    try { await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: 25 }); } catch (e) { console.error("increment_xp failed:", e.message); }
 
     return res.status(200).json({ grading });
   } catch (e) {

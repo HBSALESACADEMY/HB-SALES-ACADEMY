@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     });
     if (insertError) console.error("insert exam_results failed:", insertError.message);
 
-    await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: passed ? 150 : 30 }).catch(() => {});
+    try { await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: passed ? 150 : 30 }); } catch (e) { console.error("increment_xp failed:", e.message); }
 
     return res.status(200).json({ passed, combinedScore, mcPct: Math.round(mcPct), capstoneGrading: grading });
   } catch (e) {

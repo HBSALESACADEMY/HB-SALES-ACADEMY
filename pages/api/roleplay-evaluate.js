@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     if (insertError) console.error("insert roleplay_sessions failed:", insertError.message);
 
     const xpGain = 30;
-    await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: xpGain }).catch(() => {});
+    try { await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: xpGain }); } catch (e) { console.error("increment_xp failed:", e.message); }
 
     return res.status(200).json({ evaluation });
   } catch (e) {
