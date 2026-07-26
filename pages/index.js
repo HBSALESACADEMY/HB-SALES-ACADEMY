@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Layout from "../components/Layout";
+import Layout, { patchCachedProfile } from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 import { COURSES } from "../lib/curriculum";
@@ -12,6 +12,34 @@ export default function Dashboard() {
   const [rpSessions, setRpSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hub, setHub] = useState({ unreadMessages: 0, unreadCommunity: 0, openDuels: 0, dueFlashcards: 0, pendingApprovals: 0, pendingSuggestions: 0, pendingFriendRequests: 0, isManager: false });
+  const [draggedTileKey, setDraggedTileKey] = useState(null);
+  const [dashboardPrefs, setDashboardPrefs] = useState({});
+
+  async function persistTileOrder(newOrder) {
+    setDashboardPrefs((prev) => {
+      const next = { ...prev, order: newOrder };
+      (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        patchCachedProfile({ dashboard_prefs: next });
+        await supabase.from("profiles").update({ dashboard_prefs: next }).eq("id", session.user.id);
+      })();
+      return next;
+    });
+  }
+
+  function handleTileDrop(targetKey, visibleTiles) {
+    if (!draggedTileKey || draggedTileKey === targetKey) { setDraggedTileKey(null); return; }
+    const currentKeys = visibleTiles.map((t) => t.key);
+    const fromIdx = currentKeys.indexOf(draggedTileKey);
+    const toIdx = currentKeys.indexOf(targetKey);
+    if (fromIdx === -1 || toIdx === -1) { setDraggedTileKey(null); return; }
+    const reordered = [...currentKeys];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedTileKey);
+    setDraggedTileKey(null);
+    persistTileOrder(reordered);
+  }
 
   useEffect(() => {
     async function load() {
@@ -28,8 +56,9 @@ export default function Dashboard() {
       setRpSessions(rp || []);
       setLoading(false);
 
-      const { data: me } = await supabase.from("profiles").select("role, last_seen_community_at").eq("id", uid).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("role, last_seen_community_at, dashboard_prefs").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
+      setDashboardPrefs(me?.dashboard_prefs || {});
 
       const [
         { count: msgCount },
@@ -113,29 +142,33 @@ export default function Dashboard() {
                       { key: "admin-suggestions", label: "Wissens-Vorschläge", icon: "lock", route: "/admin/suggestions", badge: hub.pendingSuggestions },
                     ] : []),
                   ];
-                  const prefs = profile?.dashboard_prefs || {};
+                  const prefs = dashboardPrefs || {};
                   const order = prefs.order || [];
                   const hidden = new Set(prefs.hidden || []);
-                  const visible = allTiles.filter((t) => !hidden.has(t.key));
-                  visible.sort((a, b) => {
+                  const visibleTiles = allTiles.filter((t) => !hidden.has(t.key));
+                  visibleTiles.sort((a, b) => {
                     const ia = order.indexOf(a.key), ib = order.indexOf(b.key);
                     if (ia === -1 && ib === -1) return 0;
                     if (ia === -1) return 1;
                     if (ib === -1) return -1;
                     return ia - ib;
                   });
-                  return visible;
-                })().map((t) => (
-                  <button key={t.route} onClick={() => router.push(t.route)}
-                    className="card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-pointer">
-                    <div className="flex items-center justify-between w-full">
-                      <Icon name={t.icon} color="#E8368F" size={18} />
-                      {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
-                    </div>
-                    <div className="text-[13px] font-semibold text-white">{t.label}</div>
-                    {t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
-                  </button>
-                ))}
+                  return visibleTiles.map((t) => (
+                    <button key={t.key} draggable
+                      onDragStart={() => setDraggedTileKey(t.key)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleTileDrop(t.key, visibleTiles)}
+                      onClick={() => router.push(t.route)}
+                      className={`card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-grab active:cursor-grabbing ${draggedTileKey === t.key ? "opacity-40" : ""}`}>
+                      <div className="flex items-center justify-between w-full">
+                        <Icon name={t.icon} color="#E8368F" size={18} />
+                        {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
+                      </div>
+                      <div className="text-[13px] font-semibold text-white">{t.label}</div>
+                      {t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
+                    </button>
+                  ));
+                })()}
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">

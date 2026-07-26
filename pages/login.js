@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
+import { playLoginChime } from "../lib/sounds";
 
 export default function Login() {
   const router = useRouter();
@@ -17,8 +18,12 @@ export default function Login() {
     setLoading(true);
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data?.user) {
+          supabase.from("login_events").insert({ user_id: data.user.id }); // bewusst ohne await, soll den Login nicht verzögern
+        }
+        playLoginChime();
       } else {
         const { error } = await supabase.auth.signUp({
           email, password,
