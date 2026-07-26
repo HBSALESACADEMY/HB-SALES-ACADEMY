@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 
 export default function Community() {
+  const router = useRouter();
   const [selfId, setSelfId] = useState(null);
   const [isManager, setIsManager] = useState(false);
   const [groups, setGroups] = useState([]);
@@ -143,6 +145,10 @@ export default function Community() {
 
       {/* Group tabs */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <button onClick={() => router.push("/members")}
+          className="px-3 py-1.5 rounded-full text-xs font-semibold border border-line text-textMuted hover:text-white hover:border-[#4A3565]">
+          👥 Alle Mitglieder
+        </button>
         <button onClick={() => setActiveGroup("all")}
           className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-[#16130A] border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
           Alle

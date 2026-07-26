@@ -1,0 +1,104 @@
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import Layout from "../components/Layout";
+import Avatar from "../components/Avatar";
+import { supabase } from "../lib/supabaseClient";
+
+export default function Members() {
+  const router = useRouter();
+  const [selfId, setSelfId] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [friendships, setFriendships] = useState([]); // alle, die mich betreffen
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+
+  async function load() {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    setSelfId(session.user.id);
+
+    const [{ data: profiles }, { data: fr }] = await Promise.all([
+      supabase.from("profiles").select("id, full_name, avatar_url, bio").eq("status", "approved").neq("id", session.user.id).order("full_name"),
+      supabase.from("friendships").select("*").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
+    ]);
+    setMembers(profiles || []);
+    setFriendships(fr || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function relationTo(memberId) {
+    return friendships.find((f) =>
+      (f.requester_id === selfId && f.addressee_id === memberId) ||
+      (f.requester_id === memberId && f.addressee_id === selfId)
+    );
+  }
+
+  async function sendRequest(memberId) {
+    setBusyId(memberId);
+    await supabase.from("friendships").insert({ requester_id: selfId, addressee_id: memberId });
+    await load();
+    setBusyId(null);
+  }
+
+  async function respond(friendship, status) {
+    setBusyId(friendship.id);
+    await supabase.from("friendships").update({ status }).eq("id", friendship.id);
+    await load();
+    setBusyId(null);
+  }
+
+  if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
+
+  return (
+    <Layout>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mitglieder</h1>
+      <div className="brand-stripe w-16 mb-3" />
+      <p className="text-textMuted text-sm mb-6">Alle im Team — schick eine Anfrage, um schreiben zu können.</p>
+
+      <div className="flex flex-col gap-2.5">
+        {members.map((m) => {
+          const rel = relationTo(m.id);
+          const isBusy = busyId === m.id || busyId === rel?.id;
+          return (
+            <div key={m.id} className="card flex items-center gap-3.5">
+              <Avatar name={m.full_name || "?"} src={m.avatar_url} size={44} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-white text-sm">{m.full_name || "Unbenannt"}</div>
+                {m.bio && <div className="text-xs text-textMuted truncate">{m.bio}</div>}
+              </div>
+
+              {!rel && (
+                <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
+                  Anfrage senden
+                </button>
+              )}
+              {rel?.status === "pending" && rel.requester_id === selfId && (
+                <span className="text-xs text-textMuted flex-shrink-0">Angefragt...</span>
+              )}
+              {rel?.status === "pending" && rel.addressee_id === selfId && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button disabled={isBusy} onClick={() => respond(rel, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                  <button disabled={isBusy} onClick={() => respond(rel, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                </div>
+              )}
+              {rel?.status === "declined" && (
+                <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
+                  Erneut anfragen
+                </button>
+              )}
+              {rel?.status === "accepted" && (
+                <button onClick={() => router.push(`/messages?to=${m.id}`)} className="btn text-xs flex-shrink-0">
+                  Schreiben
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {members.length === 0 && <p className="text-textMuted text-sm">Noch keine anderen Mitglieder.</p>}
+      </div>
+    </Layout>
+  );
+}
