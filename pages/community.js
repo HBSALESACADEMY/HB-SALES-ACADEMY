@@ -14,6 +14,7 @@ export default function Community() {
   const [groups, setGroups] = useState([]);
   const [activeGroup, setActiveGroup] = useState("all"); // "all" | group.id
   const [posts, setPosts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [profileMap, setProfileMap] = useState({});
   const [commentsByPost, setCommentsByPost] = useState({});
   const [kudosByPost, setKudosByPost] = useState({});
@@ -180,12 +181,18 @@ export default function Community() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
-  const visiblePosts = activeGroup === "all" ? posts : posts.filter((p) => p.group_id === activeGroup);
+  const visiblePosts = (activeGroup === "all" ? posts : posts.filter((p) => p.group_id === activeGroup))
+    .filter((p) => !searchQuery.trim() || p.content.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <Layout>
       <h1 className="text-2xl font-display text-white mb-1">Community</h1>
       <p className="text-textMuted text-sm mb-5">Teilt Erfolge, Tipps, Fotos und Erfahrungen mit dem ganzen Team.</p>
+
+      <div className="card flex items-center gap-2 mb-4">
+        <Icon name="search" size={15} />
+        <input className="bg-transparent border-none outline-none text-sm flex-1 text-white" placeholder="Beiträge durchsuchen..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+      </div>
 
       {kudosWall && (kudosWall.topKudos || kudosWall.topXp || kudosWall.topStreak) && (
         <div className="card mb-5">

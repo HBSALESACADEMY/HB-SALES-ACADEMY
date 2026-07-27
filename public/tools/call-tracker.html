@@ -294,17 +294,35 @@
 
 <script>
 (function(){
-  // Polyfill für window.storage (localStorage-basiert, browserlokal je Gerät)
+  // Trennt die lokalen Zähler pro angemeldeter Person, falls sich mehrere ein
+  // Gerät/Browser teilen. Liest die Nutzer-ID synchron aus der bereits vom
+  // Haupt-Login gespeicherten Supabase-Sitzung (kein Extra-Request nötig).
+  function hbKeyPrefix() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const su = params.get("su") || "";
+      const ref = (su.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/) || [])[1];
+      if (!ref) return "hb_ct_";
+      const raw = localStorage.getItem("sb-" + ref + "-auth-token");
+      if (!raw) return "hb_ct_";
+      const parsed = JSON.parse(raw);
+      const uid = parsed?.user?.id || parsed?.currentSession?.user?.id;
+      return uid ? ("hb_ct_" + uid + "_") : "hb_ct_";
+    } catch (e) { return "hb_ct_"; }
+  }
+  const HB_PREFIX = hbKeyPrefix();
+
+  // Polyfill für window.storage (localStorage-basiert, jetzt pro Nutzer getrennt)
   if (!window.storage) {
     window.storage = {
-      async get(key){ const v = localStorage.getItem("hb_ct_"+key); return v !== null ? { key, value: v } : null; },
-      async set(key, value){ localStorage.setItem("hb_ct_"+key, value); return { key, value }; },
-      async delete(key){ localStorage.removeItem("hb_ct_"+key); return { key, deleted: true }; },
+      async get(key){ const v = localStorage.getItem(HB_PREFIX+key); return v !== null ? { key, value: v } : null; },
+      async set(key, value){ localStorage.setItem(HB_PREFIX+key, value); return { key, value }; },
+      async delete(key){ localStorage.removeItem(HB_PREFIX+key); return { key, deleted: true }; },
       async list(prefix){
         const keys = [];
         for (let i=0;i<localStorage.length;i++){
           const k = localStorage.key(i);
-          if (k && k.startsWith("hb_ct_"+(prefix||""))) keys.push(k.replace("hb_ct_",""));
+          if (k && k.startsWith(HB_PREFIX+(prefix||""))) keys.push(k.replace(HB_PREFIX,""));
         }
         return { keys };
       }

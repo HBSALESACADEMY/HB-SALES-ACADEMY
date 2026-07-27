@@ -163,7 +163,8 @@ export default function Messages() {
     const payload = selected.type === "group"
       ? { sender_id: selfId, group_id: selected.id, content }
       : { sender_id: selfId, recipient_id: selected.id, content };
-    await supabase.from("direct_messages").insert(payload);
+    const { error } = await supabase.from("direct_messages").insert(payload);
+    if (error) { alert("Nachricht konnte nicht gesendet werden: " + error.message); setInput(content); return; }
     await refreshThread();
   }
 
@@ -177,8 +178,11 @@ export default function Messages() {
       const payload = selected.type === "group"
         ? { sender_id: selfId, group_id: selected.id, content: defaultLabel || "", attachment_path: path, attachment_type: attachmentType, attachment_name: file.name || null }
         : { sender_id: selfId, recipient_id: selected.id, content: defaultLabel || "", attachment_path: path, attachment_type: attachmentType, attachment_name: file.name || null };
-      await supabase.from("direct_messages").insert(payload);
-      await refreshThread();
+      const { error: insertError } = await supabase.from("direct_messages").insert(payload);
+      if (insertError) alert("Anhang konnte nicht gesendet werden: " + insertError.message);
+      else await refreshThread();
+    } else {
+      alert("Datei-Upload fehlgeschlagen: " + error.message);
     }
     setUploading(false);
   }

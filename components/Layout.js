@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
+import { apiPost } from "../lib/apiClient";
 import Icon from "./Icon";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
@@ -25,7 +26,7 @@ const FALLBACK_NAV = [
 // nicht, wie Nutzer ihre Reihenfolge per Drag & Drop selbst festlegen können.
 const NAV_GROUPS = {
   dashboard: "Start",
-  courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen",
+  courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen", scripts: "Lernen", "roleplay-history": "Lernen",
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
@@ -65,6 +66,23 @@ export default function Layout({ children, fullBleed }) {
   const [collapsedCategories, setCollapsedCategories] = useState(new Set());
   const [draggedCategory, setDraggedCategory] = useState(null);
   const [shineId, setShineId] = useState(null);
+  const [quickHelpOpen, setQuickHelpOpen] = useState(false);
+  const [quickHelpQuestion, setQuickHelpQuestion] = useState("");
+  const [quickHelpAnswer, setQuickHelpAnswer] = useState("");
+  const [quickHelpLoading, setQuickHelpLoading] = useState(false);
+
+  async function askQuickHelp() {
+    if (!quickHelpQuestion.trim()) return;
+    setQuickHelpLoading(true);
+    setQuickHelpAnswer("");
+    try {
+      const data = await apiPost("/api/quick-help", { question: quickHelpQuestion.trim() });
+      setQuickHelpAnswer(data.answer);
+    } catch (e) {
+      setQuickHelpAnswer("Fehler: " + e.message);
+    }
+    setQuickHelpLoading(false);
+  }
   const collapsedSynced = useRef(false);
 
   useEffect(() => {
@@ -411,6 +429,31 @@ export default function Layout({ children, fullBleed }) {
         {typeof children === "function" ? children(profile) : children}
       </main>
       {openProfileId && <ProfileModal userId={openProfileId} onClose={() => setOpenProfileId(null)} />}
+
+      <button
+        onClick={() => setQuickHelpOpen(true)}
+        className="fixed bottom-5 right-5 z-[190] w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+        style={{ background: "linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%)", boxShadow: "0 4px 16px -4px rgba(232,54,143,.5)" }}
+        title="Frag die KI"
+      >
+        <span className="text-white text-lg">💬</span>
+      </button>
+
+      {quickHelpOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onClick={() => setQuickHelpOpen(false)}>
+          <div className="card max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-display font-semibold text-white">💬 Frag die KI</span>
+              <button onClick={() => setQuickHelpOpen(false)} className="text-textMuted hover:text-white text-lg leading-none">×</button>
+            </div>
+            <textarea className="input mb-2" rows={2} placeholder="Kurze Verkaufsfrage stellen..." value={quickHelpQuestion} onChange={(e) => setQuickHelpQuestion(e.target.value)} />
+            <button onClick={askQuickHelp} disabled={quickHelpLoading || !quickHelpQuestion.trim()} className="btn text-xs w-full justify-center disabled:opacity-40 mb-3">
+              {quickHelpLoading ? "Denkt nach..." : "Fragen"}
+            </button>
+            {quickHelpAnswer && <p className="text-sm text-textMuted whitespace-pre-wrap border-t border-line pt-3">{quickHelpAnswer}</p>}
+          </div>
+        </div>
+      )}
       {friendToast && (
         <button
           onClick={() => { setFriendToast(null); router.push("/members"); }}

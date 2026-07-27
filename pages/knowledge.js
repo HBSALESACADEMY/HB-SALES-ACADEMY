@@ -36,7 +36,7 @@ export default function Knowledge() {
   }, []);
 
   const combined = [...dynamicEntries, ...KNOWLEDGE_BASE];
-  const filtered = combined.filter((k) => k.title.toLowerCase().includes(query.toLowerCase()) || k.tag.toLowerCase().includes(query.toLowerCase()));
+  const filtered = combined.filter((k) => k.title.toLowerCase().includes(query.toLowerCase()) || k.tag.toLowerCase().includes(query.toLowerCase()) || k.body.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <Layout>
