@@ -125,7 +125,7 @@ export default function Messages() {
           (selected.type === "dm" && ((m.sender_id === selfId && m.recipient_id === selected.id) || (m.sender_id === selected.id && m.recipient_id === selfId)))
         );
         if (belongsToOpenThread) refreshThread();
-        else loadConversations();
+        loadConversations();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_reads" }, () => {
         if (selected) loadReadReceipts(selected, selfId);
