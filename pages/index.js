@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Layout, { patchCachedProfile } from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
+import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
 
 export default function Dashboard() {
@@ -69,20 +70,21 @@ export default function Dashboard() {
       setDashboardPrefs(me?.dashboard_prefs || {});
 
       const [
-        { count: msgCount },
         { count: postCount }, { count: commentCount },
         { data: cards }, { data: progress },
         { data: myDuels },
         { count: friendReqCount },
+        unreadInfo,
       ] = await Promise.all([
-        supabase.from("direct_messages").select("id", { count: "exact", head: true }).eq("recipient_id", uid).is("read_at", null),
         supabase.from("community_posts").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", uid),
         supabase.from("community_comments").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", uid),
         supabase.from("flashcards").select("id"),
         supabase.from("flashcard_progress").select("card_id, next_review_date").eq("user_id", uid),
         supabase.from("duels").select("*").or(`challenger_id.eq.${uid},opponent_id.eq.${uid}`),
         supabase.from("friendships").select("id", { count: "exact", head: true }).eq("addressee_id", uid).eq("status", "pending"),
+        getUnreadMessageInfo(supabase, uid),
       ]);
+      const msgCount = unreadInfo.total;
 
       const today = new Date().toISOString().slice(0, 10);
       const progressByCard = {};

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
+import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import Icon from "./Icon";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
@@ -158,26 +159,7 @@ export default function Layout({ children, fullBleed }) {
       if (!session) return;
       const uid = session.user.id;
 
-      const [{ data: myGroupMemberships }, { data: myReads }, { data: recentMsgs }] = await Promise.all([
-        supabase.from("chat_group_members").select("group_id").eq("user_id", uid),
-        supabase.from("conversation_reads").select("*").eq("user_id", uid),
-        // Nur die letzten 30 Tage betrachten, reicht für ein Badge völlig und hält die Abfrage klein.
-        supabase.from("direct_messages").select("sender_id, group_id, created_at")
-          .or(`recipient_id.eq.${uid},group_id.not.is.null`)
-          .gt("created_at", new Date(Date.now() - 30 * 86400000).toISOString()),
-      ]);
-      const myGroupIds = (myGroupMemberships || []).map((m) => m.group_id);
-      const readByKey = {};
-      (myReads || []).forEach((r) => { readByKey[`${r.is_group ? "g" : "d"}:${r.target_id}`] = r.last_read_at; });
-
-      let msgCount = 0;
-      (recentMsgs || []).forEach((m) => {
-        if (m.sender_id === uid) return; // eigene Nachrichten zählen nie als ungelesen für einen selbst
-        if (m.group_id && !myGroupIds.includes(m.group_id)) return; // fremde Gruppe, geht mich nichts an
-        const key = m.group_id ? `g:${m.group_id}` : `d:${m.sender_id}`;
-        const lastRead = readByKey[key] || "1970-01-01T00:00:00.000Z";
-        if (new Date(m.created_at) > new Date(lastRead)) msgCount++;
-      });
+      const { total: msgCount } = await getUnreadMessageInfo(supabase, uid);
       if (mounted) setUnreadMessages(msgCount || 0);
 
       const { data: me } = { data: cachedProfile };

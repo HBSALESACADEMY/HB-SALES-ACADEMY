@@ -5,6 +5,7 @@ import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
+import { getUnreadMessageInfo } from "../lib/unreadMessages";
 
 function formatPreviewTime(iso) {
   const d = new Date(iso);
@@ -63,12 +64,11 @@ export default function Messages() {
     const uid = session.user.id;
     setSelfId(uid);
 
-    const [{ data: friendships }, { data: allMsgs }, { data: myGroupMemberships }, { data: myReads }] = await Promise.all([
+    const [{ data: friendships }, unreadInfo] = await Promise.all([
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${uid},addressee_id.eq.${uid}`),
-      supabase.from("direct_messages").select("*").or(`sender_id.eq.${uid},recipient_id.eq.${uid},group_id.not.is.null`).order("created_at", { ascending: false }),
-      supabase.from("chat_group_members").select("group_id").eq("user_id", uid),
-      supabase.from("conversation_reads").select("*").eq("user_id", uid),
+      getUnreadMessageInfo(supabase, uid),
     ]);
+    const { unreadByConvoKey, relevantMessages, myGroupIds } = unreadInfo;
 
     const friendIds = (friendships || []).map((f) => f.requester_id === uid ? f.addressee_id : f.requester_id);
     const { data: friendProfiles } = friendIds.length
@@ -76,38 +76,24 @@ export default function Messages() {
       : { data: [] };
     setFriendsList(friendProfiles || []);
 
-    const myGroupIds = (myGroupMemberships || []).map((m) => m.group_id);
-    const { data: groups } = myGroupIds.length
-      ? await supabase.from("chat_groups").select("*").in("id", myGroupIds)
+    const groupIdsArr = Array.from(myGroupIds);
+    const { data: groups } = groupIdsArr.length
+      ? await supabase.from("chat_groups").select("*").in("id", groupIdsArr)
       : { data: [] };
 
-    const relevantMsgs = (allMsgs || []).filter((m) => !m.group_id || myGroupIds.includes(m.group_id));
-
-    const readByKey = {};
-    (myReads || []).forEach((r) => { readByKey[`${r.is_group ? "g" : "d"}:${r.target_id}`] = r.last_read_at; });
-
-    // Ungelesen = Nachrichten von ANDEREN (nie meine eigenen!) nach meinem letzten Lesezeitpunkt.
-    const unreadByConvo = {};
-    relevantMsgs.forEach((m) => {
-      if (m.sender_id === uid) return; // eigene Nachrichten zählen nie als "ungelesen für mich"
-      const key = m.group_id ? `g:${m.group_id}` : `d:${m.sender_id}`;
-      const lastRead = readByKey[key] || EPOCH;
-      if (new Date(m.created_at) > new Date(lastRead)) unreadByConvo[key] = (unreadByConvo[key] || 0) + 1;
-    });
-
     const lastMsgByConvo = {};
-    relevantMsgs.forEach((m) => {
+    relevantMessages.forEach((m) => {
       const key = m.group_id ? `g:${m.group_id}` : `d:${m.sender_id === uid ? m.recipient_id : m.sender_id}`;
       if (!lastMsgByConvo[key]) lastMsgByConvo[key] = m;
     });
 
     const dmConvos = (friendProfiles || []).map((c) => ({
       id: c.id, type: "dm", full_name: c.full_name, avatar_url: c.avatar_url,
-      lastMessage: lastMsgByConvo[`d:${c.id}`] || null, unread: unreadByConvo[`d:${c.id}`] || 0,
+      lastMessage: lastMsgByConvo[`d:${c.id}`] || null, unread: unreadByConvoKey[`d:${c.id}`] || 0,
     }));
     const groupConvos = (groups || []).map((g) => ({
       id: g.id, type: "group", full_name: g.name, avatar_url: null,
-      lastMessage: lastMsgByConvo[`g:${g.id}`] || null, unread: unreadByConvo[`g:${g.id}`] || 0,
+      lastMessage: lastMsgByConvo[`g:${g.id}`] || null, unread: unreadByConvoKey[`g:${g.id}`] || 0,
     }));
 
     const convos = [...dmConvos, ...groupConvos].sort((a, b) => {
