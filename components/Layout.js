@@ -31,7 +31,7 @@ const NAV_GROUPS = {
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
-  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-call-stats": "Verwaltung",
+  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung",
 };
 function groupFor(item) {
@@ -456,7 +456,7 @@ export default function Layout({ children, fullBleed }) {
         onClick={() => setQuickHelpOpen(true)}
         className="fixed bottom-5 right-5 z-[190] w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: "linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%)", boxShadow: "0 4px 16px -4px rgba(232,54,143,.5)" }}
-        title="Frag die KI"
+        title="Vertriebs-Buddy"
       >
         <span className="text-white text-lg">💬</span>
       </button>
@@ -465,7 +465,7 @@ export default function Layout({ children, fullBleed }) {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onClick={() => setQuickHelpOpen(false)}>
           <div className="card max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <span className="font-display font-semibold text-white">💬 Frag die KI</span>
+              <span className="font-display font-semibold text-white">💬 Vertriebs-Buddy</span>
               <button onClick={() => setQuickHelpOpen(false)} className="text-textMuted hover:text-white text-lg leading-none">×</button>
             </div>
             <textarea className="input mb-2" rows={2} placeholder="Kurze Verkaufsfrage stellen..." value={quickHelpQuestion} onChange={(e) => setQuickHelpQuestion(e.target.value)} />
