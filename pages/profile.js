@@ -79,7 +79,7 @@ export default function Profile() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mein Profil</h1>
-      <div className="brand-stripe w-16 mb-6" />
+      <div className="brand-stripe w-16 mb-4" />
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 

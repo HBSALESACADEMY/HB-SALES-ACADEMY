@@ -48,8 +48,8 @@ export default function AdminLogins() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Login-Verlauf</h1>
-      <div className="brand-stripe w-16 mb-3" />
-      <p className="text-textMuted text-sm mb-5">Wer sich wann angemeldet hat — die letzten 300 Anmeldungen im Team.</p>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-6">Wer sich wann angemeldet hat — die letzten 300 Anmeldungen im Team.</p>
 
       <select className="input !w-auto mb-4" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
         <option value="">Alle Nutzer</option>

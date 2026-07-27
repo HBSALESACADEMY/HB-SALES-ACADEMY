@@ -79,8 +79,8 @@ export default function AdminActivity() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Aktivitäten</h1>
-      <div className="brand-stripe w-16 mb-3" />
-      <p className="text-textMuted text-sm mb-5">Logins, Lernfortschritt und Community-Aktivität — team-weit, für alle Mitglieder.</p>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-6">Logins, Lernfortschritt und Community-Aktivität — team-weit, für alle Mitglieder.</p>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <select className="input !w-auto" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>

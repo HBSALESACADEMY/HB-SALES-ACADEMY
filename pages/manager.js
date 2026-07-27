@@ -172,7 +172,8 @@ export default function Manager() {
     <Layout>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-display text-white mb-1">Team-Übersicht</h1>
+          <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Team-Übersicht</h1>
+          <div className="brand-stripe w-16 mb-2" />
           <p className="text-textMuted text-sm">Fortschritt deiner zugeordneten Team-Mitglieder.</p>
         </div>
         {team.length > 0 && (

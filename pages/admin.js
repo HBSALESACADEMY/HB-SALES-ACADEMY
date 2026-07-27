@@ -76,7 +76,8 @@ export default function Admin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Nutzerverwaltung</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Nutzerverwaltung</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Alle registrierten Konten. Weise Team-Mitglieder zu, vergib oder entziehe Manager-Rechte, oder entferne Konten.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

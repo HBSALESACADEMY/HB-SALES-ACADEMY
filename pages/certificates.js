@@ -47,7 +47,7 @@ export default function Certificates() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Meine Zertifikate</h1>
-      <div className="brand-stripe w-16 mb-6" />
+      <div className="brand-stripe w-16 mb-4" />
 
       {earned.length === 0 ? (
         <div className="card text-center py-10">

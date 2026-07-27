@@ -96,7 +96,8 @@ export default function Roleplay() {
   if (!persona) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Rollenspiel</h1>
+        <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Rollenspiel</h1>
+        <div className="brand-stripe w-16 mb-4" />
         <p className="text-textMuted text-sm mb-6">Szenario, Schwierigkeit und Kundentyp wählen.</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {SCENARIOS.map((s) => {
@@ -104,7 +105,7 @@ export default function Roleplay() {
             return (
               <div
                 key={s.id}
-                className={`px-3.5 py-1.5 rounded-full border text-[12.5px] cursor-pointer ${scenarioId === s.id ? "bg-amber text-[#16130A] border-amber font-semibold" : "border-line text-textMuted hover:text-white hover:border-amber"} ${unlocked ? "" : "opacity-40 cursor-not-allowed"}`}
+                className={`px-3.5 py-1.5 rounded-full border text-[12.5px] cursor-pointer ${scenarioId === s.id ? "bg-amber text-white border-amber font-semibold" : "border-line text-textMuted hover:text-white hover:border-amber"} ${unlocked ? "" : "opacity-40 cursor-not-allowed"}`}
                 onClick={() => unlocked && setScenarioId(s.id)}
               >
                 {!unlocked && <Icon name="lock" size={11} />} {s.label}
@@ -114,7 +115,7 @@ export default function Roleplay() {
         </div>
         <div className="inline-flex border border-line rounded-lg overflow-hidden mb-6">
           {Object.keys(DIFFICULTY).map((k) => (
-            <button key={k} className={`px-3.5 py-2 text-[12.5px] font-semibold ${difficulty === k ? "bg-amber text-[#16130A]" : "bg-surface text-textMuted"}`} onClick={() => setDifficulty(k)}>
+            <button key={k} className={`px-3.5 py-2 text-[12.5px] font-semibold ${difficulty === k ? "bg-amber text-white" : "bg-surface text-textMuted"}`} onClick={() => setDifficulty(k)}>
               {DIFFICULTY[k].label}
             </button>
           ))}
@@ -140,7 +141,7 @@ export default function Roleplay() {
 
       <div ref={chatRef} className="flex flex-col gap-2.5 h-[320px] overflow-y-auto p-4 bg-surfaceRaised border border-line rounded-xl mb-3">
         {messages.map((m, i) => (
-          <div key={i} className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm leading-snug ${m.role === "user" ? "self-end bg-amber text-[#16130A]" : "self-start bg-[#262A3B] text-textMain"}`}>
+          <div key={i} className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm leading-snug ${m.role === "user" ? "self-end bg-amber text-white" : "self-start bg-[#262A3B] text-textMain"}`}>
             {m.content}
           </div>
         ))}

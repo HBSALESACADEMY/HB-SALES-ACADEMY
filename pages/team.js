@@ -97,7 +97,7 @@ export default function Team() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mein Team</h1>
-      <div className="brand-stripe w-16 mb-3" />
+      <div className="brand-stripe w-16 mb-4" />
       <div className="flex items-center justify-between mb-6">
         <p className="text-textMuted text-sm">{managerName ? managerName : "Wettbewerb, Ziele und Mentoring für dein Team."}</p>
         {managerName && (

@@ -32,7 +32,7 @@ export default function Simulator() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Szenario-Simulator</h1>
-      <div className="brand-stripe w-16 mb-3" />
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Echte Gesprächssituationen zum Durchspielen — jede Entscheidung führt zu einer anderen Wendung.</p>
 
       {!scenario ? (

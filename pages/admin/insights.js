@@ -1,0 +1,164 @@
+import { useEffect, useState } from "react";
+import Layout from "../../components/Layout";
+import Icon from "../../components/Icon";
+import Avatar from "../../components/Avatar";
+import { supabase } from "../../lib/supabaseClient";
+import { openProfile } from "../../lib/profileModalBus";
+import { COURSES } from "../../lib/curriculum";
+
+export default function AdminInsights() {
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", session.user.id).maybeSingle();
+      if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
+
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+      const [
+        { data: profiles }, { data: quizzes }, { data: exams }, { data: roleplays },
+        { data: posts }, { data: comments }, { data: kudos }, { data: logins },
+        { data: callLogs },
+      ] = await Promise.all([
+        supabase.from("profiles").select("id, full_name, avatar_url, xp, status, created_at"),
+        supabase.from("quiz_results").select("id"),
+        supabase.from("exam_results").select("course_id, passed"),
+        supabase.from("roleplay_sessions").select("evaluation_score"),
+        supabase.from("community_posts").select("id, user_id"),
+        supabase.from("community_comments").select("id"),
+        supabase.from("community_kudos").select("post_id"),
+        supabase.from("login_events").select("user_id, created_at").gt("created_at", weekAgo),
+        supabase.from("call_log_days").select("counts").gte("log_date", weekAgo.slice(0, 10)),
+      ]);
+
+      const approved = (profiles || []).filter((p) => p.status === "approved");
+      const pending = (profiles || []).filter((p) => p.status === "pending");
+      const totalXp = approved.reduce((s, p) => s + (p.xp || 0), 0);
+      const avgXp = approved.length ? Math.round(totalXp / approved.length) : 0;
+
+      const passedByCourse = {};
+      (exams || []).forEach((e) => { if (e.passed) passedByCourse[e.course_id] = (passedByCourse[e.course_id] || 0) + 1; });
+
+      const avgRoleplayScore = (roleplays || []).length
+        ? Math.round(roleplays.reduce((s, r) => s + (r.evaluation_score || 0), 0) / roleplays.filter((r) => r.evaluation_score != null).length)
+        : null;
+
+      const postByUser = {};
+      (posts || []).forEach((p) => { postByUser[p.id] = p.user_id; });
+      const kudosByAuthor = {};
+      (kudos || []).forEach((k) => { const author = postByUser[k.post_id]; if (author) kudosByAuthor[author] = (kudosByAuthor[author] || 0) + 1; });
+      const nameById = {};
+      (profiles || []).forEach((p) => { nameById[p.id] = p; });
+      const topContributors = Object.entries(kudosByAuthor)
+        .sort((a, b) => b[1] - a[1]).slice(0, 5)
+        .map(([id, count]) => ({ id, count, profile: nameById[id] }));
+
+      const weeklyActiveUsers = new Set((logins || []).map((l) => l.user_id)).size;
+
+      const weeklyAnwahlen = (callLogs || []).reduce((s, c) => s + (c.counts?.anwahlen || 0), 0);
+
+      setStats({
+        totalMembers: approved.length,
+        pendingMembers: pending.length,
+        totalXp, avgXp,
+        totalQuizzes: (quizzes || []).length,
+        totalExamsPassed: (exams || []).filter((e) => e.passed).length,
+        avgRoleplayScore,
+        totalRoleplays: (roleplays || []).length,
+        totalPosts: (posts || []).length,
+        totalComments: (comments || []).length,
+        totalKudos: (kudos || []).length,
+        weeklyActiveUsers,
+        weeklyAnwahlen,
+        passedByCourse,
+        topContributors,
+      });
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
+
+  if (!isAdmin) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-display text-white mb-1">Insights</h1>
+        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Admin-Konten verfügbar.</p>
+      </Layout>
+    );
+  }
+
+  const tiles = [
+    { label: "Mitglieder", value: stats.totalMembers, icon: "users", color: "#E8368F", sub: stats.pendingMembers > 0 ? `${stats.pendingMembers} warten auf Freigabe` : null },
+    { label: "Aktiv diese Woche", value: stats.weeklyActiveUsers, icon: "flame", color: "#00E5C7" },
+    { label: "Gesamt-XP", value: stats.totalXp.toLocaleString("de-DE"), icon: "award", color: "#F0B23E", sub: `Ø ${stats.avgXp} pro Mitglied` },
+    { label: "Rollenspiele", value: stats.totalRoleplays, icon: "chat", color: "#7B2FF7", sub: stats.avgRoleplayScore != null ? `Ø Score ${stats.avgRoleplayScore}` : null },
+    { label: "Quiz abgeschlossen", value: stats.totalQuizzes, icon: "book", color: "#00E5C7" },
+    { label: "Prüfungen bestanden", value: stats.totalExamsPassed, icon: "award", color: "#E8368F" },
+    { label: "Community-Beiträge", value: stats.totalPosts, icon: "users", color: "#F0B23E", sub: `${stats.totalComments} Kommentare · ${stats.totalKudos} Kudos` },
+    { label: "Anwahlen diese Woche", value: stats.weeklyAnwahlen, icon: "target", color: "#7B2FF7" },
+  ];
+
+  return (
+    <Layout>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Insights</h1>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-6">Unternehmensweiter Überblick — alle Mitglieder, alle Teams.</p>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {tiles.map((t) => (
+          <div key={t.label} className="card">
+            <div className="flex items-center justify-between mb-2">
+              <Icon name={t.icon} color={t.color} size={18} />
+            </div>
+            <div className="font-display text-2xl font-bold text-white">{t.value}</div>
+            <div className="text-xs text-textMuted mt-0.5">{t.label}</div>
+            {t.sub && <div className="text-[11px] text-textMuted mt-1">{t.sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="card mb-6">
+        <div className="font-semibold text-white text-sm mb-3">Kurs-Abschlüsse</div>
+        <div className="flex flex-col gap-2.5">
+          {COURSES.map((c) => {
+            const count = stats.passedByCourse[c.id] || 0;
+            const pct = stats.totalMembers ? Math.round((count / stats.totalMembers) * 100) : 0;
+            return (
+              <div key={c.id}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-white">{c.title}</span>
+                  <span className="text-textMuted">{count}/{stats.totalMembers} ({pct}%)</span>
+                </div>
+                <div className="h-1.5 bg-line rounded-full overflow-hidden">
+                  <div className="h-full" style={{ width: `${pct}%`, background: c.accent }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {stats.topContributors.length > 0 && (
+        <div className="card">
+          <div className="font-semibold text-white text-sm mb-3">Aktivste Community-Mitglieder (Kudos erhalten)</div>
+          <div className="flex flex-col gap-2.5">
+            {stats.topContributors.map((c) => (
+              <div key={c.id} className="flex items-center gap-3 cursor-pointer" onClick={() => openProfile(c.id)}>
+                <Avatar name={c.profile?.full_name || "?"} src={c.profile?.avatar_url} size={30} />
+                <span className="text-sm text-white flex-1">{c.profile?.full_name || "Unbenannt"}</span>
+                <span className="text-xs text-textMuted">{c.count} Kudos</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+}

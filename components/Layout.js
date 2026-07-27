@@ -31,7 +31,7 @@ const NAV_GROUPS = {
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
-  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung",
+  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung",
 };
 function groupFor(item) {

@@ -40,7 +40,8 @@ export default function Knowledge() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Wissensdatenbank</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Wissensdatenbank</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Psychologische Prinzipien zum Nachschlagen.</p>
       <div className="flex items-center gap-2 border border-line rounded-lg px-3 py-2.5 mb-5 bg-surface">
         <Icon name="search" size={15} />

@@ -34,8 +34,9 @@ export default function CoursesIndex() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Kurse</h1>
-      <p className="text-textMuted text-sm mb-6">Fünf Kurse, sequenziell freigeschaltet. Jeder Kurs endet mit einer Prüfung (Multiple-Choice + Fallstudie) und einem PDF-Zertifikat.</p>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Kurse</h1>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-6">Sechs Kurse, sequenziell freigeschaltet. Jeder Kurs endet mit einer Prüfung (Multiple-Choice + Fallstudie) und einem PDF-Zertifikat.</p>
       {loading ? (
         <p className="text-textMuted text-sm">Lädt...</p>
       ) : (

@@ -59,8 +59,9 @@ export default function Leaderboard() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Rangliste</h1>
-      <p className="text-textMuted text-sm mb-4">XP-Ranking über das ganze Team.</p>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Rangliste</h1>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-5">XP-Ranking über das ganze Team.</p>
 
       <div className="flex items-center gap-2 mb-5">
         {[["week", "Diese Woche"], ["month", "Dieser Monat"], ["all", "Allzeit"]].map(([key, label]) => (

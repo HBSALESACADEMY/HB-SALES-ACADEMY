@@ -95,7 +95,7 @@ export default function Duel() {
     return (
       <Layout>
         <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Quiz-Duell</h1>
-        <div className="brand-stripe w-16 mb-5" />
+        <div className="brand-stripe w-16 mb-4" />
         <div className="card">
           <div className="text-xs text-textMuted mb-3">Frage {qIndex + 1}/{playing.question_ids.length}</div>
           <p className="text-white text-[15px] font-medium mb-4">{question.q}</p>
@@ -120,7 +120,7 @@ export default function Duel() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Quiz-Duell</h1>
-      <div className="brand-stripe w-16 mb-3" />
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Fordere einen Kollegen zu 5 Fragen heraus — wer besser abschneidet, gewinnt.</p>
 
       <div className="card mb-6">

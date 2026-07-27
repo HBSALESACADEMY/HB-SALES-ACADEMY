@@ -186,8 +186,9 @@ export default function Community() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Community</h1>
-      <p className="text-textMuted text-sm mb-5">Teilt Erfolge, Tipps, Fotos und Erfahrungen mit dem ganzen Team.</p>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Community</h1>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-6">Teilt Erfolge, Tipps, Fotos und Erfahrungen mit dem ganzen Team.</p>
 
       <div className="card flex items-center gap-2 mb-4">
         <Icon name="search" size={15} />
@@ -230,13 +231,13 @@ export default function Community() {
           👥 Alle Mitglieder
         </button>
         <button onClick={() => setActiveGroup("all")}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-[#16130A] border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
           Alle
         </button>
         {groups.map((g) => (
           <div key={g.id} className="relative group">
             <button onClick={() => setActiveGroup(g.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === g.id ? "bg-amber text-[#16130A] border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === g.id ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
               {g.name}
             </button>
             {isManager && (

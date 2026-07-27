@@ -70,7 +70,7 @@ export default function Flashcards() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Flashcards</h1>
-      <div className="brand-stripe w-16 mb-3" />
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Kurze Wiederholungen zu Fakten und Prinzipien — kommt automatisch dann wieder, wenn's am meisten hilft.</p>
 
       {!card ? (

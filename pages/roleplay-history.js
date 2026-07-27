@@ -25,8 +25,8 @@ export default function RoleplayHistory() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Rollenspiel-Verlauf</h1>
-      <div className="brand-stripe w-16 mb-5" />
-      <p className="text-textMuted text-sm mb-5">Deine vergangenen Rollenspiele nochmal durchlesen.</p>
+      <div className="brand-stripe w-16 mb-4" />
+      <p className="text-textMuted text-sm mb-6">Deine vergangenen Rollenspiele nochmal durchlesen.</p>
 
       <div className="flex flex-col gap-3">
         {sessions.map((s) => {

@@ -68,7 +68,7 @@ export default function Members() {
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mitglieder</h1>
-      <div className="brand-stripe w-16 mb-3" />
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Alle im Team — schick eine Anfrage, um schreiben zu können.</p>
 
       <div className="flex flex-col gap-2.5">

@@ -135,7 +135,7 @@ export default function Dashboard() {
       {(profile) => (
         <>
           <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
-          <div className="brand-stripe w-16 mb-3" />
+          <div className="brand-stripe w-16 mb-4" />
           <p className="text-textMuted text-sm mb-6">Dein Überblick über Fortschritt und nächste Schritte.</p>
 
           {profile?.streak_count > 0 && profile?.last_challenge_date !== new Date().toISOString().slice(0, 10) && (

@@ -66,7 +66,7 @@ export default function Scripts() {
         {isManager && <button onClick={() => setShowForm(true)} className="btn text-xs flex-shrink-0">+ Neues Skript</button>}
       </div>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-5">Bewährte Gesprächsbausteine — suchen, ansehen, mit einem Klick kopieren.</p>
+      <p className="text-textMuted text-sm mb-6">Bewährte Gesprächsbausteine — suchen, ansehen, mit einem Klick kopieren.</p>
 
       <div className="card flex items-center gap-2 mb-5">
         <Icon name="search" size={15} />
