@@ -61,13 +61,17 @@
   }
   .view-tab.active{ color: #fff; }
   .view-slider{
-    position:absolute; top:5px; left:5px; width:calc(33.333% - 4px); height:calc(100% - 10px);
+    position:absolute; top:5px; left:5px; width:calc(25% - 4px); height:calc(100% - 10px);
     background: linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%); border-radius: 8px;
     box-shadow: 0 4px 12px -4px rgba(232,54,143,.5);
     transition: transform .25s cubic-bezier(.4,0,.2,1); z-index:1;
   }
   .view-tabs[data-view="week"] .view-slider{ transform: translateX(101%); }
   .view-tabs[data-view="month"] .view-slider{ transform: translateX(202%); }
+  .view-tabs[data-view="team"] .view-slider{ transform: translateX(303%); }
+  #teamPanel h3{ font-size:14px; margin: 0 0 4px; }
+  #teamPanel .sub{ font-size:12px; color:var(--muted); margin-bottom:14px; }
+  #teamPanel canvas{ max-height: 220px; margin-bottom: 22px; }
 
   /* DATE / TOTAL BAR */
   .statusbar{
@@ -234,6 +238,7 @@
   .modal-skip:hover{ color: var(--white); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
 <div class="wrap">
@@ -250,8 +255,10 @@
     <button class="view-tab active" data-view="today" type="button">Heute</button>
     <button class="view-tab" data-view="week" type="button">Woche</button>
     <button class="view-tab" data-view="month" type="button">Monat</button>
+    <button class="view-tab" data-view="team" type="button">Team</button>
   </div>
 
+  <div id="personalPanels">
   <div class="statusbar">
     <div id="dateLabel">–</div>
     <div id="totalLabel">Anwahlen: <b id="totalToday">0</b></div>
@@ -278,6 +285,21 @@
     <button id="copyBtn">Bericht kopieren</button>
     <button id="resetBtn">Tag zurücksetzen</button>
   </div>
+  </div>
+
+  <div id="teamPanel" style="display:none;">
+    <div class="summary" style="margin-bottom:18px;">
+      <h3>Team-Übersicht (letzte 7 Tage)</h3>
+      <div class="sub" style="font-size:12px; color:var(--muted); margin-top:-8px; margin-bottom:14px;">Nur für Manager-Konten sichtbar.</div>
+      <div id="teamNoAccess" style="display:none; font-size:13px; color:var(--muted); padding: 8px 0;">Diese Ansicht ist nur für Manager-Konten verfügbar.</div>
+      <div id="teamContent" style="display:none;">
+        <canvas id="teamMembersChart"></canvas>
+        <canvas id="teamReasonsChart"></canvas>
+      </div>
+      <div id="teamLoading" style="font-size:13px; color:var(--muted);">Lädt...</div>
+    </div>
+  </div>
+
 
 </div>
 
@@ -660,6 +682,15 @@
     viewTabs.dataset.view = view;
     viewTabs.querySelectorAll(".view-tab").forEach(b => b.classList.toggle("active", b.dataset.view === view));
 
+    if (view === "team"){
+      document.getElementById("personalPanels").style.display = "none";
+      document.getElementById("teamPanel").style.display = "block";
+      loadTeamPanel();
+      return;
+    }
+    document.getElementById("personalPanels").style.display = "block";
+    document.getElementById("teamPanel").style.display = "none";
+
     if (view === "today"){
       activeCounts = todayCounts;
       activeReasons = todayReasons;
@@ -682,6 +713,76 @@
     applyReadonlyState();
     renderAllCounts();
     renderReasons();
+  }
+
+  let teamChartInstances = [];
+  async function loadTeamPanel(){
+    const noAccessEl = document.getElementById("teamNoAccess");
+    const contentEl = document.getElementById("teamContent");
+    const loadingEl = document.getElementById("teamLoading");
+    noAccessEl.style.display = "none";
+    contentEl.style.display = "none";
+    loadingEl.style.display = "block";
+    teamChartInstances.forEach(c => c.destroy());
+    teamChartInstances = [];
+
+    if (!hbSupabase) { loadingEl.style.display = "none"; noAccessEl.style.display = "block"; return; }
+    try {
+      const { data: { session } } = await hbSupabase.auth.getSession();
+      if (!session) { loadingEl.style.display = "none"; noAccessEl.style.display = "block"; return; }
+      const { data: me } = await hbSupabase.from("profiles").select("role, manager_id, can_view_call_stats").eq("id", session.user.id).maybeSingle();
+
+      // Zugriff: entweder man ist selbst Team-Lead, oder der eigene Team-Lead hat einem die Sicht freigegeben.
+      let teamManagerId = null;
+      if (me?.role === "manager") teamManagerId = session.user.id;
+      else if (me?.can_view_call_stats && me?.manager_id) teamManagerId = me.manager_id;
+      if (!teamManagerId) { loadingEl.style.display = "none"; noAccessEl.style.display = "block"; return; }
+
+      const { data: members } = await hbSupabase.from("profiles").select("id, full_name").eq("manager_id", teamManagerId);
+      const allIds = [teamManagerId, ...(members || []).map(m => m.id)];
+      const nameById = {};
+      if (teamManagerId === session.user.id) nameById[teamManagerId] = "Ich";
+      (members || []).forEach(m => { nameById[m.id] = m.full_name || "Unbenannt"; });
+      if (!nameById[teamManagerId]) nameById[teamManagerId] = "Team-Lead";
+
+      const since = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+      const { data: logs } = await hbSupabase.from("call_log_days").select("*").in("user_id", allIds).gte("log_date", since);
+
+      const anwahlenByUser = {};
+      const reasonsTotal = { preis:0, skepsis:0, vorhanden:0, zeit:0, entscheidung:0, sonstiges:0 };
+      (logs || []).forEach(l => {
+        anwahlenByUser[l.user_id] = (anwahlenByUser[l.user_id] || 0) + (l.counts?.anwahlen || 0);
+        Object.keys(reasonsTotal).forEach(k => { reasonsTotal[k] += (l.reasons?.[k] || 0); });
+      });
+
+      const memberLabels = allIds.map(id => nameById[id] || "Unbenannt");
+      const memberValues = allIds.map(id => anwahlenByUser[id] || 0);
+
+      loadingEl.style.display = "none";
+      contentEl.style.display = "block";
+
+      const chartColors = ["#7B2FF7","#E8368F","#FF6B35","#00E5C7","#F0B23E","#5FB8E8"];
+
+      teamChartInstances.push(new Chart(document.getElementById("teamMembersChart"), {
+        type: "bar",
+        data: { labels: memberLabels, datasets: [{ label: "Anwahlen (7 Tage)", data: memberValues, backgroundColor: "#E8368F", borderRadius: 6 }] },
+        options: { responsive:true, plugins:{ legend:{ display:false }, title:{ display:true, text:"Anwahlen pro Teammitglied (7 Tage)", color:"#f5f5f5" } },
+          scales: { x:{ ticks:{ color:"#c9c9c9" }, grid:{ color:"#262626" } }, y:{ ticks:{ color:"#c9c9c9" }, grid:{ color:"#262626" } } } }
+      }));
+
+      const reasonLabels = ["Preis & Auslastung","Skepsis & Vertrauen","Bereits vorhanden","Zeit & Aufschub","Entscheidung","Sonstiges"];
+      const reasonValues = [reasonsTotal.preis, reasonsTotal.skepsis, reasonsTotal.vorhanden, reasonsTotal.zeit, reasonsTotal.entscheidung, reasonsTotal.sonstiges];
+
+      teamChartInstances.push(new Chart(document.getElementById("teamReasonsChart"), {
+        type: "doughnut",
+        data: { labels: reasonLabels, datasets: [{ data: reasonValues, backgroundColor: chartColors }] },
+        options: { responsive:true, plugins:{ legend:{ position:"bottom", labels:{ color:"#c9c9c9", font:{size:11} } }, title:{ display:true, text:"Warum negative Anrufe? (Team, 7 Tage)", color:"#f5f5f5" } } }
+      }));
+    } catch (e) {
+      loadingEl.style.display = "none";
+      noAccessEl.style.display = "block";
+      noAccessEl.textContent = "Team-Ansicht konnte nicht geladen werden.";
+    }
   }
 
   viewTabs.addEventListener("click", (e) => {

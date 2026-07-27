@@ -109,6 +109,11 @@ export default function Manager() {
     alert("Team-Ziel für diese Woche gesetzt!");
   }
 
+  async function toggleCallStatsAccess(memberId, allow) {
+    await supabase.from("profiles").update({ can_view_call_stats: allow }).eq("id", memberId);
+    setTeam((prev) => prev.map((m) => m.id === memberId ? { ...m, can_view_call_stats: allow } : m));
+  }
+
   async function saveTeamName() {
     setSavingTeamName(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -289,9 +294,13 @@ export default function Manager() {
                   {m.doneModules}/{m.totalModules} Module · Ø MC {m.avgMc !== null ? m.avgMc + "%" : "–"} · {m.certs}/{COURSES.length} Zertifikate · {m.roleplayCount} Rollenspiele
                 </div>
               </div>
-              <div className="w-32 h-1.5 bg-line rounded-full overflow-hidden">
+              <div className="w-32 h-1.5 bg-line rounded-full overflow-hidden flex-shrink-0">
                 <div className="h-full bg-teal" style={{ width: `${(m.doneModules / m.totalModules) * 100}%` }} />
               </div>
+              <button onClick={() => toggleCallStatsAccess(m.id, !m.can_view_call_stats)}
+                className={`text-xs px-2.5 py-1.5 rounded-full border flex-shrink-0 ${m.can_view_call_stats ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted hover:text-white"}`}>
+                📞 {m.can_view_call_stats ? "Auswertung sichtbar" : "Auswertung verborgen"}
+              </button>
             </div>
           ))}
         </div>
