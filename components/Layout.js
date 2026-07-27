@@ -140,7 +140,6 @@ export default function Layout({ children, fullBleed }) {
         setProfile(data);
         cachedProfile = data;
         if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
-        else if (data && data.status === "approved" && data.welcome_seen && !data.tutorial_seen) setShowTutorial(true);
         if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
         setLoadingAuth(false);
       }
@@ -216,7 +215,8 @@ export default function Layout({ children, fullBleed }) {
         approvalCount = a.count || 0; suggestionCount = s.count || 0; teamReqCount = t.count || 0;
         if (mounted) { setPendingApprovals(approvalCount); setPendingSuggestions(suggestionCount); setPendingTeamRequests(teamReqCount); }
 
-        if (mounted && prevApprovalCount.current !== null && approvalCount > prevApprovalCount.current) {
+        const isFirstCheck = prevApprovalCount.current === null;
+        if (mounted && approvalCount > 0 && (isFirstCheck || approvalCount > prevApprovalCount.current)) {
           const { data: latest } = await supabase.from("profiles").select("full_name")
             .eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
           setApprovalToast({ name: latest?.full_name || "Jemand", count: approvalCount });
