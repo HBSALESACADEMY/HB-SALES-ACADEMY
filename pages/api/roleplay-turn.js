@@ -2,6 +2,9 @@ import { requireUser } from "../../lib/supabaseServer";
 import { callAI } from "../../lib/aiClient";
 import { PERSONAS, SCENARIOS, DIFFICULTY, PRINCIPLE_LIST } from "../../lib/personas";
 
+// Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
+export const config = { maxDuration: 30 };
+
 // IMPORTANT: this route runs server-side (Vercel serverless function).
 // The Gemini API key lives only in process.env.GEMINI_API_KEY here —
 // it is never sent to or exposed in the browser.
