@@ -21,6 +21,21 @@ const FALLBACK_NAV = [
 // Modul-Level-Cache: überlebt Seitenwechsel (Next.js Client-Navigation), nicht aber
 // einen echten Browser-Reload. Verhindert, dass bei jedem Klick in der Sidebar die
 // komplette Ansicht kurz durch einen Ladebildschirm ersetzt wird.
+// Kategorie-Zuordnung für die Sidebar-Unterleisten. Rein visuell — beeinflusst
+// nicht, wie Nutzer ihre Reihenfolge per Drag & Drop selbst festlegen können.
+const NAV_GROUPS = {
+  dashboard: "Start",
+  courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen",
+  "daily-challenge": "Lernen", duel: "Lernen", flashcards: "Lernen", simulator: "Lernen",
+  "call-tracker": "Lernen", "einwand-trainer": "Lernen",
+  community: "Team", members: "Team", messages: "Team", leaderboard: "Team",
+  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung",
+  "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung",
+};
+function groupFor(item) {
+  return NAV_GROUPS[item.key] || (item.is_builtin ? "Weiteres" : "Eigene Inhalte");
+}
+
 let cachedProfile = null;
 let cachedNavItems = null;
 
@@ -237,6 +252,7 @@ export default function Layout({ children, fullBleed }) {
         <div className="flex-1 overflow-y-auto flex flex-col gap-1">
           {(() => {
             const visibleItems = sortedNav(navItems.filter((n) => !n.requires_manager || profile?.role === "manager"));
+            let lastGroup = null;
             return visibleItems.map((item) => {
               const route = item.is_builtin ? item.route : `/folder/${item.id}`;
               const badgeCount = item.key === "community" ? unreadCommunity
@@ -245,27 +261,36 @@ export default function Layout({ children, fullBleed }) {
                 : item.key === "admin" ? pendingApprovals
                 : item.key === "admin-suggestions" ? pendingSuggestions
                 : 0;
+              const group = groupFor(item);
+              const showHeader = group !== lastGroup;
+              lastGroup = group;
               return (
-                <button
-                  key={item.id}
-                  draggable
-                  onDragStart={() => setDraggedNavId(item.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => handleNavDrop(item.id, visibleItems)}
-                  onClick={() => router.push(route)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
-                    draggedNavId === item.id ? "opacity-40" : ""
-                  } ${
-                    router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
-                  }`}
-                >
-                  <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
-                  {badgeCount > 0 && (
-                    <span className="badge-count">
-                      {badgeCount > 9 ? "9+" : badgeCount}
-                    </span>
+                <div key={item.id}>
+                  {showHeader && (
+                    <div className={`px-3 ${visibleItems[0] === item ? "pb-1.5" : "pt-3.5 pb-1.5 mt-1 border-t border-line/60"}`}>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[#5A5F72]">{group}</span>
+                    </div>
                   )}
-                </button>
+                  <button
+                    draggable
+                    onDragStart={() => setDraggedNavId(item.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleNavDrop(item.id, visibleItems)}
+                    onClick={() => router.push(route)}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
+                      draggedNavId === item.id ? "opacity-40" : ""
+                    } ${
+                      router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                    }`}
+                  >
+                    <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="badge-count">
+                        {badgeCount > 9 ? "9+" : badgeCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               );
             });
           })()}
