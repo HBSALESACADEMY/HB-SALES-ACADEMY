@@ -34,7 +34,8 @@ export default function Messages() {
   const [friendsList, setFriendsList] = useState([]);
   const [selected, setSelected] = useState(null); // { id, type: 'dm'|'group', full_name, avatar_url }
   const [thread, setThread] = useState([]);
-  const [readReceiptNames, setReadReceiptNames] = useState([]);
+  const [readStates, setReadStates] = useState({});
+  const [groupMemberCount, setGroupMemberCount] = useState(0); // { userId: last_read_at } — für DM: 1 Eintrag, für Gruppe: alle anderen Mitglieder
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [showList, setShowList] = useState(true);
@@ -140,6 +141,9 @@ export default function Messages() {
         if (belongsToOpenThread) refreshThread();
         else loadConversations();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_reads" }, () => {
+        if (selected) loadReadReceipts(selected, selfId);
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selfId, selected]);
@@ -151,24 +155,19 @@ export default function Messages() {
     setConversations((prev) => prev.map((c) => (c.id === contact.id && c.type === contact.type) ? { ...c, unread: 0 } : c));
   }
 
-  async function loadReadReceipts(contact, uid, messages) {
-    if (!messages.length) { setReadReceiptNames([]); return; }
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg.sender_id !== uid) { setReadReceiptNames([]); return; } // nur bei EIGENER letzter Nachricht zeigen, wer sie gelesen hat
-
+  async function loadReadReceipts(contact, uid) {
     if (contact.type === "group") {
-      const { data: members } = await supabase.from("chat_group_members").select("user_id, profiles:user_id(full_name)").eq("group_id", contact.id).neq("user_id", uid);
-      const { data: reads } = await supabase.from("conversation_reads").select("user_id, last_read_at").eq("is_group", true).eq("target_id", contact.id);
-      const readByUser = {};
-      (reads || []).forEach((r) => { readByUser[r.user_id] = r.last_read_at; });
-      const names = (members || [])
-        .filter((m) => readByUser[m.user_id] && new Date(readByUser[m.user_id]) >= new Date(lastMsg.created_at))
-        .map((m) => m.profiles?.full_name || "Unbenannt");
-      setReadReceiptNames(names);
+      const [{ data: reads }, { count: memberCount }] = await Promise.all([
+        supabase.from("conversation_reads").select("user_id, last_read_at").eq("is_group", true).eq("target_id", contact.id).neq("user_id", uid),
+        supabase.from("chat_group_members").select("user_id", { count: "exact", head: true }).eq("group_id", contact.id).neq("user_id", uid),
+      ]);
+      const byUser = {};
+      (reads || []).forEach((r) => { byUser[r.user_id] = r.last_read_at; });
+      setReadStates(byUser);
+      setGroupMemberCount(memberCount || 0);
     } else {
       const { data: read } = await supabase.from("conversation_reads").select("last_read_at").eq("user_id", contact.id).eq("target_id", uid).eq("is_group", false).maybeSingle();
-      if (read && new Date(read.last_read_at) >= new Date(lastMsg.created_at)) setReadReceiptNames([contact.full_name || "Gelesen"]);
-      else setReadReceiptNames([]);
+      setReadStates(read ? { [contact.id]: read.last_read_at } : {});
     }
   }
 
@@ -189,7 +188,7 @@ export default function Messages() {
     const resolved = await resolveAttachments(data || []);
     setThread(resolved);
     await markRead(contact, uid);
-    await loadReadReceipts(contact, uid, resolved);
+    await loadReadReceipts(contact, uid);
     setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 50);
   }
 
@@ -206,7 +205,7 @@ export default function Messages() {
     }
     const resolved = await resolveAttachments(data || []);
     setThread(resolved);
-    await loadReadReceipts(selected, selfId, resolved);
+    await loadReadReceipts(selected, selfId);
     await loadConversations();
     setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 50);
   }
@@ -391,26 +390,36 @@ export default function Messages() {
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
                 {thread.map((m) => {
                   const mine = m.sender_id === selfId;
+                  let receipt = null;
+                  if (mine) {
+                    if (selected.type === "group") {
+                      const readCount = Object.values(readStates).filter((t) => new Date(t) >= new Date(m.created_at)).length;
+                      if (groupMemberCount > 0 && readCount >= groupMemberCount) receipt = "✓✓ Gelesen von allen";
+                      else if (readCount > 0) receipt = `✓✓ Gelesen von ${readCount}`;
+                      else receipt = "✓ Gesendet";
+                    } else {
+                      const partnerRead = readStates[selected.id];
+                      receipt = partnerRead && new Date(partnerRead) >= new Date(m.created_at) ? "✓✓ Gelesen" : "✓ Gesendet";
+                    }
+                  }
                   return (
-                    <div key={m.id} className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${mine ? "self-end bg-amber text-white" : "self-start bg-surfaceRaised text-white"}`}>
-                      {m.attachment_type === "image" && m.signedUrl && <img src={m.signedUrl} alt="" className="rounded-lg max-h-72 mb-1" />}
-                      {m.attachment_type === "video" && m.signedUrl && <video src={m.signedUrl} controls className="rounded-lg max-h-72 mb-1" />}
-                      {m.attachment_type === "audio" && m.signedUrl && <audio src={m.signedUrl} controls className="mb-1" />}
-                      {m.attachment_type === "file" && m.signedUrl && (
-                        <a href={m.signedUrl} target="_blank" rel="noreferrer" className="underline flex items-center gap-1.5 mb-1">
-                          <Icon name="download" size={13} /> {m.attachment_name || "Datei"}
-                        </a>
-                      )}
-                      {m.content && <span>{m.content}</span>}
+                    <div key={m.id} className="flex flex-col" style={{ alignItems: mine ? "flex-end" : "flex-start" }}>
+                      <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${mine ? "text-white" : "bg-surfaceRaised text-white"}`} style={mine ? { background: "#3D6FA8" } : {}}>
+                        {m.attachment_type === "image" && m.signedUrl && <img src={m.signedUrl} alt="" className="rounded-lg max-h-72 mb-1" />}
+                        {m.attachment_type === "video" && m.signedUrl && <video src={m.signedUrl} controls className="rounded-lg max-h-72 mb-1" />}
+                        {m.attachment_type === "audio" && m.signedUrl && <audio src={m.signedUrl} controls className="mb-1" />}
+                        {m.attachment_type === "file" && m.signedUrl && (
+                          <a href={m.signedUrl} target="_blank" rel="noreferrer" className="underline flex items-center gap-1.5 mb-1">
+                            <Icon name="download" size={13} /> {m.attachment_name || "Datei"}
+                          </a>
+                        )}
+                        {m.content && <span>{m.content}</span>}
+                      </div>
+                      {receipt && <span className="text-[10px] text-textMuted mt-0.5 px-0.5">{receipt}</span>}
                     </div>
                   );
                 })}
                 {thread.length === 0 && <p className="text-textMuted text-xs text-center mt-6">Noch keine Nachrichten — schreib was!</p>}
-                {readReceiptNames.length > 0 && (
-                  <div className="self-end text-[10.5px] text-textMuted mt-0.5">
-                    ✓✓ Gelesen{selected.type === "group" ? ` von ${readReceiptNames.join(", ")}` : ""}
-                  </div>
-                )}
               </div>
               <div className="flex items-center gap-2 p-3 border-t border-line flex-shrink-0">
                 <label className="btn-ghost text-xs cursor-pointer px-2.5 py-2.5" title="Foto/Datei senden">
