@@ -25,6 +25,8 @@ function attachmentTypeFor(file) {
   return "file";
 }
 
+const EPOCH = "1970-01-01T00:00:00.000Z";
+
 export default function Messages() {
   const router = useRouter();
   const [selfId, setSelfId] = useState(null);
@@ -32,6 +34,7 @@ export default function Messages() {
   const [friendsList, setFriendsList] = useState([]);
   const [selected, setSelected] = useState(null); // { id, type: 'dm'|'group', full_name, avatar_url }
   const [thread, setThread] = useState([]);
+  const [readReceiptNames, setReadReceiptNames] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [showList, setShowList] = useState(true);
@@ -59,11 +62,11 @@ export default function Messages() {
     const uid = session.user.id;
     setSelfId(uid);
 
-    const [{ data: friendships }, { data: allMsgs }, { data: unread }, { data: myGroupMemberships }] = await Promise.all([
+    const [{ data: friendships }, { data: allMsgs }, { data: myGroupMemberships }, { data: myReads }] = await Promise.all([
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${uid},addressee_id.eq.${uid}`),
       supabase.from("direct_messages").select("*").or(`sender_id.eq.${uid},recipient_id.eq.${uid},group_id.not.is.null`).order("created_at", { ascending: false }),
-      supabase.from("direct_messages").select("sender_id, group_id").is("read_at", null).or(`recipient_id.eq.${uid},group_id.not.is.null`),
       supabase.from("chat_group_members").select("group_id").eq("user_id", uid),
+      supabase.from("conversation_reads").select("*").eq("user_id", uid),
     ]);
 
     const friendIds = (friendships || []).map((f) => f.requester_id === uid ? f.addressee_id : f.requester_id);
@@ -77,28 +80,33 @@ export default function Messages() {
       ? await supabase.from("chat_groups").select("*").in("id", myGroupIds)
       : { data: [] };
 
-    // Nur Nachrichten aus MEINEN Gruppen zählen (die obige OR-Abfrage ist grob, hier filtern wir sauber).
     const relevantMsgs = (allMsgs || []).filter((m) => !m.group_id || myGroupIds.includes(m.group_id));
 
+    const readByKey = {};
+    (myReads || []).forEach((r) => { readByKey[`${r.is_group ? "g" : "d"}:${r.target_id}`] = r.last_read_at; });
+
+    // Ungelesen = Nachrichten von ANDEREN (nie meine eigenen!) nach meinem letzten Lesezeitpunkt.
     const unreadByConvo = {};
-    (unread || []).forEach((m) => {
-      if (m.group_id) { if (myGroupIds.includes(m.group_id)) unreadByConvo[`group:${m.group_id}`] = (unreadByConvo[`group:${m.group_id}`] || 0) + 1; }
-      else unreadByConvo[`dm:${m.sender_id}`] = (unreadByConvo[`dm:${m.sender_id}`] || 0) + 1;
+    relevantMsgs.forEach((m) => {
+      if (m.sender_id === uid) return; // eigene Nachrichten zählen nie als "ungelesen für mich"
+      const key = m.group_id ? `g:${m.group_id}` : `d:${m.sender_id}`;
+      const lastRead = readByKey[key] || EPOCH;
+      if (new Date(m.created_at) > new Date(lastRead)) unreadByConvo[key] = (unreadByConvo[key] || 0) + 1;
     });
 
     const lastMsgByConvo = {};
     relevantMsgs.forEach((m) => {
-      const key = m.group_id ? `group:${m.group_id}` : `dm:${m.sender_id === uid ? m.recipient_id : m.sender_id}`;
+      const key = m.group_id ? `g:${m.group_id}` : `d:${m.sender_id === uid ? m.recipient_id : m.sender_id}`;
       if (!lastMsgByConvo[key]) lastMsgByConvo[key] = m;
     });
 
     const dmConvos = (friendProfiles || []).map((c) => ({
       id: c.id, type: "dm", full_name: c.full_name, avatar_url: c.avatar_url,
-      lastMessage: lastMsgByConvo[`dm:${c.id}`] || null, unread: unreadByConvo[`dm:${c.id}`] || 0,
+      lastMessage: lastMsgByConvo[`d:${c.id}`] || null, unread: unreadByConvo[`d:${c.id}`] || 0,
     }));
     const groupConvos = (groups || []).map((g) => ({
       id: g.id, type: "group", full_name: g.name, avatar_url: null,
-      lastMessage: lastMsgByConvo[`group:${g.id}`] || null, unread: unreadByConvo[`group:${g.id}`] || 0,
+      lastMessage: lastMsgByConvo[`g:${g.id}`] || null, unread: unreadByConvo[`g:${g.id}`] || 0,
     }));
 
     const convos = [...dmConvos, ...groupConvos].sort((a, b) => {
@@ -118,6 +126,34 @@ export default function Messages() {
 
   useEffect(() => { loadConversations(); }, [router.query.to]);
 
+  async function markRead(contact, uid) {
+    await supabase.from("conversation_reads").upsert({
+      user_id: uid, target_id: contact.id, is_group: contact.type === "group", last_read_at: new Date().toISOString(),
+    }, { onConflict: "user_id,target_id,is_group" });
+    setConversations((prev) => prev.map((c) => (c.id === contact.id && c.type === contact.type) ? { ...c, unread: 0 } : c));
+  }
+
+  async function loadReadReceipts(contact, uid, messages) {
+    if (!messages.length) { setReadReceiptNames([]); return; }
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.sender_id !== uid) { setReadReceiptNames([]); return; } // nur bei EIGENER letzter Nachricht zeigen, wer sie gelesen hat
+
+    if (contact.type === "group") {
+      const { data: members } = await supabase.from("chat_group_members").select("user_id, profiles:user_id(full_name)").eq("group_id", contact.id).neq("user_id", uid);
+      const { data: reads } = await supabase.from("conversation_reads").select("user_id, last_read_at").eq("is_group", true).eq("target_id", contact.id);
+      const readByUser = {};
+      (reads || []).forEach((r) => { readByUser[r.user_id] = r.last_read_at; });
+      const names = (members || [])
+        .filter((m) => readByUser[m.user_id] && new Date(readByUser[m.user_id]) >= new Date(lastMsg.created_at))
+        .map((m) => m.profiles?.full_name || "Unbenannt");
+      setReadReceiptNames(names);
+    } else {
+      const { data: read } = await supabase.from("conversation_reads").select("last_read_at").eq("user_id", contact.id).eq("target_id", uid).eq("is_group", false).maybeSingle();
+      if (read && new Date(read.last_read_at) >= new Date(lastMsg.created_at)) setReadReceiptNames([contact.full_name || "Gelesen"]);
+      else setReadReceiptNames([]);
+    }
+  }
+
   async function openThread(contact, uidOverride) {
     const uid = uidOverride || selfId;
     setSelected(contact);
@@ -126,17 +162,16 @@ export default function Messages() {
     if (contact.type === "group") {
       const res = await supabase.from("direct_messages").select("*").eq("group_id", contact.id).order("created_at", { ascending: true });
       data = res.data;
-      await supabase.from("direct_messages").update({ read_at: new Date().toISOString() }).eq("group_id", contact.id).is("read_at", null).neq("sender_id", uid);
     } else {
       const res = await supabase.from("direct_messages").select("*")
         .or(`and(sender_id.eq.${uid},recipient_id.eq.${contact.id}),and(sender_id.eq.${contact.id},recipient_id.eq.${uid})`)
         .order("created_at", { ascending: true });
       data = res.data;
-      await supabase.from("direct_messages").update({ read_at: new Date().toISOString() })
-        .eq("recipient_id", uid).eq("sender_id", contact.id).is("read_at", null);
     }
-    setThread(await resolveAttachments(data || []));
-    setConversations((prev) => prev.map((c) => (c.id === contact.id && c.type === contact.type) ? { ...c, unread: 0 } : c));
+    const resolved = await resolveAttachments(data || []);
+    setThread(resolved);
+    await markRead(contact, uid);
+    await loadReadReceipts(contact, uid, resolved);
     setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 50);
   }
 
@@ -151,7 +186,9 @@ export default function Messages() {
         .order("created_at", { ascending: true });
       data = res.data;
     }
-    setThread(await resolveAttachments(data || []));
+    const resolved = await resolveAttachments(data || []);
+    setThread(resolved);
+    await loadReadReceipts(selected, selfId, resolved);
     await loadConversations();
     setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 50);
   }
@@ -351,6 +388,11 @@ export default function Messages() {
                   );
                 })}
                 {thread.length === 0 && <p className="text-textMuted text-xs text-center mt-6">Noch keine Nachrichten — schreib was!</p>}
+                {readReceiptNames.length > 0 && (
+                  <div className="self-end text-[10.5px] text-textMuted mt-0.5">
+                    ✓✓ Gelesen{selected.type === "group" ? ` von ${readReceiptNames.join(", ")}` : ""}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 p-3 border-t border-line flex-shrink-0">
                 <label className="btn-ghost text-xs cursor-pointer px-2.5 py-2.5" title="Foto/Datei senden">
