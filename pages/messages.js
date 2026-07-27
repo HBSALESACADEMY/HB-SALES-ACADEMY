@@ -126,6 +126,24 @@ export default function Messages() {
 
   useEffect(() => { loadConversations(); }, [router.query.to]);
 
+  // Echtzeit: neue Nachrichten (eigene oder Gruppen) kommen sofort an, ohne Neuladen.
+  useEffect(() => {
+    if (!selfId) return;
+    const channel = supabase
+      .channel("dm-realtime-" + selfId)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, (payload) => {
+        const m = payload.new;
+        const belongsToOpenThread = selected && (
+          (selected.type === "group" && m.group_id === selected.id) ||
+          (selected.type === "dm" && ((m.sender_id === selfId && m.recipient_id === selected.id) || (m.sender_id === selected.id && m.recipient_id === selfId)))
+        );
+        if (belongsToOpenThread) refreshThread();
+        else loadConversations();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selfId, selected]);
+
   async function markRead(contact, uid) {
     await supabase.from("conversation_reads").upsert({
       user_id: uid, target_id: contact.id, is_group: contact.type === "group", last_read_at: new Date().toISOString(),

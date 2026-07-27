@@ -232,7 +232,19 @@ export default function Layout({ children, fullBleed }) {
     }
     loadUnread();
     const interval = setInterval(loadUnread, 20000);
-    return () => { mounted = false; clearInterval(interval); };
+
+    // Echtzeit: sobald sich etwas Relevantes ändert (neue Nachricht, Freundschaftsanfrage,
+    // neue Registrierung), sofort neu prüfen statt bis zu 20 Sekunden zu warten.
+    const channel = supabase
+      .channel("layout-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, loadUnread)
+      .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, loadUnread)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, loadUnread)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, loadUnread)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, loadUnread)
+      .subscribe();
+
+    return () => { mounted = false; clearInterval(interval); supabase.removeChannel(channel); };
   }, []);
 
   useEffect(() => {

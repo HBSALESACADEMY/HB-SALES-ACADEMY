@@ -112,6 +112,17 @@ export default function Community() {
 
   useEffect(() => { load(); }, []);
 
+  // Echtzeit: neue Beiträge, Kommentare und Kudos erscheinen automatisch.
+  useEffect(() => {
+    const channel = supabase
+      .channel("community-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_posts" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_comments" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_kudos" }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   async function submitPost() {
     if (!newPost.trim()) return;
     setPosting(true);
