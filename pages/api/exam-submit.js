@@ -3,7 +3,7 @@ import { callAI } from "../../lib/aiClient";
 import { COURSES } from "../../lib/curriculum";
 
 // Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
-export const config = { maxDuration: 30 };
+export const config = { maxDuration: 45 };
 
 // Pass rule: MC score >= 80% AND capstone open-answer score >= 60.
 export default async function handler(req, res) {

@@ -3,7 +3,7 @@ import { callAI } from "../../lib/aiClient";
 import { COURSES } from "../../lib/curriculum";
 
 // Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
-export const config = { maxDuration: 30 };
+export const config = { maxDuration: 45 };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
