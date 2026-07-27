@@ -7,6 +7,7 @@ import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
 import ProfileModal from "./ProfileModal";
 import WelcomeModal from "./WelcomeModal";
+import TutorialModal from "./TutorialModal";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -63,6 +64,7 @@ export default function Layout({ children, fullBleed }) {
   const [approvalToast, setApprovalToast] = useState(null);
   const prevApprovalCount = useRef(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   async function dismissWelcome() {
     setShowWelcome(false);
@@ -70,6 +72,16 @@ export default function Layout({ children, fullBleed }) {
     if (session) {
       await supabase.from("profiles").update({ welcome_seen: true }).eq("id", session.user.id);
       patchCachedProfile({ welcome_seen: true });
+      if (!cachedProfile?.tutorial_seen) setShowTutorial(true);
+    }
+  }
+
+  async function dismissTutorial() {
+    setShowTutorial(false);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabase.from("profiles").update({ tutorial_seen: true }).eq("id", session.user.id);
+      patchCachedProfile({ tutorial_seen: true });
     }
   }
   const [openProfileId, setOpenProfileId] = useState(null);
@@ -128,6 +140,7 @@ export default function Layout({ children, fullBleed }) {
         setProfile(data);
         cachedProfile = data;
         if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
+        else if (data && data.status === "approved" && data.welcome_seen && !data.tutorial_seen) setShowTutorial(true);
         if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
         setLoadingAuth(false);
       }
@@ -206,7 +219,7 @@ export default function Layout({ children, fullBleed }) {
         if (mounted && prevApprovalCount.current !== null && approvalCount > prevApprovalCount.current) {
           const { data: latest } = await supabase.from("profiles").select("full_name")
             .eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
-          setApprovalToast({ name: latest?.full_name || "Jemand" });
+          setApprovalToast({ name: latest?.full_name || "Jemand", count: approvalCount });
           setTimeout(() => setApprovalToast(null), 7000);
         }
         prevApprovalCount.current = approvalCount;
@@ -501,6 +514,7 @@ export default function Layout({ children, fullBleed }) {
         </div>
       )}
       {showWelcome && <WelcomeModal onClose={dismissWelcome} />}
+      {showTutorial && <TutorialModal onClose={dismissTutorial} />}
       {approvalToast && (
         <button
           onClick={() => { setApprovalToast(null); router.push("/admin"); }}
@@ -510,7 +524,7 @@ export default function Layout({ children, fullBleed }) {
           <Icon name="lock" color="#E8368F" size={18} />
           <div className="text-left">
             <div className="text-sm font-semibold text-white">Neue Registrierung</div>
-            <div className="text-xs text-textMuted">{approvalToast.name} wartet auf Freigabe</div>
+            <div className="text-xs text-textMuted">{approvalToast.name} wartet auf Freigabe{approvalToast.count > 1 ? ` — ${approvalToast.count} insgesamt offen` : ""}</div>
           </div>
         </button>
       )}

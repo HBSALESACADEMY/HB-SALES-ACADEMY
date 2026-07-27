@@ -101,7 +101,8 @@ export default function NavigationAdmin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Navigation verwalten</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Navigation verwalten</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Sidebar frei anpassen: Reiter umbenennen, Icon ändern, Reihenfolge ändern, ausblenden oder entfernen — auch die fest eingebauten. Entfernen löscht bei eigenen Ordnern auch deren Kurse; bei fest eingebauten Seiten verschwindet nur der Sidebar-Link, die Seite bleibt erreichbar.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

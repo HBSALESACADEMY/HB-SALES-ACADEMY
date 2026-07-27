@@ -27,7 +27,8 @@ export default function CustomCourseDetail() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">{course.title}</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">{course.title}</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">{course.description}</p>
 
       <div className="flex flex-col gap-4">

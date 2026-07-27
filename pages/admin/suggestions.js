@@ -50,7 +50,8 @@ export default function Suggestions() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Wissens-Vorschläge</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Wissens-Vorschläge</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Die KI erkennt in Rollenspiel-Auswertungen gelegentlich bemerkenswerte Techniken oder Einwände und schlägt sie hier zur Aufnahme in die Wissensdatenbank vor. Genehmigte Einträge erscheinen sofort für alle unter "Wissensdatenbank".</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { playLoginChime } from "../lib/sounds";
+import { quoteOfTheDay } from "../lib/quotes";
 
 export default function Login() {
   const router = useRouter();
@@ -48,8 +49,12 @@ export default function Login() {
       <div className="card w-full max-w-sm overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
-        <img src="/logo.svg" alt="HB Sales Academy" className="h-10 w-auto mb-3" />
-        <p className="text-textMuted text-sm mb-6">{mode === "login" ? "Melde dich an" : "Konto erstellen"}</p>
+        <div className="flex flex-col items-center text-center mb-5">
+          <img src="/logo.svg" alt="HB Sales Academy" className="h-20 w-auto mb-4" />
+          <p className="text-[12.5px] italic text-textMuted leading-snug max-w-[260px]">„{quoteOfTheDay().text}"</p>
+          {quoteOfTheDay().author && <p className="text-[10.5px] text-[#5A5F72] mt-1">— {quoteOfTheDay().author}</p>}
+        </div>
+        <p className="text-textMuted text-sm mb-6 text-center">{mode === "login" ? "Melde dich an" : "Konto erstellen"}</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           {mode === "signup" && (
             <input className="input" placeholder="Vor- und Nachname" value={fullName} onChange={(e) => setFullName(e.target.value)} required />

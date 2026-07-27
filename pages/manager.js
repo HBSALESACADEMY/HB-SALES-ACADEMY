@@ -47,9 +47,9 @@ export default function Manager() {
 
     const enriched = await Promise.all((members || []).map(async (m) => {
       const [{ data: qr }, { data: er }, { data: rp }] = await Promise.all([
-        supabase.from("quiz_results").select("*").eq("user_id", m.id),
-        supabase.from("exam_results").select("*").eq("user_id", m.id),
-        supabase.from("roleplay_sessions").select("*").eq("user_id", m.id),
+        supabase.from("quiz_results").select("module_id, mc_score, mc_total").eq("user_id", m.id),
+        supabase.from("exam_results").select("passed").eq("user_id", m.id),
+        supabase.from("roleplay_sessions").select("detected_principles").eq("user_id", m.id),
       ]);
       const doneModules = new Set((qr || []).map((r) => r.module_id)).size;
       const avgMc = qr && qr.length ? Math.round(qr.reduce((s, r) => s + (r.mc_total ? r.mc_score / r.mc_total : 0), 0) / qr.length * 100) : null;

@@ -136,7 +136,8 @@ export default function ContentAdmin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Inhalte verwalten</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Inhalte verwalten</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Lege eigene Kurse mit Modulen an — Text und optional ein Video pro Modul. Jeder Kurs gehört zu einem Ordner, der als eigener Reiter in der Sidebar erscheint (Ordner anlegen unter "Navigation verwalten").</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

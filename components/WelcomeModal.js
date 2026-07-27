@@ -32,7 +32,7 @@ export default function WelcomeModal({ onClose }) {
         </p>
         <p className="text-sm text-textMuted leading-relaxed mb-5">
           Schau dich in der <b className="text-white">Community</b> um, vernetze dich mit deinem Team über{" "}
-          <b className="text-white">Mitglieder</b>, und trau dich, Fragen zu stellen — hier hilft jeder jedem.
+          <b className="text-white">Mitglieder</b>, und trau dich, Fragen zu stellen. Hier hilft jeder jedem.
           Viel Erfolg und einen tollen Start!
         </p>
         <button onClick={onClose} className="btn w-full justify-center">Los geht's!</button>

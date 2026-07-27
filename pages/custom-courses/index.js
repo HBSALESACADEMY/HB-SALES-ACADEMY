@@ -27,7 +27,8 @@ export default function CustomCoursesIndex() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Eigene Inhalte</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Eigene Inhalte</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Zusätzliche Kurse, von euren Managern angelegt — inklusive Videos, falls vorhanden.</p>
       {loading ? (
         <p className="text-textMuted text-sm">Lädt...</p>

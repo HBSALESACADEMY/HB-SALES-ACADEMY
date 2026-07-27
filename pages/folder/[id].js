@@ -34,7 +34,8 @@ export default function FolderView() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">{folder?.label || "Ordner"}</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">{folder?.label || "Ordner"}</h1>
+      <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Von euren Managern angelegte Kurse in diesem Bereich.</p>
       {courses.length === 0 ? (
         <p className="text-textMuted text-sm">Noch keine Kurse in diesem Ordner.</p>

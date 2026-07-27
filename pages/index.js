@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [draggedTileKey, setDraggedTileKey] = useState(null);
   const [dashboardPrefs, setDashboardPrefs] = useState({});
   const [onboarding, setOnboarding] = useState(null); // null = noch nicht geladen/nicht nötig
+  const [adminSnapshot, setAdminSnapshot] = useState(null);
 
   async function persistTileOrder(newOrder) {
     setDashboardPrefs((prev) => {
@@ -54,16 +55,16 @@ export default function Dashboard() {
       if (!session) return;
       const uid = session.user.id;
       const [{ data: qr }, { data: er }, { data: rp }] = await Promise.all([
-        supabase.from("quiz_results").select("*").eq("user_id", uid),
-        supabase.from("exam_results").select("*").eq("user_id", uid),
-        supabase.from("roleplay_sessions").select("*").eq("user_id", uid),
+        supabase.from("quiz_results").select("module_id, mc_score, mc_total").eq("user_id", uid),
+        supabase.from("exam_results").select("course_id, passed").eq("user_id", uid),
+        supabase.from("roleplay_sessions").select("id").eq("user_id", uid),
       ]);
       setQuizResults(qr || []);
       setExamResults(er || []);
       setRpSessions(rp || []);
       setLoading(false);
 
-      const { data: me } = await supabase.from("profiles").select("role, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("role, is_admin, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
       setDashboardPrefs(me?.dashboard_prefs || {});
 
@@ -120,6 +121,16 @@ export default function Dashboard() {
         ];
         if (steps.some((s) => !s.done)) setOnboarding(steps);
       }
+
+      if (me?.is_admin) {
+        const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+        const [{ count: totalMembers }, { count: weeklyActiveCount }, { count: pendingCount }] = await Promise.all([
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "approved"),
+          supabase.from("login_events").select("user_id", { count: "exact", head: true }).gt("created_at", weekAgo),
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        ]);
+        setAdminSnapshot({ totalMembers: totalMembers || 0, weeklyActiveCount: weeklyActiveCount || 0, pendingCount: pendingCount || 0 });
+      }
     }
     load();
   }, []);
@@ -160,6 +171,29 @@ export default function Dashboard() {
                     <span className={`text-sm ${step.done ? "text-textMuted line-through" : "text-white"}`}>{step.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {adminSnapshot && (
+            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/admin/insights")}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-semibold text-white text-sm">📊 Insights (Admin)</span>
+                <span className="text-xs text-amber">Alle Details →</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <div className="font-display text-xl font-bold text-white">{adminSnapshot.totalMembers}</div>
+                  <div className="text-[11px] text-textMuted">Mitglieder</div>
+                </div>
+                <div>
+                  <div className="font-display text-xl font-bold text-white">{adminSnapshot.weeklyActiveCount}</div>
+                  <div className="text-[11px] text-textMuted">Aktiv diese Woche</div>
+                </div>
+                <div>
+                  <div className="font-display text-xl font-bold text-white">{adminSnapshot.pendingCount}</div>
+                  <div className="text-[11px] text-textMuted">Warten auf Freigabe</div>
+                </div>
               </div>
             </div>
           )}
