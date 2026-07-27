@@ -6,6 +6,7 @@ import Icon from "./Icon";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
 import ProfileModal from "./ProfileModal";
+import WelcomeModal from "./WelcomeModal";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -59,6 +60,18 @@ export default function Layout({ children, fullBleed }) {
   const [pendingFriendRequests, setPendingFriendRequests] = useState(cachedBadges?.pendingFriendRequests ?? 0);
   const [friendToast, setFriendToast] = useState(null);
   const prevFriendReqCount = useRef(null);
+  const [approvalToast, setApprovalToast] = useState(null);
+  const prevApprovalCount = useRef(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  async function dismissWelcome() {
+    setShowWelcome(false);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabase.from("profiles").update({ welcome_seen: true }).eq("id", session.user.id);
+      patchCachedProfile({ welcome_seen: true });
+    }
+  }
   const [openProfileId, setOpenProfileId] = useState(null);
   const [draggedNavId, setDraggedNavId] = useState(null);
   const [navOrderOverride, setNavOrderOverride] = useState(null);
@@ -108,6 +121,7 @@ export default function Layout({ children, fullBleed }) {
       if (mounted) {
         setProfile(data);
         cachedProfile = data;
+        if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
         if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
         setLoadingAuth(false);
       }
@@ -164,6 +178,14 @@ export default function Layout({ children, fullBleed }) {
         ]);
         approvalCount = a.count || 0; suggestionCount = s.count || 0; teamReqCount = t.count || 0;
         if (mounted) { setPendingApprovals(approvalCount); setPendingSuggestions(suggestionCount); setPendingTeamRequests(teamReqCount); }
+
+        if (mounted && prevApprovalCount.current !== null && approvalCount > prevApprovalCount.current) {
+          const { data: latest } = await supabase.from("profiles").select("full_name")
+            .eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+          setApprovalToast({ name: latest?.full_name || "Jemand" });
+          setTimeout(() => setApprovalToast(null), 7000);
+        }
+        prevApprovalCount.current = approvalCount;
       }
 
       cachedBadges = {
@@ -453,6 +475,20 @@ export default function Layout({ children, fullBleed }) {
             {quickHelpAnswer && <p className="text-sm text-textMuted whitespace-pre-wrap border-t border-line pt-3">{quickHelpAnswer}</p>}
           </div>
         </div>
+      )}
+      {showWelcome && <WelcomeModal onClose={dismissWelcome} />}
+      {approvalToast && (
+        <button
+          onClick={() => { setApprovalToast(null); router.push("/admin"); }}
+          className="fixed bottom-24 right-5 z-[210] card !py-3 !px-4 flex items-center gap-3 shadow-lg animate-fadein cursor-pointer"
+          style={{ maxWidth: 300 }}
+        >
+          <Icon name="lock" color="#E8368F" size={18} />
+          <div className="text-left">
+            <div className="text-sm font-semibold text-white">Neue Registrierung</div>
+            <div className="text-xs text-textMuted">{approvalToast.name} wartet auf Freigabe</div>
+          </div>
+        </button>
       )}
       {friendToast && (
         <button
