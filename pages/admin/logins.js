@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Avatar from "../../components/Avatar";
 import { supabase } from "../../lib/supabaseClient";
+import { openProfile } from "../../lib/profileModalBus";
 
 export default function AdminLogins() {
   const [isManager, setIsManager] = useState(true);
@@ -61,7 +62,7 @@ export default function AdminLogins() {
           const d = new Date(e.created_at);
           return (
             <div key={e.id} className="card flex items-center gap-3 !py-2.5">
-              <Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} />
+              <button onClick={() => openProfile(p?.id)}><Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} /></button>
               <span className="text-sm text-white flex-1">{p?.full_name || "Unbekannt"}</span>
               <span className="text-xs text-textMuted font-mono">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>
             </div>

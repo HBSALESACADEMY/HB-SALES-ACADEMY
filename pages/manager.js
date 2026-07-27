@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { openProfile } from "../lib/profileModalBus";
 import { COURSES } from "../lib/curriculum";
 
 export default function Manager() {
@@ -83,9 +85,11 @@ export default function Manager() {
         <div className="flex flex-col gap-3">
           {team.map((m) => (
             <div key={m.id} className="card flex items-center gap-5">
-              <div className="w-9 h-9 rounded-full bg-surfaceRaised flex items-center justify-center text-amber flex-shrink-0"><Icon name="users" size={16} /></div>
+              <button onClick={() => openProfile(m.id)} className="flex-shrink-0">
+                <Avatar name={m.full_name || "?"} src={m.avatar_url} size={36} />
+              </button>
               <div className="flex-1">
-                <div className="font-semibold text-white text-sm">{m.full_name || "Unbenannt"}</div>
+                <button onClick={() => openProfile(m.id)} className="font-semibold text-white text-sm hover:underline">{m.full_name || "Unbenannt"}</button>
                 <div className="text-xs text-textMuted mt-1">
                   {m.doneModules}/{m.totalModules} Module · Ø MC {m.avgMc !== null ? m.avgMc + "%" : "–"} · {m.certs}/{COURSES.length} Zertifikate · {m.roleplayCount} Rollenspiele
                 </div>

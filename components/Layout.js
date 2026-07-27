@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import Icon from "./Icon";
@@ -39,6 +39,8 @@ export default function Layout({ children, fullBleed }) {
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [pendingSuggestions, setPendingSuggestions] = useState(0);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
+  const [friendToast, setFriendToast] = useState(null);
+  const prevFriendReqCount = useRef(null);
   const [openProfileId, setOpenProfileId] = useState(null);
   const [draggedNavId, setDraggedNavId] = useState(null);
   const [navOrderOverride, setNavOrderOverride] = useState(null);
@@ -98,7 +100,20 @@ export default function Layout({ children, fullBleed }) {
 
       const { count: friendReqCount } = await supabase.from("friendships")
         .select("id", { count: "exact", head: true }).eq("addressee_id", session.user.id).eq("status", "pending");
-      if (mounted) setPendingFriendRequests(friendReqCount || 0);
+      if (mounted) {
+        const newCount = friendReqCount || 0;
+        if (prevFriendReqCount.current !== null && newCount > prevFriendReqCount.current) {
+          const { data: latest } = await supabase.from("friendships").select("requester_id")
+            .eq("addressee_id", session.user.id).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+          if (latest) {
+            const { data: requester } = await supabase.from("profiles").select("full_name").eq("id", latest.requester_id).maybeSingle();
+            setFriendToast({ name: requester?.full_name || "Jemand" });
+            setTimeout(() => setFriendToast(null), 6000);
+          }
+        }
+        prevFriendReqCount.current = newCount;
+        setPendingFriendRequests(newCount);
+      }
 
       if (me?.role === "manager") {
         const [{ count: approvalCount }, { count: suggestionCount }] = await Promise.all([
@@ -277,6 +292,19 @@ export default function Layout({ children, fullBleed }) {
         {typeof children === "function" ? children(profile) : children}
       </main>
       {openProfileId && <ProfileModal userId={openProfileId} onClose={() => setOpenProfileId(null)} />}
+      {friendToast && (
+        <button
+          onClick={() => { setFriendToast(null); router.push("/members"); }}
+          className="fixed bottom-5 right-5 z-[210] card !py-3 !px-4 flex items-center gap-3 shadow-lg animate-fadein cursor-pointer"
+          style={{ maxWidth: 300 }}
+        >
+          <Icon name="users" color="#E8368F" size={18} />
+          <div className="text-left">
+            <div className="text-sm font-semibold text-white">Neue Freundschaftsanfrage</div>
+            <div className="text-xs text-textMuted">{friendToast.name} möchte sich vernetzen</div>
+          </div>
+        </button>
+      )}
     </div>
   );
 }

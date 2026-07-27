@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { openProfile } from "../lib/profileModalBus";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
 
 const ALL_QUESTIONS = (() => {
@@ -141,7 +142,7 @@ export default function Duel() {
               const opponentId = d.challenger_id === selfId ? d.opponent_id : d.challenger_id;
               return (
                 <div key={d.id} className="card flex items-center gap-3">
-                  <Avatar name={profileNames[opponentId] || "?"} size={30} />
+                  <button onClick={() => openProfile(opponentId)}><Avatar name={profileNames[opponentId] || "?"} size={30} /></button>
                   <div className="flex-1 text-sm text-white">vs. {profileNames[opponentId]}</div>
                   <button onClick={() => playDuel(d)} className="btn text-xs">Jetzt spielen</button>
                 </div>
@@ -161,7 +162,7 @@ export default function Duel() {
           const tie = myScore === theirScore;
           return (
             <div key={d.id} className="card flex items-center gap-3">
-              <Avatar name={profileNames[opponentId] || "?"} size={30} />
+              <button onClick={() => openProfile(opponentId)}><Avatar name={profileNames[opponentId] || "?"} size={30} /></button>
               <div className="flex-1 text-sm">
                 <span className="text-white">vs. {profileNames[opponentId]}</span>
                 <span className="text-textMuted"> — {myScore}:{theirScore}</span>
