@@ -236,9 +236,10 @@ export default function Messages() {
     if (!newGroupName.trim() || newGroupMembers.size === 0) return;
     const groupId = crypto.randomUUID();
     const { error } = await supabase.from("chat_groups").insert({ id: groupId, name: newGroupName.trim(), created_by: selfId });
-    if (error) return;
+    if (error) { alert("Gruppe konnte nicht erstellt werden: " + error.message); return; }
     const members = [{ group_id: groupId, user_id: selfId }, ...Array.from(newGroupMembers).map((id) => ({ group_id: groupId, user_id: id }))];
-    await supabase.from("chat_group_members").insert(members);
+    const { error: memberError } = await supabase.from("chat_group_members").insert(members);
+    if (memberError) { alert("Mitglieder konnten nicht hinzugefügt werden: " + memberError.message); return; }
     setShowNewGroup(false);
     const groupName = newGroupName.trim();
     setNewGroupName("");
