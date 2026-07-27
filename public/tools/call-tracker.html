@@ -233,6 +233,7 @@
   }
   .modal-skip:hover{ color: var(--white); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -542,9 +543,40 @@
     }).join("");
   }
 
+  // Zentrale Team-Statistik: sendet die heutigen Zählerstände (mit kurzer
+  // Verzögerung, um nicht bei jedem Tap eine eigene Anfrage zu feuern) an
+  // Supabase, damit Manager echte Team-Anrufzahlen sehen können. Das Tool
+  // funktioniert unverändert auch offline/ohne diese Synchronisierung weiter.
+  let hbSupabase = null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const su = params.get("su"), sk = params.get("sk");
+    if (su && sk && window.supabase) hbSupabase = window.supabase.createClient(su, sk);
+  } catch (e) { /* Sync einfach überspringen */ }
+
+  let syncTimer = null;
+  function syncToSupabase() {
+    if (!hbSupabase) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await hbSupabase.auth.getSession();
+        if (!session) return;
+        await hbSupabase.from("call_log_days").upsert({
+          user_id: session.user.id,
+          log_date: new Date().toISOString().slice(0, 10),
+          counts: todayCounts,
+          reasons: todayReasons,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (e) { /* nicht kritisch, Tool bleibt lokal funktionsfähig */ }
+    }, 900);
+  }
+
   async function persist(){
     try{
       await window.storage.set(STORAGE_KEY, JSON.stringify({ counts: todayCounts, reasons: todayReasons }));
+      syncToSupabase();
     }catch(err){ console.error("Speichern fehlgeschlagen:", err); }
   }
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Avatar from "./Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { computeBadges } from "../lib/badges";
+import { COURSES } from "../lib/curriculum";
 
 const FIELD_LABELS = {
   website: "Webseite",
@@ -16,6 +18,7 @@ export default function ProfileModal({ userId, onClose }) {
   const [target, setTarget] = useState(null);
   const [friendship, setFriendship] = useState(null);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [badges, setBadges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -36,6 +39,24 @@ export default function ProfileModal({ userId, onClose }) {
       setTarget(profile);
       setFriendship(fr);
       setIsBlocked(!!blockRow);
+
+      const [{ count: roleplayCount }, { count: certCount }, { count: quizCount }, { data: myPosts }, { count: mentorCount }] = await Promise.all([
+        supabase.from("roleplay_sessions").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("exam_results").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("passed", true),
+        supabase.from("quiz_results").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("community_posts").select("id").eq("user_id", userId),
+        supabase.from("mentor_pairs").select("id", { count: "exact", head: true }).eq("mentor_id", userId).eq("active", true),
+      ]);
+      let kudosReceived = 0;
+      if (myPosts && myPosts.length) {
+        const { count } = await supabase.from("community_kudos").select("id", { count: "exact", head: true }).in("post_id", myPosts.map((p) => p.id));
+        kudosReceived = count || 0;
+      }
+      setBadges(computeBadges({
+        roleplayCount: roleplayCount || 0, certCount: certCount || 0, totalCourses: COURSES.length,
+        streak: profile?.streak_count || 0, quizCount: quizCount || 0, kudosReceived, isMentor: (mentorCount || 0) > 0,
+      }));
+
       setLoading(false);
     }
     if (userId) load();
@@ -111,6 +132,16 @@ export default function ProfileModal({ userId, onClose }) {
             </div>
 
             {target.bio && fieldVisible("bio") && <p className="text-sm text-textMuted mb-4">{target.bio}</p>}
+
+            {badges.some((b) => b.earned) && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {badges.filter((b) => b.earned).map((b) => (
+                  <span key={b.id} title={b.desc} className="text-xs bg-surfaceRaised border border-line rounded-full px-2 py-1 flex items-center gap-1">
+                    <span>{b.emoji}</span> <span className="text-textMuted">{b.label}</span>
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5 mb-4">
               {["website", "instagram", "linkedin", "phone"].map((key) => {

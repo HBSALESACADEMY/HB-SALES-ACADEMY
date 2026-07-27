@@ -21,6 +21,7 @@ export default function Manager() {
   const [savingGoal, setSavingGoal] = useState(false);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairs, setPairs] = useState([]);
+  const [callStats, setCallStats] = useState([]);
 
   async function load() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -61,6 +62,12 @@ export default function Manager() {
     const { data: existingPairs } = await supabase.from("mentor_pairs").select("*, mentor:mentor_id(full_name), mentee:mentee_id(full_name)").eq("manager_id", session.user.id).eq("active", true);
     setPairs(existingPairs || []);
 
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const { data: calls } = await supabase.from("call_log_days").select("*").in("user_id", (members || []).map((m) => m.id)).eq("log_date", todayStr);
+    const nameById = {};
+    (members || []).forEach((m) => { nameById[m.id] = m.full_name || "Unbenannt"; });
+    setCallStats((calls || []).map((c) => ({ ...c, name: nameById[c.user_id] })));
+
     setLoading(false);
   }
 
@@ -99,6 +106,20 @@ export default function Manager() {
     alert("Team-Ziel für diese Woche gesetzt!");
   }
 
+  function exportTeamCsv() {
+    const header = ["Name", "Module abgeschlossen", "Von Modulen gesamt", "Ø Quiz-Score (%)", "Zertifikate", "Rollenspiele"];
+    const rows = team.map((m) => [
+      m.full_name || "Unbenannt", m.doneModules, m.totalModules, m.avgMc ?? "", m.certs, m.roleplayCount,
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `Team-Fortschritt-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async function autoPairMentors() {
     setPairingBusy(true);
     // Erfahren = höhere XP, Neu = niedrigere XP. Obere Hälfte wird oberer Hälfte zugeteilt (1:1).
@@ -134,8 +155,17 @@ export default function Manager() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">Team-Übersicht</h1>
-      <p className="text-textMuted text-sm mb-6">Fortschritt deiner zugeordneten Team-Mitglieder.</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-display text-white mb-1">Team-Übersicht</h1>
+          <p className="text-textMuted text-sm">Fortschritt deiner zugeordneten Team-Mitglieder.</p>
+        </div>
+        {team.length > 0 && (
+          <button onClick={exportTeamCsv} className="btn-ghost text-xs flex-shrink-0">
+            <Icon name="download" size={13} /> CSV exportieren
+          </button>
+        )}
+      </div>
 
       {teamRequests.length > 0 && (
         <div className="card mb-5">
@@ -192,6 +222,20 @@ export default function Manager() {
           </div>
         )}
       </div>
+
+      {callStats.length > 0 && (
+        <div className="card mb-5">
+          <div className="font-semibold text-white text-sm mb-3">📞 Anruf-Aktivität heute</div>
+          <div className="flex flex-col gap-2">
+            {callStats.map((c) => (
+              <div key={c.user_id} className="flex items-center gap-3 text-sm">
+                <span className="text-white flex-1">{c.name}</span>
+                <span className="text-textMuted text-xs">{c.counts?.anwahlen || 0} Anwahlen · {c.counts?.termin || 0} Termine · {c.counts?.positiv || 0} positiv</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {principleCounts.length > 0 && (
         <div className="card mb-5">

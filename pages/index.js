@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [hub, setHub] = useState({ unreadMessages: 0, unreadCommunity: 0, openDuels: 0, dueFlashcards: 0, pendingApprovals: 0, pendingSuggestions: 0, pendingFriendRequests: 0, isManager: false });
   const [draggedTileKey, setDraggedTileKey] = useState(null);
   const [dashboardPrefs, setDashboardPrefs] = useState({});
+  const [onboarding, setOnboarding] = useState(null); // null = noch nicht geladen/nicht nötig
 
   async function persistTileOrder(newOrder) {
     setDashboardPrefs((prev) => {
@@ -41,6 +42,12 @@ export default function Dashboard() {
     persistTileOrder(reordered);
   }
 
+  async function dismissOnboarding() {
+    setOnboarding(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await supabase.from("profiles").update({ onboarding_dismissed: true }).eq("id", session.user.id);
+  }
+
   useEffect(() => {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -56,7 +63,7 @@ export default function Dashboard() {
       setRpSessions(rp || []);
       setLoading(false);
 
-      const { data: me } = await supabase.from("profiles").select("role, last_seen_community_at, dashboard_prefs").eq("id", uid).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("role, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
       setDashboardPrefs(me?.dashboard_prefs || {});
 
@@ -104,6 +111,15 @@ export default function Dashboard() {
         pendingFriendRequests: friendReqCount || 0,
         isManager: me?.role === "manager",
       });
+
+      if (!me?.onboarding_dismissed) {
+        const steps = [
+          { key: "profile", label: "Profil ausfüllen (Foto/Bio)", done: !!(me?.avatar_url || me?.bio), route: "/profile" },
+          { key: "course", label: "Ersten Kurs starten", done: (qr || []).length > 0, route: "/courses" },
+          { key: "roleplay", label: "Erstes Rollenspiel üben", done: (rp || []).length > 0, route: "/roleplay" },
+        ];
+        if (steps.some((s) => !s.done)) setOnboarding(steps);
+      }
     }
     load();
   }, []);
@@ -121,6 +137,32 @@ export default function Dashboard() {
           <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
           <div className="brand-stripe w-16 mb-3" />
           <p className="text-textMuted text-sm mb-6">Dein Überblick über Fortschritt und nächste Schritte.</p>
+
+          {profile?.streak_count > 0 && profile?.last_challenge_date !== new Date().toISOString().slice(0, 10) && (
+            <div className="card mb-5 border border-amber/30 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/daily-challenge")}>
+              <Icon name="flame" color="#E8368F" size={18} />
+              <span className="text-sm text-white flex-1">Deine {profile.streak_count}-Tage-Serie ist in Gefahr — heute noch die Tages-Challenge machen!</span>
+            </div>
+          )}
+
+          {onboarding && (
+            <div className="card mb-5">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="font-semibold text-white text-sm">👋 Erste Schritte</span>
+                <button onClick={dismissOnboarding} className="text-textMuted hover:text-white text-xs">Ausblenden</button>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {onboarding.map((step) => (
+                  <button key={step.key} onClick={() => router.push(step.route)} className="flex items-center gap-2.5 text-left hover:opacity-80">
+                    <span className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center text-[9px] ${step.done ? "bg-teal border-teal text-[#0A0C13]" : "border-line"}`}>
+                      {step.done ? "✓" : ""}
+                    </span>
+                    <span className={`text-sm ${step.done ? "text-textMuted line-through" : "text-white"}`}>{step.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <p className="text-textMuted text-sm">Lädt...</p>
