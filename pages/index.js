@@ -85,6 +85,7 @@ export default function Dashboard() {
         getUnreadMessageInfo(supabase, uid),
       ]);
       const msgCount = unreadInfo.total;
+      console.log("DEBUG Dashboard unreadInfo:", { total: unreadInfo.total, byConvo: unreadInfo.unreadByConvoKey, relevantCount: unreadInfo.relevantMessages.length, uid });
 
       const today = new Date().toISOString().slice(0, 10);
       const progressByCard = {};
