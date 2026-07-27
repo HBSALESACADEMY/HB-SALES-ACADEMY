@@ -116,3 +116,19 @@ textarea.input { resize: vertical; font-family: 'Inter', sans-serif; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #262B3D; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #4A3565; }
+
+/* Glanz-Effekt beim Anklicken eines Sidebar-Eintrags: der Markenverlauf läuft
+   einmal quer über den Button, wie ein kurzes Aufleuchten. */
+@keyframes hb-shine-sweep {
+  0% { background-position: -180% 0; opacity: 1; }
+  100% { background-position: 220% 0; opacity: 0; }
+}
+.hb-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(123,47,247,.55) 42%, rgba(232,54,143,.65) 50%, rgba(255,107,53,.55) 58%, transparent 70%);
+  background-size: 250% 100%;
+  animation: hb-shine-sweep .7s ease-out forwards;
+}

@@ -63,6 +63,7 @@ export default function Layout({ children, fullBleed }) {
   const [categoryOrderOverride, setCategoryOrderOverride] = useState(null);
   const [collapsedCategories, setCollapsedCategories] = useState(new Set());
   const [draggedCategory, setDraggedCategory] = useState(null);
+  const [shineId, setShineId] = useState(null);
   const collapsedSynced = useRef(false);
 
   useEffect(() => {
@@ -285,7 +286,7 @@ export default function Layout({ children, fullBleed }) {
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50 w-[230px] flex-shrink-0
-        bg-gradient-to-b from-[#181A28] to-[#0A0C13] border-r border-line px-3.5 py-6 flex flex-col gap-1
+        bg-gradient-to-b from-[#1F1730] via-[#160F22] to-[#0A0C13] border-r border-line px-3.5 py-6 flex flex-col gap-1
         transition-transform duration-200 md:translate-x-0
         ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
@@ -345,13 +346,18 @@ export default function Layout({ children, fullBleed }) {
                             onDragStart={() => setDraggedNavId(item.id)}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={() => handleNavDrop(item.id, items, visibleItems)}
-                            onClick={() => router.push(route)}
-                            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
+                            onClick={() => {
+                              router.push(route);
+                              setShineId(item.id);
+                              setTimeout(() => setShineId((cur) => (cur === item.id ? null : cur)), 700);
+                            }}
+                            className={`relative overflow-hidden flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
                               draggedNavId === item.id ? "opacity-40" : ""
                             } ${
                               router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
                             }`}
                           >
+                            {shineId === item.id && <span className="hb-shine" />}
                             <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
                             {badgeCount > 0 && (
                               <span className="badge-count">
