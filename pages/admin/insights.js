@@ -36,6 +36,20 @@ export default function AdminInsights() {
         supabase.from("call_log_days").select("counts").gte("log_date", weekAgo.slice(0, 10)),
       ]);
 
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+      const [{ data: pageViews }, { data: navItems }] = await Promise.all([
+        supabase.from("page_views").select("path").gt("created_at", thirtyDaysAgo),
+        supabase.from("nav_items").select("route, label"),
+      ]);
+      const labelByRoute = {};
+      (navItems || []).forEach((n) => { labelByRoute[n.route] = n.label; });
+      const viewCounts = {};
+      (pageViews || []).forEach((v) => { viewCounts[v.path] = (viewCounts[v.path] || 0) + 1; });
+      const usageRanking = Object.entries(viewCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(([path, count]) => ({ path, count, label: labelByRoute[path] || path }));
+
       const approved = (profiles || []).filter((p) => p.status === "approved");
       const pending = (profiles || []).filter((p) => p.status === "pending");
       const totalXp = approved.reduce((s, p) => s + (p.xp || 0), 0);
@@ -77,6 +91,7 @@ export default function AdminInsights() {
         weeklyAnwahlen,
         passedByCourse,
         topContributors,
+        usageRanking,
       });
       setLoading(false);
     }
@@ -122,6 +137,27 @@ export default function AdminInsights() {
             {t.sub && <div className="text-[11px] text-textMuted mt-1">{t.sub}</div>}
           </div>
         ))}
+      </div>
+
+      <div className="card mb-6">
+        <div className="font-semibold text-white text-sm mb-1">Meistgenutzte Bereiche</div>
+        <p className="text-xs text-textMuted mb-3">Letzte 30 Tage, über alle Mitglieder hinweg.</p>
+        <div className="flex flex-col gap-2">
+          {stats.usageRanking.map((r, i) => {
+            const max = stats.usageRanking[0]?.count || 1;
+            return (
+              <div key={r.path} className="flex items-center gap-3">
+                <span className="w-5 text-center text-xs text-textMuted font-mono flex-shrink-0">{i + 1}</span>
+                <span className="text-sm text-white w-40 flex-shrink-0 truncate">{r.label}</span>
+                <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
+                  <div className="h-full brand-gradient" style={{ width: `${(r.count / max) * 100}%` }} />
+                </div>
+                <span className="text-xs text-textMuted font-mono w-10 text-right flex-shrink-0">{r.count}</span>
+              </div>
+            );
+          })}
+          {stats.usageRanking.length === 0 && <p className="text-textMuted text-sm">Noch keine Nutzungsdaten.</p>}
+        </div>
       </div>
 
       <div className="card mb-6">

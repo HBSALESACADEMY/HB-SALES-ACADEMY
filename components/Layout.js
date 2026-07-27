@@ -106,6 +106,12 @@ export default function Layout({ children, fullBleed }) {
 
   useEffect(() => {
     setMobileNavOpen(false);
+    // Leichtgewichtiges Nutzungs-Tracking für die Admin-Insights ("was wird am
+    // meisten genutzt") — nicht kritisch, daher bewusst ohne await/Fehlerbehandlung.
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) supabase.from("page_views").insert({ user_id: session.user.id, path: router.asPath.split("?")[0] });
+    })();
   }, [router.asPath]);
 
   useEffect(() => {
