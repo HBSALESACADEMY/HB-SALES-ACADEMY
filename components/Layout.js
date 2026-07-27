@@ -25,7 +25,7 @@ const FALLBACK_NAV = [
 // nicht, wie Nutzer ihre Reihenfolge per Drag & Drop selbst festlegen können.
 const NAV_GROUPS = {
   dashboard: "Start",
-  courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen",
+  courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen",
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
@@ -321,14 +321,14 @@ export default function Layout({ children, fullBleed }) {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handleCategoryDrop(category, categories)}
                     onClick={() => toggleCollapse(category)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-grab active:cursor-grabbing select-none ${draggedCategory === category ? "opacity-40" : "hover:bg-surfaceRaised/60"}`}
+                    className={`group flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors ${draggedCategory === category ? "opacity-40 bg-surfaceRaised" : "hover:bg-surfaceRaised/70"}`}
                   >
-                    <span className={`text-[9px] text-[#5A5F72] transition-transform ${isCollapsed ? "-rotate-90" : ""}`}>▼</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#5A5F72] flex-1">{category}</span>
+                    <span className="text-[10.5px] font-bold uppercase tracking-widest text-[#6B7086] flex-1">{category}</span>
+                    <span className="text-[#3A3F55] opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none tracking-tighter">⠿</span>
                   </div>
 
                   {!isCollapsed && (
-                    <div className="flex flex-col gap-1 mt-0.5">
+                    <div className="flex flex-col gap-0.5 mt-0.5 pl-1">
                       {items.map((item) => {
                         const route = item.is_builtin ? item.route : `/folder/${item.id}`;
                         const badgeCount = item.key === "community" ? unreadCommunity

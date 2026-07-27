@@ -26,6 +26,15 @@ export default function Team() {
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
   const [managerName, setManagerName] = useState(null);
+  const [leaving, setLeaving] = useState(false);
+
+  async function leaveTeam() {
+    if (!confirm("Team wirklich verlassen? Du kannst später jederzeit eine neue Team-Anfrage stellen.")) return;
+    setLeaving(true);
+    await supabase.from("profiles").update({ manager_id: null }).eq("id", selfId);
+    setLeaving(false);
+    await load();
+  }
 
   async function load() {
     setLoading(true);
@@ -89,7 +98,14 @@ export default function Team() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mein Team</h1>
       <div className="brand-stripe w-16 mb-3" />
-      <p className="text-textMuted text-sm mb-6">{managerName ? `Team von ${managerName}` : "Wettbewerb, Ziele und Mentoring für dein Team."}</p>
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-textMuted text-sm">{managerName ? `Team von ${managerName}` : "Wettbewerb, Ziele und Mentoring für dein Team."}</p>
+        {managerName && (
+          <button disabled={leaving} onClick={leaveTeam} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40 flex-shrink-0">
+            {leaving ? "..." : "Team verlassen"}
+          </button>
+        )}
+      </div>
 
       {myTeamGoal && (
         <div className="card mb-5">

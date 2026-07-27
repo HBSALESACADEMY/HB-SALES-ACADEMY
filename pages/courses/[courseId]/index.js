@@ -4,6 +4,7 @@ import Layout from "../../../components/Layout";
 import Icon from "../../../components/Icon";
 import { supabase } from "../../../lib/supabaseClient";
 import { apiGetBlob } from "../../../lib/apiClient";
+import { triggerConfetti } from "../../../lib/confetti";
 import { COURSES } from "../../../lib/curriculum";
 
 export default function CourseDetail() {
@@ -52,6 +53,7 @@ export default function CourseDetail() {
       a.href = url; a.download = `Zertifikat-${course.id}.pdf`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      triggerConfetti();
     } catch (e) {
       alert(e.message);
     } finally {

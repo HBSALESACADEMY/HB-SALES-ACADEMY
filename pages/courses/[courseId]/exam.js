@@ -4,6 +4,7 @@ import Layout from "../../../components/Layout";
 import Icon from "../../../components/Icon";
 import { COURSES, allMcQuestionsOfCourse, shuffledOptions } from "../../../lib/curriculum";
 import { apiPost } from "../../../lib/apiClient";
+import { triggerConfetti } from "../../../lib/confetti";
 
 function shuffleArray(arr) {
   const a = arr.slice();
@@ -67,6 +68,7 @@ export default function ExamRunner() {
       });
       setResult(data);
       setPhase("done");
+      if (data.passed) triggerConfetti();
     } catch (e) {
       setError(e.message);
       setPhase("capstone");

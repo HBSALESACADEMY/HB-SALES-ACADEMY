@@ -15,6 +15,7 @@ export default function ProfileModal({ userId, onClose }) {
   const [selfId, setSelfId] = useState(null);
   const [target, setTarget] = useState(null);
   const [friendship, setFriendship] = useState(null);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -25,14 +26,16 @@ export default function ProfileModal({ userId, onClose }) {
       if (!session) return;
       setSelfId(session.user.id);
 
-      const [{ data: profile }, { data: fr }] = await Promise.all([
+      const [{ data: profile }, { data: fr }, { data: blockRow }] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
         supabase.from("friendships").select("*")
           .or(`and(requester_id.eq.${session.user.id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${session.user.id})`)
           .maybeSingle(),
+        supabase.from("blocks").select("*").eq("blocker_id", session.user.id).eq("blocked_id", userId).maybeSingle(),
       ]);
       setTarget(profile);
       setFriendship(fr);
+      setIsBlocked(!!blockRow);
       setLoading(false);
     }
     if (userId) load();
@@ -57,6 +60,29 @@ export default function ProfileModal({ userId, onClose }) {
     setBusy(true);
     await supabase.from("friendships").update({ status }).eq("id", friendship.id);
     setFriendship((f) => ({ ...f, status }));
+    setBusy(false);
+  }
+
+  async function removeFriend() {
+    if (!confirm("Freundschaft wirklich beenden?")) return;
+    setBusy(true);
+    await supabase.from("friendships").delete().eq("id", friendship.id);
+    setFriendship(null);
+    setBusy(false);
+  }
+
+  async function toggleBlock() {
+    setBusy(true);
+    if (isBlocked) {
+      await supabase.from("blocks").delete().eq("blocker_id", selfId).eq("blocked_id", userId);
+      setIsBlocked(false);
+    } else {
+      if (!confirm(`${target?.full_name || "Diese Person"} wirklich blockieren? Ihr könnt euch dann nicht mehr schreiben oder anfragen.`)) { setBusy(false); return; }
+      if (friendship) await supabase.from("friendships").delete().eq("id", friendship.id);
+      await supabase.from("blocks").insert({ blocker_id: selfId, blocked_id: userId });
+      setFriendship(null);
+      setIsBlocked(true);
+    }
     setBusy(false);
   }
 
@@ -106,24 +132,38 @@ export default function ProfileModal({ userId, onClose }) {
             </div>
 
             {!isSelf && (
-              <div className="flex items-center gap-2 pt-3 border-t border-line">
-                {!friendship && (
-                  <button disabled={busy} onClick={sendRequest} className="btn-ghost text-xs flex-1 disabled:opacity-40">Anfrage senden</button>
-                )}
-                {friendship?.status === "pending" && friendship.requester_id === selfId && (
-                  <span className="text-xs text-textMuted flex-1 text-center">Angefragt...</span>
-                )}
-                {friendship?.status === "pending" && friendship.addressee_id === selfId && (
+              <div className="flex flex-col gap-2 pt-3 border-t border-line">
+                {isBlocked ? (
+                  <button disabled={busy} onClick={toggleBlock} className="btn-ghost text-xs disabled:opacity-40">Entsperren</button>
+                ) : (
                   <>
-                    <button disabled={busy} onClick={() => respond("accepted")} className="btn-ghost text-xs flex-1 text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
-                    <button disabled={busy} onClick={() => respond("declined")} className="btn-ghost text-xs flex-1 text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                    <div className="flex items-center gap-2">
+                      {!friendship && (
+                        <button disabled={busy} onClick={sendRequest} className="btn-ghost text-xs flex-1 disabled:opacity-40">Anfrage senden</button>
+                      )}
+                      {friendship?.status === "pending" && friendship.requester_id === selfId && (
+                        <span className="text-xs text-textMuted flex-1 text-center">Angefragt...</span>
+                      )}
+                      {friendship?.status === "pending" && friendship.addressee_id === selfId && (
+                        <>
+                          <button disabled={busy} onClick={() => respond("accepted")} className="btn-ghost text-xs flex-1 text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                          <button disabled={busy} onClick={() => respond("declined")} className="btn-ghost text-xs flex-1 text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                        </>
+                      )}
+                      {friendship?.status === "declined" && (
+                        <button disabled={busy} onClick={sendRequest} className="btn-ghost text-xs flex-1 disabled:opacity-40">Erneut anfragen</button>
+                      )}
+                      {isFriend && (
+                        <button onClick={() => { onClose(); router.push(`/messages?to=${userId}`); }} className="btn text-xs flex-1 justify-center">Nachricht schreiben</button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isFriend && (
+                        <button disabled={busy} onClick={removeFriend} className="btn-ghost text-xs flex-1 text-textMuted disabled:opacity-40">Freund entfernen</button>
+                      )}
+                      <button disabled={busy} onClick={toggleBlock} className="btn-ghost text-xs flex-1 text-coral border-coral/40 disabled:opacity-40">Blockieren</button>
+                    </div>
                   </>
-                )}
-                {friendship?.status === "declined" && (
-                  <button disabled={busy} onClick={sendRequest} className="btn-ghost text-xs flex-1 disabled:opacity-40">Erneut anfragen</button>
-                )}
-                {isFriend && (
-                  <button onClick={() => { onClose(); router.push(`/messages?to=${userId}`); }} className="btn text-xs flex-1 justify-center">Nachricht schreiben</button>
                 )}
               </div>
             )}
