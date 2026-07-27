@@ -15,6 +15,8 @@ export default function Manager() {
   const [busyReqId, setBusyReqId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isManager, setIsManager] = useState(true);
+  const [teamName, setTeamName] = useState("");
+  const [savingTeamName, setSavingTeamName] = useState(false);
   const [goalTitle, setGoalTitle] = useState("");
   const [goalMetric, setGoalMetric] = useState("roleplay");
   const [goalTarget, setGoalTarget] = useState(20);
@@ -28,6 +30,7 @@ export default function Manager() {
     if (!session) return;
     const { data: me } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
     if (!me || me.role !== "manager") { setIsManager(false); setLoading(false); return; }
+    setTeamName(me.team_name || "");
 
     const { data: members } = await supabase.from("profiles").select("*").eq("manager_id", session.user.id);
     const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);
@@ -106,6 +109,13 @@ export default function Manager() {
     alert("Team-Ziel für diese Woche gesetzt!");
   }
 
+  async function saveTeamName() {
+    setSavingTeamName(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("profiles").update({ team_name: teamName.trim() || null }).eq("id", session.user.id);
+    setSavingTeamName(false);
+  }
+
   function exportTeamCsv() {
     const header = ["Name", "Module abgeschlossen", "Von Modulen gesamt", "Ø Quiz-Score (%)", "Zertifikate", "Rollenspiele"];
     const rows = team.map((m) => [
@@ -155,7 +165,7 @@ export default function Manager() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-display text-white mb-1">Team-Übersicht</h1>
           <p className="text-textMuted text-sm">Fortschritt deiner zugeordneten Team-Mitglieder.</p>
@@ -165,6 +175,14 @@ export default function Manager() {
             <Icon name="download" size={13} /> CSV exportieren
           </button>
         )}
+      </div>
+
+      <div className="card mb-6 flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-textMuted flex-shrink-0">Team-Name:</span>
+        <input className="input flex-1 min-w-[160px]" placeholder="z.B. Die Abschlussmaschinen" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
+        <button disabled={savingTeamName} onClick={saveTeamName} className="btn-ghost text-xs disabled:opacity-40">
+          {savingTeamName ? "Speichert..." : "Speichern"}
+        </button>
       </div>
 
       {teamRequests.length > 0 && (

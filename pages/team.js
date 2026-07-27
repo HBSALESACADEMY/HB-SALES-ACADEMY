@@ -49,7 +49,7 @@ export default function Team() {
     const weekStartDateStr = mondayOfWeek(new Date()).toISOString().slice(0, 10);
 
     const [{ data: allProfiles }, { data: xpRows }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, manager_id, role").eq("status", "approved"),
+      supabase.from("profiles").select("id, full_name, manager_id, role, team_name").eq("status", "approved"),
       supabase.from("xp_log").select("user_id, amount").gt("created_at", weekStart),
     ]);
 
@@ -61,13 +61,13 @@ export default function Team() {
       const teamMemberIds = (allProfiles || []).filter((p) => p.manager_id === mgr.id).map((p) => p.id);
       const allIds = [mgr.id, ...teamMemberIds];
       const totalXp = allIds.reduce((sum, id) => sum + (xpByUser[id] || 0), 0);
-      return { managerId: mgr.id, managerName: mgr.full_name || "Team", memberCount: teamMemberIds.length, weeklyXp: totalXp };
+      return { managerId: mgr.id, managerName: mgr.team_name || `Team von ${mgr.full_name || "?"}`, memberCount: teamMemberIds.length, weeklyXp: totalXp };
     }).sort((a, b) => b.weeklyXp - a.weeklyXp);
     setTeamStandings(standings);
 
     if (me?.manager_id) {
-      const { data: mgr } = await supabase.from("profiles").select("full_name").eq("id", me.manager_id).maybeSingle();
-      setManagerName(mgr?.full_name || null);
+      const { data: mgr } = await supabase.from("profiles").select("full_name, team_name").eq("id", me.manager_id).maybeSingle();
+      setManagerName(mgr?.team_name || (mgr?.full_name ? `Team von ${mgr.full_name}` : null));
 
       const [{ data: goal }, { data: pair }, { data: myMentees }] = await Promise.all([
         supabase.from("team_goals").select("*").eq("manager_id", me.manager_id).eq("week_start", weekStartDateStr).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -99,7 +99,7 @@ export default function Team() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mein Team</h1>
       <div className="brand-stripe w-16 mb-3" />
       <div className="flex items-center justify-between mb-6">
-        <p className="text-textMuted text-sm">{managerName ? `Team von ${managerName}` : "Wettbewerb, Ziele und Mentoring für dein Team."}</p>
+        <p className="text-textMuted text-sm">{managerName ? managerName : "Wettbewerb, Ziele und Mentoring für dein Team."}</p>
         {managerName && (
           <button disabled={leaving} onClick={leaveTeam} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40 flex-shrink-0">
             {leaving ? "..." : "Team verlassen"}
