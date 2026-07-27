@@ -34,7 +34,7 @@ export default function Leaderboard() {
     if (session) setSelfId(session.user.id);
 
     const [{ data: profiles }, { data: friendships }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, xp, avatar_url").eq("status", "approved"),
+      supabase.from("profiles").select("id, full_name, xp, avatar_url").eq("status", "approved").eq("leaderboard_opt_out", false),
       session ? supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`) : Promise.resolve({ data: [] }),
     ]);
 

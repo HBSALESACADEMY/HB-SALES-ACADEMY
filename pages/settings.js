@@ -26,6 +26,7 @@ const ALL_DASHBOARD_TILES = [
 export default function Settings() {
   const [profile, setProfile] = useState(null);
   const [visibility, setVisibility] = useState({});
+  const [leaderboardOptOut, setLeaderboardOptOut] = useState(false);
   const [tileOrder, setTileOrder] = useState(ALL_DASHBOARD_TILES.map((t) => t.key));
   const [hiddenTiles, setHiddenTiles] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -38,6 +39,7 @@ export default function Settings() {
       const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
       setProfile(data);
       setVisibility(data?.contact_visibility || {});
+      setLeaderboardOptOut(data?.leaderboard_opt_out || false);
       const prefs = data?.dashboard_prefs || {};
       const savedOrder = prefs.order && prefs.order.length ? prefs.order : ALL_DASHBOARD_TILES.map((t) => t.key);
       const merged = [...savedOrder, ...ALL_DASHBOARD_TILES.map((t) => t.key).filter((k) => !savedOrder.includes(k))];
@@ -75,8 +77,8 @@ export default function Settings() {
     setSaved(false);
     const { data: { session } } = await supabase.auth.getSession();
     const dashboard_prefs = { order: tileOrder, hidden: Array.from(hiddenTiles) };
-    await supabase.from("profiles").update({ contact_visibility: visibility, dashboard_prefs }).eq("id", session.user.id);
-    patchCachedProfile({ contact_visibility: visibility, dashboard_prefs });
+    await supabase.from("profiles").update({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut }).eq("id", session.user.id);
+    patchCachedProfile({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut });
     setSaved(true);
   }
 
@@ -103,6 +105,19 @@ export default function Settings() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="card max-w-lg mb-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-white text-sm mb-1">Auf der Rangliste erscheinen</div>
+            <p className="text-xs text-textMuted">Wenn ausgeschaltet, wirst du für andere nicht im XP-Ranking angezeigt.</p>
+          </div>
+          <button onClick={() => setLeaderboardOptOut((v) => !v)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex-shrink-0 ${!leaderboardOptOut ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted"}`}>
+            {!leaderboardOptOut ? "Sichtbar" : "Ausgeblendet"}
+          </button>
         </div>
       </div>
 

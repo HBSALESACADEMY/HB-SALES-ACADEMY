@@ -21,12 +21,14 @@ export default function Login() {
       if (mode === "login") {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-          supabase.from("login_attempts").insert({ email, success: false }); // bewusst ohne await
+          supabase.from("login_attempts").insert({ email, success: false }).then(({ error: laErr }) => { if (laErr) console.error("login_attempts insert failed:", laErr.message); });
           throw error;
         }
         if (data?.user) {
-          supabase.from("login_events").insert({ user_id: data.user.id }); // bewusst ohne await, soll den Login nicht verzögern
-          supabase.from("login_attempts").insert({ email, user_id: data.user.id, success: true });
+          const { error: leErr } = await supabase.from("login_events").insert({ user_id: data.user.id });
+          if (leErr) console.error("login_events insert failed:", leErr.message);
+          const { error: laErr } = await supabase.from("login_attempts").insert({ email, user_id: data.user.id, success: true });
+          if (laErr) console.error("login_attempts insert failed:", laErr.message);
         }
         playLoginChime();
       } else {
