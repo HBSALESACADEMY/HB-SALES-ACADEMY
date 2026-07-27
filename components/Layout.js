@@ -225,7 +225,6 @@ export default function Layout({ children, fullBleed }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, loadUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, loadUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, loadUnread)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_reads" }, loadUnread)
       .subscribe();
 
     return () => { mounted = false; clearInterval(interval); supabase.removeChannel(channel); };
