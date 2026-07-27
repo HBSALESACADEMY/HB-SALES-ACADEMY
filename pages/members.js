@@ -9,6 +9,8 @@ export default function Members() {
   const [selfId, setSelfId] = useState(null);
   const [members, setMembers] = useState([]);
   const [friendships, setFriendships] = useState([]); // alle, die mich betreffen
+  const [teamRequests, setTeamRequests] = useState([]);
+  const [myManagerId, setMyManagerId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
 
@@ -18,12 +20,16 @@ export default function Members() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const [{ data: profiles }, { data: fr }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, avatar_url, bio, company_name, role_title, website, instagram, linkedin").eq("status", "approved").neq("id", session.user.id).order("full_name"),
+    const [{ data: profiles }, { data: fr }, { data: tr }, { data: me }] = await Promise.all([
+      supabase.from("profiles").select("id, full_name, avatar_url, bio, company_name, role_title, website, instagram, linkedin, role, manager_id").eq("status", "approved").neq("id", session.user.id).order("full_name"),
       supabase.from("friendships").select("*").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
+      supabase.from("team_requests").select("*").eq("requester_id", session.user.id),
+      supabase.from("profiles").select("manager_id").eq("id", session.user.id).maybeSingle(),
     ]);
     setMembers(profiles || []);
     setFriendships(fr || []);
+    setTeamRequests(tr || []);
+    setMyManagerId(me?.manager_id || null);
     setLoading(false);
   }
 
@@ -46,6 +52,13 @@ export default function Members() {
   async function respond(friendship, status) {
     setBusyId(friendship.id);
     await supabase.from("friendships").update({ status }).eq("id", friendship.id);
+    await load();
+    setBusyId(null);
+  }
+
+  async function sendTeamRequest(managerId) {
+    setBusyId("team-" + managerId);
+    await supabase.from("team_requests").insert({ requester_id: selfId, manager_id: managerId });
     await load();
     setBusyId(null);
   }
@@ -82,30 +95,49 @@ export default function Members() {
                 )}
               </div>
 
-              {!rel && (
-                <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
-                  Anfrage senden
-                </button>
-              )}
-              {rel?.status === "pending" && rel.requester_id === selfId && (
-                <span className="text-xs text-textMuted flex-shrink-0">Angefragt...</span>
-              )}
-              {rel?.status === "pending" && rel.addressee_id === selfId && (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button disabled={isBusy} onClick={() => respond(rel, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
-                  <button disabled={isBusy} onClick={() => respond(rel, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
-                </div>
-              )}
-              {rel?.status === "declined" && (
-                <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
-                  Erneut anfragen
-                </button>
-              )}
-              {rel?.status === "accepted" && (
-                <button onClick={() => router.push(`/messages?to=${m.id}`)} className="btn text-xs flex-shrink-0">
-                  Schreiben
-                </button>
-              )}
+              <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                {!rel && (
+                  <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40">
+                    Anfrage senden
+                  </button>
+                )}
+                {rel?.status === "pending" && rel.requester_id === selfId && (
+                  <span className="text-xs text-textMuted">Angefragt...</span>
+                )}
+                {rel?.status === "pending" && rel.addressee_id === selfId && (
+                  <div className="flex items-center gap-2">
+                    <button disabled={isBusy} onClick={() => respond(rel, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                    <button disabled={isBusy} onClick={() => respond(rel, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                  </div>
+                )}
+                {rel?.status === "declined" && (
+                  <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40">
+                    Erneut anfragen
+                  </button>
+                )}
+                {rel?.status === "accepted" && (
+                  <button onClick={() => router.push(`/messages?to=${m.id}`)} className="btn text-xs">
+                    Schreiben
+                  </button>
+                )}
+
+                {m.role === "manager" && (() => {
+                  const tReq = teamRequests.find((t) => t.manager_id === m.id);
+                  if (myManagerId === m.id) return <span className="text-[11px] text-teal">In deinem Team</span>;
+                  if (!tReq) return (
+                    <button disabled={busyId === "team-" + m.id} onClick={() => sendTeamRequest(m.id)} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40">
+                      Team beitreten
+                    </button>
+                  );
+                  if (tReq.status === "pending") return <span className="text-[11px] text-textMuted">Team-Anfrage läuft...</span>;
+                  if (tReq.status === "declined") return (
+                    <button disabled={busyId === "team-" + m.id} onClick={() => sendTeamRequest(m.id)} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40">
+                      Erneut anfragen
+                    </button>
+                  );
+                  return null;
+                })()}
+              </div>
             </div>
           );
         })}

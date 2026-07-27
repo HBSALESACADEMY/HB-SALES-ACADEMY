@@ -9,6 +9,7 @@ import { openProfile } from "../lib/profileModalBus";
 export default function Community() {
   const router = useRouter();
   const [selfId, setSelfId] = useState(null);
+  const [friendIds, setFriendIds] = useState(new Set());
   const [isManager, setIsManager] = useState(false);
   const [groups, setGroups] = useState([]);
   const [activeGroup, setActiveGroup] = useState("all"); // "all" | group.id
@@ -16,6 +17,7 @@ export default function Community() {
   const [profileMap, setProfileMap] = useState({});
   const [commentsByPost, setCommentsByPost] = useState({});
   const [kudosByPost, setKudosByPost] = useState({});
+  const [kudosWall, setKudosWall] = useState(null);
   const [newPost, setNewPost] = useState("");
   const [newPostGroup, setNewPostGroup] = useState("");
   const [newPostFile, setNewPostFile] = useState(null);
@@ -34,13 +36,16 @@ export default function Community() {
     const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
     setIsManager(me?.role === "manager");
 
-    const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: profiles }] = await Promise.all([
+    const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: profiles }, { data: friendships }] = await Promise.all([
       supabase.from("community_groups").select("*").order("created_at"),
       supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(80),
       supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
       supabase.from("community_kudos").select("*"),
       supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved"),
+      supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
     ]);
+
+    setFriendIds(new Set((friendships || []).map((f) => f.requester_id === session.user.id ? f.addressee_id : f.requester_id)));
 
     setGroups(groups || []);
 
@@ -62,6 +67,44 @@ export default function Community() {
 
     setPosts(posts || []);
     setLoading(false);
+
+    // Kudos-Wall: Highlights der Woche
+    const weekStart = (() => {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = (day === 0 ? -6 : 1) - day;
+      d.setDate(d.getDate() + diff);
+      d.setHours(0, 0, 0, 0);
+      return d.toISOString();
+    })();
+    const postAuthorByPostId = {};
+    (posts || []).forEach((p) => { postAuthorByPostId[p.id] = p.user_id; });
+
+    const [{ data: weekKudos }, { data: weekXp }] = await Promise.all([
+      supabase.from("community_kudos").select("post_id, created_at").gt("created_at", weekStart),
+      supabase.from("xp_log").select("user_id, amount").gt("created_at", weekStart),
+    ]);
+
+    const kudosByAuthor = {};
+    (weekKudos || []).forEach((k) => {
+      const author = postAuthorByPostId[k.post_id];
+      if (author) kudosByAuthor[author] = (kudosByAuthor[author] || 0) + 1;
+    });
+    const xpByUser = {};
+    (weekXp || []).forEach((r) => { xpByUser[r.user_id] = (xpByUser[r.user_id] || 0) + r.amount; });
+
+    const nameFor = (id) => names[id]?.name || "Unbenannt";
+    const topKudos = Object.entries(kudosByAuthor).sort((a, b) => b[1] - a[1])[0];
+    const topXp = Object.entries(xpByUser).sort((a, b) => b[1] - a[1])[0];
+    const topStreak = (profiles || []).filter((p) => p.id).length
+      ? (await supabase.from("profiles").select("id, full_name, streak_count").eq("status", "approved").order("streak_count", { ascending: false }).limit(1).maybeSingle()).data
+      : null;
+
+    setKudosWall({
+      topKudos: topKudos ? { name: nameFor(topKudos[0]), count: topKudos[1] } : null,
+      topXp: topXp ? { name: nameFor(topXp[0]), amount: topXp[1] } : null,
+      topStreak: topStreak && topStreak.streak_count > 0 ? { name: topStreak.full_name, days: topStreak.streak_count } : null,
+    });
 
     await supabase.from("profiles").update({ last_seen_community_at: new Date().toISOString() }).eq("id", session.user.id);
   }
@@ -144,6 +187,35 @@ export default function Community() {
       <h1 className="text-2xl font-display text-white mb-1">Community</h1>
       <p className="text-textMuted text-sm mb-5">Teilt Erfolge, Tipps, Fotos und Erfahrungen mit dem ganzen Team.</p>
 
+      {kudosWall && (kudosWall.topKudos || kudosWall.topXp || kudosWall.topStreak) && (
+        <div className="card mb-5">
+          <div className="font-semibold text-white text-sm mb-3">✨ Highlights der Woche</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {kudosWall.topKudos && (
+              <div className="text-center">
+                <div className="text-lg">🔥</div>
+                <div className="text-sm text-white font-semibold">{kudosWall.topKudos.name}</div>
+                <div className="text-xs text-textMuted">{kudosWall.topKudos.count} Kudos erhalten</div>
+              </div>
+            )}
+            {kudosWall.topXp && (
+              <div className="text-center">
+                <div className="text-lg">📈</div>
+                <div className="text-sm text-white font-semibold">{kudosWall.topXp.name}</div>
+                <div className="text-xs text-textMuted">{kudosWall.topXp.amount} XP diese Woche</div>
+              </div>
+            )}
+            {kudosWall.topStreak && (
+              <div className="text-center">
+                <div className="text-lg">⚡</div>
+                <div className="text-sm text-white font-semibold">{kudosWall.topStreak.name}</div>
+                <div className="text-xs text-textMuted">{kudosWall.topStreak.days} Tage Serie</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Group tabs */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <button onClick={() => router.push("/members")}
@@ -201,12 +273,15 @@ export default function Community() {
           const comments = commentsByPost[p.id] || [];
           const authorName = profileMap[p.user_id]?.name || "Unbenannt";
           return (
-            <div key={p.id} className="card">
+            <div key={p.id} className={`card ${friendIds.has(p.user_id) ? "border border-violet/25" : ""}`}>
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80" onClick={() => openProfile(p.user_id)}>
                   <Avatar name={authorName} src={profileMap[p.user_id]?.avatar} size={34} />
                   <div>
-                    <div className="font-semibold text-white text-sm">{authorName}</div>
+                    <div className="font-semibold text-white text-sm flex items-center gap-1.5">
+                      {authorName}
+                      {friendIds.has(p.user_id) && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet/15 text-violet font-semibold">Freund</span>}
+                    </div>
                     <div className="text-[11px] text-textMuted">{new Date(p.created_at).toLocaleString("de-DE")}</div>
                   </div>
                 </div>

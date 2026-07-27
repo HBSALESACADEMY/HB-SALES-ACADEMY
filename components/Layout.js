@@ -26,9 +26,9 @@ const FALLBACK_NAV = [
 const NAV_GROUPS = {
   dashboard: "Start",
   courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen",
-  "daily-challenge": "Lernen", duel: "Lernen", flashcards: "Lernen", simulator: "Lernen",
+  "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
-  community: "Team", members: "Team", messages: "Team", leaderboard: "Team",
+  community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung",
 };
@@ -53,12 +53,17 @@ export default function Layout({ children, fullBleed }) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [pendingSuggestions, setPendingSuggestions] = useState(0);
+  const [pendingTeamRequests, setPendingTeamRequests] = useState(0);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [friendToast, setFriendToast] = useState(null);
   const prevFriendReqCount = useRef(null);
   const [openProfileId, setOpenProfileId] = useState(null);
   const [draggedNavId, setDraggedNavId] = useState(null);
   const [navOrderOverride, setNavOrderOverride] = useState(null);
+  const [categoryOrderOverride, setCategoryOrderOverride] = useState(null);
+  const [collapsedCategories, setCollapsedCategories] = useState(new Set());
+  const [draggedCategory, setDraggedCategory] = useState(null);
+  const collapsedSynced = useRef(false);
 
   useEffect(() => {
     function handler(e) { setOpenProfileId(e.detail); }
@@ -131,11 +136,12 @@ export default function Layout({ children, fullBleed }) {
       }
 
       if (me?.role === "manager") {
-        const [{ count: approvalCount }, { count: suggestionCount }] = await Promise.all([
+        const [{ count: approvalCount }, { count: suggestionCount }, { count: teamReqCount }] = await Promise.all([
           supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
           supabase.from("kb_entries").select("id", { count: "exact", head: true }).eq("status", "pending"),
+          supabase.from("team_requests").select("id", { count: "exact", head: true }).eq("manager_id", session.user.id).eq("status", "pending"),
         ]);
-        if (mounted) { setPendingApprovals(approvalCount || 0); setPendingSuggestions(suggestionCount || 0); }
+        if (mounted) { setPendingApprovals(approvalCount || 0); setPendingSuggestions(suggestionCount || 0); setPendingTeamRequests(teamReqCount || 0); }
       }
     }
     loadUnread();
@@ -146,6 +152,13 @@ export default function Layout({ children, fullBleed }) {
   useEffect(() => {
     if (profile?.sidebar_prefs?.order && !navOrderOverride) {
       setNavOrderOverride(profile.sidebar_prefs.order);
+    }
+    if (profile?.sidebar_prefs?.categoryOrder && !categoryOrderOverride) {
+      setCategoryOrderOverride(profile.sidebar_prefs.categoryOrder);
+    }
+    if (profile?.sidebar_prefs?.collapsed && !collapsedSynced.current) {
+      setCollapsedCategories(new Set(profile.sidebar_prefs.collapsed));
+      collapsedSynced.current = true;
     }
   }, [profile]);
 
@@ -158,26 +171,63 @@ export default function Layout({ children, fullBleed }) {
     return [...ordered, ...remaining];
   }
 
-  async function persistNavOrder(newOrder) {
-    setNavOrderOverride(newOrder);
+  function sortedCategories(categories) {
+    const order = categoryOrderOverride;
+    if (!order || !order.length) return categories;
+    const ordered = order.filter((c) => categories.includes(c));
+    const remaining = categories.filter((c) => !order.includes(c));
+    return [...ordered, ...remaining];
+  }
+
+  async function persistSidebarPrefs(patch) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const sidebar_prefs = { order: newOrder };
+    const current = cachedProfile?.sidebar_prefs || {};
+    const sidebar_prefs = { ...current, ...patch };
     patchCachedProfile({ sidebar_prefs });
     await supabase.from("profiles").update({ sidebar_prefs }).eq("id", session.user.id);
   }
 
-  function handleNavDrop(targetId, visibleItems) {
+  function handleNavDrop(targetId, categoryItems, allItems) {
     if (!draggedNavId || draggedNavId === targetId) { setDraggedNavId(null); return; }
-    const currentIds = visibleItems.map((it) => it.id);
-    const fromIdx = currentIds.indexOf(draggedNavId);
-    const toIdx = currentIds.indexOf(targetId);
+    const catIds = categoryItems.map((it) => it.id);
+    const fromIdx = catIds.indexOf(draggedNavId);
+    const toIdx = catIds.indexOf(targetId);
     if (fromIdx === -1 || toIdx === -1) { setDraggedNavId(null); return; }
-    const reordered = [...currentIds];
-    reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, draggedNavId);
+    const reorderedCat = [...catIds];
+    reorderedCat.splice(fromIdx, 1);
+    reorderedCat.splice(toIdx, 0, draggedNavId);
+
+    // Gesamt-Reihenfolge neu zusammensetzen: andere Kategorien bleiben unangetastet,
+    // nur die Positionen innerhalb DIESER Kategorie werden ersetzt.
+    let catPointer = 0;
+    const fullOrder = allItems.map((it) => catIds.includes(it.id) ? reorderedCat[catPointer++] : it.id);
+
     setDraggedNavId(null);
-    persistNavOrder(reordered);
+    setNavOrderOverride(fullOrder);
+    persistSidebarPrefs({ order: fullOrder });
+  }
+
+  function handleCategoryDrop(targetCategory, visibleCategories) {
+    if (!draggedCategory || draggedCategory === targetCategory) { setDraggedCategory(null); return; }
+    const fromIdx = visibleCategories.indexOf(draggedCategory);
+    const toIdx = visibleCategories.indexOf(targetCategory);
+    if (fromIdx === -1 || toIdx === -1) { setDraggedCategory(null); return; }
+    const reordered = [...visibleCategories];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedCategory);
+    setDraggedCategory(null);
+    setCategoryOrderOverride(reordered);
+    persistSidebarPrefs({ categoryOrder: reordered });
+  }
+
+  function toggleCollapse(category) {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category); else next.add(category);
+      persistSidebarPrefs({ collapsed: Array.from(next) });
+      return next;
+    });
   }
 
   async function handleLogout() {
@@ -249,47 +299,70 @@ export default function Layout({ children, fullBleed }) {
           <p className="text-[11.5px] italic text-textMuted leading-snug">„{quoteOfTheDay().text}"</p>
           {quoteOfTheDay().author && <p className="text-[10px] text-[#5A5F72] mt-0.5">— {quoteOfTheDay().author}</p>}
         </div>
-        <div className="flex-1 overflow-y-auto flex flex-col gap-1">
+        <div className="flex-1 overflow-y-auto flex flex-col gap-0.5">
           {(() => {
             const visibleItems = sortedNav(navItems.filter((n) => !n.requires_manager || profile?.role === "manager"));
-            let lastGroup = null;
-            return visibleItems.map((item) => {
-              const route = item.is_builtin ? item.route : `/folder/${item.id}`;
-              const badgeCount = item.key === "community" ? unreadCommunity
-                : item.key === "messages" ? unreadMessages
-                : item.key === "members" ? pendingFriendRequests
-                : item.key === "admin" ? pendingApprovals
-                : item.key === "admin-suggestions" ? pendingSuggestions
-                : 0;
-              const group = groupFor(item);
-              const showHeader = group !== lastGroup;
-              lastGroup = group;
+            const byCategory = {};
+            visibleItems.forEach((item) => {
+              const g = groupFor(item);
+              byCategory[g] = byCategory[g] || [];
+              byCategory[g].push(item);
+            });
+            const categories = sortedCategories(Object.keys(byCategory));
+
+            return categories.map((category) => {
+              const items = byCategory[category];
+              const isCollapsed = collapsedCategories.has(category);
               return (
-                <div key={item.id}>
-                  {showHeader && (
-                    <div className={`px-3 ${visibleItems[0] === item ? "pb-1.5" : "pt-3.5 pb-1.5 mt-1 border-t border-line/60"}`}>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[#5A5F72]">{group}</span>
+                <div key={category} className="mb-1">
+                  <div
+                    draggable
+                    onDragStart={() => setDraggedCategory(category)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleCategoryDrop(category, categories)}
+                    onClick={() => toggleCollapse(category)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-grab active:cursor-grabbing select-none ${draggedCategory === category ? "opacity-40" : "hover:bg-surfaceRaised/60"}`}
+                  >
+                    <span className={`text-[9px] text-[#5A5F72] transition-transform ${isCollapsed ? "-rotate-90" : ""}`}>▼</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#5A5F72] flex-1">{category}</span>
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="flex flex-col gap-1 mt-0.5">
+                      {items.map((item) => {
+                        const route = item.is_builtin ? item.route : `/folder/${item.id}`;
+                        const badgeCount = item.key === "community" ? unreadCommunity
+                          : item.key === "messages" ? unreadMessages
+                          : item.key === "members" ? pendingFriendRequests
+                          : item.key === "admin" ? pendingApprovals
+                          : item.key === "admin-suggestions" ? pendingSuggestions
+                          : item.key === "manager" ? pendingTeamRequests
+                          : 0;
+                        return (
+                          <button
+                            key={item.id}
+                            draggable
+                            onDragStart={() => setDraggedNavId(item.id)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => handleNavDrop(item.id, items, visibleItems)}
+                            onClick={() => router.push(route)}
+                            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
+                              draggedNavId === item.id ? "opacity-40" : ""
+                            } ${
+                              router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                            }`}
+                          >
+                            <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
+                            {badgeCount > 0 && (
+                              <span className="badge-count">
+                                {badgeCount > 9 ? "9+" : badgeCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
-                  <button
-                    draggable
-                    onDragStart={() => setDraggedNavId(item.id)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => handleNavDrop(item.id, visibleItems)}
-                    onClick={() => router.push(route)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
-                      draggedNavId === item.id ? "opacity-40" : ""
-                    } ${
-                      router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
-                    }`}
-                  >
-                    <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
-                    {badgeCount > 0 && (
-                      <span className="badge-count">
-                        {badgeCount > 9 ? "9+" : badgeCount}
-                      </span>
-                    )}
-                  </button>
                 </div>
               );
             });
