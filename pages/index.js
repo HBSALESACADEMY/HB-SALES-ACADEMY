@@ -135,6 +135,18 @@ export default function Dashboard() {
       }
     }
     load();
+
+    // Echtzeit: neue Nachrichten/Community-Aktivität aktualisieren die Kacheln sofort,
+    // auch wenn man schon auf dem Dashboard ist (vorher nur beim erneuten Laden der Seite).
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_reads" }, load)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, load)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);
