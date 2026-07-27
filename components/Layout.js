@@ -29,7 +29,7 @@ const NAV_GROUPS = {
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
-  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung",
+  admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-call-stats": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung",
 };
 function groupFor(item) {
@@ -38,6 +38,7 @@ function groupFor(item) {
 
 let cachedProfile = null;
 let cachedNavItems = null;
+let cachedBadges = null;
 
 export function patchCachedProfile(patch) {
   cachedProfile = cachedProfile ? { ...cachedProfile, ...patch } : patch;
@@ -49,12 +50,12 @@ export default function Layout({ children, fullBleed }) {
   const [loadingAuth, setLoadingAuth] = useState(!cachedProfile);
   const [navItems, setNavItems] = useState(cachedNavItems || FALLBACK_NAV);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [unreadCommunity, setUnreadCommunity] = useState(0);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [pendingApprovals, setPendingApprovals] = useState(0);
-  const [pendingSuggestions, setPendingSuggestions] = useState(0);
-  const [pendingTeamRequests, setPendingTeamRequests] = useState(0);
-  const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
+  const [unreadCommunity, setUnreadCommunity] = useState(cachedBadges?.unreadCommunity ?? 0);
+  const [unreadMessages, setUnreadMessages] = useState(cachedBadges?.unreadMessages ?? 0);
+  const [pendingApprovals, setPendingApprovals] = useState(cachedBadges?.pendingApprovals ?? 0);
+  const [pendingSuggestions, setPendingSuggestions] = useState(cachedBadges?.pendingSuggestions ?? 0);
+  const [pendingTeamRequests, setPendingTeamRequests] = useState(cachedBadges?.pendingTeamRequests ?? 0);
+  const [pendingFriendRequests, setPendingFriendRequests] = useState(cachedBadges?.pendingFriendRequests ?? 0);
   const [friendToast, setFriendToast] = useState(null);
   const prevFriendReqCount = useRef(null);
   const [openProfileId, setOpenProfileId] = useState(null);
@@ -111,7 +112,7 @@ export default function Layout({ children, fullBleed }) {
         .eq("recipient_id", session.user.id).is("read_at", null);
       if (mounted) setUnreadMessages(msgCount || 0);
 
-      const { data: me } = await supabase.from("profiles").select("role, last_seen_community_at").eq("id", session.user.id).maybeSingle();
+      const { data: me } = { data: cachedProfile };
       const since = me?.last_seen_community_at || new Date(0).toISOString();
       const [{ count: postCount }, { count: commentCount }] = await Promise.all([
         supabase.from("community_posts").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", session.user.id),
@@ -136,19 +137,26 @@ export default function Layout({ children, fullBleed }) {
         setPendingFriendRequests(newCount);
       }
 
+      let approvalCount = 0, suggestionCount = 0, teamReqCount = 0;
       if (me?.role === "manager") {
-        const [{ count: approvalCount }, { count: suggestionCount }, { count: teamReqCount }] = await Promise.all([
+        const [a, s, t] = await Promise.all([
           supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
           supabase.from("kb_entries").select("id", { count: "exact", head: true }).eq("status", "pending"),
           supabase.from("team_requests").select("id", { count: "exact", head: true }).eq("manager_id", session.user.id).eq("status", "pending"),
         ]);
-        if (mounted) { setPendingApprovals(approvalCount || 0); setPendingSuggestions(suggestionCount || 0); setPendingTeamRequests(teamReqCount || 0); }
+        approvalCount = a.count || 0; suggestionCount = s.count || 0; teamReqCount = t.count || 0;
+        if (mounted) { setPendingApprovals(approvalCount); setPendingSuggestions(suggestionCount); setPendingTeamRequests(teamReqCount); }
       }
+
+      cachedBadges = {
+        unreadMessages: msgCount || 0, unreadCommunity: (postCount || 0) + (commentCount || 0),
+        pendingFriendRequests: friendReqCount || 0, pendingApprovals: approvalCount, pendingSuggestions: suggestionCount, pendingTeamRequests: teamReqCount,
+      };
     }
     loadUnread();
     const interval = setInterval(loadUnread, 20000);
     return () => { mounted = false; clearInterval(interval); };
-  }, [router.asPath]);
+  }, []);
 
   useEffect(() => {
     if (profile?.sidebar_prefs?.order && !navOrderOverride) {
@@ -321,15 +329,21 @@ export default function Layout({ children, fullBleed }) {
                     onDragStart={() => setDraggedCategory(category)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handleCategoryDrop(category, categories)}
-                    onClick={() => toggleCollapse(category)}
-                    className={`group flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors ${draggedCategory === category ? "opacity-40 bg-surfaceRaised" : "hover:bg-surfaceRaised/70"}`}
+                    onClick={() => {
+                      toggleCollapse(category);
+                      setShineId(`cat:${category}`);
+                      setTimeout(() => setShineId((cur) => (cur === `cat:${category}` ? null : cur)), 700);
+                    }}
+                    className={`relative overflow-hidden group flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors ${draggedCategory === category ? "opacity-40 bg-surfaceRaised" : "hover:bg-surfaceRaised/70"}`}
                   >
+                    {shineId === `cat:${category}` && <span className="hb-shine" />}
                     <span className="text-[10.5px] font-bold uppercase tracking-widest text-[#6B7086] flex-1">{category}</span>
                     <span className="text-[#3A3F55] opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none tracking-tighter">⠿</span>
                   </div>
 
-                  {!isCollapsed && (
-                    <div className="flex flex-col gap-0.5 mt-0.5 pl-1">
+                  <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: isCollapsed ? "0fr" : "1fr" }}>
+                    <div className="overflow-hidden">
+                      <div className="flex flex-col gap-0.5 mt-0.5 pl-1">
                       {items.map((item) => {
                         const route = item.is_builtin ? item.route : `/folder/${item.id}`;
                         const badgeCount = item.key === "community" ? unreadCommunity
@@ -367,8 +381,9 @@ export default function Layout({ children, fullBleed }) {
                           </button>
                         );
                       })}
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             });

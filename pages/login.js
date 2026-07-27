@@ -19,9 +19,13 @@ export default function Login() {
     try {
       if (mode === "login") {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          supabase.from("login_attempts").insert({ email, success: false }); // bewusst ohne await
+          throw error;
+        }
         if (data?.user) {
           supabase.from("login_events").insert({ user_id: data.user.id }); // bewusst ohne await, soll den Login nicht verzögern
+          supabase.from("login_attempts").insert({ email, user_id: data.user.id, success: true });
         }
         playLoginChime();
       } else {
