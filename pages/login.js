@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
+import { apiGet } from "../lib/apiClient";
+import { applyOrgBranding } from "../lib/orgBranding";
 import { playLoginChime } from "../lib/sounds";
 import { quoteOfTheDay } from "../lib/quotes";
 
@@ -13,6 +15,34 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+
+  const [orgCode, setOrgCode] = useState("");
+  const [resolvedOrg, setResolvedOrg] = useState(null);
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [codeError, setCodeError] = useState("");
+
+  async function resolveOrgCode(e) {
+    e.preventDefault();
+    if (!orgCode.trim()) return;
+    setCodeError("");
+    setCodeLoading(true);
+    try {
+      const { org } = await apiGet(`/api/org-by-slug?slug=${encodeURIComponent(orgCode.trim())}`);
+      setResolvedOrg(org);
+      applyOrgBranding(org);
+    } catch (err) {
+      setCodeError(err.message || "Unbekannter Firmen-Code.");
+    } finally {
+      setCodeLoading(false);
+    }
+  }
+
+  function changeCompany() {
+    setResolvedOrg(null);
+    setOrgCode("");
+    setCodeError("");
+    setError("");
+  }
 
   async function handleForgotPassword(e) {
     e.preventDefault();
@@ -52,7 +82,7 @@ export default function Login() {
       } else {
         const { error } = await supabase.auth.signUp({
           email, password,
-          options: { data: { full_name: fullName } },
+          options: { data: { full_name: fullName, org_slug: resolvedOrg.slug } },
         });
         if (error) throw error;
       }
@@ -70,11 +100,23 @@ export default function Login() {
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
         <div className="flex flex-col items-center text-center mb-5">
-          <img src="/logo.svg" alt="HB Sales Academy" className="h-20 w-auto mb-4" />
+          <img src={resolvedOrg?.logo_url || "/logo.svg"} alt={resolvedOrg?.name || "HB Sales Academy"} className="h-20 w-auto mb-4" />
           <p className="text-[12.5px] italic text-textMuted leading-snug max-w-[260px]">„{quoteOfTheDay().text}"</p>
           {quoteOfTheDay().author && <p className="text-[10.5px] text-[#5A5F72] mt-1">— {quoteOfTheDay().author}</p>}
         </div>
-        {mode === "forgot" ? (
+
+        {!resolvedOrg ? (
+          <>
+            <p className="text-textMuted text-sm mb-6 text-center">Firmencode eingeben, um fortzufahren</p>
+            <form onSubmit={resolveOrgCode} className="flex flex-col gap-3">
+              <input className="input" placeholder="Firmencode" value={orgCode} onChange={(e) => setOrgCode(e.target.value)} required autoFocus />
+              {codeError && <p className="text-coral text-xs">{codeError}</p>}
+              <button className="btn justify-center" disabled={codeLoading}>
+                {codeLoading ? "..." : "Weiter"}
+              </button>
+            </form>
+          </>
+        ) : mode === "forgot" ? (
           <>
             <p className="text-textMuted text-sm mb-6 text-center">Passwort zurücksetzen</p>
             {resetSent ? (
@@ -94,7 +136,10 @@ export default function Login() {
           </>
         ) : (
           <>
-            <p className="text-textMuted text-sm mb-6 text-center">{mode === "login" ? "Melde dich an" : "Konto erstellen"}</p>
+            <p className="text-textMuted text-sm mb-1 text-center">{mode === "login" ? `Melde dich bei ${resolvedOrg.name} an` : `Konto bei ${resolvedOrg.name} erstellen`}</p>
+            <p className="text-center mb-5">
+              <button className="text-textMuted text-[11px] underline" onClick={changeCompany}>Andere Firma?</button>
+            </p>
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               {mode === "signup" && (
                 <input className="input" placeholder="Vor- und Nachname" value={fullName} onChange={(e) => setFullName(e.target.value)} required />

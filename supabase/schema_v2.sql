@@ -18,6 +18,23 @@
 
 
 -- =============================================================================
+-- 0. ORGANIZATIONS (Mandanten-Grenze für Multi-Tenant/White-Label)
+-- =============================================================================
+-- Jede Organisation ist ein zahlender Kunde mit eigenem Branding. Neue
+-- Organisationen legt Houman per SQL an (siehe README) — kein Selbstbedienungs-
+-- Signup. Mitarbeiter registrieren sich mit dem Firmen-Code (slug) der
+-- Organisation über das normale Signup-Formular.
+
+create table if not exists organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  logo_url text,
+  primary_color text,
+  created_at timestamptz not null default now()
+);
+
+-- =============================================================================
 -- 1. PROFILES (Basis-Tabelle, erweitert auth.users)
 -- =============================================================================
 
@@ -28,6 +45,7 @@ create table if not exists profiles (
   is_admin boolean not null default false,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   manager_id uuid references profiles(id) on delete set null,
+  organization_id uuid not null references organizations(id),
   xp integer not null default 0,
   created_at timestamptz not null default now(),
   last_seen_community_at timestamptz not null default now(),
@@ -50,12 +68,19 @@ create table if not exists profiles (
   leaderboard_opt_out boolean not null default false
 );
 
--- Auto-create a profile row whenever a new auth user signs up
+-- Auto-create a profile row whenever a new auth user signs up. Verlangt einen
+-- gültigen Firmen-Code (org_slug) im Signup-Formular, sonst schlägt die
+-- Registrierung sauber fehl statt eine Organisation-lose Zeile zu erzeugen.
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare org_id uuid;
 begin
-  insert into public.profiles (id, full_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''));
+  select id into org_id from organizations where slug = new.raw_user_meta_data->>'org_slug';
+  if org_id is null then
+    raise exception 'Unbekannter Firmen-Code.';
+  end if;
+  insert into public.profiles (id, full_name, organization_id)
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''), org_id);
   return new;
 end;
 $$ language plpgsql security definer;
@@ -64,6 +89,22 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Verhindert, dass ein Nutzer seine eigene organization_id selbst umbiegt.
+-- auth.uid() ist bei Service-Role-Zugriffen (Houmans direkte SQL-Eingriffe) null.
+create or replace function public.prevent_organization_change()
+returns trigger as $$
+begin
+  if auth.uid() is not null and new.organization_id is distinct from old.organization_id then
+    raise exception 'organization_id kann nicht selbst geändert werden.';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists prevent_organization_change on profiles;
+create trigger prevent_organization_change before update on profiles
+for each row execute procedure public.prevent_organization_change();
 
 
 -- =============================================================================
@@ -421,19 +462,32 @@ language sql stable security definer as $$
   select exists (select 1 from chat_group_members where group_id = gid and user_id = uid);
 $$;
 
+-- Vergleicht die organization_id zweier Personen — die Mandanten-Grenze,
+-- auf der praktisch alle anderen Sichtbarkeits-Prüfungen aufbauen.
+create or replace function public.same_org(a uuid, b uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (
+    select 1 from profiles pa, profiles pb
+    where pa.id = a and pb.id = b and pa.organization_id = pb.organization_id
+  );
+$$;
+
 -- Ein Team hat genau einen Lead (teams.created_by). Prüft, ob viewer_id
 -- ein Team leitet, in dem target_id Mitglied ist — für Trainingsdaten
 -- (quiz/exam/roleplay/call_log_days/login_events/login_attempts).
 create or replace function public.is_team_lead_of(target_id uuid, viewer_id uuid)
 returns boolean
 language sql stable security definer as $$
-  select exists (
+  select same_org(viewer_id, target_id) and exists (
     select 1 from teams t join team_members tm on tm.team_id = t.id
     where t.created_by = viewer_id and tm.user_id = target_id
   );
 $$;
 
 -- Prüft, ob uid der Lead eines bestimmten Teams ist (team_goals, team_requests).
+-- Braucht keine same_org()-Ergänzung: bezieht sich auf EIN Team, dessen Lead
+-- per Definition bereits derselbe Nutzer ist wie der Prüfende.
 create or replace function public.is_lead_of_team(tid uuid, uid uuid)
 returns boolean
 language sql stable security definer as $$
@@ -444,25 +498,33 @@ $$;
 create or replace function public.shares_team_with(a uuid, b uuid)
 returns boolean
 language sql stable security definer as $$
-  select exists (
+  select same_org(a, b) and exists (
     select 1 from team_members m1 join team_members m2 on m1.team_id = m2.team_id
     where m1.user_id = a and m2.user_id = b
   );
 $$;
 
--- Steuert die eingeschränkte Sichtbarkeit in der Mitgliederliste:
--- eigenes Profil, Manager/Admins sehen alles, alle sehen Manager,
--- Team-Kollegen untereinander, und jeder der in der Community aktiv war.
+-- Steuert die eingeschränkte Sichtbarkeit in der Mitgliederliste. Die
+-- Community ist bewusst unternehmensübergreifend (eine gemeinsame Sales-
+-- Community für alle Organisationen) — wer dort aktiv war, ist daher IMMER
+-- sichtbar, unabhängig von der Organisation. Alles andere (Manager/Admins
+-- sehen ihre Organisation, alle sehen Manager ihrer eigenen Organisation,
+-- Team-Kollegen untereinander) bleibt auf same_org() beschränkt.
 create or replace function public.can_view_profile(target_id uuid, viewer_id uuid)
 returns boolean
 language sql stable security definer as $$
   select
     target_id = viewer_id
-    or exists (select 1 from profiles v where v.id = viewer_id and (v.is_admin = true or v.role = 'manager'))
-    or exists (select 1 from profiles t where t.id = target_id and t.role = 'manager')
-    or shares_team_with(viewer_id, target_id)
     or exists (select 1 from community_posts cp where cp.user_id = target_id)
     or exists (select 1 from community_comments cc where cc.user_id = target_id)
+    or (
+      same_org(viewer_id, target_id)
+      and (
+        exists (select 1 from profiles v where v.id = viewer_id and (v.is_admin = true or v.role = 'manager'))
+        or exists (select 1 from profiles t where t.id = target_id and t.role = 'manager')
+        or shares_team_with(viewer_id, target_id)
+      )
+    )
 $$;
 
 -- Atomarer XP-Zuwachs + Protokoll-Eintrag, aufgerufen via supabase.rpc('increment_xp', ...)
@@ -480,6 +542,7 @@ $$;
 -- 7. ROW LEVEL SECURITY
 -- =============================================================================
 
+alter table organizations enable row level security;
 alter table profiles enable row level security;
 alter table quiz_results enable row level security;
 alter table exam_results enable row level security;
@@ -516,6 +579,17 @@ alter table login_events enable row level security;
 alter table page_views enable row level security;
 alter table ai_request_log enable row level security;
 
+-- --- organizations ---
+drop policy if exists "organizations_select_own" on organizations;
+create policy "organizations_select_own" on organizations for select using (
+  id = (select organization_id from profiles where id = auth.uid())
+);
+drop policy if exists "organizations_update_admin" on organizations;
+create policy "organizations_update_admin" on organizations for update using (
+  id = (select organization_id from profiles where id = auth.uid())
+  and exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+
 -- --- profiles ---
 drop policy if exists "profiles_select_own" on profiles;
 create policy "profiles_select_own" on profiles for select using (auth.uid() = id);
@@ -538,7 +612,9 @@ create policy "quiz_select_own" on quiz_results for select using (auth.uid() = u
 drop policy if exists "quiz_select_team" on quiz_results;
 create policy "quiz_select_team" on quiz_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "quiz_results_select_admin" on quiz_results;
-create policy "quiz_results_select_admin" on quiz_results for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
+create policy "quiz_results_select_admin" on quiz_results for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+);
 
 -- --- exam_results ---
 drop policy if exists "exam_insert_own" on exam_results;
@@ -548,7 +624,9 @@ create policy "exam_select_own" on exam_results for select using (auth.uid() = u
 drop policy if exists "exam_select_team" on exam_results;
 create policy "exam_select_team" on exam_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "exam_results_select_admin" on exam_results;
-create policy "exam_results_select_admin" on exam_results for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
+create policy "exam_results_select_admin" on exam_results for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+);
 
 -- --- roleplay_sessions ---
 drop policy if exists "rp_insert_own" on roleplay_sessions;
@@ -558,65 +636,93 @@ create policy "rp_select_own" on roleplay_sessions for select using (auth.uid() 
 drop policy if exists "rp_select_team" on roleplay_sessions;
 create policy "rp_select_team" on roleplay_sessions for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "roleplay_sessions_select_admin" on roleplay_sessions;
-create policy "roleplay_sessions_select_admin" on roleplay_sessions for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
+create policy "roleplay_sessions_select_admin" on roleplay_sessions for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+);
 
 -- --- nav_items ---
 drop policy if exists "nav_items_select_all" on nav_items;
-create policy "nav_items_select_all" on nav_items for select using (true);
+create policy "nav_items_select_all" on nav_items for select using (
+  is_builtin = true or same_org(created_by, auth.uid())
+);
 drop policy if exists "nav_items_write_managers" on nav_items;
 create policy "nav_items_write_managers" on nav_items for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "nav_items_update_managers" on nav_items;
-create policy "nav_items_update_managers" on nav_items for update using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "nav_items_update_managers" on nav_items for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+  and (is_builtin = true or same_org(created_by, auth.uid()))
+);
 drop policy if exists "nav_items_delete_managers" on nav_items;
-create policy "nav_items_delete_managers" on nav_items for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "nav_items_delete_managers" on nav_items for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+  and (is_builtin = true or same_org(created_by, auth.uid()))
+);
 
 -- --- custom_courses ---
 drop policy if exists "custom_courses_select_all" on custom_courses;
-create policy "custom_courses_select_all" on custom_courses for select using (true);
+create policy "custom_courses_select_all" on custom_courses for select using (same_org(created_by, auth.uid()));
 drop policy if exists "custom_courses_write_managers" on custom_courses;
 create policy "custom_courses_write_managers" on custom_courses for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "custom_courses_update_managers" on custom_courses;
-create policy "custom_courses_update_managers" on custom_courses for update using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "custom_courses_update_managers" on custom_courses for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 drop policy if exists "custom_courses_delete_managers" on custom_courses;
-create policy "custom_courses_delete_managers" on custom_courses for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "custom_courses_delete_managers" on custom_courses for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 
 -- --- custom_modules ---
 drop policy if exists "custom_modules_select_all" on custom_modules;
-create policy "custom_modules_select_all" on custom_modules for select using (true);
+create policy "custom_modules_select_all" on custom_modules for select using (same_org(created_by, auth.uid()));
 drop policy if exists "custom_modules_write_managers" on custom_modules;
 create policy "custom_modules_write_managers" on custom_modules for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "custom_modules_update_managers" on custom_modules;
-create policy "custom_modules_update_managers" on custom_modules for update using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "custom_modules_update_managers" on custom_modules for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 drop policy if exists "custom_modules_delete_managers" on custom_modules;
-create policy "custom_modules_delete_managers" on custom_modules for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "custom_modules_delete_managers" on custom_modules for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 
 -- --- kb_entries ---
 drop policy if exists "kb_entries_select_approved" on kb_entries;
-create policy "kb_entries_select_approved" on kb_entries for select using (status = 'approved');
+create policy "kb_entries_select_approved" on kb_entries for select using (status = 'approved' and same_org(created_by, auth.uid()));
 drop policy if exists "kb_entries_select_managers_all" on kb_entries;
-create policy "kb_entries_select_managers_all" on kb_entries for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "kb_entries_select_managers_all" on kb_entries for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 drop policy if exists "kb_entries_insert_pending" on kb_entries;
 create policy "kb_entries_insert_pending" on kb_entries for insert with check (status = 'pending');
 drop policy if exists "kb_entries_update_managers" on kb_entries;
-create policy "kb_entries_update_managers" on kb_entries for update using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "kb_entries_update_managers" on kb_entries for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 drop policy if exists "kb_entries_delete_managers" on kb_entries;
-create policy "kb_entries_delete_managers" on kb_entries for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "kb_entries_delete_managers" on kb_entries for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 
 -- --- scripts ---
 drop policy if exists "scripts_select_all" on scripts;
-create policy "scripts_select_all" on scripts for select using (true);
+create policy "scripts_select_all" on scripts for select using (same_org(created_by, auth.uid()));
 drop policy if exists "scripts_insert_managers" on scripts;
 create policy "scripts_insert_managers" on scripts for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "scripts_update_managers" on scripts;
-create policy "scripts_update_managers" on scripts for update using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "scripts_update_managers" on scripts for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 drop policy if exists "scripts_delete_managers" on scripts;
-create policy "scripts_delete_managers" on scripts for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "scripts_delete_managers" on scripts for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 
 -- --- guides ---
 drop policy if exists "guides_select_own" on guides;
 create policy "guides_select_own" on guides for select using (auth.uid() = created_by);
 drop policy if exists "guides_select_published" on guides;
-create policy "guides_select_published" on guides for select using (is_published = true);
+create policy "guides_select_published" on guides for select using (is_published = true and same_org(created_by, auth.uid()));
 drop policy if exists "guides_insert_own" on guides;
 create policy "guides_insert_own" on guides for insert with check (auth.uid() = created_by);
 drop policy if exists "guides_update_own" on guides;
@@ -624,16 +730,18 @@ create policy "guides_update_own" on guides for update using (auth.uid() = creat
 drop policy if exists "guides_delete_own_or_manager" on guides;
 create policy "guides_delete_own_or_manager" on guides for delete using (
   auth.uid() = created_by
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid()))
 );
 
 -- --- flashcards ---
 drop policy if exists "flashcards_select_all" on flashcards;
-create policy "flashcards_select_all" on flashcards for select using (true);
+create policy "flashcards_select_all" on flashcards for select using (same_org(created_by, auth.uid()));
 drop policy if exists "flashcards_write_managers" on flashcards;
 create policy "flashcards_write_managers" on flashcards for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "flashcards_delete_managers" on flashcards;
-create policy "flashcards_delete_managers" on flashcards for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "flashcards_delete_managers" on flashcards for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 
 -- --- flashcard_progress ---
 drop policy if exists "fp_select_own" on flashcard_progress;
@@ -653,17 +761,24 @@ create policy "dcc_insert_own" on daily_challenge_completions for insert with ch
 drop policy if exists "duels_select_participant" on duels;
 create policy "duels_select_participant" on duels for select using (auth.uid() = challenger_id or auth.uid() = opponent_id);
 drop policy if exists "duels_insert_challenger" on duels;
-create policy "duels_insert_challenger" on duels for insert with check (auth.uid() = challenger_id);
+create policy "duels_insert_challenger" on duels for insert with check (
+  auth.uid() = challenger_id and same_org(challenger_id, opponent_id)
+);
 drop policy if exists "duels_update_participant" on duels;
 create policy "duels_update_participant" on duels for update using (auth.uid() = challenger_id or auth.uid() = opponent_id);
 
 -- --- community_groups ---
 drop policy if exists "community_groups_select_all" on community_groups;
+-- Community bleibt bewusst UNTERNEHMENSÜBERGREIFEND (eine gemeinsame Sales-
+-- Community für alle Organisationen) — nur Löschen/Moderieren durch einen
+-- Manager bleibt auf die eigene Organisation begrenzt.
 create policy "community_groups_select_all" on community_groups for select using (true);
 drop policy if exists "community_groups_write_managers" on community_groups;
 create policy "community_groups_write_managers" on community_groups for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "community_groups_delete_managers" on community_groups;
-create policy "community_groups_delete_managers" on community_groups for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "community_groups_delete_managers" on community_groups for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+);
 
 -- --- community_posts ---
 drop policy if exists "community_posts_select_all" on community_posts;
@@ -671,7 +786,10 @@ create policy "community_posts_select_all" on community_posts for select using (
 drop policy if exists "community_posts_insert_own" on community_posts;
 create policy "community_posts_insert_own" on community_posts for insert with check (auth.uid() = user_id);
 drop policy if exists "community_posts_delete_own_or_manager" on community_posts;
-create policy "community_posts_delete_own_or_manager" on community_posts for delete using (auth.uid() = user_id or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "community_posts_delete_own_or_manager" on community_posts for delete using (
+  auth.uid() = user_id
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
+);
 
 -- --- community_comments ---
 drop policy if exists "community_comments_select_all" on community_comments;
@@ -679,7 +797,10 @@ create policy "community_comments_select_all" on community_comments for select u
 drop policy if exists "community_comments_insert_own" on community_comments;
 create policy "community_comments_insert_own" on community_comments for insert with check (auth.uid() = user_id);
 drop policy if exists "community_comments_delete_own_or_manager" on community_comments;
-create policy "community_comments_delete_own_or_manager" on community_comments for delete using (auth.uid() = user_id or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "community_comments_delete_own_or_manager" on community_comments for delete using (
+  auth.uid() = user_id
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
+);
 
 -- --- community_kudos ---
 drop policy if exists "community_kudos_select_all" on community_kudos;
@@ -695,6 +816,7 @@ create policy "friendships_select_own" on friendships for select using (auth.uid
 drop policy if exists "friendships_insert_own" on friendships;
 create policy "friendships_insert_own" on friendships for insert with check (
   auth.uid() = requester_id
+  and same_org(requester_id, addressee_id)
   and not exists (
     select 1 from blocks b
     where (b.blocker_id = friendships.addressee_id and b.blocked_id = friendships.requester_id)
@@ -710,7 +832,9 @@ create policy "friendships_delete_participant" on friendships for delete using (
 drop policy if exists "blocks_select_own" on blocks;
 create policy "blocks_select_own" on blocks for select using (auth.uid() = blocker_id);
 drop policy if exists "blocks_insert_own" on blocks;
-create policy "blocks_insert_own" on blocks for insert with check (auth.uid() = blocker_id);
+create policy "blocks_insert_own" on blocks for insert with check (
+  auth.uid() = blocker_id and same_org(blocker_id, blocked_id)
+);
 drop policy if exists "blocks_delete_own" on blocks;
 create policy "blocks_delete_own" on blocks for delete using (auth.uid() = blocker_id);
 
@@ -730,8 +854,11 @@ drop policy if exists "chat_group_members_select_member" on chat_group_members;
 create policy "chat_group_members_select_member" on chat_group_members for select using (is_group_member(group_id, auth.uid()));
 drop policy if exists "chat_group_members_insert" on chat_group_members;
 create policy "chat_group_members_insert" on chat_group_members for insert with check (
-  exists (select 1 from chat_groups g where g.id = chat_group_members.group_id and g.created_by = auth.uid())
-  or exists (select 1 from chat_group_members m2 where m2.group_id = chat_group_members.group_id and m2.user_id = auth.uid())
+  (
+    exists (select 1 from chat_groups g where g.id = chat_group_members.group_id and g.created_by = auth.uid())
+    or exists (select 1 from chat_group_members m2 where m2.group_id = chat_group_members.group_id and m2.user_id = auth.uid())
+  )
+  and same_org(user_id, auth.uid())
 );
 drop policy if exists "chat_group_members_delete_own" on chat_group_members;
 create policy "chat_group_members_delete_own" on chat_group_members for delete using (auth.uid() = user_id);
@@ -780,13 +907,13 @@ create policy "conversation_reads_update_own" on conversation_reads for update u
 
 -- --- xp_log ---
 drop policy if exists "xp_log_select_all" on xp_log;
-create policy "xp_log_select_all" on xp_log for select using (true);
+create policy "xp_log_select_all" on xp_log for select using (same_org(user_id, auth.uid()));
 drop policy if exists "xp_log_insert_own" on xp_log;
 create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = user_id);
 
 -- --- teams ---
 drop policy if exists "teams_select_all" on teams;
-create policy "teams_select_all" on teams for select using (true);
+create policy "teams_select_all" on teams for select using (same_org(created_by, auth.uid()));
 drop policy if exists "teams_insert_managers" on teams;
 create policy "teams_insert_managers" on teams for insert with check (
   exists (select 1 from profiles where id = auth.uid() and role = 'manager')
@@ -798,9 +925,11 @@ create policy "teams_delete_own" on teams for delete using (created_by = auth.ui
 
 -- --- team_members ---
 drop policy if exists "team_members_select_all" on team_members;
-create policy "team_members_select_all" on team_members for select using (true);
+create policy "team_members_select_all" on team_members for select using (same_org(user_id, auth.uid()));
 drop policy if exists "team_members_insert_lead" on team_members;
-create policy "team_members_insert_lead" on team_members for insert with check (is_lead_of_team(team_id, auth.uid()));
+create policy "team_members_insert_lead" on team_members for insert with check (
+  is_lead_of_team(team_id, auth.uid()) and same_org(user_id, auth.uid())
+);
 drop policy if exists "team_members_delete_lead_or_self" on team_members;
 create policy "team_members_delete_lead_or_self" on team_members for delete using (
   is_lead_of_team(team_id, auth.uid()) or auth.uid() = user_id
@@ -808,7 +937,7 @@ create policy "team_members_delete_lead_or_self" on team_members for delete usin
 
 -- --- team_goals ---
 drop policy if exists "team_goals_select_all" on team_goals;
-create policy "team_goals_select_all" on team_goals for select using (true);
+create policy "team_goals_select_all" on team_goals for select using (same_org(manager_id, auth.uid()));
 drop policy if exists "team_goals_insert_manager" on team_goals;
 create policy "team_goals_insert_manager" on team_goals for insert with check (is_lead_of_team(team_id, auth.uid()));
 drop policy if exists "team_goals_update_manager" on team_goals;
@@ -820,7 +949,10 @@ create policy "team_requests_select_participant" on team_requests for select usi
   auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
 );
 drop policy if exists "team_requests_insert_own" on team_requests;
-create policy "team_requests_insert_own" on team_requests for insert with check (auth.uid() = requester_id);
+create policy "team_requests_insert_own" on team_requests for insert with check (
+  auth.uid() = requester_id
+  and exists (select 1 from teams t where t.id = team_requests.team_id and same_org(t.created_by, requester_id))
+);
 drop policy if exists "team_requests_update_manager" on team_requests;
 create policy "team_requests_update_manager" on team_requests for update using (
   auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
@@ -834,7 +966,9 @@ create policy "team_requests_delete_participant" on team_requests for delete usi
 drop policy if exists "mentor_pairs_select_participant" on mentor_pairs;
 create policy "mentor_pairs_select_participant" on mentor_pairs for select using (auth.uid() = mentor_id or auth.uid() = mentee_id or auth.uid() = manager_id);
 drop policy if exists "mentor_pairs_insert_manager" on mentor_pairs;
-create policy "mentor_pairs_insert_manager" on mentor_pairs for insert with check (auth.uid() = manager_id);
+create policy "mentor_pairs_insert_manager" on mentor_pairs for insert with check (
+  auth.uid() = manager_id and same_org(mentor_id, auth.uid()) and same_org(mentee_id, auth.uid())
+);
 drop policy if exists "mentor_pairs_update_manager" on mentor_pairs;
 create policy "mentor_pairs_update_manager" on mentor_pairs for update using (auth.uid() = manager_id);
 
@@ -844,7 +978,7 @@ create policy "call_log_days_select_own" on call_log_days for select using (auth
 drop policy if exists "call_log_days_select_managers" on call_log_days;
 create policy "call_log_days_select_managers" on call_log_days for select using (
   is_team_lead_of(user_id, auth.uid())
-  or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  or (exists (select 1 from profiles where id = auth.uid() and is_admin = true) and same_org(user_id, auth.uid()))
 );
 drop policy if exists "call_log_days_upsert_own" on call_log_days;
 create policy "call_log_days_upsert_own" on call_log_days for insert with check (auth.uid() = user_id);
@@ -857,7 +991,7 @@ create policy "login_attempts_insert_anyone" on login_attempts for insert with c
 drop policy if exists "login_attempts_select_managers" on login_attempts;
 create policy "login_attempts_select_managers" on login_attempts for select using (
   is_team_lead_of(user_id, auth.uid())
-  or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  or (exists (select 1 from profiles where id = auth.uid() and is_admin = true) and same_org(user_id, auth.uid()))
 );
 
 -- --- login_events ---
@@ -866,13 +1000,17 @@ create policy "login_events_insert_own" on login_events for insert with check (a
 drop policy if exists "login_events_select_managers" on login_events;
 create policy "login_events_select_managers" on login_events for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "login_events_select_admin" on login_events;
-create policy "login_events_select_admin" on login_events for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
+create policy "login_events_select_admin" on login_events for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+);
 
 -- --- page_views ---
 drop policy if exists "page_views_insert_own" on page_views;
 create policy "page_views_insert_own" on page_views for insert with check (auth.uid() = user_id);
 drop policy if exists "page_views_select_admin" on page_views;
-create policy "page_views_select_admin" on page_views for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
+create policy "page_views_select_admin" on page_views for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+);
 
 -- --- ai_request_log ---
 -- bewusst keine Policies: RLS ohne Policies sperrt anon/authenticated komplett aus,
@@ -892,6 +1030,40 @@ alter publication supabase_realtime add table public.community_kudos;
 alter publication supabase_realtime add table public.direct_messages;
 alter publication supabase_realtime add table public.friendships;
 alter publication supabase_realtime add table public.conversation_reads;
+
+
+-- =============================================================================
+-- 9. STORAGE
+-- =============================================================================
+-- Hinweis: schema_v2.sql wurde rein aus den Postgres-Tabellen introspektiert
+-- und bildet die ÜBRIGEN, älteren Storage-Buckets (avatars, course-videos,
+-- dm-uploads, community-uploads) bislang NICHT ab — die existieren nur in
+-- supabase/archive/migration_9/7/11 usw. Nur der neue org-logos-Bucket ist
+-- hier vollständig, weil er Teil dieser Änderung ist.
+
+insert into storage.buckets (id, name, public) values ('org-logos', 'org-logos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "org_logos_public_read" on storage.objects;
+create policy "org_logos_public_read" on storage.objects for select using (bucket_id = 'org-logos');
+
+drop policy if exists "org_logos_admin_upload" on storage.objects;
+create policy "org_logos_admin_upload" on storage.objects for insert with check (
+  bucket_id = 'org-logos'
+  and exists (
+    select 1 from profiles where id = auth.uid() and is_admin = true
+    and organization_id::text = (storage.foldername(name))[1]
+  )
+);
+
+drop policy if exists "org_logos_admin_update" on storage.objects;
+create policy "org_logos_admin_update" on storage.objects for update using (
+  bucket_id = 'org-logos'
+  and exists (
+    select 1 from profiles where id = auth.uid() and is_admin = true
+    and organization_id::text = (storage.foldername(name))[1]
+  )
+);
 
 
 -- =============================================================================

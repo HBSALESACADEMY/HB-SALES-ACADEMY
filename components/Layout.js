@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
+import { applyOrgBranding } from "../lib/orgBranding";
 import Icon from "./Icon";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
@@ -43,6 +44,7 @@ function groupFor(item) {
 let cachedProfile = null;
 let cachedNavItems = null;
 let cachedBadges = null;
+let cachedOrg = null;
 
 export function patchCachedProfile(patch) {
   cachedProfile = cachedProfile ? { ...cachedProfile, ...patch } : patch;
@@ -127,6 +129,12 @@ export default function Layout({ children, fullBleed }) {
     })();
   }, [router.asPath]);
 
+  const [org, setOrg] = useState(cachedOrg);
+
+  // Sofort aus dem Cache anwenden (kein Flackern beim Seitenwechsel), bevor
+  // load() unten die Organisation ggf. neu vom Server nachlädt.
+  useEffect(() => { if (cachedOrg) applyOrgBranding(cachedOrg); }, []);
+
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -143,6 +151,14 @@ export default function Layout({ children, fullBleed }) {
         if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
         if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
         setLoadingAuth(false);
+      }
+      if (data?.organization_id) {
+        const { data: orgData } = await supabase.from("organizations").select("*").eq("id", data.organization_id).maybeSingle();
+        if (mounted && orgData) {
+          setOrg(orgData);
+          cachedOrg = orgData;
+          applyOrgBranding(orgData);
+        }
       }
     }
     load();
@@ -353,7 +369,7 @@ export default function Layout({ children, fullBleed }) {
     <div className="flex flex-col md:flex-row h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
       {/* Mobile top bar */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[#12141C] flex-shrink-0">
-        <img src="/logo.svg" alt="HB Sales Academy" className="h-10 w-auto" />
+        <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-10 w-auto" />
         <button onClick={() => setMobileNavOpen(true)} className="text-white p-1.5 -mr-1.5" aria-label="Menü öffnen">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
         </button>
@@ -371,7 +387,7 @@ export default function Layout({ children, fullBleed }) {
         ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         <div className="flex items-center justify-between px-2 pb-4 pt-1">
-          <img src="/logo.svg" alt="HB Sales Academy" className="h-[68px] w-auto" />
+          <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-[68px] w-auto" />
           <button onClick={() => setMobileNavOpen(false)} className="md:hidden text-textMuted p-1" aria-label="Menü schließen">
             <Icon name="x" size={16} />
           </button>
