@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { apiGet } from "../lib/apiClient";
 
 export default function Members() {
   const router = useRouter();
@@ -14,6 +15,29 @@ export default function Members() {
   const [teamRequests, setTeamRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+
+  // Globale Namenssuche (unternehmensübergreifend, wie die Community) —
+  // liefert nur Name+Avatar, für Freundschaftsanfragen unabhängig davon,
+  // ob die Person in der eigenen Organisation oder Community aktiv ist.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    const handle = setTimeout(async () => {
+      try {
+        const { results } = await apiGet(`/api/search-members?q=${encodeURIComponent(q)}`);
+        setSearchResults(results || []);
+      } catch (e) {
+        setSearchResults([]);
+      }
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
   async function load() {
     setLoading(true);
@@ -84,6 +108,53 @@ export default function Members() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mitglieder</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Dein Team und alle, die in der Community aktiv sind — schick eine Anfrage, um schreiben zu können.</p>
+
+      <div className="card mb-6">
+        <div className="font-semibold text-white text-sm mb-3">Person finden</div>
+        <input className="input" placeholder="Namen eingeben..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        {searching && <p className="text-textMuted text-xs mt-2">Suche...</p>}
+        {!searching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+          <p className="text-textMuted text-xs mt-2">Keine Treffer.</p>
+        )}
+        {searchResults.length > 0 && (
+          <div className="flex flex-col gap-2.5 mt-3">
+            {searchResults.map((m) => {
+              const rel = relationTo(m.id);
+              const isBusy = busyId === m.id || busyId === rel?.id;
+              return (
+                <div key={m.id} className="flex items-center gap-3">
+                  <Avatar name={m.full_name || "?"} src={m.avatar_url} size={32} />
+                  <span className="text-sm text-white flex-1 truncate">{m.full_name || "Unbenannt"}</span>
+                  {!rel && (
+                    <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
+                      Anfrage senden
+                    </button>
+                  )}
+                  {rel?.status === "pending" && rel.requester_id === selfId && (
+                    <span className="text-xs text-textMuted flex-shrink-0">Angefragt...</span>
+                  )}
+                  {rel?.status === "pending" && rel.addressee_id === selfId && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button disabled={isBusy} onClick={() => respond(rel, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                      <button disabled={isBusy} onClick={() => respond(rel, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                    </div>
+                  )}
+                  {rel?.status === "declined" && (
+                    <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
+                      Erneut anfragen
+                    </button>
+                  )}
+                  {rel?.status === "accepted" && (
+                    <button onClick={() => router.push(`/messages?to=${m.id}`)} className="btn text-xs flex-shrink-0">
+                      Schreiben
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {teams.length > 0 && (
         <div className="mb-6">

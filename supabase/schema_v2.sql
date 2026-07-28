@@ -831,7 +831,6 @@ create policy "friendships_select_own" on friendships for select using (auth.uid
 drop policy if exists "friendships_insert_own" on friendships;
 create policy "friendships_insert_own" on friendships for insert with check (
   auth.uid() = requester_id
-  and same_org(requester_id, addressee_id)
   and not exists (
     select 1 from blocks b
     where (b.blocker_id = friendships.addressee_id and b.blocked_id = friendships.requester_id)

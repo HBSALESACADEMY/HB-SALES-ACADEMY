@@ -73,6 +73,16 @@ export default function Login() {
           throw error;
         }
         if (data?.user) {
+          // Prüfen, ob dieser Account wirklich zur Firma des eingegebenen
+          // Firmencodes gehört — sonst zurück auf "falscher Zugang", auch
+          // wenn E-Mail/Passwort für sich genommen korrekt waren. Plattform-
+          // Admins sind davon ausgenommen (kommen mit jedem Firmencode rein).
+          const { data: profile } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", data.user.id).maybeSingle();
+          if (!profile || (!profile.is_platform_admin && profile.organization_id !== resolvedOrg.id)) {
+            supabase.from("login_attempts").insert({ email, user_id: data.user.id, success: false }).then(({ error: laErr }) => { if (laErr) console.error("login_attempts insert failed:", laErr.message); });
+            await supabase.auth.signOut();
+            throw new Error("Dieser Account gehört nicht zu dieser Firma. Bitte den richtigen Firmencode verwenden.");
+          }
           const { error: leErr } = await supabase.from("login_events").insert({ user_id: data.user.id });
           if (leErr) console.error("login_events insert failed:", leErr.message);
           const { error: laErr } = await supabase.from("login_attempts").insert({ email, user_id: data.user.id, success: true });
