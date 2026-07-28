@@ -23,8 +23,11 @@ export default async function handler(req, res) {
   const { data: me } = await client.from("profiles").select("is_platform_admin").eq("id", user.id).maybeSingle();
   if (!me?.is_platform_admin) return res.status(403).json({ error: "Nur für Plattform-Admins verfügbar." });
 
-  const { name, managerEmail, managerPassword } = req.body || {};
+  const { name, managerName, managerEmail, managerPassword } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: "Firmenname erforderlich." });
+  if (!managerName || !managerName.trim()) {
+    return res.status(400).json({ error: "Name des Organisations-Managers erforderlich." });
+  }
   if (!managerEmail || !managerEmail.trim() || !managerPassword) {
     return res.status(400).json({ error: "E-Mail und Passwort für den Organisations-Manager erforderlich." });
   }
@@ -53,7 +56,7 @@ export default async function handler(req, res) {
       email: managerEmail.trim(),
       password: managerPassword,
       email_confirm: true,
-      user_metadata: { full_name: "Organisations-Manager", org_slug: org.slug },
+      user_metadata: { full_name: managerName.trim(), org_slug: org.slug },
     });
     if (createErr) {
       await admin.from("organizations").delete().eq("id", org.id);

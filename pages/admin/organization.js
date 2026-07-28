@@ -217,6 +217,7 @@ export default function AdminOrganization() {
   const [allOrgs, setAllOrgs] = useState([]);
   const [expandedOrgId, setExpandedOrgId] = useState(null);
   const [newOrgName, setNewOrgName] = useState("");
+  const [newManagerName, setNewManagerName] = useState("");
   const [newManagerEmail, setNewManagerEmail] = useState("");
   const [newManagerPassword, setNewManagerPassword] = useState("");
   const [creatingOrg, setCreatingOrg] = useState(false);
@@ -229,6 +230,9 @@ export default function AdminOrganization() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [moveTargets, setMoveTargets] = useState({});
   const [movingId, setMovingId] = useState(null);
+  const [managerTargets, setManagerTargets] = useState({});
+  const [settingManagerId, setSettingManagerId] = useState(null);
+  const [managerError, setManagerError] = useState("");
   const [moveError, setMoveError] = useState("");
 
   async function loadAllOrgs() {
@@ -267,7 +271,7 @@ export default function AdminOrganization() {
   }, []);
 
   async function createOrg() {
-    if (!newOrgName.trim() || !newManagerEmail.trim() || !newManagerPassword) return;
+    if (!newOrgName.trim() || !newManagerName.trim() || !newManagerEmail.trim() || !newManagerPassword) return;
     setCreatingOrg(true);
     setCreateError("");
     setJustCreatedSlug(null);
@@ -275,10 +279,12 @@ export default function AdminOrganization() {
     try {
       const { org: created } = await apiPost("/api/platform/create-organization", {
         name: newOrgName.trim(),
+        managerName: newManagerName.trim(),
         managerEmail: newManagerEmail.trim(),
         managerPassword: newManagerPassword,
       });
       setNewOrgName("");
+      setNewManagerName("");
       setNewManagerEmail("");
       setNewManagerPassword("");
       setJustCreatedSlug(created.slug);
@@ -307,6 +313,21 @@ export default function AdminOrganization() {
       setMoveError(e.message);
     }
     setMovingId(null);
+  }
+
+  async function setOrgManager(organizationId) {
+    const newManagerId = managerTargets[organizationId];
+    if (!newManagerId) return;
+    setSettingManagerId(organizationId);
+    setManagerError("");
+    try {
+      await apiPost("/api/platform/set-org-manager", { organizationId, newManagerId });
+      setManagerTargets((prev) => ({ ...prev, [organizationId]: "" }));
+      await loadMembers();
+    } catch (e) {
+      setManagerError(e.message);
+    }
+    setSettingManagerId(null);
   }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
@@ -346,6 +367,10 @@ export default function AdminOrganization() {
                 <input className="input" placeholder="Firmenname des Kunden" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} />
               </div>
               <div>
+                <label className="text-xs text-textMuted mb-1 block">Name des Organisations-Managers</label>
+                <input className="input" placeholder="Vor- und Nachname" value={newManagerName} onChange={(e) => setNewManagerName(e.target.value)} />
+              </div>
+              <div>
                 <label className="text-xs text-textMuted mb-1 block">E-Mail des Organisations-Managers</label>
                 <input className="input" type="email" placeholder="manager@kunde.de" value={newManagerEmail} onChange={(e) => setNewManagerEmail(e.target.value)} />
               </div>
@@ -353,7 +378,7 @@ export default function AdminOrganization() {
                 <label className="text-xs text-textMuted mb-1 block">Passwort des Organisations-Managers</label>
                 <input className="input" type="password" placeholder="Mindestens 6 Zeichen" value={newManagerPassword} onChange={(e) => setNewManagerPassword(e.target.value)} />
               </div>
-              <button disabled={creatingOrg || !newOrgName.trim() || !newManagerEmail.trim() || !newManagerPassword} onClick={createOrg} className="btn text-xs disabled:opacity-40 self-start mt-1">
+              <button disabled={creatingOrg || !newOrgName.trim() || !newManagerName.trim() || !newManagerEmail.trim() || !newManagerPassword} onClick={createOrg} className="btn text-xs disabled:opacity-40 self-start mt-1">
                 {creatingOrg ? "Legt an..." : "Anlegen"}
               </button>
             </div>
@@ -395,6 +420,38 @@ export default function AdminOrganization() {
                         onSaved={loadAllOrgs}
                         onDeleted={() => { setExpandedOrgId(null); loadAllOrgs(); loadMembers(); }}
                       />
+
+                      <div className="mt-4 pt-4 border-t border-line">
+                        <div className="text-xs text-textMuted uppercase tracking-wide mb-2">Organisations-Manager</div>
+                        {(() => {
+                          const orgMembers = members.filter((m) => m.organization_id === o.id && m.status === "approved");
+                          const currentManager = orgMembers.find((m) => m.role === "manager" && m.is_admin);
+                          const candidates = orgMembers.filter((m) => m.id !== currentManager?.id);
+                          const selected = managerTargets[o.id] || "";
+                          const busy = settingManagerId === o.id;
+                          return (
+                            <>
+                              <p className="text-sm text-white mb-2">
+                                {currentManager ? currentManager.full_name || "Unbenannt" : <span className="text-textMuted">— noch kein Organisations-Manager —</span>}
+                              </p>
+                              {candidates.length > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <select className="input flex-1" value={selected} onChange={(e) => setManagerTargets((prev) => ({ ...prev, [o.id]: e.target.value }))}>
+                                    <option value="">Anderen Nutzer wählen...</option>
+                                    {candidates.map((c) => <option key={c.id} value={c.id}>{c.full_name || "Unbenannt"}</option>)}
+                                  </select>
+                                  <button disabled={!selected || busy} onClick={() => setOrgManager(o.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
+                                    {busy ? "Setzt..." : currentManager ? "Ersetzen" : "Festlegen"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="text-textMuted text-xs">Keine weiteren freigegebenen Mitglieder in dieser Organisation.</p>
+                              )}
+                              {managerError && <p className="text-coral text-xs mt-2">{managerError}</p>}
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>
