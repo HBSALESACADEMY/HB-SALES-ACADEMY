@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Layout from "../components/Layout";
+import Layout, { getCachedOrg } from "../components/Layout";
 import { supabase } from "../lib/supabaseClient";
 
 export default function EinwandTrainer() {
@@ -13,11 +13,23 @@ export default function EinwandTrainer() {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      // Von Layout.js bereits aufgelöste Organisation übernehmen (respektiert
+      // für Plattform-Admins die per Firmencode gewählte "aktive" Organisation
+      // statt stur profiles.organization_id — sonst weicht das Branding hier
+      // von der Sidebar ab). Nur bei komplett frischem Laden (Direktaufruf,
+      // Reload) noch nicht gesetzt — dann denselben Auflösungsweg wie
+      // Layout.js selbst nachbauen.
+      const cached = getCachedOrg();
+      if (cached) {
+        if (mounted) { setLogoUrl(cached.logo_url || null); setLogoLoaded(true); }
+        return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setLogoLoaded(true); return; }
-      const { data: profile } = await supabase.from("profiles").select("organization_id").eq("id", session.user.id).maybeSingle();
-      if (profile?.organization_id) {
-        const { data: org } = await supabase.from("organizations").select("logo_url").eq("id", profile.organization_id).maybeSingle();
+      const { data: profile } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const activeOrgId = (profile?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || profile?.organization_id;
+      if (activeOrgId) {
+        const { data: org } = await supabase.from("organizations").select("logo_url").eq("id", activeOrgId).maybeSingle();
         if (mounted) setLogoUrl(org?.logo_url || null);
       }
       if (mounted) setLogoLoaded(true);

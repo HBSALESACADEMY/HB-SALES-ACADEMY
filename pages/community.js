@@ -13,15 +13,24 @@ export default function Community() {
   const [isManager, setIsManager] = useState(false);
   const [groups, setGroups] = useState([]);
   const [activeGroup, setActiveGroup] = useState("all"); // "all" | group.id
+  // "org" = nur die eigene Organisation (Standard, strikt getrennt von
+  // anderen Organisationen), "global" = organisationsübergreifend geteilte Beiträge.
+  const [scope, setScope] = useState("org");
+  const [myOrgId, setMyOrgId] = useState(null);
+  const [orgByUserId, setOrgByUserId] = useState({});
   const [posts, setPosts] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [profileMap, setProfileMap] = useState({});
   const [commentsByPost, setCommentsByPost] = useState({});
   const [kudosByPost, setKudosByPost] = useState({});
   const [kudosWall, setKudosWall] = useState(null);
+  const [weekKudosRaw, setWeekKudosRaw] = useState([]);
+  const [weekXpRaw, setWeekXpRaw] = useState([]);
+  const [allProfiles, setAllProfiles] = useState([]);
   const [newPost, setNewPost] = useState("");
   const [newPostGroup, setNewPostGroup] = useState("");
   const [newPostFile, setNewPostFile] = useState(null);
+  const [shareGlobally, setShareGlobally] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
@@ -34,15 +43,18 @@ export default function Community() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
+    const { data: me } = await supabase.from("profiles").select("role, organization_id").eq("id", session.user.id).maybeSingle();
     setIsManager(me?.role === "manager");
+    setMyOrgId(me?.organization_id || null);
 
     const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: profiles }, { data: friendships }] = await Promise.all([
       supabase.from("community_groups").select("*").order("created_at"),
       supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(80),
       supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
       supabase.from("community_kudos").select("*"),
-      supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved"),
+      // organization_id + streak_count zusätzlich geladen — für die
+      // Trennung "Meine Organisation"/"Global" und die Kudos-Wall.
+      supabase.from("profiles").select("id, full_name, avatar_url, organization_id, streak_count").eq("status", "approved"),
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
     ]);
 
@@ -51,8 +63,10 @@ export default function Community() {
     setGroups(groups || []);
 
     const names = {};
-    (profiles || []).forEach((p) => { names[p.id] = { name: p.full_name || "Unbenannt", avatar: p.avatar_url }; });
+    const orgById = {};
+    (profiles || []).forEach((p) => { names[p.id] = { name: p.full_name || "Unbenannt", avatar: p.avatar_url }; orgById[p.id] = p.organization_id; });
     setProfileMap(names);
+    setOrgByUserId(orgById);
 
     const cByPost = {};
     (comments || []).forEach((c) => { cByPost[c.post_id] = cByPost[c.post_id] || []; cByPost[c.post_id].push(c); });
@@ -69,7 +83,9 @@ export default function Community() {
     setPosts(posts || []);
     setLoading(false);
 
-    // Kudos-Wall: Highlights der Woche
+    // Kudos-Wall: Highlights der Woche — Rohdaten laden, die tatsächliche
+    // Berechnung passiert scope-abhängig (Meine Organisation/Global) in
+    // einem eigenen Effekt weiter unten, ohne bei jedem Tab-Wechsel neu zu laden.
     const weekStart = (() => {
       const d = new Date();
       const day = d.getDay();
@@ -86,31 +102,43 @@ export default function Community() {
       supabase.from("xp_log").select("user_id, amount").gt("created_at", weekStart),
     ]);
 
+    setWeekKudosRaw((weekKudos || []).map((k) => ({ ...k, author: postAuthorByPostId[k.post_id] })));
+    setWeekXpRaw(weekXp || []);
+    setAllProfiles(profiles || []);
+
+    await supabase.from("profiles").update({ last_seen_community_at: new Date().toISOString() }).eq("id", session.user.id);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  // Kudos-Wall scope-abhängig (Meine Organisation/Global) neu berechnen —
+  // ohne Nachladen, rein aus den bereits geladenen Rohdaten.
+  useEffect(() => {
+    const inScope = (userId) => scope === "global" || orgByUserId[userId] === myOrgId;
+    const nameFor = (id) => profileMap[id]?.name || "Unbenannt";
+
     const kudosByAuthor = {};
-    (weekKudos || []).forEach((k) => {
-      const author = postAuthorByPostId[k.post_id];
-      if (author) kudosByAuthor[author] = (kudosByAuthor[author] || 0) + 1;
+    weekKudosRaw.forEach((k) => {
+      if (!k.author || !inScope(k.author)) return;
+      kudosByAuthor[k.author] = (kudosByAuthor[k.author] || 0) + 1;
     });
     const xpByUser = {};
-    (weekXp || []).forEach((r) => { xpByUser[r.user_id] = (xpByUser[r.user_id] || 0) + r.amount; });
+    weekXpRaw.forEach((r) => {
+      if (!inScope(r.user_id)) return;
+      xpByUser[r.user_id] = (xpByUser[r.user_id] || 0) + r.amount;
+    });
+    const scopedProfiles = allProfiles.filter((p) => inScope(p.id));
+    const topStreak = scopedProfiles.reduce((best, p) => (!best || (p.streak_count || 0) > (best.streak_count || 0)) ? p : best, null);
 
-    const nameFor = (id) => names[id]?.name || "Unbenannt";
     const topKudos = Object.entries(kudosByAuthor).sort((a, b) => b[1] - a[1])[0];
     const topXp = Object.entries(xpByUser).sort((a, b) => b[1] - a[1])[0];
-    const topStreak = (profiles || []).filter((p) => p.id).length
-      ? (await supabase.from("profiles").select("id, full_name, streak_count").eq("status", "approved").order("streak_count", { ascending: false }).limit(1).maybeSingle()).data
-      : null;
 
     setKudosWall({
       topKudos: topKudos ? { name: nameFor(topKudos[0]), count: topKudos[1] } : null,
       topXp: topXp ? { name: nameFor(topXp[0]), amount: topXp[1] } : null,
       topStreak: topStreak && topStreak.streak_count > 0 ? { name: topStreak.full_name, days: topStreak.streak_count } : null,
     });
-
-    await supabase.from("profiles").update({ last_seen_community_at: new Date().toISOString() }).eq("id", session.user.id);
-  }
-
-  useEffect(() => { load(); }, []);
+  }, [scope, orgByUserId, myOrgId, weekKudosRaw, weekXpRaw, allProfiles, profileMap]);
 
   // Echtzeit: neue Beiträge, Kommentare und Kudos erscheinen automatisch.
   useEffect(() => {
@@ -146,9 +174,11 @@ export default function Community() {
       group_id: newPostGroup || null,
       attachment_url,
       attachment_type,
+      visibility: shareGlobally ? "global" : "org",
     });
     setNewPost("");
     setNewPostFile(null);
+    setShareGlobally(false);
     setPosting(false);
     await load();
   }
@@ -192,18 +222,34 @@ export default function Community() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
-  const visiblePosts = (activeGroup === "all" ? posts : posts.filter((p) => p.group_id === activeGroup))
+  // "Meine Organisation" zeigt alles aus der eigenen Organisation (auch
+  // Beiträge, die zusätzlich global geteilt wurden). "Global" zeigt nur
+  // bewusst organisationsübergreifend geteilte Beiträge, unabhängig von der
+  // Organisation der Autorin/des Autors.
+  const scopedPosts = posts.filter((p) => scope === "global" ? p.visibility === "global" : orgByUserId[p.user_id] === myOrgId);
+  const visiblePosts = (activeGroup === "all" ? scopedPosts : scopedPosts.filter((p) => p.group_id === activeGroup))
     .filter((p) => !searchQuery.trim() || p.content.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Community</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Teilt Erfolge, Tipps, Fotos und Erfahrungen mit dem ganzen Team.</p>
+      <p className="text-textMuted text-sm mb-6">Teilt Erfolge, Tipps, Fotos und Erfahrungen — standardmäßig nur mit eurer Organisation, optional auch global.</p>
 
       <div className="card flex items-center gap-2 mb-4">
         <Icon name="search" size={15} />
         <input className="bg-transparent border-none outline-none text-sm flex-1 text-white" placeholder="Beiträge durchsuchen..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={() => setScope("org")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "org" ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+          Meine Organisation
+        </button>
+        <button onClick={() => setScope("global")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "global" ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+          Global
+        </button>
       </div>
 
       {kudosWall && (kudosWall.topKudos || kudosWall.topXp || kudosWall.topStreak) && (
@@ -281,6 +327,10 @@ export default function Community() {
           <label className="btn-ghost text-xs cursor-pointer px-3 py-2">
             <Icon name="download" size={13} /> {newPostFile ? newPostFile.name.slice(0, 20) : "Datei anhängen"}
             <input type="file" className="hidden" onChange={(e) => setNewPostFile(e.target.files[0])} />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-textMuted cursor-pointer select-none">
+            <input type="checkbox" checked={shareGlobally} onChange={(e) => setShareGlobally(e.target.checked)} />
+            Auch in der globalen Community teilen
           </label>
           <button disabled={posting || !newPost.trim()} onClick={submitPost} className="btn ml-auto disabled:opacity-40">Posten</button>
         </div>

@@ -64,17 +64,28 @@ export default function Messages() {
     const uid = session.user.id;
     setSelfId(uid);
 
-    const [{ data: friendships }, unreadInfo] = await Promise.all([
+    const [{ data: friendships }, { data: me }, unreadInfo] = await Promise.all([
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${uid},addressee_id.eq.${uid}`),
+      supabase.from("profiles").select("organization_id").eq("id", uid).maybeSingle(),
       getUnreadMessageInfo(supabase, uid),
     ]);
     const { unreadByConvoKey, relevantMessages, myGroupIds } = unreadInfo;
 
     const friendIds = (friendships || []).map((f) => f.requester_id === uid ? f.addressee_id : f.requester_id);
-    const { data: friendProfiles } = friendIds.length
-      ? await supabase.from("profiles").select("id, full_name, avatar_url").in("id", friendIds)
-      : { data: [] };
-    setFriendsList(friendProfiles || []);
+    const [{ data: friendProfiles }, { data: orgColleagues }] = await Promise.all([
+      friendIds.length ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", friendIds) : Promise.resolve({ data: [] }),
+      // Mitglieder der eigenen Organisation sind immer direkt anschreibbar,
+      // unabhängig von einer Freundschaft — deshalb hier mit in die
+      // Kontakt-/Konversationsliste aufgenommen.
+      me?.organization_id
+        ? supabase.from("profiles").select("id, full_name, avatar_url").eq("organization_id", me.organization_id).eq("status", "approved").neq("id", uid)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const contactById = new Map();
+    (friendProfiles || []).forEach((p) => contactById.set(p.id, p));
+    (orgColleagues || []).forEach((p) => contactById.set(p.id, p));
+    const dmContacts = Array.from(contactById.values());
+    setFriendsList(dmContacts);
 
     const groupIdsArr = Array.from(myGroupIds);
     const { data: groups } = groupIdsArr.length
@@ -87,7 +98,7 @@ export default function Messages() {
       if (!lastMsgByConvo[key]) lastMsgByConvo[key] = m;
     });
 
-    const dmConvos = (friendProfiles || []).map((c) => ({
+    const dmConvos = dmContacts.map((c) => ({
       id: c.id, type: "dm", full_name: c.full_name, avatar_url: c.avatar_url,
       lastMessage: lastMsgByConvo[`d:${c.id}`] || null, unread: unreadByConvoKey[`d:${c.id}`] || 0,
     }));
@@ -309,7 +320,7 @@ export default function Messages() {
                     {f.full_name || "Unbenannt"}
                   </label>
                 ))}
-                {friendsList.length === 0 && <p className="text-textMuted text-xs">Noch keine Freunde, mit denen du eine Gruppe starten könntest.</p>}
+                {friendsList.length === 0 && <p className="text-textMuted text-xs">Noch niemand, mit dem du eine Gruppe starten könntest.</p>}
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowNewGroup(false)} className="btn-ghost text-xs flex-1">Abbrechen</button>
@@ -347,7 +358,7 @@ export default function Messages() {
           })}
           {conversations.length === 0 && !showNewGroup && (
             <div className="px-3 text-xs text-textMuted">
-              Noch keine Freunde zum Schreiben. <button onClick={() => router.push("/members")} className="underline text-amber">Mitglieder ansehen</button> und eine Anfrage schicken.
+              Noch niemand zum Schreiben. <button onClick={() => router.push("/members")} className="underline text-amber">Mitglieder ansehen</button> — Kollegen deiner Organisation kannst du direkt anschreiben, alle anderen erst nach einer Anfrage.
             </div>
           )}
         </div>

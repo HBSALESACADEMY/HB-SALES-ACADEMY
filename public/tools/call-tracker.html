@@ -249,12 +249,15 @@
   </header>
   <script>
     // Läuft als eigenständiges HTML im iframe (siehe pages/call-tracker.js),
-    // kennt die angemeldete Organisation deshalb nicht von selbst — das Logo
-    // wird der App per Query-Param mitgegeben und hier übernommen. Ohne
-    // Param bleibt das Standard-Logo oben stehen (unbrandete Organisation).
+    // kennt die angemeldete Organisation deshalb nicht von selbst — Logo UND
+    // Organisationsname werden der App per Query-Param mitgegeben und hier
+    // übernommen (window.HB_ORG_NAME wird unten in buildReport() genutzt).
+    // Ohne Param bleiben die Standardwerte stehen (unbrandete Organisation).
     (function(){
-      var logoUrl = new URLSearchParams(window.location.search).get("logo");
+      var params = new URLSearchParams(window.location.search);
+      var logoUrl = params.get("logo");
       if (logoUrl) document.querySelector(".logo").src = logoUrl;
+      window.HB_ORG_NAME = params.get("org") || "HB Sales Academy";
     })();
   </script>
 
@@ -805,7 +808,7 @@
     const total = REASONS.reduce((sum, r) => sum + activeReasons[r.key], 0);
     const rangeLabel = currentView === "today" ? todayFullLabel() : (currentView === "week" ? weekLabel() : monthLabel());
     const lines = [
-      `HB Sales Academy – Bericht (${rangeLabel})`,
+      `${window.HB_ORG_NAME || "HB Sales Academy"} – Bericht (${rangeLabel})`,
       ``,
       `Anwahlen: ${activeCounts.anwahlen}`,
       `Ans Telefon gegangen: ${activeCounts.erreicht}`,

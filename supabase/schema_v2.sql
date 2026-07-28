@@ -279,7 +279,10 @@ create table if not exists community_posts (
   created_at timestamptz not null default now(),
   group_id uuid references community_groups(id) on delete set null,
   attachment_url text,
-  attachment_type text
+  attachment_type text,
+  -- 'org' = nur für die eigene Organisation sichtbar (Standard), 'global' =
+  -- bewusst mit allen Organisationen geteilt.
+  visibility text not null default 'org' check (visibility in ('org', 'global'))
 );
 
 create table if not exists community_comments (
@@ -507,27 +510,16 @@ language sql stable security definer as $$
   );
 $$;
 
--- Steuert die eingeschränkte Sichtbarkeit in der Mitgliederliste. Die
--- Community ist bewusst unternehmensübergreifend (eine gemeinsame Sales-
--- Community für alle Organisationen) — wer dort aktiv war, ist daher IMMER
--- sichtbar, unabhängig von der Organisation. Alles andere (Manager/Admins
--- sehen ihre Organisation, alle sehen Manager ihrer eigenen Organisation,
--- Team-Kollegen untereinander) bleibt auf same_org() beschränkt.
+-- Mitglieder der eigenen Organisation sind füreinander uneingeschränkt
+-- sichtbar. Zusätzlich ist jedes freigegebene Profil grundsätzlich
+-- auffindbar (nötig für die globale Suche/Community: "Profil ansehen" MUSS
+-- schon vor einer Freundschaftsanfrage möglich sein).
 create or replace function public.can_view_profile(target_id uuid, viewer_id uuid)
 returns boolean
 language sql stable security definer as $$
   select
     target_id = viewer_id
-    or exists (select 1 from community_posts cp where cp.user_id = target_id)
-    or exists (select 1 from community_comments cc where cc.user_id = target_id)
-    or (
-      same_org(viewer_id, target_id)
-      and (
-        exists (select 1 from profiles v where v.id = viewer_id and (v.is_admin = true or v.role = 'manager'))
-        or exists (select 1 from profiles t where t.id = target_id and t.role = 'manager')
-        or shares_team_with(viewer_id, target_id)
-      )
-    )
+    or exists (select 1 from profiles t where t.id = target_id and t.status = 'approved')
 $$;
 
 -- Atomarer XP-Zuwachs + Protokoll-Eintrag, aufgerufen via supabase.rpc('increment_xp', ...)
@@ -609,8 +601,8 @@ create policy "organizations_delete_platform_admin" on organizations for delete 
 drop policy if exists "profiles_select_own" on profiles;
 create policy "profiles_select_own" on profiles for select using (auth.uid() = id);
 
--- profiles_select_team entfällt: can_view_profile() (über shares_team_with)
--- deckt die Team-Sichtbarkeit jetzt vollständig ab.
+-- profiles_select_team entfällt: can_view_profile() deckt die Sichtbarkeit
+-- (eigene Organisation uneingeschränkt + jedes freigegebene Profil) ab.
 drop policy if exists "profiles_select_team" on profiles;
 
 drop policy if exists "profiles_select_scoped" on profiles;
@@ -796,8 +788,12 @@ create policy "community_groups_delete_managers" on community_groups for delete 
 );
 
 -- --- community_posts ---
+-- visibility='org' (Standard) ist nur für die eigene Organisation sichtbar;
+-- visibility='global' bewusst für alle. Komplett getrennte Communities.
 drop policy if exists "community_posts_select_all" on community_posts;
-create policy "community_posts_select_all" on community_posts for select using (true);
+create policy "community_posts_select_all" on community_posts for select using (
+  visibility = 'global' or same_org(user_id, auth.uid())
+);
 drop policy if exists "community_posts_insert_own" on community_posts;
 create policy "community_posts_insert_own" on community_posts for insert with check (auth.uid() = user_id);
 drop policy if exists "community_posts_delete_own_or_manager" on community_posts;
@@ -806,22 +802,44 @@ create policy "community_posts_delete_own_or_manager" on community_posts for del
   or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
 );
 
--- --- community_comments ---
+-- --- community_comments --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_comments_select_all" on community_comments;
-create policy "community_comments_select_all" on community_comments for select using (true);
+create policy "community_comments_select_all" on community_comments for select using (
+  exists (
+    select 1 from community_posts cp where cp.id = community_comments.post_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
 drop policy if exists "community_comments_insert_own" on community_comments;
-create policy "community_comments_insert_own" on community_comments for insert with check (auth.uid() = user_id);
+create policy "community_comments_insert_own" on community_comments for insert with check (
+  auth.uid() = user_id
+  and exists (
+    select 1 from community_posts cp where cp.id = community_comments.post_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
 drop policy if exists "community_comments_delete_own_or_manager" on community_comments;
 create policy "community_comments_delete_own_or_manager" on community_comments for delete using (
   auth.uid() = user_id
   or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
 );
 
--- --- community_kudos ---
+-- --- community_kudos --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_kudos_select_all" on community_kudos;
-create policy "community_kudos_select_all" on community_kudos for select using (true);
+create policy "community_kudos_select_all" on community_kudos for select using (
+  exists (
+    select 1 from community_posts cp where cp.id = community_kudos.post_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
 drop policy if exists "community_kudos_insert_own" on community_kudos;
-create policy "community_kudos_insert_own" on community_kudos for insert with check (auth.uid() = user_id);
+create policy "community_kudos_insert_own" on community_kudos for insert with check (
+  auth.uid() = user_id
+  and exists (
+    select 1 from community_posts cp where cp.id = community_kudos.post_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
 drop policy if exists "community_kudos_delete_own" on community_kudos;
 create policy "community_kudos_delete_own" on community_kudos for delete using (auth.uid() = user_id);
 
@@ -883,6 +901,9 @@ create policy "dm_select_own" on direct_messages for select using (
   auth.uid() = sender_id or auth.uid() = recipient_id
   or (group_id is not null and is_group_member(group_id, auth.uid()))
 );
+-- Innerhalb der eigenen Organisation ist Chatten ohne Freundschaftsanfrage
+-- erlaubt (same_org). Organisationsübergreifend bleibt eine akzeptierte
+-- Freundschaftsanfrage nötig. Blockierungen gelten in beiden Fällen.
 drop policy if exists "dm_insert_friends" on direct_messages;
 create policy "dm_insert_friends" on direct_messages for insert with check (
   auth.uid() = sender_id
@@ -890,11 +911,14 @@ create policy "dm_insert_friends" on direct_messages for insert with check (
     (group_id is not null and is_group_member(group_id, auth.uid()))
     or (
       group_id is null and recipient_id is not null
-      and exists (
-        select 1 from friendships f
-        where f.status = 'accepted'
-          and ((f.requester_id = direct_messages.sender_id and f.addressee_id = direct_messages.recipient_id)
-            or (f.requester_id = direct_messages.recipient_id and f.addressee_id = direct_messages.sender_id))
+      and (
+        same_org(sender_id, recipient_id)
+        or exists (
+          select 1 from friendships f
+          where f.status = 'accepted'
+            and ((f.requester_id = direct_messages.sender_id and f.addressee_id = direct_messages.recipient_id)
+              or (f.requester_id = direct_messages.recipient_id and f.addressee_id = direct_messages.sender_id))
+        )
       )
       and not exists (
         select 1 from blocks b
