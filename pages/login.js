@@ -12,6 +12,24 @@ export default function Login() {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message || "Etwas ist schiefgelaufen.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -56,21 +74,50 @@ export default function Login() {
           <p className="text-[12.5px] italic text-textMuted leading-snug max-w-[260px]">„{quoteOfTheDay().text}"</p>
           {quoteOfTheDay().author && <p className="text-[10.5px] text-[#5A5F72] mt-1">— {quoteOfTheDay().author}</p>}
         </div>
-        <p className="text-textMuted text-sm mb-6 text-center">{mode === "login" ? "Melde dich an" : "Konto erstellen"}</p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {mode === "signup" && (
-            <input className="input" placeholder="Vor- und Nachname" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-          )}
-          <input className="input" type="email" placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input className="input" type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-          {error && <p className="text-coral text-xs">{error}</p>}
-          <button className="btn justify-center" disabled={loading}>
-            {loading ? "..." : mode === "login" ? "Anmelden" : "Registrieren"}
-          </button>
-        </form>
-        <button className="text-textMuted text-xs mt-4 underline" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
-          {mode === "login" ? "Noch kein Konto? Jetzt registrieren" : "Bereits ein Konto? Anmelden"}
-        </button>
+        {mode === "forgot" ? (
+          <>
+            <p className="text-textMuted text-sm mb-6 text-center">Passwort zurücksetzen</p>
+            {resetSent ? (
+              <p className="text-teal text-sm text-center mb-4">Falls ein Konto mit dieser E-Mail existiert, wurde ein Link zum Zurücksetzen verschickt. Bitte E-Mails prüfen (auch Spam-Ordner).</p>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="flex flex-col gap-3">
+                <input className="input" type="email" placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                {error && <p className="text-coral text-xs">{error}</p>}
+                <button className="btn justify-center" disabled={loading}>
+                  {loading ? "..." : "Link zum Zurücksetzen senden"}
+                </button>
+              </form>
+            )}
+            <button className="text-textMuted text-xs mt-4 underline" onClick={() => { setMode("login"); setResetSent(false); setError(""); }}>
+              Zurück zum Login
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-textMuted text-sm mb-6 text-center">{mode === "login" ? "Melde dich an" : "Konto erstellen"}</p>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              {mode === "signup" && (
+                <input className="input" placeholder="Vor- und Nachname" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              )}
+              <input className="input" type="email" placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <input className="input" type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+              {error && <p className="text-coral text-xs">{error}</p>}
+              <button className="btn justify-center" disabled={loading}>
+                {loading ? "..." : mode === "login" ? "Anmelden" : "Registrieren"}
+              </button>
+            </form>
+            <div className="flex items-center justify-between mt-4">
+              <button className="text-textMuted text-xs underline" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
+                {mode === "login" ? "Noch kein Konto? Jetzt registrieren" : "Bereits ein Konto? Anmelden"}
+              </button>
+              {mode === "login" && (
+                <button className="text-textMuted text-xs underline" onClick={() => { setMode("forgot"); setError(""); }}>
+                  Passwort vergessen?
+                </button>
+              )}
+            </div>
+          </>
+        )}
         </div>
       </div>
     </div>

@@ -72,7 +72,11 @@ export default function AdminInsights() {
         .sort((a, b) => b[1] - a[1]).slice(0, 5)
         .map(([id, count]) => ({ id, count, profile: nameById[id] }));
 
-      const weeklyActiveUsers = new Set((logins || []).map((l) => l.user_id)).size;
+      // Nur gegen aktuell genehmigte Mitglieder zählen — sonst würden z.B. Login-Events
+      // von inzwischen gelöschten/abgelehnten Test-Konten die Zahl über die echte
+      // Mitgliederzahl hinaus aufblähen.
+      const approvedIds = new Set(approved.map((p) => p.id));
+      const weeklyActiveUsers = new Set((logins || []).map((l) => l.user_id).filter((id) => approvedIds.has(id))).size;
 
       const weeklyAnwahlen = (callLogs || []).reduce((s, c) => s + (c.counts?.anwahlen || 0), 0);
 
