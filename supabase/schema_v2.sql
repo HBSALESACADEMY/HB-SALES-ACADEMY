@@ -600,6 +600,10 @@ drop policy if exists "organizations_insert_platform_admin" on organizations;
 create policy "organizations_insert_platform_admin" on organizations for insert with check (
   exists (select 1 from profiles where id = auth.uid() and is_platform_admin = true)
 );
+drop policy if exists "organizations_delete_platform_admin" on organizations;
+create policy "organizations_delete_platform_admin" on organizations for delete using (
+  exists (select 1 from profiles where id = auth.uid() and is_platform_admin = true)
+);
 
 -- --- profiles ---
 drop policy if exists "profiles_select_own" on profiles;
