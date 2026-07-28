@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const admin = getAdminSupabase();
     const { data, error } = await admin
       .from("organizations")
-      .select("name, slug, logo_url, primary_color")
+      .select("id, name, slug, logo_url, primary_color")
       .eq("slug", slug)
       .maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
