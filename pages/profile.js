@@ -14,6 +14,12 @@ export default function Profile() {
   const [saved, setSaved] = useState(false);
   const [pendingFile, setPendingFile] = useState(null); // Datei, die gerade zugeschnitten wird
 
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSaved, setPasswordSaved] = useState(false);
+
   async function load() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
@@ -73,6 +79,18 @@ export default function Profile() {
   }
 
   function setField(key, value) { setFields((f) => ({ ...f, [key]: value })); }
+
+  async function changePassword() {
+    setPasswordError("");
+    setPasswordSaved(false);
+    if (newPassword.length < 6) { setPasswordError("Das Passwort muss mindestens 6 Zeichen lang sein."); return; }
+    if (newPassword !== confirmPassword) { setPasswordError("Die Passwörter stimmen nicht überein."); return; }
+    setChangingPassword(true);
+    const { error: err } = await supabase.auth.updateUser({ password: newPassword });
+    if (err) setPasswordError(err.message);
+    else { setPasswordSaved(true); setNewPassword(""); setConfirmPassword(""); }
+    setChangingPassword(false);
+  }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
@@ -142,6 +160,25 @@ export default function Profile() {
             {saving ? "Speichert..." : "Speichern"}
           </button>
           {saved && <p className="text-teal text-xs">Gespeichert!</p>}
+        </div>
+      </div>
+
+      <div className="card max-w-md mt-4">
+        <div className="text-[11px] text-textMuted uppercase tracking-wide mb-3">Passwort ändern</div>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-textMuted mb-1 block">Neues Passwort</label>
+            <input type="password" className="input" placeholder="Mindestens 6 Zeichen" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-textMuted mb-1 block">Neues Passwort bestätigen</label>
+            <input type="password" className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+          </div>
+          {passwordError && <p className="text-coral text-xs">{passwordError}</p>}
+          <button disabled={changingPassword || !newPassword || !confirmPassword} onClick={changePassword} className="btn self-start disabled:opacity-40">
+            {changingPassword ? "Ändert..." : "Passwort ändern"}
+          </button>
+          {passwordSaved && <p className="text-teal text-xs">Passwort geändert!</p>}
         </div>
       </div>
     </Layout>

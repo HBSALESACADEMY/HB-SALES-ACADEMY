@@ -25,8 +25,14 @@ export default async function handler(req, res) {
 
     if (!exam) return res.status(403).json({ error: "Kein bestandenes Prüfungsergebnis für diesen Kurs gefunden." });
 
-    const { data: profile } = await auth.client.from("profiles").select("full_name").eq("id", auth.user.id).maybeSingle();
+    const { data: profile } = await auth.client.from("profiles").select("full_name, organization_id").eq("id", auth.user.id).maybeSingle();
     const name = (profile && profile.full_name) || auth.user.email || "Teilnehmer";
+
+    let orgLogoUrl = null;
+    if (profile?.organization_id) {
+      const { data: org } = await auth.client.from("organizations").select("logo_url").eq("id", profile.organization_id).maybeSingle();
+      orgLogoUrl = org?.logo_url || null;
+    }
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([842, 595]); // A4 landscape
@@ -54,8 +60,26 @@ export default async function handler(req, res) {
       borderColor: amber, borderWidth: 0.75, color: undefined,
     });
 
-    const logoBytes = fs.readFileSync(path.join(process.cwd(), "public", "logo.png"));
-    const logoImage = await pdfDoc.embedPng(logoBytes);
+    // Organisations-Logo verwenden, falls vorhanden — sonst Standard-Logo als
+    // Fallback für unbrandete Organisationen oder nicht einbettbare Formate.
+    let logoImage = null;
+    if (orgLogoUrl) {
+      try {
+        const logoResp = await fetch(orgLogoUrl);
+        if (logoResp.ok) {
+          const contentType = logoResp.headers.get("content-type") || "";
+          const bytes = Buffer.from(await logoResp.arrayBuffer());
+          if (contentType.includes("png")) logoImage = await pdfDoc.embedPng(bytes);
+          else if (contentType.includes("jpeg") || contentType.includes("jpg")) logoImage = await pdfDoc.embedJpg(bytes);
+        }
+      } catch (e) {
+        // Fällt unten auf das Standard-Logo zurück.
+      }
+    }
+    if (!logoImage) {
+      const logoBytes = fs.readFileSync(path.join(process.cwd(), "public", "logo.png"));
+      logoImage = await pdfDoc.embedPng(logoBytes);
+    }
     const logoAspect = logoImage.width / logoImage.height;
 
     const centerText = (text, y, font, size, color) => {

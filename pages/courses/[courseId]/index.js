@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Layout from "../../../components/Layout";
+import Layout, { getCachedOrg } from "../../../components/Layout";
 import Icon from "../../../components/Icon";
 import { supabase } from "../../../lib/supabaseClient";
 import { apiGetBlob } from "../../../lib/apiClient";
@@ -96,7 +96,7 @@ export default function CourseDetail() {
             {passed ? (
               <div className="border-2 border-amber rounded-xl p-5 text-center" style={{ background: "rgba(240,178,62,.06)" }}>
                 <div className="text-xs text-textMuted mb-1.5">Zertifikat erhalten</div>
-                <img src="/logo.svg" alt="HB Sales Academy" className="h-6 w-auto mx-auto mb-2" />
+                <img src={getCachedOrg()?.logo_url || "/logo.svg"} alt={getCachedOrg()?.name || "HB Sales Academy"} className="h-6 w-auto mx-auto mb-2" />
                 <div className="font-display text-[17px] text-white mb-2.5">{course.title}</div>
                 <button className="btn" onClick={downloadCertificate} disabled={downloading}>
                   <Icon name="download" size={14} /> {downloading ? "Wird erstellt..." : "PDF-Zertifikat herunterladen"}

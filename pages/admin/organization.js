@@ -217,6 +217,8 @@ export default function AdminOrganization() {
   const [allOrgs, setAllOrgs] = useState([]);
   const [expandedOrgId, setExpandedOrgId] = useState(null);
   const [newOrgName, setNewOrgName] = useState("");
+  const [newManagerEmail, setNewManagerEmail] = useState("");
+  const [newManagerPassword, setNewManagerPassword] = useState("");
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [createError, setCreateError] = useState("");
   const [justCreatedSlug, setJustCreatedSlug] = useState(null);
@@ -265,28 +267,24 @@ export default function AdminOrganization() {
   }, []);
 
   async function createOrg() {
-    if (!newOrgName.trim()) return;
+    if (!newOrgName.trim() || !newManagerEmail.trim() || !newManagerPassword) return;
     setCreatingOrg(true);
     setCreateError("");
     setJustCreatedSlug(null);
 
-    const base = slugify(newOrgName.trim()) || "firma";
-    let candidateSlug = base;
-    let attempt = 1;
-    let created = null;
-
-    while (attempt <= 20 && !created) {
-      const { data, error: err } = await supabase.from("organizations").insert({ name: newOrgName.trim(), slug: candidateSlug }).select().maybeSingle();
-      if (!err) { created = data; break; }
-      if (err.code === "23505") { attempt += 1; candidateSlug = `${base}-${attempt}`; continue; }
-      setCreateError(err.message);
-      break;
-    }
-
-    if (created) {
+    try {
+      const { org: created } = await apiPost("/api/platform/create-organization", {
+        name: newOrgName.trim(),
+        managerEmail: newManagerEmail.trim(),
+        managerPassword: newManagerPassword,
+      });
       setNewOrgName("");
+      setNewManagerEmail("");
+      setNewManagerPassword("");
       setJustCreatedSlug(created.slug);
       await Promise.all([loadAllOrgs(), loadMembers()]);
+    } catch (e) {
+      setCreateError(e.message);
     }
     setCreatingOrg(false);
   }
@@ -341,16 +339,28 @@ export default function AdminOrganization() {
         <>
           <div className="card mb-6">
             <div className="font-semibold text-white text-sm mb-3">Neuen Kunden einrichten</div>
-            <div className="flex items-center gap-2">
-              <input className="input flex-1" placeholder="Firmenname des Kunden" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} />
-              <button disabled={creatingOrg} onClick={createOrg} className="btn text-xs disabled:opacity-40 flex-shrink-0">
+            <p className="text-textMuted text-xs mb-3">Legt die Organisation UND direkt einen Organisations-Manager-Account an, mit dem sich der Kunde sofort anmelden und eigene Nutzer freigeben kann.</p>
+            <div className="flex flex-col gap-2 max-w-sm">
+              <div>
+                <label className="text-xs text-textMuted mb-1 block">Firmenname</label>
+                <input className="input" placeholder="Firmenname des Kunden" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-textMuted mb-1 block">E-Mail des Organisations-Managers</label>
+                <input className="input" type="email" placeholder="manager@kunde.de" value={newManagerEmail} onChange={(e) => setNewManagerEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-textMuted mb-1 block">Passwort des Organisations-Managers</label>
+                <input className="input" type="password" placeholder="Mindestens 6 Zeichen" value={newManagerPassword} onChange={(e) => setNewManagerPassword(e.target.value)} />
+              </div>
+              <button disabled={creatingOrg || !newOrgName.trim() || !newManagerEmail.trim() || !newManagerPassword} onClick={createOrg} className="btn text-xs disabled:opacity-40 self-start mt-1">
                 {creatingOrg ? "Legt an..." : "Anlegen"}
               </button>
             </div>
             {createError && <p className="text-coral text-xs mt-2">{createError}</p>}
             {justCreatedSlug && (
               <p className="text-teal text-sm mt-3">
-                Angelegt! Firmencode: <span className="font-mono font-semibold">{justCreatedSlug}</span> — diesen Code dem Kunden für Registrierung/Login geben.
+                Angelegt! Firmencode: <span className="font-mono font-semibold">{justCreatedSlug}</span> — Firmencode und Zugangsdaten dem Organisations-Manager geben. Das Passwort kann er später selbst in seinem Profil ändern.
               </p>
             )}
           </div>

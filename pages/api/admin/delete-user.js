@@ -8,8 +8,8 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { client, user } = auth;
 
-  const { data: me } = await client.from("profiles").select("role, organization_id").eq("id", user.id).maybeSingle();
-  if (!me || me.role !== "manager") {
+  const { data: me } = await client.from("profiles").select("role, is_platform_admin, organization_id").eq("id", user.id).maybeSingle();
+  if (!me || (me.role !== "manager" && !me.is_platform_admin)) {
     return res.status(403).json({ error: "Nur Manager können Nutzer entfernen." });
   }
 
@@ -23,10 +23,13 @@ export default async function handler(req, res) {
     const admin = getAdminSupabase();
 
     // Service-Role umgeht RLS komplett — ohne diese Prüfung könnte ein Manager
-    // Konten einer FREMDEN Organisation löschen.
-    const { data: target } = await admin.from("profiles").select("organization_id").eq("id", targetId).maybeSingle();
-    if (!target || target.organization_id !== me.organization_id) {
-      return res.status(403).json({ error: "Nutzer gehört nicht zu deiner Organisation." });
+    // Konten einer FREMDEN Organisation löschen. Plattform-Admins sind bewusst
+    // von dieser Einschränkung ausgenommen.
+    if (!me.is_platform_admin) {
+      const { data: target } = await admin.from("profiles").select("organization_id").eq("id", targetId).maybeSingle();
+      if (!target || target.organization_id !== me.organization_id) {
+        return res.status(403).json({ error: "Nutzer gehört nicht zu deiner Organisation." });
+      }
     }
 
     // Deletes the auth.users row; the profiles row (and all quiz/exam/roleplay

@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
-import { applyOrgBranding } from "../lib/orgBranding";
+import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import Icon from "./Icon";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
@@ -48,6 +48,12 @@ let cachedOrg = null;
 
 export function patchCachedProfile(patch) {
   cachedProfile = cachedProfile ? { ...cachedProfile, ...patch } : patch;
+}
+
+// Erlaubt anderen Seiten (z.B. Zertifikat-Ansicht), das bereits geladene
+// Organisations-Logo zu nutzen, ohne es erneut zu laden.
+export function getCachedOrg() {
+  return cachedOrg;
 }
 
 export default function Layout({ children, fullBleed }) {
@@ -152,13 +158,27 @@ export default function Layout({ children, fullBleed }) {
         if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
         setLoadingAuth(false);
       }
-      if (data?.organization_id) {
-        const { data: orgData } = await supabase.from("organizations").select("*").eq("id", data.organization_id).maybeSingle();
+      // Plattform-Admins sehen bewusst die Marke der Organisation, deren
+      // Firmencode sie zuletzt auf der Login-Seite eingegeben haben (session-
+      // gebunden) — nicht zwingend die ihrer eigenen fest zugeordneten
+      // Organisation. Für alle anderen Konten gilt immer die eigene, echte
+      // organization_id.
+      const activeOrgId = (data?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || data?.organization_id;
+      if (activeOrgId) {
+        const { data: orgData } = await supabase.from("organizations").select("*").eq("id", activeOrgId).maybeSingle();
         if (mounted && orgData) {
           setOrg(orgData);
           cachedOrg = orgData;
           applyOrgBranding(orgData);
+        } else if (mounted) {
+          setOrg(null);
+          cachedOrg = null;
+          resetOrgBranding();
         }
+      } else if (mounted) {
+        setOrg(null);
+        cachedOrg = null;
+        resetOrgBranding();
       }
     }
     load();
@@ -204,11 +224,14 @@ export default function Layout({ children, fullBleed }) {
       }
 
       let approvalCount = 0, suggestionCount = 0, teamReqCount = 0;
-      if (me?.role === "manager") {
+      if (me?.role === "manager" || me?.role === "trainer") {
+        // Trainer sehen nur den Wissens-Vorschläge-Badge (Content-Verwaltung),
+        // keine Nutzer-Freigaben/Team-Anfragen — die bleiben Manager-only.
+        const isManager = me?.role === "manager";
         const [a, s, t] = await Promise.all([
-          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
+          isManager ? supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending") : Promise.resolve({ count: 0 }),
           supabase.from("kb_entries").select("id", { count: "exact", head: true }).eq("status", "pending"),
-          supabase.from("team_requests").select("id", { count: "exact", head: true }).eq("manager_id", session.user.id).eq("status", "pending"),
+          isManager ? supabase.from("team_requests").select("id", { count: "exact", head: true }).eq("manager_id", session.user.id).eq("status", "pending") : Promise.resolve({ count: 0 }),
         ]);
         approvalCount = a.count || 0; suggestionCount = s.count || 0; teamReqCount = t.count || 0;
         if (mounted) { setPendingApprovals(approvalCount); setPendingSuggestions(suggestionCount); setPendingTeamRequests(teamReqCount); }
@@ -328,8 +351,17 @@ export default function Layout({ children, fullBleed }) {
   }
 
   async function handleLogout() {
+    // Alle organisationsbezogenen Caches leeren UND die angewendeten
+    // Marken-CSS-Variablen zurücksetzen — sonst könnten Logo/Farben der
+    // GERADE VERLASSENEN Organisation kurz sichtbar bleiben, falls sich im
+    // selben Browser-Tab direkt danach jemand aus einer ANDEREN Organisation
+    // anmeldet.
     cachedProfile = null;
     cachedNavItems = null;
+    cachedBadges = null;
+    cachedOrg = null;
+    resetOrgBranding();
+    sessionStorage.removeItem("hb_active_org_id");
     await supabase.auth.signOut();
     router.replace("/login");
   }
@@ -398,7 +430,14 @@ export default function Layout({ children, fullBleed }) {
         </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-0.5">
           {(() => {
-            const visibleItems = sortedNav(navItems.filter((n) => !n.requires_manager || profile?.role === "manager"));
+            // Trainer sehen zusätzlich die Content-Verwaltungsseiten (siehe
+            // pages/admin/{content,suggestions,navigation}.js), aber bewusst
+            // NICHT Nutzerverwaltung/Team — die bleiben Managern vorbehalten.
+            const TRAINER_NAV_IDS = ["admin-content", "admin-suggestions", "admin-navigation"];
+            const visibleItems = sortedNav(navItems.filter((n) =>
+              !n.requires_manager || profile?.role === "manager" ||
+              (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key))
+            ));
             const byCategory = {};
             visibleItems.forEach((item) => {
               const g = groupFor(item);

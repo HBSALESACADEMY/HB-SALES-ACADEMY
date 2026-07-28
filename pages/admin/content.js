@@ -25,7 +25,7 @@ export default function ContentAdmin() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-    if (!me || me.role !== "manager") {
+    if (!me || (me.role !== "manager" && me.role !== "trainer")) {
       setIsManager(false);
       setLoading(false);
       return;

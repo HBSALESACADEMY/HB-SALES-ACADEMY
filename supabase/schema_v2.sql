@@ -43,7 +43,7 @@ create table if not exists organizations (
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'rep' check (role in ('rep', 'manager')),
+  role text not null default 'rep' check (role in ('rep', 'manager', 'trainer')),
   is_admin boolean not null default false,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   manager_id uuid references profiles(id) on delete set null,
@@ -661,15 +661,15 @@ create policy "nav_items_select_all" on nav_items for select using (
   is_builtin = true or same_org(created_by, auth.uid())
 );
 drop policy if exists "nav_items_write_managers" on nav_items;
-create policy "nav_items_write_managers" on nav_items for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "nav_items_write_managers" on nav_items for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
 drop policy if exists "nav_items_update_managers" on nav_items;
 create policy "nav_items_update_managers" on nav_items for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer'))
   and (is_builtin = true or same_org(created_by, auth.uid()))
 );
 drop policy if exists "nav_items_delete_managers" on nav_items;
 create policy "nav_items_delete_managers" on nav_items for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer'))
   and (is_builtin = true or same_org(created_by, auth.uid()))
 );
 
@@ -677,28 +677,28 @@ create policy "nav_items_delete_managers" on nav_items for delete using (
 drop policy if exists "custom_courses_select_all" on custom_courses;
 create policy "custom_courses_select_all" on custom_courses for select using (same_org(created_by, auth.uid()));
 drop policy if exists "custom_courses_write_managers" on custom_courses;
-create policy "custom_courses_write_managers" on custom_courses for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "custom_courses_write_managers" on custom_courses for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
 drop policy if exists "custom_courses_update_managers" on custom_courses;
 create policy "custom_courses_update_managers" on custom_courses for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 drop policy if exists "custom_courses_delete_managers" on custom_courses;
 create policy "custom_courses_delete_managers" on custom_courses for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 
 -- --- custom_modules ---
 drop policy if exists "custom_modules_select_all" on custom_modules;
 create policy "custom_modules_select_all" on custom_modules for select using (same_org(created_by, auth.uid()));
 drop policy if exists "custom_modules_write_managers" on custom_modules;
-create policy "custom_modules_write_managers" on custom_modules for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "custom_modules_write_managers" on custom_modules for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
 drop policy if exists "custom_modules_update_managers" on custom_modules;
 create policy "custom_modules_update_managers" on custom_modules for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 drop policy if exists "custom_modules_delete_managers" on custom_modules;
 create policy "custom_modules_delete_managers" on custom_modules for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 
 -- --- kb_entries ---
@@ -706,17 +706,17 @@ drop policy if exists "kb_entries_select_approved" on kb_entries;
 create policy "kb_entries_select_approved" on kb_entries for select using (status = 'approved' and same_org(created_by, auth.uid()));
 drop policy if exists "kb_entries_select_managers_all" on kb_entries;
 create policy "kb_entries_select_managers_all" on kb_entries for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_insert_pending" on kb_entries;
 create policy "kb_entries_insert_pending" on kb_entries for insert with check (status = 'pending');
 drop policy if exists "kb_entries_update_managers" on kb_entries;
 create policy "kb_entries_update_managers" on kb_entries for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_delete_managers" on kb_entries;
 create policy "kb_entries_delete_managers" on kb_entries for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 
 -- --- scripts ---

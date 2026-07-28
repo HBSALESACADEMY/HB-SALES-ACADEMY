@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
-import { applyOrgBranding } from "../lib/orgBranding";
+import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { playLoginChime } from "../lib/sounds";
 import { quoteOfTheDay } from "../lib/quotes";
 
@@ -30,6 +30,10 @@ export default function Login() {
       const { org } = await apiGet(`/api/org-by-slug?slug=${encodeURIComponent(orgCode.trim())}`);
       setResolvedOrg(org);
       applyOrgBranding(org);
+      // Merkt sich, welche Organisation gerade per Firmencode ausgewählt wurde —
+      // Plattform-Admins sehen nach dem Login bewusst DIESE Marke, nicht die
+      // ihrer eigenen fest zugeordneten Organisation (siehe components/Layout.js).
+      sessionStorage.setItem("hb_active_org_id", org.id);
     } catch (err) {
       setCodeError(err.message || "Unbekannter Firmen-Code.");
     } finally {
@@ -42,6 +46,8 @@ export default function Login() {
     setOrgCode("");
     setCodeError("");
     setError("");
+    resetOrgBranding();
+    sessionStorage.removeItem("hb_active_org_id");
   }
 
   async function handleForgotPassword(e) {

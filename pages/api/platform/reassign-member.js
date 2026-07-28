@@ -27,10 +27,17 @@ export default async function handler(req, res) {
 
     // Rolle zurücksetzen: Manager-/Admin-Rechte der ALTEN Organisation sollen
     // nicht automatisch in die neue Organisation mit übernommen werden.
+    // Ausnahme: Plattform-Admins (organisationsübergreifende Rechte) behalten
+    // beim Verschieben immer Manager+Admin-Rechte — sonst würde ein
+    // versehentliches Verschieben eines Plattform-Admins die eigenen
+    // Verwaltungsrechte kappen.
+    const { data: target } = await admin.from("profiles").select("is_platform_admin").eq("id", targetId).maybeSingle();
+    const keepRights = !!target?.is_platform_admin;
+
     const { error: updErr } = await admin.from("profiles").update({
       organization_id: organizationId,
-      role: "rep",
-      is_admin: false,
+      role: keepRights ? "manager" : "rep",
+      is_admin: keepRights ? true : false,
     }).eq("id", targetId);
     if (updErr) throw updErr;
 

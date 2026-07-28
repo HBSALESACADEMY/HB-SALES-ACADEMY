@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout, { patchCachedProfile } from "../components/Layout";
 import Icon from "../components/Icon";
+import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
@@ -17,6 +18,26 @@ export default function Dashboard() {
   const [dashboardPrefs, setDashboardPrefs] = useState({});
   const [onboarding, setOnboarding] = useState(null); // null = noch nicht geladen/nicht nötig
   const [adminSnapshot, setAdminSnapshot] = useState(null);
+  const [pendingFriendReqs, setPendingFriendReqs] = useState([]);
+  const [friendReqBusyId, setFriendReqBusyId] = useState(null);
+
+  async function loadPendingFriendRequests(uid) {
+    const { data: reqs } = await supabase.from("friendships").select("id, requester_id").eq("addressee_id", uid).eq("status", "pending").order("created_at", { ascending: false });
+    const requesterIds = (reqs || []).map((r) => r.requester_id);
+    const { data: requesterProfiles } = requesterIds.length
+      ? await supabase.from("profiles").select("id, full_name, avatar_url").in("id", requesterIds)
+      : { data: [] };
+    const profileById = new Map((requesterProfiles || []).map((p) => [p.id, p]));
+    setPendingFriendReqs((reqs || []).map((r) => ({ ...r, profile: profileById.get(r.requester_id) })));
+  }
+
+  async function respondFriendRequest(id, status) {
+    setFriendReqBusyId(id);
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("friendships").update({ status }).eq("id", id);
+    if (session) await loadPendingFriendRequests(session.user.id);
+    setFriendReqBusyId(null);
+  }
 
   async function persistTileOrder(newOrder) {
     setDashboardPrefs((prev) => {
@@ -64,6 +85,7 @@ export default function Dashboard() {
       setExamResults(er || []);
       setRpSessions(rp || []);
       setLoading(false);
+      loadPendingFriendRequests(uid);
 
       const { data: me } = await supabase.from("profiles").select("role, is_admin, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
@@ -185,6 +207,27 @@ export default function Dashboard() {
                     <span className={`text-sm ${step.done ? "text-textMuted line-through" : "text-white"}`}>{step.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {pendingFriendReqs.length > 0 && (
+            <div className="card mb-5">
+              <div className="font-semibold text-white text-sm mb-3">Freundschaftsanfragen</div>
+              <div className="flex flex-col gap-2.5">
+                {pendingFriendReqs.map((r) => {
+                  const busy = friendReqBusyId === r.id;
+                  return (
+                    <div key={r.id} className="flex items-center gap-3">
+                      <Avatar name={r.profile?.full_name || "?"} src={r.profile?.avatar_url} size={32} />
+                      <span className="text-sm text-white flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button disabled={busy} onClick={() => respondFriendRequest(r.id, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                        <button disabled={busy} onClick={() => respondFriendRequest(r.id, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
