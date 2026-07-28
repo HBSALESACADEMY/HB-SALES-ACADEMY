@@ -15,7 +15,7 @@ Vollständige Web-App (Next.js + Supabase) für Vertriebspsychologie-Training.
 
 ### 1. Supabase-Projekt anlegen
 1. Auf [supabase.com](https://supabase.com) kostenlos ein neues Projekt erstellen.
-2. Im SQL-Editor den Inhalt von `supabase/schema.sql` einfügen und ausführen. Das legt alle Tabellen, Trigger und Row-Level-Security-Policies an.
+2. Im SQL-Editor den Inhalt von `supabase/schema_v2.sql` einfügen und ausführen. Das legt alle Tabellen, Trigger und Row-Level-Security-Policies an.
 3. Unter **Project Settings → API** die `Project URL` und den `anon public` Key kopieren.
 
 ### 2. Anthropic API-Key
@@ -65,7 +65,7 @@ Der Fortschritt der zugeordneten Team-Mitglieder bleibt weiterhin unter "Team (M
 lib/curriculum.js       5 Kurse, 17 Module, 102 MC-Fragen, 17 Fallstudien, 5 Kursprüfungs-Fallstudien
 lib/personas.js         6 Rollenspiel-Personas, 5 Szenarien, 3 Schwierigkeitsgrade
 pages/api/*.js          Serverseitige Routen (Anthropic-Aufrufe, PDF-Erstellung, Speichern in Supabase)
-supabase/schema.sql     Tabellen + Row-Level-Security (inkl. Manager-Sichtbarkeit)
+supabase/schema_v2.sql  Tabellen + Row-Level-Security (inkl. Manager-Sichtbarkeit)
 ```
 
 Weitere Fragen/Module lassen sich einfach in `lib/curriculum.js` ergänzen — die Datenstruktur ist bewusst so gehalten, dass neue Module/Fragen ohne Codeänderung an anderer Stelle funktionieren.
