@@ -67,11 +67,21 @@ function extractDominantColors(imgEl, count = 3) {
     .map((c) => toHex(c.r, c.g, c.b));
 }
 
+function slugify(name) {
+  return name
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // Umlaute/Akzente entfernen
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default function AdminOrganization() {
   const [isAdmin, setIsAdmin] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [org, setOrg] = useState(null);
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [secondaryColor, setSecondaryColor] = useState("#7B2FF7");
   const [primaryColor, setPrimaryColor] = useState("#E8368F");
@@ -81,20 +91,37 @@ export default function AdminOrganization() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
+  const [allOrgs, setAllOrgs] = useState([]);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [creatingOrg, setCreatingOrg] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [justCreatedSlug, setJustCreatedSlug] = useState(null);
+  const [copiedSlug, setCopiedSlug] = useState(null);
+
+  async function loadAllOrgs() {
+    const { data } = await supabase.from("organizations").select("*").order("created_at", { ascending: false });
+    setAllOrgs(data || []);
+  }
+
   useEffect(() => {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      const { data: me } = await supabase.from("profiles").select("is_admin, organization_id").eq("id", session.user.id).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
       if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
       const { data: orgData } = await supabase.from("organizations").select("*").eq("id", me.organization_id).maybeSingle();
       if (orgData) {
         setOrg(orgData);
         setName(orgData.name || "");
+        setSlug(orgData.slug || "");
         setLogoUrl(orgData.logo_url || "");
         setSecondaryColor(orgData.secondary_color || "#7B2FF7");
         setPrimaryColor(orgData.primary_color || "#E8368F");
         setTertiaryColor(orgData.tertiary_color || "#FF6B35");
+      }
+      if (me.is_platform_admin) {
+        setIsPlatformAdmin(true);
+        await loadAllOrgs();
       }
       setLoading(false);
     }
@@ -137,21 +164,58 @@ export default function AdminOrganization() {
   }
 
   async function save() {
-    if (!org || !name.trim()) return;
+    if (!org || !name.trim() || !slug.trim()) return;
     setSaving(true);
     setError("");
     setSaved(false);
     const { error: err } = await supabase.from("organizations").update({
       name: name.trim(),
+      slug: slugify(slug.trim()),
       logo_url: logoUrl.trim() || null,
       secondary_color: secondaryColor,
       primary_color: primaryColor,
       tertiary_color: tertiaryColor,
     }).eq("id", org.id);
     setSaving(false);
-    if (err) { setError(err.message); return; }
+    if (err) {
+      setError(err.code === "23505" ? "Dieser Firmencode ist schon vergeben." : err.message);
+      return;
+    }
     setSaved(true);
     setTimeout(() => window.location.reload(), 900);
+  }
+
+  async function createOrg() {
+    if (!newOrgName.trim()) return;
+    setCreatingOrg(true);
+    setCreateError("");
+    setJustCreatedSlug(null);
+
+    const base = slugify(newOrgName.trim()) || "firma";
+    let candidateSlug = base;
+    let attempt = 1;
+    let created = null;
+
+    while (attempt <= 20 && !created) {
+      const { data, error: err } = await supabase.from("organizations").insert({ name: newOrgName.trim(), slug: candidateSlug }).select().maybeSingle();
+      if (!err) { created = data; break; }
+      if (err.code === "23505") { attempt += 1; candidateSlug = `${base}-${attempt}`; continue; }
+      setCreateError(err.message);
+      break;
+    }
+
+    if (created) {
+      setNewOrgName("");
+      setJustCreatedSlug(created.slug);
+      await loadAllOrgs();
+    }
+    setCreatingOrg(false);
+  }
+
+  function copySlug(s) {
+    navigator.clipboard.writeText(s);
+    setCopiedSlug(s);
+    setTimeout(() => setCopiedSlug((x) => (x === s ? null : x)), 1500);
   }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
@@ -169,11 +233,14 @@ export default function AdminOrganization() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Organisation</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Name, Logo und Markenfarben eurer Organisation — für alle Mitglieder eurer Organisation sichtbar.</p>
+      <p className="text-textMuted text-sm mb-6">Name, Firmencode, Logo und Markenfarben eurer Organisation — für alle Mitglieder eurer Organisation sichtbar.</p>
 
-      <div className="card">
+      <div className="card mb-6">
         <label className="block text-xs text-textMuted mb-1.5">Name</label>
         <input className="input mb-4" value={name} onChange={(e) => setName(e.target.value)} placeholder="Firmenname" />
+
+        <label className="block text-xs text-textMuted mb-1.5">Firmencode (Login/Registrierung)</label>
+        <input className="input mb-4" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="firmencode" />
 
         <label className="block text-xs text-textMuted mb-1.5">Logo</label>
         <div className="flex items-center gap-3 mb-4">
@@ -207,6 +274,44 @@ export default function AdminOrganization() {
           {saving ? "Speichert..." : saved ? "Gespeichert!" : "Speichern"}
         </button>
       </div>
+
+      {isPlatformAdmin && (
+        <>
+          <div className="card mb-6">
+            <div className="font-semibold text-white text-sm mb-3">Neuen Kunden einrichten</div>
+            <div className="flex items-center gap-2">
+              <input className="input flex-1" placeholder="Firmenname des Kunden" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} />
+              <button disabled={creatingOrg} onClick={createOrg} className="btn text-xs disabled:opacity-40 flex-shrink-0">
+                {creatingOrg ? "Legt an..." : "Anlegen"}
+              </button>
+            </div>
+            {createError && <p className="text-coral text-xs mt-2">{createError}</p>}
+            {justCreatedSlug && (
+              <p className="text-teal text-sm mt-3">
+                Angelegt! Firmencode: <span className="font-mono font-semibold">{justCreatedSlug}</span> — diesen Code dem Kunden für Registrierung/Login geben.
+              </p>
+            )}
+          </div>
+
+          <div className="text-xs text-textMuted uppercase tracking-wide mb-2.5">Alle Organisationen</div>
+          <div className="flex flex-col gap-2.5">
+            {allOrgs.map((o) => (
+              <div key={o.id} className="card flex items-center gap-3.5">
+                {o.logo_url && <img src={o.logo_url} alt="" className="h-8 w-auto rounded" onError={(e) => { e.target.style.display = "none"; }} />}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-white text-sm">{o.name}</div>
+                  <div className="text-xs text-textMuted mt-0.5">
+                    Code: <span className="font-mono">{o.slug}</span> · angelegt {new Date(o.created_at).toLocaleDateString("de-DE")}
+                  </div>
+                </div>
+                <button onClick={() => copySlug(o.slug)} className="btn-ghost text-xs flex-shrink-0">
+                  {copiedSlug === o.slug ? "Kopiert!" : "Code kopieren"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Layout>
   );
 }
