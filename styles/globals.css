@@ -15,16 +15,16 @@ html, body {
 ::selection { background: rgba(var(--org-accent-rgb, 232,54,143), .32); color: #fff; }
 
 /* Signatur-Verlauf aus dem HB Sales Academy Logo: Violett → Magenta → Orange.
-   Die mittlere Farbe ist pro Organisation anpassbar (siehe components/Layout.js,
-   setzt --org-accent/--org-accent-rgb) — ohne gesetzten Wert exakt wie bisher. */
-.brand-gradient { background: linear-gradient(90deg, #7B2FF7 0%, var(--org-accent, #E8368F) 55%, #FF6B35 100%); }
+   Alle drei Farben sind pro Organisation anpassbar (siehe lib/orgBranding.js,
+   setzt --org-color-1/--org-accent/--org-color-3) — ohne gesetzte Werte exakt wie bisher. */
+.brand-gradient { background: linear-gradient(90deg, var(--org-color-1, #7B2FF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF6B35) 100%); }
 .brand-stripe {
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7B2FF7 0%, var(--org-accent, #E8368F) 55%, #FF6B35 100%);
+  background: linear-gradient(90deg, var(--org-color-1, #7B2FF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF6B35) 100%);
 }
 .brand-text-gradient {
-  background: linear-gradient(90deg, #7B2FF7 0%, var(--org-accent, #E8368F) 60%, #FF6B35 100%);
+  background: linear-gradient(90deg, var(--org-color-1, #7B2FF7) 0%, var(--org-accent, #E8368F) 60%, var(--org-color-3, #FF6B35) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -44,7 +44,7 @@ html, body {
 }
 
 .btn {
-  background: linear-gradient(120deg, #8B3EF7 0%, var(--org-accent, #E8368F) 55%, #FF7A45 100%);
+  background: linear-gradient(120deg, var(--org-color-1, #8B3EF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF7A45) 100%);
   color: #fff;
   border: none;
   padding: 10px 18px;

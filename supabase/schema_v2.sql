@@ -31,6 +31,8 @@ create table if not exists organizations (
   slug text not null unique,
   logo_url text,
   primary_color text,
+  secondary_color text,
+  tertiary_color text,
   created_at timestamptz not null default now()
 );
 
@@ -65,7 +67,8 @@ create table if not exists profiles (
   onboarding_dismissed boolean not null default false,
   team_name text,
   welcome_seen boolean not null default false,
-  leaderboard_opt_out boolean not null default false
+  leaderboard_opt_out boolean not null default false,
+  is_platform_admin boolean not null default false
 );
 
 -- Auto-create a profile row whenever a new auth user signs up. Verlangt einen
@@ -583,11 +586,19 @@ alter table ai_request_log enable row level security;
 drop policy if exists "organizations_select_own" on organizations;
 create policy "organizations_select_own" on organizations for select using (
   id = (select organization_id from profiles where id = auth.uid())
+  or exists (select 1 from profiles where id = auth.uid() and is_platform_admin = true)
 );
 drop policy if exists "organizations_update_admin" on organizations;
 create policy "organizations_update_admin" on organizations for update using (
-  id = (select organization_id from profiles where id = auth.uid())
-  and exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  (
+    id = (select organization_id from profiles where id = auth.uid())
+    and exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  )
+  or exists (select 1 from profiles where id = auth.uid() and is_platform_admin = true)
+);
+drop policy if exists "organizations_insert_platform_admin" on organizations;
+create policy "organizations_insert_platform_admin" on organizations for insert with check (
+  exists (select 1 from profiles where id = auth.uid() and is_platform_admin = true)
 );
 
 -- --- profiles ---
@@ -1072,3 +1083,4 @@ create policy "org_logos_admin_update" on storage.objects for update using (
 --   update profiles set role = 'manager' where id = '<manager-uuid>';
 --   update profiles set manager_id = '<manager-uuid>' where id = '<rep-uuid>';
 --   update profiles set is_admin = true where id = '<admin-uuid>';
+--   update profiles set is_platform_admin = true where id = '<dein-eigenes-uuid>'; -- nur einmalig, für dich selbst
