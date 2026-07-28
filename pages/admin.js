@@ -78,7 +78,7 @@ export default function Admin() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Nutzerverwaltung</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Alle registrierten Konten. Weise Team-Mitglieder zu, vergib oder entziehe Manager-Rechte, oder entferne Konten.</p>
+      <p className="text-textMuted text-sm mb-6">Alle registrierten Konten. Vergib oder entziehe Manager-Rechte, oder entferne Konten. Team-Mitgliedschaft wird unter "Team (Manager)" verwaltet.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -110,7 +110,6 @@ export default function Admin() {
       <div className="flex flex-col gap-2.5">
         {users.filter((u) => u.status !== "pending").map((u) => {
           const isSelf = u.id === selfId;
-          const inMyTeam = u.manager_id === selfId;
           const busy = busyId === u.id;
           return (
             <div key={u.id} className="card flex items-center gap-4 flex-wrap">
@@ -124,7 +123,6 @@ export default function Admin() {
                   {u.role === "manager" && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Manager</span>}
                   {u.is_admin && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Admin</span>}
                   {u.status === "rejected" && <span className="text-[10px] uppercase tracking-wide text-coral border border-coral/40 rounded px-1.5 py-0.5">Abgelehnt</span>}
-                  {inMyTeam && <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">In deinem Team</span>}
                 </div>
                 <div className="text-xs text-textMuted mt-1">{u.email || "–"}</div>
               </div>
@@ -138,16 +136,6 @@ export default function Admin() {
                 ) : (
                   <button disabled={busy} onClick={() => runAction(u.id, "make_manager")} className="btn-ghost text-xs disabled:opacity-40">
                     Zum Manager machen
-                  </button>
-                ))}
-
-                {!isSelf && (inMyTeam ? (
-                  <button disabled={busy} onClick={() => runAction(u.id, "remove_from_team")} className="btn-ghost text-xs disabled:opacity-40">
-                    Aus Team entfernen
-                  </button>
-                ) : (
-                  <button disabled={busy} onClick={() => runAction(u.id, "add_to_team")} className="btn-ghost text-xs disabled:opacity-40">
-                    Zu meinem Team hinzufügen
                   </button>
                 ))}
 

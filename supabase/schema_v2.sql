@@ -317,9 +317,29 @@ create table if not exists xp_log (
   created_at timestamptz not null default now()
 );
 
+-- Echte Mehrfach-Teams: eine Person kann in mehreren Teams gleichzeitig sein.
+-- Der Lead eines Teams ist teams.created_by (bewusst kein separates
+-- is_lead-Flag in team_members — ein Lead pro Team reicht für v1).
+-- profiles.manager_id (oben) bleibt als Altlast bestehen, wird aber von
+-- keiner Policy/keinem Code-Pfad mehr für Berechtigungen genutzt.
+create table if not exists teams (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_by uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists team_members (
+  team_id uuid not null references teams(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (team_id, user_id)
+);
+
 create table if not exists team_goals (
   id uuid primary key default gen_random_uuid(),
   manager_id uuid not null references profiles(id) on delete cascade,
+  team_id uuid references teams(id) on delete cascade,
   title text not null,
   metric text not null check (metric in ('roleplay', 'quiz', 'daily_challenge')),
   target_count integer not null,
@@ -331,9 +351,10 @@ create table if not exists team_requests (
   id uuid primary key default gen_random_uuid(),
   requester_id uuid not null references profiles(id) on delete cascade,
   manager_id uuid not null references profiles(id) on delete cascade,
+  team_id uuid references teams(id) on delete cascade,
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
   created_at timestamptz not null default now(),
-  unique (requester_id, manager_id)
+  unique (requester_id, team_id)
 );
 
 create table if not exists mentor_pairs (
@@ -400,6 +421,35 @@ language sql stable security definer as $$
   select exists (select 1 from chat_group_members where group_id = gid and user_id = uid);
 $$;
 
+-- Ein Team hat genau einen Lead (teams.created_by). Prüft, ob viewer_id
+-- ein Team leitet, in dem target_id Mitglied ist — für Trainingsdaten
+-- (quiz/exam/roleplay/call_log_days/login_events/login_attempts).
+create or replace function public.is_team_lead_of(target_id uuid, viewer_id uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (
+    select 1 from teams t join team_members tm on tm.team_id = t.id
+    where t.created_by = viewer_id and tm.user_id = target_id
+  );
+$$;
+
+-- Prüft, ob uid der Lead eines bestimmten Teams ist (team_goals, team_requests).
+create or replace function public.is_lead_of_team(tid uuid, uid uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (select 1 from teams where id = tid and created_by = uid);
+$$;
+
+-- Prüft, ob zwei Personen mindestens ein gemeinsames Team haben (für can_view_profile).
+create or replace function public.shares_team_with(a uuid, b uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (
+    select 1 from team_members m1 join team_members m2 on m1.team_id = m2.team_id
+    where m1.user_id = a and m2.user_id = b
+  );
+$$;
+
 -- Steuert die eingeschränkte Sichtbarkeit in der Mitgliederliste:
 -- eigenes Profil, Manager/Admins sehen alles, alle sehen Manager,
 -- Team-Kollegen untereinander, und jeder der in der Community aktiv war.
@@ -410,11 +460,7 @@ language sql stable security definer as $$
     target_id = viewer_id
     or exists (select 1 from profiles v where v.id = viewer_id and (v.is_admin = true or v.role = 'manager'))
     or exists (select 1 from profiles t where t.id = target_id and t.role = 'manager')
-    or exists (
-      select 1 from profiles v, profiles t
-      where v.id = viewer_id and t.id = target_id
-        and (v.manager_id = t.id or t.manager_id = v.manager_id or (v.role = 'manager' and t.manager_id = v.id))
-    )
+    or shares_team_with(viewer_id, target_id)
     or exists (select 1 from community_posts cp where cp.user_id = target_id)
     or exists (select 1 from community_comments cc where cc.user_id = target_id)
 $$;
@@ -459,6 +505,8 @@ alter table chat_group_members enable row level security;
 alter table direct_messages enable row level security;
 alter table conversation_reads enable row level security;
 alter table xp_log enable row level security;
+alter table teams enable row level security;
+alter table team_members enable row level security;
 alter table team_goals enable row level security;
 alter table team_requests enable row level security;
 alter table mentor_pairs enable row level security;
@@ -472,8 +520,9 @@ alter table ai_request_log enable row level security;
 drop policy if exists "profiles_select_own" on profiles;
 create policy "profiles_select_own" on profiles for select using (auth.uid() = id);
 
+-- profiles_select_team entfällt: can_view_profile() (über shares_team_with)
+-- deckt die Team-Sichtbarkeit jetzt vollständig ab.
 drop policy if exists "profiles_select_team" on profiles;
-create policy "profiles_select_team" on profiles for select using (manager_id = auth.uid());
 
 drop policy if exists "profiles_select_scoped" on profiles;
 create policy "profiles_select_scoped" on profiles for select using (can_view_profile(id, auth.uid()));
@@ -487,7 +536,7 @@ create policy "quiz_insert_own" on quiz_results for insert with check (auth.uid(
 drop policy if exists "quiz_select_own" on quiz_results;
 create policy "quiz_select_own" on quiz_results for select using (auth.uid() = user_id);
 drop policy if exists "quiz_select_team" on quiz_results;
-create policy "quiz_select_team" on quiz_results for select using (user_id in (select id from profiles where manager_id = auth.uid()));
+create policy "quiz_select_team" on quiz_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "quiz_results_select_admin" on quiz_results;
 create policy "quiz_results_select_admin" on quiz_results for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
 
@@ -497,7 +546,7 @@ create policy "exam_insert_own" on exam_results for insert with check (auth.uid(
 drop policy if exists "exam_select_own" on exam_results;
 create policy "exam_select_own" on exam_results for select using (auth.uid() = user_id);
 drop policy if exists "exam_select_team" on exam_results;
-create policy "exam_select_team" on exam_results for select using (user_id in (select id from profiles where manager_id = auth.uid()));
+create policy "exam_select_team" on exam_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "exam_results_select_admin" on exam_results;
 create policy "exam_results_select_admin" on exam_results for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
 
@@ -507,7 +556,7 @@ create policy "rp_insert_own" on roleplay_sessions for insert with check (auth.u
 drop policy if exists "rp_select_own" on roleplay_sessions;
 create policy "rp_select_own" on roleplay_sessions for select using (auth.uid() = user_id);
 drop policy if exists "rp_select_team" on roleplay_sessions;
-create policy "rp_select_team" on roleplay_sessions for select using (user_id in (select id from profiles where manager_id = auth.uid()));
+create policy "rp_select_team" on roleplay_sessions for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "roleplay_sessions_select_admin" on roleplay_sessions;
 create policy "roleplay_sessions_select_admin" on roleplay_sessions for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
 
@@ -735,23 +784,51 @@ create policy "xp_log_select_all" on xp_log for select using (true);
 drop policy if exists "xp_log_insert_own" on xp_log;
 create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = user_id);
 
+-- --- teams ---
+drop policy if exists "teams_select_all" on teams;
+create policy "teams_select_all" on teams for select using (true);
+drop policy if exists "teams_insert_managers" on teams;
+create policy "teams_insert_managers" on teams for insert with check (
+  exists (select 1 from profiles where id = auth.uid() and role = 'manager')
+);
+drop policy if exists "teams_update_own" on teams;
+create policy "teams_update_own" on teams for update using (created_by = auth.uid());
+drop policy if exists "teams_delete_own" on teams;
+create policy "teams_delete_own" on teams for delete using (created_by = auth.uid());
+
+-- --- team_members ---
+drop policy if exists "team_members_select_all" on team_members;
+create policy "team_members_select_all" on team_members for select using (true);
+drop policy if exists "team_members_insert_lead" on team_members;
+create policy "team_members_insert_lead" on team_members for insert with check (is_lead_of_team(team_id, auth.uid()));
+drop policy if exists "team_members_delete_lead_or_self" on team_members;
+create policy "team_members_delete_lead_or_self" on team_members for delete using (
+  is_lead_of_team(team_id, auth.uid()) or auth.uid() = user_id
+);
+
 -- --- team_goals ---
 drop policy if exists "team_goals_select_all" on team_goals;
 create policy "team_goals_select_all" on team_goals for select using (true);
 drop policy if exists "team_goals_insert_manager" on team_goals;
-create policy "team_goals_insert_manager" on team_goals for insert with check (auth.uid() = manager_id);
+create policy "team_goals_insert_manager" on team_goals for insert with check (is_lead_of_team(team_id, auth.uid()));
 drop policy if exists "team_goals_update_manager" on team_goals;
-create policy "team_goals_update_manager" on team_goals for update using (auth.uid() = manager_id);
+create policy "team_goals_update_manager" on team_goals for update using (is_lead_of_team(team_id, auth.uid()));
 
 -- --- team_requests ---
 drop policy if exists "team_requests_select_participant" on team_requests;
-create policy "team_requests_select_participant" on team_requests for select using (auth.uid() = requester_id or auth.uid() = manager_id);
+create policy "team_requests_select_participant" on team_requests for select using (
+  auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
+);
 drop policy if exists "team_requests_insert_own" on team_requests;
 create policy "team_requests_insert_own" on team_requests for insert with check (auth.uid() = requester_id);
 drop policy if exists "team_requests_update_manager" on team_requests;
-create policy "team_requests_update_manager" on team_requests for update using (auth.uid() = manager_id or auth.uid() = requester_id);
+create policy "team_requests_update_manager" on team_requests for update using (
+  auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
+);
 drop policy if exists "team_requests_delete_participant" on team_requests;
-create policy "team_requests_delete_participant" on team_requests for delete using (auth.uid() = requester_id or auth.uid() = manager_id);
+create policy "team_requests_delete_participant" on team_requests for delete using (
+  auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
+);
 
 -- --- mentor_pairs ---
 drop policy if exists "mentor_pairs_select_participant" on mentor_pairs;
@@ -765,7 +842,10 @@ create policy "mentor_pairs_update_manager" on mentor_pairs for update using (au
 drop policy if exists "call_log_days_select_own" on call_log_days;
 create policy "call_log_days_select_own" on call_log_days for select using (auth.uid() = user_id);
 drop policy if exists "call_log_days_select_managers" on call_log_days;
-create policy "call_log_days_select_managers" on call_log_days for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "call_log_days_select_managers" on call_log_days for select using (
+  is_team_lead_of(user_id, auth.uid())
+  or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
 drop policy if exists "call_log_days_upsert_own" on call_log_days;
 create policy "call_log_days_upsert_own" on call_log_days for insert with check (auth.uid() = user_id);
 drop policy if exists "call_log_days_update_own" on call_log_days;
@@ -775,13 +855,16 @@ create policy "call_log_days_update_own" on call_log_days for update using (auth
 drop policy if exists "login_attempts_insert_anyone" on login_attempts;
 create policy "login_attempts_insert_anyone" on login_attempts for insert with check (true);
 drop policy if exists "login_attempts_select_managers" on login_attempts;
-create policy "login_attempts_select_managers" on login_attempts for select using (exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin = true)));
+create policy "login_attempts_select_managers" on login_attempts for select using (
+  is_team_lead_of(user_id, auth.uid())
+  or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
 
 -- --- login_events ---
 drop policy if exists "login_events_insert_own" on login_events;
 create policy "login_events_insert_own" on login_events for insert with check (auth.uid() = user_id);
 drop policy if exists "login_events_select_managers" on login_events;
-create policy "login_events_select_managers" on login_events for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "login_events_select_managers" on login_events for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "login_events_select_admin" on login_events;
 create policy "login_events_select_admin" on login_events for select using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
 

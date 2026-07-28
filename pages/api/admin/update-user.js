@@ -1,7 +1,7 @@
 import { requireUser } from "../../../lib/supabaseServer";
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 
-// action: "make_manager" | "remove_manager" | "add_to_team" | "remove_from_team" | "approve" | "reject"
+// action: "make_manager" | "remove_manager" | "approve" | "reject"
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -31,8 +31,6 @@ export default async function handler(req, res) {
     let update = {};
     if (action === "make_manager") update = { role: "manager" };
     else if (action === "remove_manager") update = { role: "rep" };
-    else if (action === "add_to_team") update = { manager_id: user.id };
-    else if (action === "remove_from_team") update = { manager_id: null };
     else if (action === "approve") update = { status: "approved" };
     else if (action === "reject") update = { status: "rejected" };
     else return res.status(400).json({ error: "Unbekannte Aktion." });

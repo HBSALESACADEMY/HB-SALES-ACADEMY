@@ -9,8 +9,9 @@ export default function Members() {
   const [selfId, setSelfId] = useState(null);
   const [members, setMembers] = useState([]);
   const [friendships, setFriendships] = useState([]); // alle, die mich betreffen
+  const [teams, setTeams] = useState([]);
+  const [myTeamIds, setMyTeamIds] = useState(new Set());
   const [teamRequests, setTeamRequests] = useState([]);
-  const [myManagerId, setMyManagerId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
 
@@ -20,16 +21,29 @@ export default function Members() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const [{ data: profiles }, { data: fr }, { data: tr }, { data: me }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, avatar_url, bio, company_name, role_title, website, instagram, linkedin, role, manager_id").eq("status", "approved").neq("id", session.user.id).order("full_name"),
+    const [{ data: profiles }, { data: fr }, { data: allTeams }, { data: allMemberships }, { data: myMemberships }, { data: tr }] = await Promise.all([
+      supabase.from("profiles").select("id, full_name, avatar_url, bio, company_name, role_title, website, instagram, linkedin, role").eq("status", "approved").neq("id", session.user.id).order("full_name"),
       supabase.from("friendships").select("*").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
+      supabase.from("teams").select("id, name, created_by"),
+      supabase.from("team_members").select("team_id, user_id"),
+      supabase.from("team_members").select("team_id").eq("user_id", session.user.id),
       supabase.from("team_requests").select("*").eq("requester_id", session.user.id),
-      supabase.from("profiles").select("manager_id").eq("id", session.user.id).maybeSingle(),
     ]);
     setMembers(profiles || []);
     setFriendships(fr || []);
     setTeamRequests(tr || []);
-    setMyManagerId(me?.manager_id || null);
+    setMyTeamIds(new Set((myMemberships || []).map((m) => m.team_id)));
+
+    const memberCountByTeam = {};
+    (allMemberships || []).forEach((m) => { memberCountByTeam[m.team_id] = (memberCountByTeam[m.team_id] || 0) + 1; });
+    const leadIds = Array.from(new Set((allTeams || []).map((t) => t.created_by)));
+    const { data: leadProfiles } = leadIds.length
+      ? await supabase.from("profiles").select("id, full_name").in("id", leadIds)
+      : { data: [] };
+    const leadNameById = {};
+    (leadProfiles || []).forEach((p) => { leadNameById[p.id] = p.full_name || "Unbenannt"; });
+    setTeams((allTeams || []).map((t) => ({ ...t, memberCount: memberCountByTeam[t.id] || 0, leadName: leadNameById[t.created_by] })));
+
     setLoading(false);
   }
 
@@ -56,9 +70,9 @@ export default function Members() {
     setBusyId(null);
   }
 
-  async function sendTeamRequest(managerId) {
-    setBusyId("team-" + managerId);
-    await supabase.from("team_requests").insert({ requester_id: selfId, manager_id: managerId });
+  async function sendTeamRequest(team) {
+    setBusyId("team-" + team.id);
+    await supabase.from("team_requests").insert({ requester_id: selfId, manager_id: team.created_by, team_id: team.id });
     await load();
     setBusyId(null);
   }
@@ -70,6 +84,40 @@ export default function Members() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mitglieder</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Dein Team und alle, die in der Community aktiv sind — schick eine Anfrage, um schreiben zu können.</p>
+
+      {teams.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-white mb-2.5">Teams</h2>
+          <div className="flex flex-col gap-2.5">
+            {teams.map((t) => {
+              const inTeam = myTeamIds.has(t.id);
+              const tReq = teamRequests.find((r) => r.team_id === t.id);
+              const busy = busyId === "team-" + t.id;
+              return (
+                <div key={t.id} className="card flex items-center gap-3.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-white text-sm">{t.name}</div>
+                    <div className="text-xs text-textMuted mt-0.5">Lead: {t.leadName} · {t.memberCount} Mitglieder</div>
+                  </div>
+                  {inTeam ? (
+                    <span className="text-[11px] text-teal flex-shrink-0">In diesem Team</span>
+                  ) : !tReq ? (
+                    <button disabled={busy} onClick={() => sendTeamRequest(t)} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40 flex-shrink-0">
+                      Beitreten
+                    </button>
+                  ) : tReq.status === "pending" ? (
+                    <span className="text-[11px] text-textMuted flex-shrink-0">Anfrage läuft...</span>
+                  ) : tReq.status === "declined" ? (
+                    <button disabled={busy} onClick={() => sendTeamRequest(t)} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40 flex-shrink-0">
+                      Erneut anfragen
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2.5">
         {members.map((m) => {
@@ -120,23 +168,6 @@ export default function Members() {
                     Schreiben
                   </button>
                 )}
-
-                {m.role === "manager" && (() => {
-                  const tReq = teamRequests.find((t) => t.manager_id === m.id);
-                  if (myManagerId === m.id) return <span className="text-[11px] text-teal">In deinem Team</span>;
-                  if (!tReq) return (
-                    <button disabled={busyId === "team-" + m.id} onClick={() => sendTeamRequest(m.id)} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40">
-                      Team beitreten
-                    </button>
-                  );
-                  if (tReq.status === "pending") return <span className="text-[11px] text-textMuted">Team-Anfrage läuft...</span>;
-                  if (tReq.status === "declined") return (
-                    <button disabled={busyId === "team-" + m.id} onClick={() => sendTeamRequest(m.id)} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40">
-                      Erneut anfragen
-                    </button>
-                  );
-                  return null;
-                })()}
               </div>
             </div>
           );

@@ -15,16 +15,18 @@ export default async function handler(req, res) {
     const admin = getAdminSupabase();
     const { data: request, error: reqErr } = await admin.from("team_requests").select("*").eq("id", requestId).maybeSingle();
     if (reqErr || !request) return res.status(404).json({ error: "Anfrage nicht gefunden." });
-    if (request.manager_id !== auth.user.id) return res.status(403).json({ error: "Nur der angefragte Manager darf antworten." });
+
+    const { data: team } = await admin.from("teams").select("created_by").eq("id", request.team_id).maybeSingle();
+    if (!team || team.created_by !== auth.user.id) return res.status(403).json({ error: "Nur der Lead dieses Teams darf antworten." });
 
     if (action === "decline") {
       await admin.from("team_requests").update({ status: "declined" }).eq("id", requestId);
       return res.status(200).json({ ok: true });
     }
 
-    // Annehmen: Requester dem Team zuordnen + Anfrage als angenommen markieren.
-    const { error: updErr } = await admin.from("profiles").update({ manager_id: auth.user.id }).eq("id", request.requester_id);
-    if (updErr) return res.status(500).json({ error: updErr.message });
+    // Annehmen: Requester ins Team aufnehmen + Anfrage als angenommen markieren.
+    const { error: insErr } = await admin.from("team_members").insert({ team_id: request.team_id, user_id: request.requester_id });
+    if (insErr) return res.status(500).json({ error: insErr.message });
     await admin.from("team_requests").update({ status: "accepted" }).eq("id", requestId);
 
     return res.status(200).json({ ok: true });
