@@ -247,6 +247,16 @@
     <img class="logo" alt="HB Sales Academy" src="/logo.svg">
     <div class="subtitle">Cold Call Tracker</div>
   </header>
+  <script>
+    // Läuft als eigenständiges HTML im iframe (siehe pages/call-tracker.js),
+    // kennt die angemeldete Organisation deshalb nicht von selbst — das Logo
+    // wird der App per Query-Param mitgegeben und hier übernommen. Ohne
+    // Param bleibt das Standard-Logo oben stehen (unbrandete Organisation).
+    (function(){
+      var logoUrl = new URLSearchParams(window.location.search).get("logo");
+      if (logoUrl) document.querySelector(".logo").src = logoUrl;
+    })();
+  </script>
 
   <div class="rule"></div>
 
