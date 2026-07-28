@@ -20,17 +20,20 @@ create table if not exists organizations (
   created_at timestamptz not null default now()
 );
 
+-- Muss VOR den organizations-Policies stehen, die diese Spalte lesen.
+alter table profiles add column if not exists organization_id uuid references organizations(id);
+
 alter table organizations enable row level security;
 
+drop policy if exists "organizations_select_own" on organizations;
 create policy "organizations_select_own" on organizations for select using (
   id = (select organization_id from profiles where id = auth.uid())
 );
+drop policy if exists "organizations_update_admin" on organizations;
 create policy "organizations_update_admin" on organizations for update using (
   id = (select organization_id from profiles where id = auth.uid())
   and exists (select 1 from profiles where id = auth.uid() and is_admin = true)
 );
-
-alter table profiles add column if not exists organization_id uuid references organizations(id);
 
 
 -- ============================================================
