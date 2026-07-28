@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { client, user } = auth;
 
-  const { data: me } = await client.from("profiles").select("role, is_admin").eq("id", user.id).maybeSingle();
+  const { data: me } = await client.from("profiles").select("role, is_admin, organization_id").eq("id", user.id).maybeSingle();
   if (!me || me.role !== "manager") {
     return res.status(403).json({ error: "Nur Manager können die Nutzerverwaltung sehen." });
   }
@@ -16,9 +16,12 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
 
+    // Service-Role umgeht RLS komplett — organization_id muss hier deshalb
+    // explizit gefiltert werden, sonst sähe jeder Manager jede Organisation.
     const { data: profiles, error: profilesError } = await admin
       .from("profiles")
       .select("*")
+      .eq("organization_id", me.organization_id)
       .order("created_at", { ascending: true });
     if (profilesError) throw profilesError;
 

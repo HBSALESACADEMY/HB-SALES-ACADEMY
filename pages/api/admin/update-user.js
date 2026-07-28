@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { client, user } = auth;
 
-  const { data: me } = await client.from("profiles").select("role, is_admin").eq("id", user.id).maybeSingle();
+  const { data: me } = await client.from("profiles").select("role, is_admin, organization_id").eq("id", user.id).maybeSingle();
   if (!me || me.role !== "manager") {
     return res.status(403).json({ error: "Nur Manager können Nutzer verwalten." });
   }
@@ -28,6 +28,14 @@ export default async function handler(req, res) {
 
   try {
     const admin = getAdminSupabase();
+
+    // Service-Role umgeht RLS komplett — ohne diese Prüfung könnte ein Manager
+    // Nutzer einer FREMDEN Organisation genehmigen/löschen/befördern.
+    const { data: target } = await admin.from("profiles").select("organization_id").eq("id", targetId).maybeSingle();
+    if (!target || target.organization_id !== me.organization_id) {
+      return res.status(403).json({ error: "Nutzer gehört nicht zu deiner Organisation." });
+    }
+
     let update = {};
     if (action === "make_manager") update = { role: "manager" };
     else if (action === "remove_manager") update = { role: "rep" };
