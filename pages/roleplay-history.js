@@ -44,12 +44,47 @@ export default function RoleplayHistory() {
               </button>
               {s.evaluation && <p className="text-xs text-textMuted mt-2">{s.evaluation}</p>}
               {isOpen && (
-                <div className="mt-3 pt-3 border-t border-line flex flex-col gap-2">
-                  {(s.transcript || []).map((m, i) => (
-                    <div key={i} className={`max-w-[85%] px-3 py-2 rounded-lg text-xs ${m.role === "user" ? "self-end bg-amber text-white ml-auto" : "self-start bg-surfaceRaised text-white"}`}>
-                      {m.content}
+                <div className="mt-3 pt-3 border-t border-line flex flex-col gap-3">
+                  {s.evaluation_detail && (
+                    <div className="flex flex-col gap-3">
+                      {(s.evaluation_detail.staerken?.length > 0 || s.evaluation_detail.verbesserung?.length > 0) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <strong className="text-xs text-teal block mb-1.5">Stärken</strong>
+                            <ul className="text-xs text-textMuted list-disc pl-4 space-y-1">
+                              {(s.evaluation_detail.staerken || []).map((x, i) => <li key={i}>{x}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <strong className="text-xs text-coral block mb-1.5">Verbesserung</strong>
+                            <ul className="text-xs text-textMuted list-disc pl-4 space-y-1">
+                              {(s.evaluation_detail.verbesserung || []).map((x, i) => <li key={i}>{x}</li>)}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      {s.evaluation_detail.beispielsaetze?.length > 0 && (
+                        <div>
+                          <strong className="text-xs text-violet block mb-2">Das hättest du sagen können</strong>
+                          <div className="flex flex-col gap-2.5">
+                            {s.evaluation_detail.beispielsaetze.map((b, i) => (
+                              <div key={i} className="text-xs">
+                                <div className="text-textMuted mb-0.5">{b.moment}</div>
+                                <div className="text-white italic">„{b.satz}“</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )}
+                  <div className="flex flex-col gap-2">
+                    {(s.transcript || []).map((m, i) => (
+                      <div key={i} className={`max-w-[85%] px-3 py-2 rounded-lg text-xs ${m.role === "user" ? "self-end bg-amber text-white ml-auto" : "self-start bg-surfaceRaised text-white"}`}>
+                        {m.content}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

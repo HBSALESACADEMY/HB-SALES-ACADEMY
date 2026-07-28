@@ -19,17 +19,20 @@ export default async function handler(req, res) {
     const raw = await callAI(
       "Du bist ein Trainer für Verkaufspsychologie. Bewerte das folgende Verkaufsgespräch auf Deutsch, konstruktiv und konkret. " +
         "Prüfe zusätzlich, ob der Verkäufer eine bemerkenswerte, spezifische Technik oder einen ungewöhnlichen Einwand gezeigt hat, der es wert wäre, als kurzer Lerneintrag in eine Wissensdatenbank aufgenommen zu werden (nur bei echtem Mehrwert, sonst null). " +
+        "Nenne außerdem zu den Verbesserungspunkten passende, konkrete Beispielsätze — wörtliche Formulierungen, die der Verkäufer an der jeweiligen Stelle im Gespräch hätte sagen können, statt nur abstrakt zu beschreiben was besser gewesen wäre. " +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit den Feldern: " +
-        '{"score": <Zahl 0-100>, "staerken": [<max 3 kurze Punkte>], "verbesserung": [<max 3 kurze Punkte>], "zusammenfassung": "<2-3 Sätze>", "kbSuggestion": {"tag": "<kurzes Schlagwort>", "title": "<kurzer Titel>", "body": "<1-2 Sätze Lerninhalt>"} oder null}. Kein Text außerhalb des JSON.',
+        '{"score": <Zahl 0-100>, "staerken": [<max 3 kurze Punkte>], "verbesserung": [<max 3 kurze Punkte>], ' +
+        '"beispielsaetze": [{"moment": "<kurzer Kontext, an welcher Stelle im Gespräch>", "satz": "<wörtlicher Beispielsatz>"} , max 3], ' +
+        '"zusammenfassung": "<2-3 Sätze>", "kbSuggestion": {"tag": "<kurzes Schlagwort>", "title": "<kurzer Titel>", "body": "<1-2 Sätze Lerninhalt>"} oder null}. Kein Text außerhalb des JSON.',
       [{ role: "user", content: transcript }],
-      600
+      800
     );
 
     let evaluation;
     try {
       evaluation = JSON.parse(raw.replace(/```json|```/g, "").trim());
     } catch (e) {
-      evaluation = { score: null, staerken: [], verbesserung: [], zusammenfassung: raw, kbSuggestion: null };
+      evaluation = { score: null, staerken: [], verbesserung: [], beispielsaetze: [], zusammenfassung: raw, kbSuggestion: null };
     }
 
     const turnCount = messages.filter((m) => m.role === "user").length;
@@ -43,6 +46,7 @@ export default async function handler(req, res) {
       detected_principles: detected,
       evaluation: evaluation.zusammenfassung || "",
       evaluation_score: evaluation.score,
+      evaluation_detail: { staerken: evaluation.staerken || [], verbesserung: evaluation.verbesserung || [], beispielsaetze: evaluation.beispielsaetze || [] },
     });
     if (insertError) console.error("insert roleplay_sessions failed:", insertError.message);
 

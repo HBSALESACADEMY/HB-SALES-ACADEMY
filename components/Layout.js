@@ -30,7 +30,7 @@ const FALLBACK_NAV = [
 const NAV_GROUPS = {
   dashboard: "Start",
   courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen", scripts: "Lernen", "roleplay-history": "Lernen",
-  "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen",
+  "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen", "leitfaden-generator": "Lernen",
   "call-tracker": "Lernen", "einwand-trainer": "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",

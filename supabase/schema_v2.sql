@@ -104,6 +104,7 @@ create table if not exists roleplay_sessions (
   detected_principles jsonb,
   evaluation text,
   evaluation_score integer,
+  evaluation_detail jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -190,6 +191,17 @@ create table if not exists daily_challenge_completions (
   correct boolean not null,
   created_at timestamptz not null default now(),
   unique (user_id, challenge_date)
+);
+
+create table if not exists guides (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('cold_call', 'closing_call')),
+  title text not null,
+  input jsonb not null default '{}'::jsonb,
+  content jsonb not null,
+  is_published boolean not null default false,
+  created_by uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists duels (
@@ -431,6 +443,7 @@ alter table custom_courses enable row level security;
 alter table custom_modules enable row level security;
 alter table kb_entries enable row level security;
 alter table scripts enable row level security;
+alter table guides enable row level security;
 alter table flashcards enable row level security;
 alter table flashcard_progress enable row level security;
 alter table daily_challenge_completions enable row level security;
@@ -549,6 +562,21 @@ drop policy if exists "scripts_update_managers" on scripts;
 create policy "scripts_update_managers" on scripts for update using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "scripts_delete_managers" on scripts;
 create policy "scripts_delete_managers" on scripts for delete using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+
+-- --- guides ---
+drop policy if exists "guides_select_own" on guides;
+create policy "guides_select_own" on guides for select using (auth.uid() = created_by);
+drop policy if exists "guides_select_published" on guides;
+create policy "guides_select_published" on guides for select using (is_published = true);
+drop policy if exists "guides_insert_own" on guides;
+create policy "guides_insert_own" on guides for insert with check (auth.uid() = created_by);
+drop policy if exists "guides_update_own" on guides;
+create policy "guides_update_own" on guides for update using (auth.uid() = created_by);
+drop policy if exists "guides_delete_own_or_manager" on guides;
+create policy "guides_delete_own_or_manager" on guides for delete using (
+  auth.uid() = created_by
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+);
 
 -- --- flashcards ---
 drop policy if exists "flashcards_select_all" on flashcards;

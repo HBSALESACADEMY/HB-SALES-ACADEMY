@@ -198,6 +198,19 @@ export default function Roleplay() {
               </ul>
             </div>
           </div>
+          {(feedback.beispielsaetze || []).length > 0 && (
+            <div className="mt-4 pt-4 border-t border-line">
+              <strong className="text-xs text-violet block mb-2">Das hättest du sagen können</strong>
+              <div className="flex flex-col gap-2.5">
+                {feedback.beispielsaetze.map((b, i) => (
+                  <div key={i} className="text-xs">
+                    <div className="text-textMuted mb-0.5">{b.moment}</div>
+                    <div className="text-white italic">„{b.satz}“</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Layout>
