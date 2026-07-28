@@ -20,6 +20,12 @@ export default async function handler(req, res) {
       "Du bist ein Trainer für Verkaufspsychologie. Bewerte das folgende Verkaufsgespräch auf Deutsch, konstruktiv und konkret. " +
         "Prüfe zusätzlich, ob der Verkäufer eine bemerkenswerte, spezifische Technik oder einen ungewöhnlichen Einwand gezeigt hat, der es wert wäre, als kurzer Lerneintrag in eine Wissensdatenbank aufgenommen zu werden (nur bei echtem Mehrwert, sonst null). " +
         "Nenne außerdem zu den Verbesserungspunkten passende, konkrete Beispielsätze — wörtliche Formulierungen, die der Verkäufer an der jeweiligen Stelle im Gespräch hätte sagen können, statt nur abstrakt zu beschreiben was besser gewesen wäre. " +
+        "ABSOLUT VERBOTEN in Verbesserungspunkten und Beispielsätzen: (1) eine Selbstvorstellung mit Namen " +
+        "und/oder Firma in irgendeiner Formulierung (z.B. „Ich bin [Name] von [Firma]“) als empfohlener Einstieg " +
+        "— das Gespräch soll NICHT mit einer Personen- oder Firmenvorstellung beginnen; (2) eine Preisreduzierung, " +
+        "ein Rabatt oder Nachlass als Verbesserung oder Einwandbehandlung. Das Ziel ist KEIN klassisches " +
+        "Verkaufsgespräch, sondern ein sympathisches, echtes Gespräch — gute Beispielsätze bauen Neugier, Sympathie " +
+        "und eine persönliche Verbindung zum Kunden auf, statt mit Fakten, Rabatten oder Standardfloskeln zu arbeiten. " +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit den Feldern: " +
         '{"score": <Zahl 0-100>, "staerken": [<max 3 kurze Punkte>], "verbesserung": [<max 3 kurze Punkte>], ' +
         '"beispielsaetze": [{"moment": "<kurzer Kontext, an welcher Stelle im Gespräch>", "satz": "<wörtlicher Beispielsatz>"} , max 3], ' +

@@ -25,12 +25,22 @@ export default async function handler(req, res) {
 
     const raw = await callAI(
       "Du hilfst Vertriebler:innen, einen individuellen GesprächsLEITFADEN für einen Telefonanruf zu entwerfen. " +
-        "Das ist AUSDRÜCKLICH KEIN Skript zum wörtlichen Ablesen — schreibe keine kompletten, vorgefertigten Sätze, " +
-        "sondern eine Orientierung: pro Phase des Gesprächs ein klares Ziel und knappe Stichpunkte " +
-        "(Fragen, Themen, worauf man achten sollte), die der/die Vertriebler:in in eigenen Worten nutzt. " +
-        "4 bis 6 Phasen, passend zum jeweiligen Anruftyp (bei Kaltakquise z.B. Einstieg/Interesse wecken/" +
-        "Bedarfsermittlung/Nutzenargumentation/Einwandbehandlung/nächster Schritt; bei Abschluss-Anrufen z.B. " +
-        "Wiedereinstieg/Bedarf bestätigen/Angebot zusammenfassen/Einwände ausräumen/Abschlussfrage). " +
+        "Das Ziel ist AUSDRÜCKLICH KEIN klassisches Verkaufsgespräch, sondern ein sympathisches, echtes, " +
+        "persönliches Gespräch — der Kunde soll sich zu keinem Zeitpunkt 'verkauft' fühlen. " +
+        "Das ist außerdem KEIN Skript zum wörtlichen Ablesen — schreibe keine kompletten, vorgefertigten Sätze, " +
+        "sondern eine Orientierung: pro Phase ein klares Ziel und knappe Stichpunkte (Fragen, Themen, worauf man " +
+        "achten sollte), die der/die Vertriebler:in in eigenen Worten nutzt. 4 bis 6 Phasen, passend zum Anruftyp. " +
+        "ABSOLUT VERBOTEN, in KEINER Phase und KEINEM Stichpunkt: " +
+        "(1) eine Selbstvorstellung mit Namen und/oder Firma, egal in welcher Formulierung (z.B. „Ich bin [Name] " +
+        "von [Firma]“, „Stellen Sie sich mit Namen und Unternehmen vor“, „Firma nennen“) — das Gespräch beginnt " +
+        "NICHT mit einer Personen- oder Firmenvorstellung; " +
+        "(2) eine Preisreduzierung, ein Rabatt oder Nachlass als Vorschlag oder Einwandbehandlung; " +
+        "(3) aufdringliche Verkaufstechniken oder Verkaufsjargon. " +
+        "Die erste Phase (Einstieg) baut stattdessen auf echter Neugier und Sympathie auf: ein Bezug zur Situation " +
+        "des Angerufenen, eine ehrliche unaufdringliche Frage, echtes Interesse am Gegenüber. Firma/Produkt kommen " +
+        "— falls überhaupt nötig — erst später, beiläufig, nie als Aufhänger. Verkauft wird grundsätzlich auf der " +
+        "emotionalen Ebene: alle Stichpunkte sollen Sympathie und Vertrauen aufbauen, bevor es um Fakten, " +
+        "Produktdetails oder Preis geht. " +
         "Bleib produktneutral und konkret auf das genannte Produkt und die Zielgruppe bezogen, auf Deutsch. " +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt: " +
         '{"title": "<kurzer, konkreter Titel>", "phasen": [{"phase": "<Phasenname>", "ziel": "<1 Satz Ziel dieser Phase>", "punkte": [<max 4 kurze Stichpunkte>]}]}. ' +
