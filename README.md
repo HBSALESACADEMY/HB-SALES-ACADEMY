@@ -102,14 +102,25 @@ Jede Organisation kann eigenes Logo + vollständiges Farbschema hinterlegen
   Logo-Upload werden bis zu 3 dominante Farben automatisch erkannt und als
   Vorschlag übernommen (Canvas-Histogramm, keine externe Bibliothek) — danach
   frei änderbar.
-- **Optional vollständiges Theme:** Hintergrund-, Karten-/Flächen- und
-  Textfarbe. Ohne diese Angaben bleibt das aktuelle HB-Sales-Academy-Design
-  als neutraler Standard erhalten.
-- **Automatischer Kontrast:** Button-, Karten- und allgemeine Textfarbe
-  werden per echter WCAG-Kontrastberechnung (schlechtester Punkt im
-  Farbverlauf, nicht nur Durchschnitt) automatisch hell oder dunkel gewählt
-  — eine Organisation kann die Anwendung nie unabsichtlich unlesbar machen.
-  Manuell gesetzte Textfarben haben immer Vorrang.
+- **Optional vollständiges Theme:** Hintergrund-, Karten-/Flächen-, Text-,
+  gedämpfte Text- und Rahmenfarbe (`organizations.background_color` /
+  `surface_color` / `text_color` / `muted_color` / `border_color`). Ohne
+  diese Angaben bleibt das aktuelle HB-Sales-Academy-Design als neutraler
+  Standard erhalten.
+- **Automatischer Kontrast, geprüft an mehreren Stellen — nicht nur am
+  Button:**
+  - Button-, Karten- und allgemeine Textfarbe werden per echter WCAG-
+    Kontrastberechnung (schlechtester Punkt im Farbverlauf, nicht nur
+    Durchschnitt) automatisch hell oder dunkel gewählt.
+  - Überschriften (`.brand-text-gradient`) fallen automatisch auf eine
+    einfarbige, sichere Textfarbe zurück, falls der Marken-Verlauf gegen den
+    Seitenhintergrund nicht lesbar wäre (z.B. bei sehr dunklem Branding).
+  - Der aktive Sidebar-Menüpunkt nutzt eine gegen den tatsächlichen Sidebar-
+    Hintergrund geprüfte Text-/Icon-Farbe statt der rohen Akzentfarbe.
+  - Eine Organisation kann die Anwendung dadurch nie unabsichtlich unlesbar
+    machen — getestet u.a. mit sehr hellem, sehr dunklem und kräftigem
+    Branding. Manuell gesetzte Textfarben haben dabei immer Vorrang vor der
+    automatischen Berechnung.
 - **Zentral statt Seite für Seite:** Alles läuft über CSS-Variablen
   (`lib/orgBranding.js` setzt sie beim Login/Organisationswechsel), an die
   sowohl `styles/globals.css` (Karten, Buttons, Inputs, Sidebar, Scrollbar)
