@@ -23,6 +23,7 @@ export default function Community() {
   const [profileMap, setProfileMap] = useState({});
   const [commentsByPost, setCommentsByPost] = useState({});
   const [kudosByPost, setKudosByPost] = useState({});
+  const [kudosByComment, setKudosByComment] = useState({});
   const [kudosWall, setKudosWall] = useState(null);
   const [weekKudosRaw, setWeekKudosRaw] = useState([]);
   const [weekXpRaw, setWeekXpRaw] = useState([]);
@@ -47,11 +48,12 @@ export default function Community() {
     setIsManager(me?.role === "manager");
     setMyOrgId(me?.organization_id || null);
 
-    const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: profiles }, { data: friendships }] = await Promise.all([
+    const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: commentKudos }, { data: profiles }, { data: friendships }] = await Promise.all([
       supabase.from("community_groups").select("*").order("created_at"),
       supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(80),
       supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
       supabase.from("community_kudos").select("*"),
+      supabase.from("community_comment_kudos").select("*"),
       // organization_id + streak_count zusätzlich geladen — für die
       // Trennung "Meine Organisation"/"Global" und die Kudos-Wall.
       supabase.from("profiles").select("id, full_name, avatar_url, organization_id, streak_count").eq("status", "approved"),
@@ -79,6 +81,14 @@ export default function Community() {
       if (k.user_id === session.user.id) kByPost[k.post_id].mine = true;
     });
     setKudosByPost(kByPost);
+
+    const kByComment = {};
+    (commentKudos || []).forEach((k) => {
+      kByComment[k.comment_id] = kByComment[k.comment_id] || { count: 0, mine: false };
+      kByComment[k.comment_id].count += 1;
+      if (k.user_id === session.user.id) kByComment[k.comment_id].mine = true;
+    });
+    setKudosByComment(kByComment);
 
     setPosts(posts || []);
     setLoading(false);
@@ -110,6 +120,15 @@ export default function Community() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Direktsprung aus der Sidebar (z.B. /community?group=Einwandbehandlung)
+  // wählt die passende Gruppe per Namen vor, sobald die Gruppen geladen sind.
+  useEffect(() => {
+    const groupName = router.query.group;
+    if (!groupName || !groups.length) return;
+    const match = groups.find((g) => g.name === groupName);
+    if (match) setActiveGroup(match.id);
+  }, [router.query.group, groups]);
 
   // Kudos-Wall scope-abhängig (Meine Organisation/Global) neu berechnen —
   // ohne Nachladen, rein aus den bereits geladenen Rohdaten.
@@ -147,6 +166,7 @@ export default function Community() {
       .on("postgres_changes", { event: "*", schema: "public", table: "community_posts" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_comments" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_kudos" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_comment_kudos" }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -203,6 +223,14 @@ export default function Community() {
     const mine = kudosByPost[postId]?.mine;
     if (mine) await supabase.from("community_kudos").delete().eq("post_id", postId).eq("user_id", session.user.id);
     else await supabase.from("community_kudos").insert({ post_id: postId, user_id: session.user.id });
+    await load();
+  }
+
+  async function toggleCommentKudos(commentId) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const mine = kudosByComment[commentId]?.mine;
+    if (mine) await supabase.from("community_comment_kudos").delete().eq("comment_id", commentId).eq("user_id", session.user.id);
+    else await supabase.from("community_comment_kudos").insert({ comment_id: commentId, user_id: session.user.id });
     await load();
   }
 
@@ -376,21 +404,39 @@ export default function Community() {
                 <Icon name="flame" size={13} /> {kudos.count || 0}
               </button>
 
-              {comments.length > 0 && (
-                <div className="flex flex-col gap-2.5 mt-3 pt-3 border-t border-line">
-                  {comments.map((c) => (
-                    <div key={c.id} className="flex items-start gap-2">
-                      <button onClick={() => openProfile(c.user_id)} className="flex-shrink-0">
-                        <Avatar name={profileMap[c.user_id]?.name || "?"} src={profileMap[c.user_id]?.avatar} size={22} />
-                      </button>
-                      <div className="text-xs">
-                        <span className="font-semibold text-white cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>{profileMap[c.user_id]?.name || "Unbenannt"}: </span>
-                        <span className="text-textMuted">{c.content}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {comments.length > 0 && (() => {
+                // Meiste Likes zuerst; bei Gleichstand bleibt die
+                // chronologische Reihenfolge erhalten (stabile Sortierung).
+                const sortedComments = [...comments].sort((a, b) => (kudosByComment[b.id]?.count || 0) - (kudosByComment[a.id]?.count || 0));
+                const topCount = kudosByComment[sortedComments[0]?.id]?.count || 0;
+                return (
+                  <div className="flex flex-col gap-2.5 mt-3 pt-3 border-t border-line">
+                    {sortedComments.map((c) => {
+                      const cKudos = kudosByComment[c.id] || { count: 0, mine: false };
+                      const isTop = topCount > 0 && cKudos.count === topCount;
+                      return (
+                        <div key={c.id} className="flex items-start gap-2">
+                          <button onClick={() => openProfile(c.user_id)} className="flex-shrink-0">
+                            <Avatar name={profileMap[c.user_id]?.name || "?"} src={profileMap[c.user_id]?.avatar} size={22} />
+                          </button>
+                          <div className="text-xs flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-white cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>{profileMap[c.user_id]?.name || "Unbenannt"}:</span>
+                              <span className="text-textMuted">{c.content}</span>
+                              {isTop && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber/15 text-amber font-semibold flex-shrink-0">🏆 Top-Antwort</span>
+                              )}
+                            </div>
+                            <button onClick={() => toggleCommentKudos(c.id)} className={`btn-ghost !py-0.5 !px-1.5 text-[10px] mt-1 inline-flex items-center gap-1 ${cKudos.mine ? "text-amber border-amber/40" : ""}`}>
+                              <Icon name="flame" size={10} /> {cKudos.count || 0}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               <div className="flex items-center gap-2 mt-3">
                 <input className="input flex-1 text-xs" placeholder="Kommentieren..." value={commentDrafts[p.id] || ""}
                   onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}

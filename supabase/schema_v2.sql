@@ -300,6 +300,16 @@ create table if not exists community_kudos (
   primary key (post_id, user_id)
 );
 
+-- Einzeln likebare Kommentare (z.B. für "Top-Antwort" bei Einwandbehandlung) —
+-- eigene Tabelle statt Erweiterung von community_kudos, damit dessen
+-- Struktur (post_id NOT NULL, PK auf post_id+user_id) unangetastet bleibt.
+create table if not exists community_comment_kudos (
+  comment_id uuid not null references community_comments(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id)
+);
+
 create table if not exists friendships (
   id uuid primary key default gen_random_uuid(),
   requester_id uuid not null references profiles(id) on delete cascade,
@@ -558,6 +568,7 @@ alter table community_groups enable row level security;
 alter table community_posts enable row level security;
 alter table community_comments enable row level security;
 alter table community_kudos enable row level security;
+alter table community_comment_kudos enable row level security;
 alter table friendships enable row level security;
 alter table blocks enable row level security;
 alter table chat_groups enable row level security;
@@ -844,6 +855,29 @@ create policy "community_kudos_insert_own" on community_kudos for insert with ch
 );
 drop policy if exists "community_kudos_delete_own" on community_kudos;
 create policy "community_kudos_delete_own" on community_kudos for delete using (auth.uid() = user_id);
+
+-- --- community_comment_kudos --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
+drop policy if exists "community_comment_kudos_select_all" on community_comment_kudos;
+create policy "community_comment_kudos_select_all" on community_comment_kudos for select using (
+  exists (
+    select 1 from community_comments cc
+    join community_posts cp on cp.id = cc.post_id
+    where cc.id = community_comment_kudos.comment_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
+drop policy if exists "community_comment_kudos_insert_own" on community_comment_kudos;
+create policy "community_comment_kudos_insert_own" on community_comment_kudos for insert with check (
+  auth.uid() = user_id
+  and exists (
+    select 1 from community_comments cc
+    join community_posts cp on cp.id = cc.post_id
+    where cc.id = community_comment_kudos.comment_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
+drop policy if exists "community_comment_kudos_delete_own" on community_comment_kudos;
+create policy "community_comment_kudos_delete_own" on community_comment_kudos for delete using (auth.uid() = user_id);
 
 -- --- friendships ---
 drop policy if exists "friendships_select_own" on friendships;
