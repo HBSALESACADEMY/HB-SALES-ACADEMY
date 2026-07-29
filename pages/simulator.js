@@ -40,7 +40,7 @@ export default function Simulator() {
           {SCENARIOS.map((s) => (
             <div key={s.id} className="card cursor-pointer hover:-translate-y-0.5 transition" onClick={() => start(s)}>
               <div className="flex items-center gap-3">
-                <Icon name="chat" color="#7B2FF7" />
+                <Icon name="chat" color="var(--org-color-1, #7B2FF7)" />
                 <div>
                   <div className="font-display font-semibold text-white">{s.title}</div>
                   <div className="text-xs text-textMuted mt-0.5">{s.intro}</div>

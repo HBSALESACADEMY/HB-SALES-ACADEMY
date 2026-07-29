@@ -93,7 +93,7 @@ export default function Leaderboard() {
                     {range === "all" && <div className="text-[11px] text-textMuted">Level {level}</div>}
                   </div>
                 </button>
-                <span className="flex items-center gap-1 font-mono text-sm text-white flex-shrink-0"><Icon name="flame" size={13} color="#E8368F" /> {r.xp || 0} XP</span>
+                <span className="flex items-center gap-1 font-mono text-sm text-white flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #E8368F)" /> {r.xp || 0} XP</span>
               </div>
             );
           })}

@@ -508,8 +508,12 @@ export default function Layout({ children, fullBleed }) {
                             className={`relative overflow-hidden flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
                               draggedNavId === item.id ? "opacity-40" : ""
                             } ${
-                              router.asPath === route ? "bg-gradient-to-r from-[#7B2FF7]/15 via-[#E8368F]/15 to-transparent text-amber shadow-[inset_2px_0_0_#E8368F]" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                              router.asPath === route ? "text-amber" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
                             }`}
+                            style={router.asPath === route ? {
+                              background: "linear-gradient(90deg, rgb(var(--org-color-1-rgb, 123 47 247) / .15), rgb(var(--org-accent-rgb, 232 54 143) / .15), transparent)",
+                              boxShadow: "inset 2px 0 0 var(--org-accent, #E8368F)",
+                            } : undefined}
                           >
                             {shineId === item.id && <span className="hb-shine" />}
                             <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
@@ -555,7 +559,7 @@ export default function Layout({ children, fullBleed }) {
       <button
         onClick={() => setQuickHelpOpen(true)}
         className="fixed bottom-5 right-5 z-[190] w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
-        style={{ background: "linear-gradient(120deg, #8B3EF7 0%, #E8368F 55%, #FF7A45 100%)", boxShadow: "0 4px 16px -4px rgba(232,54,143,.5)" }}
+        style={{ background: "linear-gradient(120deg, var(--org-color-1, #8B3EF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF7A45) 100%)", boxShadow: "0 4px 16px -4px rgb(var(--org-accent-rgb, 232 54 143) / .5)" }}
         title="Vertriebs-Buddy"
       >
         <span className="text-white text-lg">💬</span>
@@ -584,7 +588,7 @@ export default function Layout({ children, fullBleed }) {
           className="fixed bottom-24 right-5 z-[210] card !py-3 !px-4 flex items-center gap-3 shadow-lg animate-fadein cursor-pointer"
           style={{ maxWidth: 300 }}
         >
-          <Icon name="lock" color="#E8368F" size={18} />
+          <Icon name="lock" color="var(--org-accent, #E8368F)" size={18} />
           <div className="text-left">
             <div className="text-sm font-semibold text-white">Neue Registrierung</div>
             <div className="text-xs text-textMuted">{approvalToast.name} wartet auf Freigabe{approvalToast.count > 1 ? ` — ${approvalToast.count} insgesamt offen` : ""}</div>
@@ -597,7 +601,7 @@ export default function Layout({ children, fullBleed }) {
           className="fixed bottom-5 right-5 z-[210] card !py-3 !px-4 flex items-center gap-3 shadow-lg animate-fadein cursor-pointer"
           style={{ maxWidth: 300 }}
         >
-          <Icon name="users" color="#E8368F" size={18} />
+          <Icon name="users" color="var(--org-accent, #E8368F)" size={18} />
           <div className="text-left">
             <div className="text-sm font-semibold text-white">Neue Freundschaftsanfrage</div>
             <div className="text-xs text-textMuted">{friendToast.name} möchte sich vernetzen</div>

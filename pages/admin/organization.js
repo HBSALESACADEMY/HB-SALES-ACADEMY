@@ -3,6 +3,7 @@ import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
+import { textColorForColors } from "../../lib/orgBranding";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -192,6 +193,42 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         </div>
       </div>
       <div className="h-2 rounded-full mb-5" style={{ background: `linear-gradient(90deg, ${secondaryColor} 0%, ${primaryColor} 55%, ${tertiaryColor} 100%)` }} />
+
+      <label className="block text-xs text-textMuted mb-1.5">Vorschau</label>
+      <div className="rounded-xl border border-line p-4 mb-5" style={{ background: "linear-gradient(180deg, #191D29 0%, #14161F 100%)" }}>
+        <div className="flex items-center gap-3 mb-3">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-9 w-auto rounded" onError={(e) => { e.target.style.display = "none"; }} />
+          ) : (
+            <div className="h-9 w-9 rounded bg-surfaceRaised" />
+          )}
+          <div
+            className="font-display font-bold text-lg"
+            style={{
+              background: `linear-gradient(90deg, ${secondaryColor} 0%, ${primaryColor} 60%, ${tertiaryColor} 100%)`,
+              WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+            }}
+          >
+            {name.trim() || "Deine Organisation"}
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            className="text-[13.5px] font-semibold px-4 py-2.5 rounded-lg"
+            style={{
+              background: `linear-gradient(120deg, ${secondaryColor} 0%, ${primaryColor} 55%, ${tertiaryColor} 100%)`,
+              color: textColorForColors([secondaryColor, primaryColor, tertiaryColor]),
+            }}
+          >
+            Beispiel-Button
+          </button>
+          <span className="text-[11px] uppercase tracking-wide rounded px-1.5 py-0.5" style={{ color: primaryColor, borderWidth: 1, borderStyle: "solid", borderColor: primaryColor }}>
+            Badge
+          </span>
+        </div>
+        <p className="text-[11px] text-textMuted mt-2.5">So erscheinen Logo, Marken-Verlauf und Buttons später in der ganzen Plattform.</p>
+      </div>
 
       {error && <p className="text-coral text-xs mb-3">{error}</p>}
       <div className="flex items-center gap-2">

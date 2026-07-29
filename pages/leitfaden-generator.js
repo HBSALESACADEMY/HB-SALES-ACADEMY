@@ -115,7 +115,7 @@ export default function GuideGenerator() {
       </div>
 
       {currentGuide && (
-        <div className="card mb-6" style={{ borderLeft: "4px solid #E8368F" }}>
+        <div className="card mb-6" style={{ borderLeft: "4px solid var(--org-accent, #E8368F)" }}>
           <div className="flex items-center justify-between mb-3">
             <div className="font-display font-semibold text-white text-sm">{currentGuide.title}</div>
             <div className="flex items-center gap-2 flex-shrink-0">

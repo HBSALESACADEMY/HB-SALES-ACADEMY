@@ -10,10 +10,18 @@ module.exports = {
         line: "#2A2E3F",
         textMain: "#EDEDF4",
         textMuted: "#90939F",
-        amber: "#F0B23E",
+        // amber/violet sind die Marken-Akzentfarben — pro Organisation über
+        // --org-accent-rgb/--org-color-1-rgb ersetzbar (siehe lib/orgBranding.js).
+        // Jede bestehende Klasse (text-amber, bg-amber/40, border-violet/40, ...)
+        // wird dadurch automatisch organisationsspezifisch, ohne einzelne
+        // Seiten anzupassen. Fallback-Werte = heutiges Standarddesign.
+        amber: "rgb(var(--org-accent-rgb, 240 178 62) / <alpha-value>)",
+        violet: "rgb(var(--org-color-1-rgb, 158 140 240) / <alpha-value>)",
+        // teal (Erfolg) und coral (Gefahr/Löschen) bleiben bewusst feste
+        // Statusfarben — ihre Bedeutung muss unabhängig vom Organisations-
+        // Branding erkennbar bleiben.
         teal: "#3FBFA6",
         coral: "#E5716A",
-        violet: "#9E8CF0",
       },
       fontFamily: {
         display: ["'Space Grotesk'", "sans-serif"],

@@ -4,7 +4,7 @@ import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
 
 const COLORS = ["amber", "teal", "coral", "violet"];
-const COLOR_HEX = { amber: "#E8368F", teal: "#00E5C7", coral: "#FF4D6D", violet: "#7B2FF7" };
+const COLOR_HEX = { amber: "var(--org-accent, #E8368F)", teal: "#00E5C7", coral: "#FF4D6D", violet: "var(--org-color-1, #7B2FF7)" };
 
 export default function ContentAdmin() {
   const [isManager, setIsManager] = useState(true);

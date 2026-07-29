@@ -66,7 +66,7 @@ export default function DailyChallenge() {
       <p className="text-textMuted text-sm mb-6">Eine Frage pro Tag, für alle im Team gleich. Baue deine Serie auf!</p>
 
       <div className="card mb-5 flex items-center gap-3">
-        <Icon name="flame" size={22} color="#E8368F" />
+        <Icon name="flame" size={22} color="var(--org-accent, #E8368F)" />
         <div>
           <div className="font-display text-xl font-bold text-white">{streak} {streak === 1 ? "Tag" : "Tage"}</div>
           <div className="text-xs text-textMuted">aktuelle Serie</div>

@@ -12,7 +12,7 @@ html, body {
 
 * { box-sizing: border-box; }
 
-::selection { background: rgba(var(--org-accent-rgb, 232,54,143), .32); color: #fff; }
+::selection { background: rgb(var(--org-accent-rgb, 232 54 143) / .32); color: #fff; }
 
 /* Signatur-Verlauf aus dem HB Sales Academy Logo: Violett → Magenta → Orange.
    Alle drei Farben sind pro Organisation anpassbar (siehe lib/orgBranding.js,
@@ -40,12 +40,18 @@ html, body {
 }
 .card.cursor-pointer:hover, .card[class*="hover:-translate"]:hover {
   border-color: #4A3565;
-  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px -14px rgba(0,0,0,.65), 0 0 0 1px rgba(var(--org-accent-rgb, 232,54,143), .15);
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px -14px rgba(0,0,0,.65), 0 0 0 1px rgb(var(--org-accent-rgb, 232 54 143) / .15);
 }
 
 .btn {
   background: linear-gradient(120deg, var(--org-color-1, #8B3EF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF7A45) 100%);
-  color: #fff;
+  /* Automatischer Kontrast: lib/orgBranding.js berechnet per WCAG-Formel aus
+     dem SCHLECHTESTEN Punkt im Verlauf, ob helle oder dunkle Schrift lesbar
+     ist (siehe applyOrgBranding/textColorForColors). Der Fallback #12141C
+     gilt für den Standard-Verlauf selbst (helles Orange-Ende hat mit Weiß
+     nur 2.6:1 Kontrast, mit Dunkel 4.1:1) — ohne gesetzte Organisationsfarben
+     wird also ebenfalls die dunkle, lesbare Variante verwendet. */
+  color: var(--org-button-text, #12141C);
   border: none;
   padding: 10px 18px;
   border-radius: 9px;
@@ -55,10 +61,10 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 16px -4px rgba(var(--org-accent-rgb, 232,54,143), .5);
+  box-shadow: 0 4px 16px -4px rgb(var(--org-accent-rgb, 232 54 143) / .5);
   transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.btn:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 20px -4px rgba(var(--org-accent-rgb, 232,54,143), .6); }
+.btn:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 20px -4px rgb(var(--org-accent-rgb, 232 54 143) / .6); }
 .btn:active { transform: translateY(0); }
 .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
 
@@ -69,7 +75,7 @@ html, body {
   border-radius: 9px;
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.btn-ghost:hover { color: #fff; border-color: #4A3565; background: rgba(var(--org-accent-rgb, 232,54,143), .08); }
+.btn-ghost:hover { color: #fff; border-color: #4A3565; background: rgb(var(--org-accent-rgb, 232 54 143) / .08); }
 
 .input {
   padding: 10px 14px;
@@ -82,7 +88,7 @@ html, body {
   width: 100%;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.input:focus { outline: none; border-color: var(--org-accent, #E8368F); box-shadow: 0 0 0 3px rgba(var(--org-accent-rgb, 232,54,143), .15); }
+.input:focus { outline: none; border-color: var(--org-accent, #E8368F); box-shadow: 0 0 0 3px rgb(var(--org-accent-rgb, 232 54 143) / .15); }
 .input::placeholder { color: #5A5F72; }
 
 textarea.input { resize: vertical; font-family: 'Inter', sans-serif; }

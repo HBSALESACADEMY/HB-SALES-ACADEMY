@@ -8,8 +8,8 @@ import { openProfile } from "../../lib/profileModalBus";
 const TYPE_META = {
   login: { label: "Login", icon: "logout", color: "#90939F" },
   quiz: { label: "Quiz abgeschlossen", icon: "book", color: "#00E5C7" },
-  exam: { label: "Prüfung", icon: "award", color: "#E8368F" },
-  roleplay: { label: "Rollenspiel", icon: "chat", color: "#7B2FF7" },
+  exam: { label: "Prüfung", icon: "award", color: "var(--org-accent, #E8368F)" },
+  roleplay: { label: "Rollenspiel", icon: "chat", color: "var(--org-color-1, #7B2FF7)" },
   community_post: { label: "Community-Beitrag", icon: "users", color: "#F0B23E" },
   community_comment: { label: "Community-Kommentar", icon: "users", color: "#F0B23E" },
 };

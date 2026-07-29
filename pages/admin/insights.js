@@ -117,14 +117,14 @@ export default function AdminInsights() {
   }
 
   const tiles = [
-    { label: "Mitglieder", value: stats.totalMembers, icon: "users", color: "#E8368F", sub: stats.pendingMembers > 0 ? `${stats.pendingMembers} warten auf Freigabe` : null },
+    { label: "Mitglieder", value: stats.totalMembers, icon: "users", color: "var(--org-accent, #E8368F)", sub: stats.pendingMembers > 0 ? `${stats.pendingMembers} warten auf Freigabe` : null },
     { label: "Aktiv diese Woche", value: stats.weeklyActiveUsers, icon: "flame", color: "#00E5C7" },
     { label: "Gesamt-XP", value: stats.totalXp.toLocaleString("de-DE"), icon: "award", color: "#F0B23E", sub: `Ø ${stats.avgXp} pro Mitglied` },
-    { label: "Rollenspiele", value: stats.totalRoleplays, icon: "chat", color: "#7B2FF7", sub: stats.avgRoleplayScore != null ? `Ø Score ${stats.avgRoleplayScore}` : null },
+    { label: "Rollenspiele", value: stats.totalRoleplays, icon: "chat", color: "var(--org-color-1, #7B2FF7)", sub: stats.avgRoleplayScore != null ? `Ø Score ${stats.avgRoleplayScore}` : null },
     { label: "Quiz abgeschlossen", value: stats.totalQuizzes, icon: "book", color: "#00E5C7" },
-    { label: "Prüfungen bestanden", value: stats.totalExamsPassed, icon: "award", color: "#E8368F" },
+    { label: "Prüfungen bestanden", value: stats.totalExamsPassed, icon: "award", color: "var(--org-accent, #E8368F)" },
     { label: "Community-Beiträge", value: stats.totalPosts, icon: "users", color: "#F0B23E", sub: `${stats.totalComments} Kommentare · ${stats.totalKudos} Kudos` },
-    { label: "Anwahlen diese Woche", value: stats.weeklyAnwahlen, icon: "target", color: "#7B2FF7" },
+    { label: "Anwahlen diese Woche", value: stats.weeklyAnwahlen, icon: "target", color: "var(--org-color-1, #7B2FF7)" },
   ];
 
   return (
