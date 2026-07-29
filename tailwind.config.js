@@ -4,12 +4,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: "#0F1117",
-        surface: "#171A24",
-        surfaceRaised: "#1D2130",
-        line: "#2A2E3F",
-        textMain: "#EDEDF4",
-        textMuted: "#90939F",
+        // Basis-Oberflächenfarben — pro Organisation über --org-*-rgb
+        // ersetzbar (siehe lib/orgBranding.js). Fallback-Werte = heutiges
+        // Standarddesign, macht jede bestehende Nutzung (bg-bg, bg-surface,
+        // bg-surfaceRaised, border-line, text-textMain, text-textMuted) im
+        // gesamten Projekt automatisch organisationsspezifisch.
+        bg: "rgb(var(--org-bg-rgb, 15 17 23) / <alpha-value>)",
+        surface: "rgb(var(--org-surface-rgb, 23 26 36) / <alpha-value>)",
+        surfaceRaised: "rgb(var(--org-surface-raised-rgb, 29 33 48) / <alpha-value>)",
+        line: "rgb(var(--org-line-rgb, 42 46 63) / <alpha-value>)",
+        textMain: "rgb(var(--org-text-rgb, 237 237 244) / <alpha-value>)",
+        textMuted: "rgb(var(--org-text-muted-rgb, 144 147 159) / <alpha-value>)",
         // amber/violet sind die Marken-Akzentfarben — pro Organisation über
         // --org-accent-rgb/--org-color-1-rgb ersetzbar (siehe lib/orgBranding.js).
         // Jede bestehende Klasse (text-amber, bg-amber/40, border-violet/40, ...)

@@ -413,7 +413,7 @@ export default function Layout({ children, fullBleed }) {
   return (
     <div className="flex flex-col md:flex-row h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
       {/* Mobile top bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[#12141C] flex-shrink-0">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[var(--org-bg,#12141C)] flex-shrink-0">
         <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-10 w-auto" />
         <button onClick={() => setMobileNavOpen(true)} className="text-white p-1.5 -mr-1.5" aria-label="Menü öffnen">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
@@ -427,7 +427,7 @@ export default function Layout({ children, fullBleed }) {
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50 w-[230px] flex-shrink-0
-        bg-gradient-to-b from-[#1F1730] via-[#160F22] to-[#0A0C13] border-r border-line px-3.5 py-6 flex flex-col gap-1
+        bg-gradient-to-b from-[var(--org-sidebar-tint,#1F1730)] via-[#160F22] to-[var(--org-bg,#0A0C13)] border-r border-line px-3.5 py-6 flex flex-col gap-1
         transition-transform duration-200 md:translate-x-0
         ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
       `}>

@@ -4,13 +4,19 @@
 @tailwind utilities;
 
 html, body {
-  background: #0A0C13;
-  color: #EDEDF4;
+  background: var(--org-bg, #0A0C13);
+  color: var(--org-text, #EDEDF4);
   margin: 0;
   padding: 0;
 }
 
 * { box-sizing: border-box; }
+
+/* Native Formularelemente (Checkboxen, Radios, Ranges) übernehmen die
+   Marken-Akzentfarbe automatisch — kein CSS-Nachbau nötig. */
+input[type="checkbox"], input[type="radio"], input[type="range"] {
+  accent-color: var(--org-accent, #E8368F);
+}
 
 ::selection { background: rgb(var(--org-accent-rgb, 232 54 143) / .32); color: #fff; }
 
@@ -31,15 +37,15 @@ html, body {
 }
 
 .card {
-  background: linear-gradient(180deg, #191D29 0%, #14161F 100%);
-  border: 1px solid #262B3D;
+  background: linear-gradient(180deg, var(--org-surface-raised, #191D29) 0%, var(--org-surface, #14161F) 100%);
+  border: 1px solid var(--org-line, #262B3D);
   border-radius: 14px;
   padding: 18px 20px;
   box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
   transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 .card.cursor-pointer:hover, .card[class*="hover:-translate"]:hover {
-  border-color: #4A3565;
+  border-color: var(--org-color-1, #4A3565);
   box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px -14px rgba(0,0,0,.65), 0 0 0 1px rgb(var(--org-accent-rgb, 232 54 143) / .15);
 }
 
@@ -70,26 +76,26 @@ html, body {
 
 .btn-ghost {
   background: rgba(255,255,255,.02);
-  color: #90939F;
-  border: 1px solid #262B3D;
+  color: var(--org-text-muted, #90939F);
+  border: 1px solid var(--org-line, #262B3D);
   border-radius: 9px;
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.btn-ghost:hover { color: #fff; border-color: #4A3565; background: rgb(var(--org-accent-rgb, 232 54 143) / .08); }
+.btn-ghost:hover { color: var(--org-text, #fff); border-color: var(--org-color-1, #4A3565); background: rgb(var(--org-accent-rgb, 232 54 143) / .08); }
 
 .input {
   padding: 10px 14px;
   border-radius: 9px;
-  border: 1px solid #262B3D;
-  background: #12141C;
-  color: #EDEDF4;
+  border: 1px solid var(--org-line, #262B3D);
+  background: var(--org-bg, #12141C);
+  color: var(--org-text, #EDEDF4);
   font-size: 14px;
   font-family: 'Inter', sans-serif;
   width: 100%;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .input:focus { outline: none; border-color: var(--org-accent, #E8368F); box-shadow: 0 0 0 3px rgb(var(--org-accent-rgb, 232 54 143) / .15); }
-.input::placeholder { color: #5A5F72; }
+.input::placeholder { color: var(--org-text-muted, #5A5F72); }
 
 textarea.input { resize: vertical; font-family: 'Inter', sans-serif; }
 
@@ -122,8 +128,8 @@ textarea.input { resize: vertical; font-family: 'Inter', sans-serif; }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #262B3D; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #4A3565; }
+::-webkit-scrollbar-thumb { background: var(--org-line, #262B3D); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--org-color-1, #4A3565); }
 
 /* Glanz-Effekt beim Anklicken eines Sidebar-Eintrags: der Markenverlauf läuft
    einmal links nach rechts über den Button, wie ein kurzes Aufleuchten.
@@ -141,7 +147,7 @@ textarea.input { resize: vertical; font-family: 'Inter', sans-serif; }
   top: 0; bottom: 0;
   left: -55%;
   width: 55%;
-  background: linear-gradient(90deg, transparent, rgba(123,47,247,.55) 35%, rgba(232,54,143,.7) 50%, rgba(255,107,53,.55) 65%, transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--org-color-1-rgb, 123 47 247) / .55) 35%, rgb(var(--org-accent-rgb, 232 54 143) / .7) 50%, rgb(var(--org-color-3-rgb, 255 107 53) / .55) 65%, transparent);
   animation: hb-shine-sweep .55s cubic-bezier(.35,0,.25,1) forwards;
   will-change: transform;
 }

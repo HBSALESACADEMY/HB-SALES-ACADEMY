@@ -111,7 +111,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgba(123,47,247,.10), transparent), radial-gradient(600px 350px at 100% 100%, rgba(255,107,53,.08), transparent)" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgb(var(--org-color-1-rgb, 123 47 247) / .10), transparent), radial-gradient(600px 350px at 100% 100%, rgb(var(--org-color-3-rgb, 255 107 53) / .08), transparent), var(--org-bg, transparent)" }}>
       <div className="card w-full max-w-sm overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">

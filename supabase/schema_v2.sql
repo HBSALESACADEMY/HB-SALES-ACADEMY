@@ -33,6 +33,13 @@ create table if not exists organizations (
   primary_color text,
   secondary_color text,
   tertiary_color text,
+  -- Vollständiges Theme über den Marken-Verlauf hinaus — alle nullable,
+  -- leer = heutiges HB-Sales-Academy-Design bleibt Standard.
+  background_color text,
+  surface_color text,
+  text_color text,
+  muted_color text,
+  border_color text,
   created_at timestamptz not null default now()
 );
 

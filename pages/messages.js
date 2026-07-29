@@ -401,7 +401,7 @@ export default function Messages() {
                   }
                   return (
                     <div key={m.id} className="flex flex-col" style={{ alignItems: mine ? "flex-end" : "flex-start" }}>
-                      <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${mine ? "text-white" : "bg-surfaceRaised text-white"}`} style={mine ? { background: "#3D6FA8" } : {}}>
+                      <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${mine ? "" : "bg-surfaceRaised text-white"}`} style={mine ? { background: "var(--org-accent, #3D6FA8)", color: "var(--org-button-text, #fff)" } : {}}>
                         {m.attachment_type === "image" && m.signedUrl && <img src={m.signedUrl} alt="" className="rounded-lg max-h-72 mb-1" />}
                         {m.attachment_type === "video" && m.signedUrl && <video src={m.signedUrl} controls className="rounded-lg max-h-72 mb-1" />}
                         {m.attachment_type === "audio" && m.signedUrl && <audio src={m.signedUrl} controls className="mb-1" />}

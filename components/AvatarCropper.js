@@ -74,7 +74,7 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
 
         <div
           className="mx-auto rounded-full overflow-hidden relative select-none"
-          style={{ width: BOX, height: BOX, background: "#0A0C13", cursor: "grab", border: "2px solid #262B3D" }}
+          style={{ width: BOX, height: BOX, background: "var(--org-bg, #0A0C13)", cursor: "grab", border: "2px solid var(--org-line, #262B3D)" }}
           onMouseDown={(e) => startDrag(e.clientX, e.clientY)}
           onMouseMove={(e) => e.buttons === 1 && moveDrag(e.clientX, e.clientY)}
           onTouchStart={(e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)}

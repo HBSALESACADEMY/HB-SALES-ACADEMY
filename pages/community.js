@@ -312,7 +312,7 @@ export default function Community() {
       {/* Group tabs */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <button onClick={() => router.push("/members")}
-          className="px-3 py-1.5 rounded-full text-xs font-semibold border border-line text-textMuted hover:text-white hover:border-[#4A3565]">
+          className="px-3 py-1.5 rounded-full text-xs font-semibold border border-line text-textMuted hover:text-white hover:border-[var(--org-color-1,#4A3565)]">
           👥 Alle Mitglieder
         </button>
         <button onClick={() => setActiveGroup("all")}

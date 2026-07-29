@@ -3,7 +3,7 @@ import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import { textColorForColors } from "../../lib/orgBranding";
+import { textColorForColors, blend } from "../../lib/orgBranding";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -88,6 +88,10 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [secondaryColor, setSecondaryColor] = useState(org.secondary_color || "#7B2FF7");
   const [primaryColor, setPrimaryColor] = useState(org.primary_color || "#E8368F");
   const [tertiaryColor, setTertiaryColor] = useState(org.tertiary_color || "#FF6B35");
+  const [backgroundColor, setBackgroundColor] = useState(org.background_color || "#0A0C13");
+  const [surfaceColor, setSurfaceColor] = useState(org.surface_color || "#171A24");
+  const [textColor, setTextColor] = useState(org.text_color || "#EDEDF4");
+  const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -136,6 +140,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       secondary_color: secondaryColor,
       primary_color: primaryColor,
       tertiary_color: tertiaryColor,
+      background_color: useCustomSurface ? backgroundColor : null,
+      surface_color: useCustomSurface ? surfaceColor : null,
+      text_color: useCustomSurface ? textColor : null,
     }).eq("id", org.id);
     setSaving(false);
     if (err) {
@@ -194,8 +201,46 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       </div>
       <div className="h-2 rounded-full mb-5" style={{ background: `linear-gradient(90deg, ${secondaryColor} 0%, ${primaryColor} 55%, ${tertiaryColor} 100%)` }} />
 
+      <label className="flex items-center gap-2 text-xs text-textMuted mb-4 cursor-pointer select-none">
+        <input type="checkbox" checked={useCustomSurface} onChange={(e) => setUseCustomSurface(e.target.checked)} />
+        Auch Hintergrund, Kartenfläche und Textfarbe anpassen (sonst bleibt das HB-Standarddesign für diese Flächen erhalten)
+      </label>
+
+      {useCustomSurface && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+          <div>
+            <label className="block text-xs text-textMuted mb-1.5">Hintergrund</label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="h-10 w-14 rounded border border-line bg-transparent cursor-pointer" />
+              <span className="text-xs text-textMuted font-mono">{backgroundColor}</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-textMuted mb-1.5">Karten / Fläche</label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={surfaceColor} onChange={(e) => setSurfaceColor(e.target.value)} className="h-10 w-14 rounded border border-line bg-transparent cursor-pointer" />
+              <span className="text-xs text-textMuted font-mono">{surfaceColor}</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-textMuted mb-1.5">Textfarbe</label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="h-10 w-14 rounded border border-line bg-transparent cursor-pointer" />
+              <span className="text-xs text-textMuted font-mono">{textColor}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-textMuted sm:col-span-3">Textfarbe wird automatisch für ausreichenden Kontrast auf Hintergrund/Fläche geprüft, sofern hier nichts eingetragen wird — die manuelle Auswahl hat aber immer Vorrang.</p>
+        </div>
+      )}
+
       <label className="block text-xs text-textMuted mb-1.5">Vorschau</label>
-      <div className="rounded-xl border border-line p-4 mb-5" style={{ background: "linear-gradient(180deg, #191D29 0%, #14161F 100%)" }}>
+      <div
+        className="rounded-xl border p-4 mb-5"
+        style={{
+          background: useCustomSurface ? surfaceColor : "linear-gradient(180deg, #191D29 0%, #14161F 100%)",
+          borderColor: "var(--org-line, #262B3D)",
+        }}
+      >
         <div className="flex items-center gap-3 mb-3">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="h-9 w-auto rounded" onError={(e) => { e.target.style.display = "none"; }} />
@@ -212,6 +257,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
             {name.trim() || "Deine Organisation"}
           </div>
         </div>
+        <p className="text-sm mb-3" style={{ color: useCustomSurface ? (textColor || textColorForColors([surfaceColor])) : "#EDEDF4" }}>
+          So sieht Fließtext auf deiner Kartenfläche aus.
+        </p>
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
@@ -227,7 +275,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
             Badge
           </span>
         </div>
-        <p className="text-[11px] text-textMuted mt-2.5">So erscheinen Logo, Marken-Verlauf und Buttons später in der ganzen Plattform.</p>
+        <p className="text-[11px] mt-2.5" style={{ color: useCustomSurface ? blend(textColorForColors([surfaceColor]), surfaceColor, 0.42) : "#90939F" }}>
+          So erscheinen Logo, Marken-Verlauf, Buttons, Hintergrund und Text später in der ganzen Plattform.
+        </p>
       </div>
 
       {error && <p className="text-coral text-xs mb-3">{error}</p>}
