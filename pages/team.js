@@ -113,7 +113,7 @@ export default function Team() {
           {myTeams.map((t) => (
             <div key={t.id} className="card">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-semibold text-white text-sm">{t.name}{t.isLead && <span className="text-amber"> (du leitest dieses Team)</span>}</div>
+                <div className="font-semibold text-textMain text-sm">{t.name}{t.isLead && <span className="text-amber"> (du leitest dieses Team)</span>}</div>
                 {!t.isLead && (
                   <button disabled={leavingId === t.id} onClick={() => leaveTeam(t.id)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40 flex-shrink-0">
                     {leavingId === t.id ? "..." : "Team verlassen"}
@@ -138,15 +138,15 @@ export default function Team() {
       )}
 
       <div className="card mb-5">
-        <div className="font-semibold text-white text-sm mb-3">🏆 Team-Wettbewerb dieser Woche</div>
+        <div className="font-semibold text-textMain text-sm mb-3">🏆 Team-Wettbewerb dieser Woche</div>
         <div className="flex flex-col gap-2">
           {teamStandings.map((t, i) => {
             const isMyTeam = myTeamIdSet.has(t.teamId);
             return (
               <div key={t.teamId} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isMyTeam ? "bg-surfaceRaised border border-amber/30" : ""}`}>
                 <span className="w-6 text-center text-sm text-textMuted font-mono">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
-                <span className="flex-1 text-sm text-white">{t.teamName}{isMyTeam && <span className="text-amber"> (dein Team)</span>} <span className="text-textMuted text-xs">· {t.memberCount} Mitglieder</span></span>
-                <span className="font-mono text-sm text-white">{t.weeklyXp} XP</span>
+                <span className="flex-1 text-sm text-textMain">{t.teamName}{isMyTeam && <span className="text-amber"> (dein Team)</span>} <span className="text-textMuted text-xs">· {t.memberCount} Mitglieder</span></span>
+                <span className="font-mono text-sm text-textMain">{t.weeklyXp} XP</span>
               </div>
             );
           })}
@@ -156,17 +156,17 @@ export default function Team() {
 
       {(mentor || mentees.length > 0) && (
         <div className="card">
-          <div className="font-semibold text-white text-sm mb-3">🤝 Mentoring</div>
+          <div className="font-semibold text-textMain text-sm mb-3">🤝 Mentoring</div>
           {mentor && (
             <div className="flex items-center gap-3 mb-2 cursor-pointer" onClick={() => openProfile(mentor.mentor_id)}>
               <Avatar name={mentor.mentor?.full_name || "?"} src={mentor.mentor?.avatar_url} size={32} />
-              <div className="text-sm"><span className="text-textMuted">Dein Mentor: </span><span className="text-white font-medium">{mentor.mentor?.full_name}</span></div>
+              <div className="text-sm"><span className="text-textMuted">Dein Mentor: </span><span className="text-textMain font-medium">{mentor.mentor?.full_name}</span></div>
             </div>
           )}
           {mentees.map((m) => (
             <div key={m.id} className="flex items-center gap-3 cursor-pointer" onClick={() => openProfile(m.mentee_id)}>
               <Avatar name={m.mentee?.full_name || "?"} src={m.mentee?.avatar_url} size={32} />
-              <div className="text-sm"><span className="text-textMuted">Du bist Mentor für: </span><span className="text-white font-medium">{m.mentee?.full_name}</span></div>
+              <div className="text-sm"><span className="text-textMuted">Du bist Mentor für: </span><span className="text-textMain font-medium">{m.mentee?.full_name}</span></div>
             </div>
           ))}
         </div>

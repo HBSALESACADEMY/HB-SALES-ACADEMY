@@ -105,7 +105,7 @@ export default function Roleplay() {
             return (
               <div
                 key={s.id}
-                className={`px-3.5 py-1.5 rounded-full border text-[12.5px] cursor-pointer ${scenarioId === s.id ? "bg-amber text-white border-amber font-semibold" : "border-line text-textMuted hover:text-white hover:border-amber"} ${unlocked ? "" : "opacity-40 cursor-not-allowed"}`}
+                className={`px-3.5 py-1.5 rounded-full border text-[12.5px] cursor-pointer ${scenarioId === s.id ? "bg-amber text-[var(--org-button-text,#fff)] border-amber font-semibold" : "border-line text-textMuted hover:text-textMain hover:border-amber"} ${unlocked ? "" : "opacity-40 cursor-not-allowed"}`}
                 onClick={() => unlocked && setScenarioId(s.id)}
               >
                 {!unlocked && <Icon name="lock" size={11} />} {s.label}
@@ -115,7 +115,7 @@ export default function Roleplay() {
         </div>
         <div className="inline-flex border border-line rounded-lg overflow-hidden mb-6">
           {Object.keys(DIFFICULTY).map((k) => (
-            <button key={k} className={`px-3.5 py-2 text-[12.5px] font-semibold ${difficulty === k ? "bg-amber text-white" : "bg-surface text-textMuted"}`} onClick={() => setDifficulty(k)}>
+            <button key={k} className={`px-3.5 py-2 text-[12.5px] font-semibold ${difficulty === k ? "bg-amber text-[var(--org-button-text,#fff)]" : "bg-surface text-textMuted"}`} onClick={() => setDifficulty(k)}>
               {DIFFICULTY[k].label}
             </button>
           ))}
@@ -123,7 +123,7 @@ export default function Roleplay() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {PERSONAS.map((p) => (
             <div key={p.id} className="card cursor-pointer hover:-translate-y-0.5 hover:shadow-xl transition" style={{ borderLeft: `4px solid ${p.accent}` }} onClick={() => selectPersona(p)}>
-              <div className="font-display font-semibold text-[15px] text-white">{p.name}</div>
+              <div className="font-display font-semibold text-[15px] text-textMain">{p.name}</div>
               <div className="text-[12.5px] text-textMuted mt-1">{p.tagline}</div>
             </div>
           ))}
@@ -136,12 +136,12 @@ export default function Roleplay() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-white mb-1">{persona.name}</h1>
+      <h1 className="text-2xl font-display text-textMain mb-1">{persona.name}</h1>
       <p className="text-textMuted text-sm mb-4">{persona.tagline} · Szenario: {sc.label} · Modus: {DIFFICULTY[difficulty].label}</p>
 
       <div ref={chatRef} className="flex flex-col gap-2.5 h-[320px] overflow-y-auto p-4 bg-surfaceRaised border border-line rounded-xl mb-3">
         {messages.map((m, i) => (
-          <div key={i} className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm leading-snug ${m.role === "user" ? "self-end bg-amber text-white" : "self-start bg-[#262A3B] text-textMain"}`}>
+          <div key={i} className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm leading-snug ${m.role === "user" ? "self-end bg-amber text-[var(--org-button-text,#fff)]" : "self-start bg-[#262A3B] text-textMain"}`}>
             {m.content}
           </div>
         ))}
@@ -181,7 +181,7 @@ export default function Roleplay() {
       {feedback && (
         <div className="card mt-4">
           <div className="flex items-center gap-3 mb-3">
-            <span className="font-mono text-xl font-bold text-white">{feedback.score !== null ? feedback.score + "%" : "–"}</span>
+            <span className="font-mono text-xl font-bold text-textMain">{feedback.score !== null ? feedback.score + "%" : "–"}</span>
           </div>
           <p className="text-sm text-textMuted mb-3">{feedback.zusammenfassung}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -205,7 +205,7 @@ export default function Roleplay() {
                 {feedback.beispielsaetze.map((b, i) => (
                   <div key={i} className="text-xs">
                     <div className="text-textMuted mb-0.5">{b.moment}</div>
-                    <div className="text-white italic">„{b.satz}“</div>
+                    <div className="text-textMain italic">„{b.satz}“</div>
                   </div>
                 ))}
               </div>

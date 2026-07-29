@@ -42,7 +42,7 @@ export default function Simulator() {
               <div className="flex items-center gap-3">
                 <Icon name="chat" color="var(--org-color-1, #7B2FF7)" />
                 <div>
-                  <div className="font-display font-semibold text-white">{s.title}</div>
+                  <div className="font-display font-semibold text-textMain">{s.title}</div>
                   <div className="text-xs text-textMuted mt-0.5">{s.intro}</div>
                 </div>
               </div>
@@ -55,15 +55,15 @@ export default function Simulator() {
 
           {node.outcome ? (
             <div className={`p-4 rounded-lg border ${node.score >= 80 ? "border-teal/40 bg-teal/10" : node.score >= 50 ? "border-amber/40 bg-amber/10" : "border-coral/40 bg-coral/10"}`}>
-              <p className="text-white text-sm font-medium mb-1">{node.text}</p>
+              <p className="text-textMain text-sm font-medium mb-1">{node.text}</p>
               <p className="text-xs text-textMuted">Ergebnis-Score: {node.score}/100</p>
             </div>
           ) : (
             <>
-              <p className="text-white text-[16px] leading-relaxed mb-5">{node.text}</p>
+              <p className="text-textMain text-[16px] leading-relaxed mb-5">{node.text}</p>
               <div className="flex flex-col gap-2">
                 {node.options.map((opt, i) => (
-                  <button key={i} onClick={() => choose(opt)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-white hover:border-[var(--org-color-1,#4A3565)] hover:bg-surfaceRaised transition">
+                  <button key={i} onClick={() => choose(opt)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#4A3565)] hover:bg-surfaceRaised transition">
                     {opt.label}
                   </button>
                 ))}

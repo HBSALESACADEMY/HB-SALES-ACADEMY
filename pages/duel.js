@@ -98,10 +98,10 @@ export default function Duel() {
         <div className="brand-stripe w-16 mb-4" />
         <div className="card">
           <div className="text-xs text-textMuted mb-3">Frage {qIndex + 1}/{playing.question_ids.length}</div>
-          <p className="text-white text-[15px] font-medium mb-4">{question.q}</p>
+          <p className="text-textMain text-[15px] font-medium mb-4">{question.q}</p>
           <div className="flex flex-col gap-2">
             {question.options.map((opt, i) => (
-              <button key={i} onClick={() => answer(i)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-white hover:border-[var(--org-color-1,#4A3565)] hover:bg-surfaceRaised transition">
+              <button key={i} onClick={() => answer(i)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#4A3565)] hover:bg-surfaceRaised transition">
                 {opt}
               </button>
             ))}
@@ -124,7 +124,7 @@ export default function Duel() {
       <p className="text-textMuted text-sm mb-6">Fordere einen Kollegen zu 5 Fragen heraus — wer besser abschneidet, gewinnt.</p>
 
       <div className="card mb-6">
-        <div className="font-semibold text-white text-sm mb-3">Neues Duell starten</div>
+        <div className="font-semibold text-textMain text-sm mb-3">Neues Duell starten</div>
         <div className="flex items-center gap-2 flex-wrap">
           <select className="input !w-auto" value={selectedContact} onChange={(e) => setSelectedContact(e.target.value)}>
             <option value="">Gegner wählen...</option>
@@ -136,14 +136,14 @@ export default function Duel() {
 
       {myTurnDuels.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-sm font-semibold text-white mb-2.5">Du bist dran</h2>
+          <h2 className="text-sm font-semibold text-textMain mb-2.5">Du bist dran</h2>
           <div className="flex flex-col gap-2.5">
             {myTurnDuels.map((d) => {
               const opponentId = d.challenger_id === selfId ? d.opponent_id : d.challenger_id;
               return (
                 <div key={d.id} className="card flex items-center gap-3">
                   <button onClick={() => openProfile(opponentId)}><Avatar name={profileNames[opponentId] || "?"} size={30} /></button>
-                  <div className="flex-1 text-sm text-white">vs. {profileNames[opponentId]}</div>
+                  <div className="flex-1 text-sm text-textMain">vs. {profileNames[opponentId]}</div>
                   <button onClick={() => playDuel(d)} className="btn text-xs">Jetzt spielen</button>
                 </div>
               );
@@ -152,7 +152,7 @@ export default function Duel() {
         </div>
       )}
 
-      <h2 className="text-sm font-semibold text-white mb-2.5">Abgeschlossene Duelle</h2>
+      <h2 className="text-sm font-semibold text-textMain mb-2.5">Abgeschlossene Duelle</h2>
       <div className="flex flex-col gap-2.5">
         {doneDuels.map((d) => {
           const opponentId = d.challenger_id === selfId ? d.opponent_id : d.challenger_id;
@@ -164,7 +164,7 @@ export default function Duel() {
             <div key={d.id} className="card flex items-center gap-3">
               <button onClick={() => openProfile(opponentId)}><Avatar name={profileNames[opponentId] || "?"} size={30} /></button>
               <div className="flex-1 text-sm">
-                <span className="text-white">vs. {profileNames[opponentId]}</span>
+                <span className="text-textMain">vs. {profileNames[opponentId]}</span>
                 <span className="text-textMuted"> — {myScore}:{theirScore}</span>
               </div>
               <span className={`text-xs font-semibold ${won ? "text-teal" : tie ? "text-textMuted" : "text-coral"}`}>

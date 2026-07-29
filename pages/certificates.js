@@ -51,7 +51,7 @@ export default function Certificates() {
 
       {earned.length === 0 ? (
         <div className="card text-center py-10">
-          <p className="text-white font-semibold mb-1">Noch kein Zertifikat verdient.</p>
+          <p className="text-textMain font-semibold mb-1">Noch kein Zertifikat verdient.</p>
           <p className="text-textMuted text-sm">Schließe die Prüfung eines Kurses erfolgreich ab, um dein erstes Zertifikat freizuschalten.</p>
         </div>
       ) : (
@@ -62,7 +62,7 @@ export default function Certificates() {
                 <Icon name="award" size={20} color={c.accent} />
               </div>
               <div className="flex-1">
-                <div className="font-display font-semibold text-white">{c.title}</div>
+                <div className="font-display font-semibold text-textMain">{c.title}</div>
                 <div className="text-xs text-textMuted">Zertifikat erhalten</div>
               </div>
               <button disabled={downloadingId === c.id} onClick={() => download(c.id)} className="btn text-xs disabled:opacity-40">
@@ -80,7 +80,7 @@ export default function Certificates() {
             {remaining.map((c) => (
               <div key={c.id} className="card !py-3 flex items-center gap-3 opacity-50">
                 <Icon name="award" size={16} />
-                <span className="text-sm text-white flex-1">{c.title}</span>
+                <span className="text-sm text-textMain flex-1">{c.title}</span>
                 <span className="text-xs text-textMuted">Noch nicht bestanden</span>
               </div>
             ))}

@@ -39,7 +39,7 @@ export default function TutorialModal({ onClose }) {
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
           <div className="text-3xl mb-3">{current.emoji}</div>
-          <h2 className="font-display font-bold text-white text-lg mb-2">{current.title}</h2>
+          <h2 className="font-display font-bold text-textMain text-lg mb-2">{current.title}</h2>
           <p className="text-sm text-textMuted leading-relaxed mb-5">{current.body}</p>
 
           <div className="flex items-center justify-center gap-1.5 mb-5">
@@ -57,7 +57,7 @@ export default function TutorialModal({ onClose }) {
             </button>
           </div>
           {!isLast && (
-            <button onClick={onClose} className="text-textMuted hover:text-white text-xs mt-3 w-full text-center">Überspringen</button>
+            <button onClick={onClose} className="text-textMuted hover:text-textMain text-xs mt-3 w-full text-center">Überspringen</button>
           )}
         </div>
       </div>

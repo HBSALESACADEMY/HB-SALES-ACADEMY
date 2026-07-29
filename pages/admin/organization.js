@@ -422,7 +422,7 @@ export default function AdminOrganization() {
   if (!isAdmin) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Organisation</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Organisation</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Admin-Konten verfügbar.</p>
       </Layout>
     );
@@ -446,7 +446,7 @@ export default function AdminOrganization() {
       {isPlatformAdmin && (
         <>
           <div className="card mb-6">
-            <div className="font-semibold text-white text-sm mb-3">Neuen Kunden einrichten</div>
+            <div className="font-semibold text-textMain text-sm mb-3">Neuen Kunden einrichten</div>
             <p className="text-textMuted text-xs mb-3">Legt die Organisation UND direkt einen Organisations-Manager-Account an, mit dem sich der Kunde sofort anmelden und eigene Nutzer freigeben kann.</p>
             <div className="flex flex-col gap-2 max-w-sm">
               <div>
@@ -487,7 +487,7 @@ export default function AdminOrganization() {
                     <button onClick={() => setExpandedOrgId(isOpen ? null : o.id)} className="flex items-center gap-3.5 flex-1 min-w-0 text-left">
                       {o.logo_url && <img src={o.logo_url} alt="" className="h-8 w-auto rounded flex-shrink-0" onError={(e) => { e.target.style.display = "none"; }} />}
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-white text-sm">{o.name}</div>
+                        <div className="font-semibold text-textMain text-sm">{o.name}</div>
                         <div className="text-xs text-textMuted mt-0.5">
                           Code: <span className="font-mono">{o.slug}</span> · angelegt {new Date(o.created_at).toLocaleDateString("de-DE")}
                         </div>
@@ -518,7 +518,7 @@ export default function AdminOrganization() {
                           const busy = settingManagerId === o.id;
                           return (
                             <>
-                              <p className="text-sm text-white mb-2">
+                              <p className="text-sm text-textMain mb-2">
                                 {currentManager ? currentManager.full_name || "Unbenannt" : <span className="text-textMuted">— noch kein Organisations-Manager —</span>}
                               </p>
                               {candidates.length > 0 ? (
@@ -547,7 +547,7 @@ export default function AdminOrganization() {
           </div>
 
           <div className="card">
-            <div className="font-semibold text-white text-sm mb-3">Mitglieder zwischen Organisationen verteilen</div>
+            <div className="font-semibold text-textMain text-sm mb-3">Mitglieder zwischen Organisationen verteilen</div>
             {moveError && <p className="text-coral text-xs mb-3">{moveError}</p>}
             {membersLoading ? (
               <p className="text-textMuted text-sm">Lädt...</p>
@@ -556,7 +556,7 @@ export default function AdminOrganization() {
                 {members.map((m) => (
                   <div key={m.id} className="flex items-center gap-2.5">
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white truncate">{m.full_name || "Unbenannt"}</div>
+                      <div className="text-sm text-textMain truncate">{m.full_name || "Unbenannt"}</div>
                       <div className="text-[11px] text-textMuted">
                         aktuell: {orgNameById[m.organization_id] || "?"} · {m.role}{m.is_admin ? " · Admin" : ""} · {m.status}
                       </div>

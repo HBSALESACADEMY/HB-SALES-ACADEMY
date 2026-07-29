@@ -67,7 +67,7 @@ export default function AdminActivity() {
   if (!isAdmin) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Aktivitäten</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Aktivitäten</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Admin-Konten verfügbar.</p>
       </Layout>
     );
@@ -103,7 +103,7 @@ export default function AdminActivity() {
               <button onClick={() => openProfile(p?.id)}><Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} /></button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-white">{p?.full_name || "Unbekannt"}</span>
+                  <span className="text-sm text-textMain">{p?.full_name || "Unbekannt"}</span>
                   <Icon name={meta.icon} size={12} color={meta.color} />
                   <span className="text-xs" style={{ color: meta.color }}>{meta.label}</span>
                 </div>

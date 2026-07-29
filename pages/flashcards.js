@@ -75,13 +75,13 @@ export default function Flashcards() {
 
       {!card ? (
         <div className="card text-center py-10">
-          <p className="text-white font-semibold mb-1">{doneCount > 0 ? "Für heute geschafft! 🎉" : "Keine fälligen Karten heute."}</p>
+          <p className="text-textMain font-semibold mb-1">{doneCount > 0 ? "Für heute geschafft! 🎉" : "Keine fälligen Karten heute."}</p>
           <p className="text-textMuted text-sm">{doneCount > 0 ? `Du hast ${doneCount} Karte${doneCount === 1 ? "" : "n"} wiederholt.` : "Schau morgen wieder vorbei, oder ein Manager kann neue Karten anlegen."}</p>
         </div>
       ) : (
         <div className="card">
           <div className="text-[10.5px] font-semibold uppercase tracking-wide text-amber mb-3">{card.tag} · Karte {index + 1}/{dueCards.length}</div>
-          <p className="text-white text-[16px] font-medium mb-6 min-h-[60px]">{card.front}</p>
+          <p className="text-textMain text-[16px] font-medium mb-6 min-h-[60px]">{card.front}</p>
           {revealed ? (
             <>
               <div className="border-t border-line pt-4 mb-5">

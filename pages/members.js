@@ -116,7 +116,7 @@ export default function Members() {
       <p className="text-textMuted text-sm mb-6">Mitglieder deiner Organisation kannst du direkt anschreiben. Für alle anderen erst eine Anfrage senden und auf Annahme warten.</p>
 
       <div className="card mb-6">
-        <div className="font-semibold text-white text-sm mb-3">Person finden (organisationsübergreifend)</div>
+        <div className="font-semibold text-textMain text-sm mb-3">Person finden (organisationsübergreifend)</div>
         <input className="input" placeholder="Namen eingeben..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         {searching && <p className="text-textMuted text-xs mt-2">Suche...</p>}
         {!searching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
@@ -130,7 +130,7 @@ export default function Members() {
               return (
                 <div key={m.id} className="flex items-center gap-3">
                   <Avatar name={m.full_name || "?"} src={m.avatar_url} size={32} />
-                  <span className="text-sm text-white flex-1 truncate">{m.full_name || "Unbenannt"}</span>
+                  <span className="text-sm text-textMain flex-1 truncate">{m.full_name || "Unbenannt"}</span>
                   {!rel && (
                     <button disabled={isBusy} onClick={() => sendRequest(m.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
                       Anfrage senden
@@ -164,7 +164,7 @@ export default function Members() {
 
       {teams.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-sm font-semibold text-white mb-2.5">Teams</h2>
+          <h2 className="text-sm font-semibold text-textMain mb-2.5">Teams</h2>
           <div className="flex flex-col gap-2.5">
             {teams.map((t) => {
               const inTeam = myTeamIds.has(t.id);
@@ -173,7 +173,7 @@ export default function Members() {
               return (
                 <div key={t.id} className="card flex items-center gap-3.5">
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-white text-sm">{t.name}</div>
+                    <div className="font-semibold text-textMain text-sm">{t.name}</div>
                     <div className="text-xs text-textMuted mt-0.5">Lead: {t.leadName} · {t.memberCount} Mitglieder</div>
                   </div>
                   {inTeam ? (
@@ -196,13 +196,13 @@ export default function Members() {
         </div>
       )}
 
-      <h2 className="text-sm font-semibold text-white mb-2.5">Mitglieder meiner Organisation</h2>
+      <h2 className="text-sm font-semibold text-textMain mb-2.5">Mitglieder meiner Organisation</h2>
       <div className="flex flex-col gap-2.5">
         {orgMembers.map((m) => (
           <div key={m.id} className="card flex items-center gap-3.5">
             <Avatar name={m.full_name || "?"} src={m.avatar_url} size={44} />
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-white text-sm">{m.full_name || "Unbenannt"}</div>
+              <div className="font-semibold text-textMain text-sm">{m.full_name || "Unbenannt"}</div>
               {(m.role_title || m.company_name) && (
                 <div className="text-xs text-textMuted truncate">
                   {[m.role_title, m.company_name].filter(Boolean).join(" · ")}

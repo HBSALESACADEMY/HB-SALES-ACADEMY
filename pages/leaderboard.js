@@ -65,7 +65,7 @@ export default function Leaderboard() {
 
       <div className="flex items-center gap-2 mb-5">
         {[["week", "Diese Woche"], ["month", "Dieser Monat"], ["all", "Allzeit"]].map(([key, label]) => (
-          <button key={key} onClick={() => setRange(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${range === key ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white"}`}>
+          <button key={key} onClick={() => setRange(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${range === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
             {label}
           </button>
         ))}
@@ -86,14 +86,14 @@ export default function Leaderboard() {
                 <button onClick={() => openProfile(r.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80">
                   <Avatar name={r.full_name || "?"} src={r.avatar_url} size={32} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-white text-sm truncate flex items-center gap-1.5">
+                    <div className="font-semibold text-textMain text-sm truncate flex items-center gap-1.5">
                       {r.full_name || "Unbenannt"}{isSelf && <span className="text-amber"> (Du)</span>}
                       {isFriend && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet/15 text-violet font-semibold">Freund</span>}
                     </div>
                     {range === "all" && <div className="text-[11px] text-textMuted">Level {level}</div>}
                   </div>
                 </button>
-                <span className="flex items-center gap-1 font-mono text-sm text-white flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #E8368F)" /> {r.xp || 0} XP</span>
+                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #E8368F)" /> {r.xp || 0} XP</span>
               </div>
             );
           })}

@@ -64,7 +64,7 @@ export default function CourseDetail() {
   return (
     <Layout>
       <button className="btn-ghost btn mb-4" onClick={() => router.push("/courses")}>← Alle Kurse</button>
-      <h1 className="text-2xl font-display text-white mb-1">{course.title}</h1>
+      <h1 className="text-2xl font-display text-textMain mb-1">{course.title}</h1>
       <p className="text-textMuted text-sm mb-6">{course.desc}</p>
 
       {loading ? (
@@ -82,7 +82,7 @@ export default function CourseDetail() {
                   onClick={() => unlocked && router.push(`/courses/${course.id}/module/${m.id}`)}
                 >
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: course.accent, background: "rgba(255,255,255,.06)" }}>Modul {idx + 1}</span>
-                  <div className="font-display text-[15.5px] font-semibold text-white my-1.5">{m.title}</div>
+                  <div className="font-display text-[15.5px] font-semibold text-textMain my-1.5">{m.title}</div>
                   <div className="text-xs text-textMuted leading-relaxed">
                     {result ? `MC: ${Math.round((result.mc_score / result.mc_total) * 100)}% · Fallstudie: ${result.open_score}%` : (unlocked ? "Noch nicht bearbeitet" : "Gesperrt")}
                   </div>
@@ -97,7 +97,7 @@ export default function CourseDetail() {
               <div className="border-2 border-amber rounded-xl p-5 text-center" style={{ background: "rgba(240,178,62,.06)" }}>
                 <div className="text-xs text-textMuted mb-1.5">Zertifikat erhalten</div>
                 <img src={getCachedOrg()?.logo_url || "/logo.svg"} alt={getCachedOrg()?.name || "HB Sales Academy"} className="h-6 w-auto mx-auto mb-2" />
-                <div className="font-display text-[17px] text-white mb-2.5">{course.title}</div>
+                <div className="font-display text-[17px] text-textMain mb-2.5">{course.title}</div>
                 <button className="btn" onClick={downloadCertificate} disabled={downloading}>
                   <Icon name="download" size={14} /> {downloading ? "Wird erstellt..." : "PDF-Zertifikat herunterladen"}
                 </button>

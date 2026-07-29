@@ -197,15 +197,15 @@ export default function Dashboard() {
           {profile?.streak_count > 0 && profile?.last_challenge_date !== new Date().toISOString().slice(0, 10) && (
             <div className="card mb-5 border border-amber/30 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/daily-challenge")}>
               <Icon name="flame" color="var(--org-accent, #E8368F)" size={18} />
-              <span className="text-sm text-white flex-1">Deine {profile.streak_count}-Tage-Serie ist in Gefahr — heute noch die Tages-Challenge machen!</span>
+              <span className="text-sm text-textMain flex-1">Deine {profile.streak_count}-Tage-Serie ist in Gefahr — heute noch die Tages-Challenge machen!</span>
             </div>
           )}
 
           {onboarding && (
             <div className="card mb-5">
               <div className="flex items-center justify-between mb-2.5">
-                <span className="font-semibold text-white text-sm">👋 Erste Schritte</span>
-                <button onClick={dismissOnboarding} className="text-textMuted hover:text-white text-xs">Ausblenden</button>
+                <span className="font-semibold text-textMain text-sm">👋 Erste Schritte</span>
+                <button onClick={dismissOnboarding} className="text-textMuted hover:text-textMain text-xs">Ausblenden</button>
               </div>
               <div className="flex flex-col gap-1.5">
                 {onboarding.map((step) => (
@@ -213,7 +213,7 @@ export default function Dashboard() {
                     <span className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center text-[9px] ${step.done ? "bg-teal border-teal text-[#0A0C13]" : "border-line"}`}>
                       {step.done ? "✓" : ""}
                     </span>
-                    <span className={`text-sm ${step.done ? "text-textMuted line-through" : "text-white"}`}>{step.label}</span>
+                    <span className={`text-sm ${step.done ? "text-textMuted line-through" : "text-textMain"}`}>{step.label}</span>
                   </button>
                 ))}
               </div>
@@ -222,14 +222,14 @@ export default function Dashboard() {
 
           {pendingFriendReqs.length > 0 && (
             <div className="card mb-5">
-              <div className="font-semibold text-white text-sm mb-3">Freundschaftsanfragen</div>
+              <div className="font-semibold text-textMain text-sm mb-3">Freundschaftsanfragen</div>
               <div className="flex flex-col gap-2.5">
                 {pendingFriendReqs.map((r) => {
                   const busy = friendReqBusyId === r.id;
                   return (
                     <div key={r.id} className="flex items-center gap-3">
                       <Avatar name={r.profile?.full_name || "?"} src={r.profile?.avatar_url} size={32} />
-                      <span className="text-sm text-white flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
+                      <span className="text-sm text-textMain flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <button disabled={busy} onClick={() => respondFriendRequest(r.id, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
                         <button disabled={busy} onClick={() => respondFriendRequest(r.id, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
@@ -244,20 +244,20 @@ export default function Dashboard() {
           {adminSnapshot && (
             <div className="card mb-5 cursor-pointer" onClick={() => router.push("/admin/insights")}>
               <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-white text-sm">📊 Insights (Admin)</span>
+                <span className="font-semibold text-textMain text-sm">📊 Insights (Admin)</span>
                 <span className="text-xs text-amber">Alle Details →</span>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="font-display text-xl font-bold text-white">{adminSnapshot.totalMembers}</div>
+                  <div className="font-display text-xl font-bold text-textMain">{adminSnapshot.totalMembers}</div>
                   <div className="text-[11px] text-textMuted">Mitglieder</div>
                 </div>
                 <div>
-                  <div className="font-display text-xl font-bold text-white">{adminSnapshot.weeklyActiveCount}</div>
+                  <div className="font-display text-xl font-bold text-textMain">{adminSnapshot.weeklyActiveCount}</div>
                   <div className="text-[11px] text-textMuted">Aktiv diese Woche</div>
                 </div>
                 <div>
-                  <div className="font-display text-xl font-bold text-white">{adminSnapshot.pendingCount}</div>
+                  <div className="font-display text-xl font-bold text-textMain">{adminSnapshot.pendingCount}</div>
                   <div className="text-[11px] text-textMuted">Warten auf Freigabe</div>
                 </div>
               </div>
@@ -306,7 +306,7 @@ export default function Dashboard() {
                         <Icon name={t.icon} color="var(--org-accent, #E8368F)" size={18} />
                         {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
                       </div>
-                      <div className="text-[13px] font-semibold text-white">{t.label}</div>
+                      <div className="text-[13px] font-semibold text-textMain">{t.label}</div>
                       {t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
                     </button>
                   ));
@@ -314,10 +314,10 @@ export default function Dashboard() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-white font-mono">{doneModuleIds.size}/{totalModules}</div></div>
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-white font-mono">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Zertifikate</div><div className="text-2xl font-display font-bold text-white font-mono">{certCount}/{COURSES.length}</div></div>
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Rollenspiele</div><div className="text-2xl font-display font-bold text-white font-mono">{rpSessions.length}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-textMain font-mono">{doneModuleIds.size}/{totalModules}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-textMain font-mono">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Zertifikate</div><div className="text-2xl font-display font-bold text-textMain font-mono">{certCount}/{COURSES.length}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Rollenspiele</div><div className="text-2xl font-display font-bold text-textMain font-mono">{rpSessions.length}</div></div>
               </div>
 
               <div className="card mb-5">
@@ -329,7 +329,7 @@ export default function Dashboard() {
                     return (
                       <div key={c.id} className="flex items-center gap-3 text-sm">
                         <span style={{ color: c.accent }}>{passed ? <Icon name="check" size={14} /> : <Icon name="book" size={14} />}</span>
-                        <span className="flex-1 text-white">{c.title}</span>
+                        <span className="flex-1 text-textMain">{c.title}</span>
                         <span className="text-textMuted font-mono text-xs">{doneCount}/{c.modules.length} Module</span>
                       </div>
                     );
@@ -341,7 +341,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 mb-3"><Icon name="target" color="var(--org-accent, #E8368F)" /><strong className="text-sm">Nächster Schritt</strong></div>
                 {nextCourse ? (
                   <>
-                    <p className="text-sm text-textMuted mb-3">Weiter mit: <strong className="text-white">{nextCourse.title}</strong> – {nextCourse.desc}</p>
+                    <p className="text-sm text-textMuted mb-3">Weiter mit: <strong className="text-textMain">{nextCourse.title}</strong> – {nextCourse.desc}</p>
                     <button className="btn" onClick={() => router.push("/courses")}>Kurse öffnen <Icon name="chevron" size={14} /></button>
                   </>
                 ) : (

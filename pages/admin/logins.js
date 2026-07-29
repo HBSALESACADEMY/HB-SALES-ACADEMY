@@ -36,7 +36,7 @@ export default function AdminLogins() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Login-Verlauf</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Login-Verlauf</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
       </Layout>
     );
@@ -63,7 +63,7 @@ export default function AdminLogins() {
           return (
             <div key={e.id} className="card flex items-center gap-3 !py-2.5">
               <button onClick={() => openProfile(p?.id)}><Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} /></button>
-              <span className="text-sm text-white flex-1">{p?.full_name || "Unbekannt"}</span>
+              <span className="text-sm text-textMain flex-1">{p?.full_name || "Unbekannt"}</span>
               <span className="text-xs text-textMuted font-mono">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>
             </div>
           );

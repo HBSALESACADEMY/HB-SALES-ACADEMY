@@ -79,7 +79,7 @@ export default function ExamRunner() {
     <Layout>
       {phase === "mc" && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">{course.title} — Kursprüfung</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">{course.title} — Kursprüfung</h1>
           <p className="text-textMuted text-sm mb-5">Frage {qIndex + 1} von {questions.length} · Bestehensgrenze: 80% Multiple-Choice + 60% Fallstudie</p>
           <div className="card max-w-xl">
             <p className="text-[15.5px] font-semibold mb-4">{questions[qIndex].q}</p>
@@ -110,7 +110,7 @@ export default function ExamRunner() {
 
       {(phase === "capstone" || phase === "grading") && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">Abschluss-Fallstudie</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">Abschluss-Fallstudie</h1>
           <p className="text-textMuted text-sm mb-4">MC-Teil: {mcScore}/{questions.length} richtig ({Math.round((mcScore / questions.length) * 100)}%)</p>
           <div className="card max-w-xl">
             <p className="text-[15px] font-medium mb-4 leading-relaxed">{course.examCase.prompt}</p>
@@ -125,7 +125,7 @@ export default function ExamRunner() {
 
       {phase === "done" && result && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">Prüfungsergebnis</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">Prüfungsergebnis</h1>
           <div className="card max-w-xl">
             <div className="flex items-center gap-2.5 mb-3">
               <Icon name="award" size={22} color={result.passed ? "#00E5C7" : "#FF4D6D"} />
@@ -136,7 +136,7 @@ export default function ExamRunner() {
               {result.passed ? "Prüfung bestanden — nächster Kurs freigeschaltet, PDF-Zertifikat verfügbar!" : "Nicht bestanden (nötig: MC ≥ 80% und Fallstudie ≥ 60%). Module nochmal ansehen und erneut versuchen."}
             </p>
             <div className="border-t border-line pt-3 mb-4">
-              <strong className="text-sm text-white block mb-1.5">Feedback zur Fallstudie</strong>
+              <strong className="text-sm text-textMain block mb-1.5">Feedback zur Fallstudie</strong>
               <p className="text-sm text-textMuted leading-relaxed">{result.capstoneGrading.feedback}</p>
             </div>
             <button className="btn" onClick={() => router.push(`/courses/${course.id}`)}>Zurück zum Kurs</button>

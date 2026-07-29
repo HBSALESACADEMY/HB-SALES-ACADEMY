@@ -306,7 +306,7 @@ export default function Messages() {
       <div className="flex h-full gap-3">
         <div className={`w-full md:w-72 flex-shrink-0 flex-col gap-0.5 overflow-y-auto ${showList ? "flex" : "hidden md:flex"}`}>
           <div className="flex items-center justify-between px-2 mb-2">
-            <h1 className="text-lg font-display text-white">Nachrichten</h1>
+            <h1 className="text-lg font-display text-textMain">Nachrichten</h1>
             <button onClick={() => setShowNewGroup(true)} className="btn-ghost text-xs px-2 py-1" title="Neue Gruppe">+ Gruppe</button>
           </div>
 
@@ -315,7 +315,7 @@ export default function Messages() {
               <input className="input text-xs mb-2" placeholder="Gruppenname" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} />
               <div className="flex flex-col gap-1 max-h-40 overflow-y-auto mb-2">
                 {friendsList.map((f) => (
-                  <label key={f.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                  <label key={f.id} className="flex items-center gap-2 text-xs text-textMain cursor-pointer">
                     <input type="checkbox" checked={newGroupMembers.has(f.id)} onChange={() => toggleGroupMember(f.id)} />
                     {f.full_name || "Unbenannt"}
                   </label>
@@ -345,11 +345,11 @@ export default function Messages() {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-sm truncate ${c.unread > 0 ? "font-bold text-white" : "font-medium text-white"}`}>{c.full_name || "Unbenannt"}</span>
+                    <span className={`text-sm truncate ${c.unread > 0 ? "font-bold text-textMain" : "font-medium text-textMain"}`}>{c.full_name || "Unbenannt"}</span>
                     {c.lastMessage && <span className="text-[10px] text-textMuted flex-shrink-0">{formatPreviewTime(c.lastMessage.created_at)}</span>}
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-xs truncate ${c.unread > 0 ? "text-white font-medium" : "text-textMuted"}`}>{preview}</span>
+                    <span className={`text-xs truncate ${c.unread > 0 ? "text-textMain font-medium" : "text-textMuted"}`}>{preview}</span>
                     {c.unread > 0 && <span className="badge-count flex-shrink-0">{c.unread > 9 ? "9+" : c.unread}</span>}
                   </div>
                 </div>
@@ -375,12 +375,12 @@ export default function Messages() {
                     <div className="w-[30px] h-[30px] rounded-full bg-surfaceRaised border border-line flex items-center justify-center">
                       <Icon name="users" size={15} color="var(--org-color-1, #7B2FF7)" />
                     </div>
-                    <span className="font-semibold text-white text-sm">{selected.full_name}</span>
+                    <span className="font-semibold text-textMain text-sm">{selected.full_name}</span>
                   </div>
                 ) : (
                   <button onClick={() => openProfile(selected.id)} className="flex items-center gap-2.5 hover:opacity-80">
                     <Avatar name={selected.full_name || "?"} src={selected.avatar_url} size={30} />
-                    <span className="font-semibold text-white text-sm">{selected.full_name || "Unbenannt"}</span>
+                    <span className="font-semibold text-textMain text-sm">{selected.full_name || "Unbenannt"}</span>
                   </button>
                 )}
               </div>
@@ -401,7 +401,7 @@ export default function Messages() {
                   }
                   return (
                     <div key={m.id} className="flex flex-col" style={{ alignItems: mine ? "flex-end" : "flex-start" }}>
-                      <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${mine ? "" : "bg-surfaceRaised text-white"}`} style={mine ? { background: "var(--org-accent, #3D6FA8)", color: "var(--org-button-text, #fff)" } : {}}>
+                      <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${mine ? "" : "bg-surfaceRaised text-textMain"}`} style={mine ? { background: "var(--org-accent, #3D6FA8)", color: "var(--org-button-text, #fff)" } : {}}>
                         {m.attachment_type === "image" && m.signedUrl && <img src={m.signedUrl} alt="" className="rounded-lg max-h-72 mb-1" />}
                         {m.attachment_type === "video" && m.signedUrl && <video src={m.signedUrl} controls className="rounded-lg max-h-72 mb-1" />}
                         {m.attachment_type === "audio" && m.signedUrl && <audio src={m.signedUrl} controls className="mb-1" />}

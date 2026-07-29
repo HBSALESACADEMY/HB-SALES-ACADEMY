@@ -93,7 +93,7 @@ export default function NavigationAdmin() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Navigation verwalten</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Navigation verwalten</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
       </Layout>
     );
@@ -108,7 +108,7 @@ export default function NavigationAdmin() {
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="card mb-6">
-        <div className="font-semibold text-white text-sm mb-3">Neuen Ordner/Reiter anlegen</div>
+        <div className="font-semibold text-textMain text-sm mb-3">Neuen Ordner/Reiter anlegen</div>
         <div className="flex items-center gap-2 flex-wrap">
           <input className="input flex-1 min-w-[160px]" placeholder="Name (z. B. Produktschulungen)" value={newFolder.label} onChange={(e) => setNewFolder({ ...newFolder, label: e.target.value })} />
           <select className="input w-auto" value={newFolder.icon} onChange={(e) => setNewFolder({ ...newFolder, icon: e.target.value })}>

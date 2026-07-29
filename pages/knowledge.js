@@ -45,7 +45,7 @@ export default function Knowledge() {
       <p className="text-textMuted text-sm mb-6">Psychologische Prinzipien zum Nachschlagen.</p>
       <div className="flex items-center gap-2 border border-line rounded-lg px-3 py-2.5 mb-5 bg-surface">
         <Icon name="search" size={15} />
-        <input className="bg-transparent border-none outline-none text-sm flex-1 text-white" placeholder="Suche..." value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="bg-transparent border-none outline-none text-sm flex-1 text-textMain" placeholder="Suche..." value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {filtered.length === 0 && <p className="text-textMuted text-sm">Keine Treffer.</p>}
@@ -55,7 +55,7 @@ export default function Knowledge() {
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber">{k.tag}</span>
               {k.isNew && <span className="text-[9px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1 py-0.5">Community</span>}
             </div>
-            <div className="font-display font-semibold text-[15px] text-white my-1.5">{k.title}</div>
+            <div className="font-display font-semibold text-[15px] text-textMain my-1.5">{k.title}</div>
             <div className="text-[13px] text-textMuted leading-relaxed">{k.body}</div>
           </div>
         ))}

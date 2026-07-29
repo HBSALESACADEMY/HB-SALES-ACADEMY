@@ -82,7 +82,7 @@ export default function Admin() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Nutzerverwaltung</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Nutzerverwaltung</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
       </Layout>
     );
@@ -98,14 +98,14 @@ export default function Admin() {
 
       {users.some((u) => u.status === "pending") && (
         <div className="mb-6">
-          <h2 className="text-sm font-semibold text-white mb-2.5">Ausstehende Registrierungen</h2>
+          <h2 className="text-sm font-semibold text-textMain mb-2.5">Ausstehende Registrierungen</h2>
           <div className="flex flex-col gap-2.5">
             {users.filter((u) => u.status === "pending").map((u) => {
               const busy = busyId === u.id;
               return (
                 <div key={u.id} className="card flex items-center gap-4 flex-wrap border border-amber/30">
                   <div className="flex-1 min-w-[180px]">
-                    <div className="font-semibold text-white text-sm flex items-center gap-2">
+                    <div className="font-semibold text-textMain text-sm flex items-center gap-2">
                       {u.full_name || "Unbenannt"}
                       <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Ausstehend</span>
                     </div>
@@ -122,7 +122,7 @@ export default function Admin() {
         </div>
       )}
 
-      <h2 className="text-sm font-semibold text-white mb-2.5">Alle Konten</h2>
+      <h2 className="text-sm font-semibold text-textMain mb-2.5">Alle Konten</h2>
 
       <div className="flex flex-col gap-2.5">
         {users.filter((u) => u.status !== "pending").map((u) => {
@@ -134,7 +134,7 @@ export default function Admin() {
                 <Icon name="users" size={16} />
               </div>
               <div className="flex-1 min-w-[180px]">
-                <div className="font-semibold text-white text-sm flex items-center gap-2">
+                <div className="font-semibold text-textMain text-sm flex items-center gap-2">
                   {u.full_name || "Unbenannt"}
                   {isSelf && <span className="text-[10px] uppercase tracking-wide text-textMuted border border-line rounded px-1.5 py-0.5">Du</span>}
                   <span

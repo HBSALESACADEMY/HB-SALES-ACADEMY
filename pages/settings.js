@@ -90,14 +90,14 @@ export default function Settings() {
       <div className="brand-stripe w-16 mb-4" />
 
       <div className="card max-w-lg mb-5">
-        <div className="font-semibold text-white text-sm mb-1">Sichtbarkeit der Kontaktdaten</div>
+        <div className="font-semibold text-textMain text-sm mb-1">Sichtbarkeit der Kontaktdaten</div>
         <p className="text-xs text-textMuted mb-4">Entscheide pro Feld, wer es in deinem Profil sehen kann.</p>
         <div className="flex flex-col gap-2.5">
           {CONTACT_FIELDS.map((f) => {
             const isFriendsOnly = visibility[f.key] === "friends";
             return (
               <div key={f.key} className="flex items-center justify-between">
-                <span className="text-sm text-white">{f.label}</span>
+                <span className="text-sm text-textMain">{f.label}</span>
                 <button onClick={() => toggleVisibility(f.key)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${isFriendsOnly ? "border-violet/40 text-violet bg-violet/10" : "border-teal/40 text-teal bg-teal/10"}`}>
                   {isFriendsOnly ? "Nur Freunde" : "Öffentlich"}
@@ -111,7 +111,7 @@ export default function Settings() {
       <div className="card max-w-lg mb-5">
         <div className="flex items-center justify-between">
           <div>
-            <div className="font-semibold text-white text-sm mb-1">Auf der Rangliste erscheinen</div>
+            <div className="font-semibold text-textMain text-sm mb-1">Auf der Rangliste erscheinen</div>
             <p className="text-xs text-textMuted">Wenn ausgeschaltet, wirst du für andere nicht im XP-Ranking angezeigt.</p>
           </div>
           <button onClick={() => setLeaderboardOptOut((v) => !v)}
@@ -122,7 +122,7 @@ export default function Settings() {
       </div>
 
       <div className="card max-w-lg mb-5">
-        <div className="font-semibold text-white text-sm mb-1">Dashboard-Kacheln</div>
+        <div className="font-semibold text-textMain text-sm mb-1">Dashboard-Kacheln</div>
         <p className="text-xs text-textMuted mb-4">Reihenfolge anpassen oder Kacheln ausblenden.</p>
         <div className="flex flex-col gap-1.5">
           {tileOrder.map((key, i) => {
@@ -132,10 +132,10 @@ export default function Settings() {
             return (
               <div key={key} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isHidden ? "opacity-40" : ""}`}>
                 <div className="flex flex-col">
-                  <button onClick={() => moveTile(key, -1)} disabled={i === 0} className="text-textMuted hover:text-white disabled:opacity-20 leading-none text-xs">▲</button>
-                  <button onClick={() => moveTile(key, 1)} disabled={i === tileOrder.length - 1} className="text-textMuted hover:text-white disabled:opacity-20 leading-none text-xs">▼</button>
+                  <button onClick={() => moveTile(key, -1)} disabled={i === 0} className="text-textMuted hover:text-textMain disabled:opacity-20 leading-none text-xs">▲</button>
+                  <button onClick={() => moveTile(key, 1)} disabled={i === tileOrder.length - 1} className="text-textMuted hover:text-textMain disabled:opacity-20 leading-none text-xs">▼</button>
                 </div>
-                <span className="text-sm text-white flex-1">{tile.label}</span>
+                <span className="text-sm text-textMain flex-1">{tile.label}</span>
                 <button onClick={() => toggleTileHidden(key)} className="btn-ghost text-xs">
                   {isHidden ? "Einblenden" : "Ausblenden"}
                 </button>

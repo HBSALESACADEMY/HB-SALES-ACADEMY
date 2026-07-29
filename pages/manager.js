@@ -249,7 +249,7 @@ export default function Manager() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Team</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Team</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar. Ein Admin kann die Rolle direkt in Supabase setzen (siehe README).</p>
       </Layout>
     );
@@ -277,12 +277,12 @@ export default function Manager() {
       </div>
 
       <div className="card mb-5">
-        <div className="font-semibold text-white text-sm mb-3">Meine Teams</div>
+        <div className="font-semibold text-textMain text-sm mb-3">Meine Teams</div>
         {myTeams.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {myTeams.map((t) => (
               <button key={t.id} onClick={() => selectTeam(t.id)}
-                className={`px-3 py-1.5 rounded-full text-xs border ${selectedTeamId === t.id ? "bg-amber text-white border-amber font-semibold" : "border-line text-textMuted hover:text-white"}`}>
+                className={`px-3 py-1.5 rounded-full text-xs border ${selectedTeamId === t.id ? "bg-amber text-[var(--org-button-text,#fff)] border-amber font-semibold" : "border-line text-textMuted hover:text-textMain"}`}>
                 {t.name}
               </button>
             ))}
@@ -312,14 +312,14 @@ export default function Manager() {
       ) : (
         <>
           <div className="card mb-5">
-            <div className="font-semibold text-white text-sm mb-3">Mitglieder hinzufügen</div>
+            <div className="font-semibold text-textMain text-sm mb-3">Mitglieder hinzufügen</div>
             <input className="input mb-2.5" placeholder="Nach Namen suchen..." value={addQuery} onChange={(e) => setAddQuery(e.target.value)} />
             {addQuery.trim() && (
               <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
                 {addableProfiles.slice(0, 20).map((p) => (
                   <div key={p.id} className="flex items-center gap-2.5">
                     <Avatar name={p.full_name || "?"} src={p.avatar_url} size={26} />
-                    <span className="text-sm text-white flex-1">{p.full_name || "Unbenannt"}</span>
+                    <span className="text-sm text-textMain flex-1">{p.full_name || "Unbenannt"}</span>
                     <button disabled={addBusyId === p.id} onClick={() => addMember(p.id)} className="btn-ghost text-xs disabled:opacity-40">Hinzufügen</button>
                   </div>
                 ))}
@@ -330,7 +330,7 @@ export default function Manager() {
 
           {teamRequests.length > 0 && (
             <div className="card mb-5">
-              <div className="font-semibold text-white text-sm mb-3">Offene Team-Anfragen</div>
+              <div className="font-semibold text-textMain text-sm mb-3">Offene Team-Anfragen</div>
               <div className="flex flex-col gap-2.5">
                 {teamRequests.map((r) => {
                   const p = requestProfiles[r.requester_id];
@@ -340,7 +340,7 @@ export default function Manager() {
                       <button onClick={() => openProfile(r.requester_id)} className="flex-shrink-0">
                         <Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} />
                       </button>
-                      <span className="text-sm text-white flex-1">{p?.full_name || "Unbenannt"}</span>
+                      <span className="text-sm text-textMain flex-1">{p?.full_name || "Unbenannt"}</span>
                       <button disabled={busy} onClick={() => respondToTeamRequest(r.id, "accept")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
                       <button disabled={busy} onClick={() => respondToTeamRequest(r.id, "decline")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
                     </div>
@@ -351,7 +351,7 @@ export default function Manager() {
           )}
 
           <div className="card mb-5">
-            <div className="font-semibold text-white text-sm mb-3">🎯 Team-Ziel für diese Woche setzen</div>
+            <div className="font-semibold text-textMain text-sm mb-3">🎯 Team-Ziel für diese Woche setzen</div>
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[160px]" placeholder="z.B. 50 Rollenspiele im Team" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} />
               <select className="input !w-auto" value={goalMetric} onChange={(e) => setGoalMetric(e.target.value)}>
@@ -365,7 +365,7 @@ export default function Manager() {
           </div>
 
           <div className="card mb-5">
-            <div className="font-semibold text-white text-sm mb-3">🤝 Mentoring-Paare</div>
+            <div className="font-semibold text-textMain text-sm mb-3">🤝 Mentoring-Paare</div>
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <select className="input !w-auto flex-1 min-w-[140px]" value={pairMentorId} onChange={(e) => setPairMentorId(e.target.value)}>
                 <option value="">Mentor wählen...</option>
@@ -386,7 +386,7 @@ export default function Manager() {
               <div className="flex flex-col gap-1.5">
                 {pairs.map((p) => (
                   <div key={p.id} className="flex items-center gap-2 text-sm text-textMuted">
-                    <span className="flex-1"><span className="text-white">{p.mentor?.full_name}</span> → <span className="text-white">{p.mentee?.full_name}</span></span>
+                    <span className="flex-1"><span className="text-textMain">{p.mentor?.full_name}</span> → <span className="text-textMain">{p.mentee?.full_name}</span></span>
                     <button onClick={() => dissolvePair(p.id)} className="btn-ghost text-xs text-coral">Auflösen</button>
                   </div>
                 ))}
@@ -396,11 +396,11 @@ export default function Manager() {
 
           {callStats.length > 0 && (
             <div className="card mb-5">
-              <div className="font-semibold text-white text-sm mb-3">📞 Anruf-Aktivität heute</div>
+              <div className="font-semibold text-textMain text-sm mb-3">📞 Anruf-Aktivität heute</div>
               <div className="flex flex-col gap-2">
                 {callStats.map((c) => (
                   <div key={c.user_id} className="flex items-center gap-3 text-sm">
-                    <span className="text-white flex-1">{c.name}</span>
+                    <span className="text-textMain flex-1">{c.name}</span>
                     <span className="text-textMuted text-xs">{c.counts?.anwahlen || 0} Anwahlen · {c.counts?.termin || 0} Termine · {c.counts?.positiv || 0} positiv</span>
                   </div>
                 ))}
@@ -410,7 +410,7 @@ export default function Manager() {
 
           {principleCounts.length > 0 && (
             <div className="card mb-5">
-              <div className="font-semibold text-white text-sm mb-3">Team-Insights: meistgenutzte Prinzipien im Rollenspiel</div>
+              <div className="font-semibold text-textMain text-sm mb-3">Team-Insights: meistgenutzte Prinzipien im Rollenspiel</div>
               <div className="flex flex-col gap-2">
                 {principleCounts.map(([name, count]) => {
                   const max = principleCounts[0][1];
@@ -437,7 +437,7 @@ export default function Manager() {
                     <Avatar name={m.full_name || "?"} src={m.avatar_url} size={36} />
                   </button>
                   <div className="flex-1">
-                    <button onClick={() => openProfile(m.id)} className="font-semibold text-white text-sm hover:underline">{m.full_name || "Unbenannt"}</button>
+                    <button onClick={() => openProfile(m.id)} className="font-semibold text-textMain text-sm hover:underline">{m.full_name || "Unbenannt"}</button>
                     <div className="text-xs text-textMuted mt-1">
                       {m.doneModules}/{m.totalModules} Module · Ø MC {m.avgMc !== null ? m.avgMc + "%" : "–"} · {m.certs}/{COURSES.length} Zertifikate · {m.roleplayCount} Rollenspiele
                     </div>
@@ -446,7 +446,7 @@ export default function Manager() {
                     <div className="h-full bg-teal" style={{ width: `${(m.doneModules / m.totalModules) * 100}%` }} />
                   </div>
                   <button onClick={() => toggleCallStatsAccess(m.id, !m.can_view_call_stats)}
-                    className={`text-xs px-2.5 py-1.5 rounded-full border flex-shrink-0 ${m.can_view_call_stats ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted hover:text-white"}`}>
+                    className={`text-xs px-2.5 py-1.5 rounded-full border flex-shrink-0 ${m.can_view_call_stats ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted hover:text-textMain"}`}>
                     📞 {m.can_view_call_stats ? "Auswertung sichtbar" : "Auswertung verborgen"}
                   </button>
                   <button onClick={() => removeMember(m.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>

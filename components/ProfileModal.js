@@ -122,13 +122,13 @@ export default function ProfileModal({ userId, onClose }) {
               <div className="flex items-center gap-3">
                 <Avatar name={target.full_name || "?"} src={target.avatar_url} size={56} />
                 <div>
-                  <div className="font-display font-semibold text-white">{target.full_name || "Unbenannt"}</div>
+                  <div className="font-display font-semibold text-textMain">{target.full_name || "Unbenannt"}</div>
                   {fieldVisible("role_title") && (target.role_title || target.company_name) && (
                     <div className="text-xs text-textMuted">{[target.role_title, target.company_name].filter(Boolean).join(" · ")}</div>
                   )}
                 </div>
               </div>
-              <button onClick={onClose} className="text-textMuted hover:text-white text-lg leading-none">×</button>
+              <button onClick={onClose} className="text-textMuted hover:text-textMain text-lg leading-none">×</button>
             </div>
 
             {target.bio && fieldVisible("bio") && <p className="text-sm text-textMuted mb-4">{target.bio}</p>}
@@ -153,7 +153,7 @@ export default function ProfileModal({ userId, onClose }) {
                 return (
                   <div key={key} className="text-xs flex items-center gap-2">
                     <span className="text-textMuted w-16 flex-shrink-0">{FIELD_LABELS[key]}</span>
-                    {href ? <a href={href} target="_blank" rel="noreferrer" className="text-amber hover:underline">{target[key]}</a> : <span className="text-white">{target[key]}</span>}
+                    {href ? <a href={href} target="_blank" rel="noreferrer" className="text-amber hover:underline">{target[key]}</a> : <span className="text-textMain">{target[key]}</span>}
                   </div>
                 );
               })}

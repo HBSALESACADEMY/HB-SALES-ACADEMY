@@ -128,7 +128,7 @@ export default function ContentAdmin() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Inhalte verwalten</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Inhalte verwalten</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
       </Layout>
     );
@@ -143,7 +143,7 @@ export default function ContentAdmin() {
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="card mb-6">
-        <div className="font-semibold text-white text-sm mb-3">Neuen Kurs anlegen</div>
+        <div className="font-semibold text-textMain text-sm mb-3">Neuen Kurs anlegen</div>
         <div className="flex flex-col gap-2.5">
           <input className="input" placeholder="Titel" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} />
           <textarea className="input" placeholder="Kurzbeschreibung" rows={2} value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} />
@@ -173,7 +173,7 @@ export default function ContentAdmin() {
             <div key={c.id} className="card">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <div className="font-display text-base font-semibold text-white">{c.title}</div>
+                  <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
                   <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
                   <div className="text-[10px] uppercase tracking-wide text-teal mt-1">{folders.find((f) => f.id === c.nav_item_id)?.label || "Ohne Ordner"}</div>
                 </div>

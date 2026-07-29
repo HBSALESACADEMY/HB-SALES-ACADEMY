@@ -266,42 +266,42 @@ export default function Community() {
 
       <div className="card flex items-center gap-2 mb-4">
         <Icon name="search" size={15} />
-        <input className="bg-transparent border-none outline-none text-sm flex-1 text-white" placeholder="Beiträge durchsuchen..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        <input className="bg-transparent border-none outline-none text-sm flex-1 text-textMain" placeholder="Beiträge durchsuchen..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
       </div>
 
       <div className="flex items-center gap-2 mb-4">
         <button onClick={() => setScope("org")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "org" ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "org" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
           Meine Organisation
         </button>
         <button onClick={() => setScope("global")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "global" ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "global" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
           Global
         </button>
       </div>
 
       {kudosWall && (kudosWall.topKudos || kudosWall.topXp || kudosWall.topStreak) && (
         <div className="card mb-5">
-          <div className="font-semibold text-white text-sm mb-3">✨ Highlights der Woche</div>
+          <div className="font-semibold text-textMain text-sm mb-3">✨ Highlights der Woche</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {kudosWall.topKudos && (
               <div className="text-center">
                 <div className="text-lg">🔥</div>
-                <div className="text-sm text-white font-semibold">{kudosWall.topKudos.name}</div>
+                <div className="text-sm text-textMain font-semibold">{kudosWall.topKudos.name}</div>
                 <div className="text-xs text-textMuted">{kudosWall.topKudos.count} Kudos erhalten</div>
               </div>
             )}
             {kudosWall.topXp && (
               <div className="text-center">
                 <div className="text-lg">📈</div>
-                <div className="text-sm text-white font-semibold">{kudosWall.topXp.name}</div>
+                <div className="text-sm text-textMain font-semibold">{kudosWall.topXp.name}</div>
                 <div className="text-xs text-textMuted">{kudosWall.topXp.amount} XP diese Woche</div>
               </div>
             )}
             {kudosWall.topStreak && (
               <div className="text-center">
                 <div className="text-lg">⚡</div>
-                <div className="text-sm text-white font-semibold">{kudosWall.topStreak.name}</div>
+                <div className="text-sm text-textMain font-semibold">{kudosWall.topStreak.name}</div>
                 <div className="text-xs text-textMuted">{kudosWall.topStreak.days} Tage Serie</div>
               </div>
             )}
@@ -312,26 +312,26 @@ export default function Community() {
       {/* Group tabs */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <button onClick={() => router.push("/members")}
-          className="px-3 py-1.5 rounded-full text-xs font-semibold border border-line text-textMuted hover:text-white hover:border-[var(--org-color-1,#4A3565)]">
+          className="px-3 py-1.5 rounded-full text-xs font-semibold border border-line text-textMuted hover:text-textMain hover:border-[var(--org-color-1,#4A3565)]">
           👥 Alle Mitglieder
         </button>
         <button onClick={() => setActiveGroup("all")}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
           Alle
         </button>
         {groups.map((g) => (
           <div key={g.id} className="relative group">
             <button onClick={() => setActiveGroup(g.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === g.id ? "bg-amber text-white border-amber" : "border-line text-textMuted hover:text-white hover:border-[#3A3F55]"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === g.id ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
               {g.name}
             </button>
             {isManager && (
-              <button onClick={() => deleteGroup(g.id)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-coral text-white text-[9px] items-center justify-center hidden group-hover:flex">×</button>
+              <button onClick={() => deleteGroup(g.id)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-coral text-textMain text-[9px] items-center justify-center hidden group-hover:flex">×</button>
             )}
           </div>
         ))}
         {isManager && !showGroupForm && (
-          <button onClick={() => setShowGroupForm(true)} className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-line text-textMuted hover:text-white hover:border-[#3A3F55]">
+          <button onClick={() => setShowGroupForm(true)} className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]">
             + Neue Gruppe
           </button>
         )}
@@ -375,7 +375,7 @@ export default function Community() {
                 <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80" onClick={() => openProfile(p.user_id)}>
                   <Avatar name={authorName} src={profileMap[p.user_id]?.avatar} size={34} />
                   <div>
-                    <div className="font-semibold text-white text-sm flex items-center gap-1.5">
+                    <div className="font-semibold text-textMain text-sm flex items-center gap-1.5">
                       {authorName}
                       {friendIds.has(p.user_id) && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet/15 text-violet font-semibold">Freund</span>}
                     </div>
@@ -386,7 +386,7 @@ export default function Community() {
                   <button onClick={() => deletePost(p.id)} className="btn-ghost text-xs text-coral">Löschen</button>
                 )}
               </div>
-              <p className="text-sm text-white whitespace-pre-wrap mb-3">{p.content}</p>
+              <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{p.content}</p>
 
               {p.attachment_url && p.attachment_type === "image" && (
                 <img src={p.attachment_url} alt="" className="rounded-lg max-h-96 w-auto mb-3 border border-line" />
@@ -421,7 +421,7 @@ export default function Community() {
                           </button>
                           <div className="text-xs flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-semibold text-white cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>{profileMap[c.user_id]?.name || "Unbenannt"}:</span>
+                              <span className="font-semibold text-textMain cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>{profileMap[c.user_id]?.name || "Unbenannt"}:</span>
                               <span className="text-textMuted">{c.content}</span>
                               {isTop && (
                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber/15 text-amber font-semibold flex-shrink-0">🏆 Top-Antwort</span>

@@ -42,7 +42,7 @@ export default function Suggestions() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Wissens-Vorschläge</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Wissens-Vorschläge</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
       </Layout>
     );
@@ -60,7 +60,7 @@ export default function Suggestions() {
         {pending.map((p) => (
           <div key={p.id} className="card">
             <div className="text-[10.5px] font-semibold uppercase tracking-wide text-amber mb-1">{p.tag}</div>
-            <div className="font-display font-semibold text-white mb-1.5">{p.title}</div>
+            <div className="font-display font-semibold text-textMain mb-1.5">{p.title}</div>
             <p className="text-[13px] text-textMuted mb-3">{p.body}</p>
             <div className="flex items-center gap-2">
               <button disabled={busyId === p.id} onClick={() => decide(p.id, "approved")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Genehmigen</button>

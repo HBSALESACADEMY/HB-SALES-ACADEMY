@@ -16,7 +16,7 @@ function GuideContent({ content }) {
     <div className="flex flex-col gap-3">
       {(content?.phasen || []).map((p, i) => (
         <div key={i}>
-          <div className="text-sm font-display font-semibold text-white">{p.phase}</div>
+          <div className="text-sm font-display font-semibold text-textMain">{p.phase}</div>
           {p.ziel && <div className="text-xs text-textMuted italic mb-1">{p.ziel}</div>}
           <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
             {(p.punkte || []).map((pt, j) => <li key={j}>{pt}</li>)}
@@ -102,7 +102,7 @@ export default function GuideGenerator() {
       <div className="card mb-5">
         <div className="inline-flex border border-line rounded-lg overflow-hidden mb-4">
           {TYPES.map((t) => (
-            <button key={t.id} className={`px-3.5 py-2 text-[12.5px] font-semibold ${type === t.id ? "bg-amber text-white" : "bg-surface text-textMuted"}`} onClick={() => setType(t.id)}>
+            <button key={t.id} className={`px-3.5 py-2 text-[12.5px] font-semibold ${type === t.id ? "bg-amber text-[var(--org-button-text,#fff)]" : "bg-surface text-textMuted"}`} onClick={() => setType(t.id)}>
               {t.label}
             </button>
           ))}
@@ -117,7 +117,7 @@ export default function GuideGenerator() {
       {currentGuide && (
         <div className="card mb-6" style={{ borderLeft: "4px solid var(--org-accent, #E8368F)" }}>
           <div className="flex items-center justify-between mb-3">
-            <div className="font-display font-semibold text-white text-sm">{currentGuide.title}</div>
+            <div className="font-display font-semibold text-textMain text-sm">{currentGuide.title}</div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button onClick={() => togglePublish(currentGuide)} className="btn-ghost text-xs">
                 {currentGuide.is_published ? "Privat machen" : "Im Team veröffentlichen"}
@@ -138,7 +138,7 @@ export default function GuideGenerator() {
               <div key={g.id} className="card">
                 <button onClick={() => setExpandedId(isOpen ? null : g.id)} className="flex items-center justify-between w-full text-left">
                   <div>
-                    <div className="font-semibold text-white text-sm">{g.title}</div>
+                    <div className="font-semibold text-textMain text-sm">{g.title}</div>
                     <div className="text-xs text-textMuted mt-0.5">
                       {TYPES.find((t) => t.id === g.type)?.label} · {new Date(g.created_at).toLocaleDateString("de-DE")}
                       {g.is_published && <span className="text-teal"> · veröffentlicht</span>}
@@ -179,7 +179,7 @@ export default function GuideGenerator() {
                         <Avatar name={author?.name || "?"} src={author?.avatar} size={28} />
                       </span>
                       <div>
-                        <div className="font-semibold text-white text-sm">{g.title}</div>
+                        <div className="font-semibold text-textMain text-sm">{g.title}</div>
                         <div className="text-xs text-textMuted mt-0.5">
                           {TYPES.find((t) => t.id === g.type)?.label} · von {author?.name || "Unbenannt"}
                         </div>

@@ -56,7 +56,7 @@ export default function CoursesIndex() {
                   <Icon name={unlocked ? (passed ? "check" : "book") : "lock"} />
                 </div>
                 <div className="flex-1">
-                  <div className="font-display text-base font-semibold text-white">{idx + 1}. {c.title}</div>
+                  <div className="font-display text-base font-semibold text-textMain">{idx + 1}. {c.title}</div>
                   <div className="text-xs text-textMuted mt-0.5">{c.desc}</div>
                 </div>
                 <div className="w-28 h-1.5 bg-line rounded-full overflow-hidden flex-shrink-0">

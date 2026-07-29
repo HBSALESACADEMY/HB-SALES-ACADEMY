@@ -37,7 +37,7 @@ export default function RoleplayHistory() {
             <div key={s.id} className="card">
               <button onClick={() => setExpandedId(isOpen ? null : s.id)} className="flex items-center justify-between w-full text-left">
                 <div>
-                  <div className="font-semibold text-white text-sm">{persona?.name || "Rollenspiel"} {s.difficulty && `· ${s.difficulty}`}</div>
+                  <div className="font-semibold text-textMain text-sm">{persona?.name || "Rollenspiel"} {s.difficulty && `· ${s.difficulty}`}</div>
                   <div className="text-xs text-textMuted mt-0.5">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} {s.evaluation_score != null && `· Score ${s.evaluation_score}`}</div>
                 </div>
                 <Icon name="chevron" size={14} color="#5A5F72" />
@@ -70,7 +70,7 @@ export default function RoleplayHistory() {
                             {s.evaluation_detail.beispielsaetze.map((b, i) => (
                               <div key={i} className="text-xs">
                                 <div className="text-textMuted mb-0.5">{b.moment}</div>
-                                <div className="text-white italic">„{b.satz}“</div>
+                                <div className="text-textMain italic">„{b.satz}“</div>
                               </div>
                             ))}
                           </div>
@@ -80,7 +80,7 @@ export default function RoleplayHistory() {
                   )}
                   <div className="flex flex-col gap-2">
                     {(s.transcript || []).map((m, i) => (
-                      <div key={i} className={`max-w-[85%] px-3 py-2 rounded-lg text-xs ${m.role === "user" ? "self-end bg-amber text-white ml-auto" : "self-start bg-surfaceRaised text-white"}`}>
+                      <div key={i} className={`max-w-[85%] px-3 py-2 rounded-lg text-xs ${m.role === "user" ? "self-end bg-amber text-[var(--org-button-text,#fff)] ml-auto" : "self-start bg-surfaceRaised text-textMain"}`}>
                         {m.content}
                       </div>
                     ))}

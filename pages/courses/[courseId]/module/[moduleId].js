@@ -74,7 +74,7 @@ export default function ModuleRunner() {
     <Layout>
       {phase === "theory" && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">{mod.title}</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">{mod.title}</h1>
           <p className="text-textMuted text-sm mb-5">{course.title}</p>
           <div className="border-l-[3px] border-amber rounded-r-lg p-4 mb-5 text-[13.5px] text-textMuted leading-relaxed whitespace-pre-line" style={{ background: "rgba(240,178,62,.06)" }}>
             {mod.theory}
@@ -85,7 +85,7 @@ export default function ModuleRunner() {
 
       {phase === "mc" && shuffled && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">{mod.title}</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">{mod.title}</h1>
           <p className="text-textMuted text-sm mb-4">Frage {qIndex + 1} von {questions.length}</p>
           <div className="flex mb-6">
             {questions.map((_, i) => (
@@ -127,7 +127,7 @@ export default function ModuleRunner() {
 
       {(phase === "open" || phase === "grading") && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">Praxisfall</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">Praxisfall</h1>
           <p className="text-textMuted text-sm mb-4">MC-Teil: {mcScore}/{questions.length} richtig. Jetzt eine offene Fallstudie — deine Antwort wird von der KI bewertet.</p>
           <div className="card max-w-xl">
             <p className="text-[15px] font-medium mb-4 leading-relaxed">{mod.open.prompt}</p>
@@ -148,20 +148,20 @@ export default function ModuleRunner() {
 
       {phase === "done" && grading && (
         <>
-          <h1 className="text-2xl font-display text-white mb-1">{mod.title} – Ergebnis</h1>
+          <h1 className="text-2xl font-display text-textMain mb-1">{mod.title} – Ergebnis</h1>
           <div className="card max-w-xl">
             <div className="flex gap-6 mb-4">
               <div>
                 <div className="text-[11px] text-textMuted uppercase">Multiple Choice</div>
-                <div className="text-2xl font-mono font-bold text-white">{Math.round((mcScore / questions.length) * 100)}%</div>
+                <div className="text-2xl font-mono font-bold text-textMain">{Math.round((mcScore / questions.length) * 100)}%</div>
               </div>
               <div>
                 <div className="text-[11px] text-textMuted uppercase">Fallstudie (KI-bewertet)</div>
-                <div className="text-2xl font-mono font-bold text-white">{grading.score}%</div>
+                <div className="text-2xl font-mono font-bold text-textMain">{grading.score}%</div>
               </div>
             </div>
             <div className="border-t border-line pt-4">
-              <strong className="text-sm text-white block mb-1.5">Feedback zur Fallstudie</strong>
+              <strong className="text-sm text-textMain block mb-1.5">Feedback zur Fallstudie</strong>
               <p className="text-sm text-textMuted leading-relaxed">{grading.feedback}</p>
               {grading.erfuellteKriterien && grading.erfuellteKriterien.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">

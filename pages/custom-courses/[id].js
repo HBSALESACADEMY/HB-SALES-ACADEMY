@@ -34,7 +34,7 @@ export default function CustomCourseDetail() {
       <div className="flex flex-col gap-4">
         {modules.map((m) => (
           <div key={m.id} className="card">
-            <div className="font-display text-base font-semibold text-white mb-2">{m.title}</div>
+            <div className="font-display text-base font-semibold text-textMain mb-2">{m.title}</div>
             {m.video_url && (
               <video controls className="w-full rounded-lg mb-3" src={m.video_url} />
             )}

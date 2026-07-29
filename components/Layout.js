@@ -387,7 +387,7 @@ export default function Layout({ children, fullBleed }) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="card max-w-sm text-center">
-          <div className="font-display text-lg font-bold text-white mb-2">Konto wartet auf Freigabe</div>
+          <div className="font-display text-lg font-bold text-textMain mb-2">Konto wartet auf Freigabe</div>
           <p className="text-textMuted text-sm mb-4">Ein Manager muss deine Registrierung erst bestätigen, bevor du die Academy nutzen kannst. Schau später nochmal vorbei.</p>
           <button onClick={handleLogout} className="btn-ghost text-xs">Abmelden</button>
         </div>
@@ -399,7 +399,7 @@ export default function Layout({ children, fullBleed }) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="card max-w-sm text-center">
-          <div className="font-display text-lg font-bold text-white mb-2">Zugang abgelehnt</div>
+          <div className="font-display text-lg font-bold text-textMain mb-2">Zugang abgelehnt</div>
           <p className="text-textMuted text-sm mb-4">Dein Konto wurde von einem Manager nicht freigegeben. Wende dich an deinen Ansprechpartner, falls das ein Irrtum ist.</p>
           <button onClick={handleLogout} className="btn-ghost text-xs">Abmelden</button>
         </div>
@@ -415,7 +415,7 @@ export default function Layout({ children, fullBleed }) {
       {/* Mobile top bar */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[var(--org-bg,#12141C)] flex-shrink-0">
         <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-10 w-auto" />
-        <button onClick={() => setMobileNavOpen(true)} className="text-white p-1.5 -mr-1.5" aria-label="Menü öffnen">
+        <button onClick={() => setMobileNavOpen(true)} className="text-textMain p-1.5 -mr-1.5" aria-label="Menü öffnen">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
         </button>
       </div>
@@ -508,11 +508,16 @@ export default function Layout({ children, fullBleed }) {
                             className={`relative overflow-hidden flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
                               draggedNavId === item.id ? "opacity-40" : ""
                             } ${
-                              router.asPath === route ? "text-amber" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-white"
+                              router.asPath === route ? "" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-textMain"
                             }`}
                             style={router.asPath === route ? {
                               background: "linear-gradient(90deg, rgb(var(--org-color-1-rgb, 123 47 247) / .15), rgb(var(--org-accent-rgb, 232 54 143) / .15), transparent)",
                               boxShadow: "inset 2px 0 0 var(--org-accent, #E8368F)",
+                              // Gegen den Sidebar-Hintergrund kontrastgeprüft (siehe
+                              // lib/orgBranding.js setNavActiveTextVar) — nicht die
+                              // rohe Akzentfarbe, damit ein sehr helles Branding hier
+                              // nie unlesbar wird. Icon erbt automatisch (currentColor).
+                              color: "var(--org-nav-active-text, #E8368F)",
                             } : undefined}
                           >
                             {shineId === item.id && <span className="hb-shine" />}
@@ -535,7 +540,7 @@ export default function Layout({ children, fullBleed }) {
         </div>
         <button onClick={() => router.push("/profile")} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surfaceRaised text-left mb-1">
           <Avatar name={profile?.full_name || "?"} src={profile?.avatar_url} size={30} />
-          <span className="text-[13px] font-medium text-white truncate flex-1">{profile?.full_name || "Mein Profil"}</span>
+          <span className="text-[13px] font-medium text-textMain truncate flex-1">{profile?.full_name || "Mein Profil"}</span>
         </button>
         <div className="mt-auto flex flex-col gap-1.5 p-2.5 bg-surface border border-line rounded-lg text-xs">
           <div className="flex justify-between">
@@ -547,7 +552,7 @@ export default function Layout({ children, fullBleed }) {
           </div>
           <span className="font-mono text-textMuted">{into}/150 bis Level {level + 1}</span>
         </div>
-        <button onClick={handleLogout} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] text-textMuted hover:text-white hover:bg-surfaceRaised text-left">
+        <button onClick={handleLogout} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] text-textMuted hover:text-textMain hover:bg-surfaceRaised text-left">
           <Icon name="logout" size={15} /> Abmelden
         </button>
       </aside>
@@ -562,15 +567,15 @@ export default function Layout({ children, fullBleed }) {
         style={{ background: "linear-gradient(120deg, var(--org-color-1, #8B3EF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF7A45) 100%)", boxShadow: "0 4px 16px -4px rgb(var(--org-accent-rgb, 232 54 143) / .5)" }}
         title="Vertriebs-Buddy"
       >
-        <span className="text-white text-lg">💬</span>
+        <span className="text-textMain text-lg">💬</span>
       </button>
 
       {quickHelpOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onClick={() => setQuickHelpOpen(false)}>
           <div className="card max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <span className="font-display font-semibold text-white">💬 Vertriebs-Buddy</span>
-              <button onClick={() => setQuickHelpOpen(false)} className="text-textMuted hover:text-white text-lg leading-none">×</button>
+              <span className="font-display font-semibold text-textMain">💬 Vertriebs-Buddy</span>
+              <button onClick={() => setQuickHelpOpen(false)} className="text-textMuted hover:text-textMain text-lg leading-none">×</button>
             </div>
             <textarea className="input mb-2" rows={2} placeholder="Kurze Verkaufsfrage stellen..." value={quickHelpQuestion} onChange={(e) => setQuickHelpQuestion(e.target.value)} />
             <button onClick={askQuickHelp} disabled={quickHelpLoading || !quickHelpQuestion.trim()} className="btn text-xs w-full justify-center disabled:opacity-40 mb-3">
@@ -590,7 +595,7 @@ export default function Layout({ children, fullBleed }) {
         >
           <Icon name="lock" color="var(--org-accent, #E8368F)" size={18} />
           <div className="text-left">
-            <div className="text-sm font-semibold text-white">Neue Registrierung</div>
+            <div className="text-sm font-semibold text-textMain">Neue Registrierung</div>
             <div className="text-xs text-textMuted">{approvalToast.name} wartet auf Freigabe{approvalToast.count > 1 ? ` — ${approvalToast.count} insgesamt offen` : ""}</div>
           </div>
         </button>
@@ -603,7 +608,7 @@ export default function Layout({ children, fullBleed }) {
         >
           <Icon name="users" color="var(--org-accent, #E8368F)" size={18} />
           <div className="text-left">
-            <div className="text-sm font-semibold text-white">Neue Freundschaftsanfrage</div>
+            <div className="text-sm font-semibold text-textMain">Neue Freundschaftsanfrage</div>
             <div className="text-xs text-textMuted">{friendToast.name} möchte sich vernetzen</div>
           </div>
         </button>

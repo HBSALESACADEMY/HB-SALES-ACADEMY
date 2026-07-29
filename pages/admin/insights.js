@@ -110,7 +110,7 @@ export default function AdminInsights() {
   if (!isAdmin) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-white mb-1">Insights</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Insights</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Admin-Konten verfügbar.</p>
       </Layout>
     );
@@ -139,7 +139,7 @@ export default function AdminInsights() {
             <div className="flex items-center justify-between mb-2">
               <Icon name={t.icon} color={t.color} size={18} />
             </div>
-            <div className="font-display text-2xl font-bold text-white">{t.value}</div>
+            <div className="font-display text-2xl font-bold text-textMain">{t.value}</div>
             <div className="text-xs text-textMuted mt-0.5">{t.label}</div>
             {t.sub && <div className="text-[11px] text-textMuted mt-1">{t.sub}</div>}
           </div>
@@ -147,7 +147,7 @@ export default function AdminInsights() {
       </div>
 
       <div className="card mb-6">
-        <div className="font-semibold text-white text-sm mb-1">Meistgenutzte Bereiche</div>
+        <div className="font-semibold text-textMain text-sm mb-1">Meistgenutzte Bereiche</div>
         <p className="text-xs text-textMuted mb-3">Letzte 30 Tage, über alle Mitglieder hinweg.</p>
         <div className="flex flex-col gap-2">
           {stats.usageRanking.map((r, i) => {
@@ -155,7 +155,7 @@ export default function AdminInsights() {
             return (
               <div key={r.path} className="flex items-center gap-3">
                 <span className="w-5 text-center text-xs text-textMuted font-mono flex-shrink-0">{i + 1}</span>
-                <span className="text-sm text-white w-40 flex-shrink-0 truncate">{r.label}</span>
+                <span className="text-sm text-textMain w-40 flex-shrink-0 truncate">{r.label}</span>
                 <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
                   <div className="h-full brand-gradient" style={{ width: `${(r.count / max) * 100}%` }} />
                 </div>
@@ -168,7 +168,7 @@ export default function AdminInsights() {
       </div>
 
       <div className="card mb-6">
-        <div className="font-semibold text-white text-sm mb-3">Kurs-Abschlüsse</div>
+        <div className="font-semibold text-textMain text-sm mb-3">Kurs-Abschlüsse</div>
         <div className="flex flex-col gap-2.5">
           {COURSES.map((c) => {
             const count = stats.passedByCourse[c.id] || 0;
@@ -176,7 +176,7 @@ export default function AdminInsights() {
             return (
               <div key={c.id}>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-white">{c.title}</span>
+                  <span className="text-textMain">{c.title}</span>
                   <span className="text-textMuted">{count}/{stats.totalMembers} ({pct}%)</span>
                 </div>
                 <div className="h-1.5 bg-line rounded-full overflow-hidden">
@@ -190,12 +190,12 @@ export default function AdminInsights() {
 
       {stats.topContributors.length > 0 && (
         <div className="card">
-          <div className="font-semibold text-white text-sm mb-3">Aktivste Community-Mitglieder (Kudos erhalten)</div>
+          <div className="font-semibold text-textMain text-sm mb-3">Aktivste Community-Mitglieder (Kudos erhalten)</div>
           <div className="flex flex-col gap-2.5">
             {stats.topContributors.map((c) => (
               <div key={c.id} className="flex items-center gap-3 cursor-pointer" onClick={() => openProfile(c.id)}>
                 <Avatar name={c.profile?.full_name || "?"} src={c.profile?.avatar_url} size={30} />
-                <span className="text-sm text-white flex-1">{c.profile?.full_name || "Unbenannt"}</span>
+                <span className="text-sm text-textMain flex-1">{c.profile?.full_name || "Unbenannt"}</span>
                 <span className="text-xs text-textMuted">{c.count} Kudos</span>
               </div>
             ))}

@@ -36,37 +36,27 @@ Struktur bitte ausschließlich `schema_v2.sql` verwenden.
 
 ## Multi-Tenant: neue Kunden-Organisation anlegen
 
-Seit `migration_15_organizations.sql` ist die App Multi-Tenant/White-Label:
-jede Zeile in praktisch jeder Tabelle ist implizit einer `organizations`-Zeile
-zugeordnet (über `profiles.organization_id`), Kunden sehen sich gegenseitig
-nicht (Ausnahme: die Community bleibt bewusst unternehmensübergreifend).
+Die App ist Multi-Tenant/White-Label: jede Zeile in praktisch jeder Tabelle
+ist implizit einer `organizations`-Zeile zugeordnet (transitiv über
+`profiles.organization_id`, per `same_org()`-Funktion), Kunden sehen sich
+gegenseitig nicht (Ausnahme: die globale Community-Ebene und Freundschafts-
+anfragen bleiben bewusst unternehmensübergreifend).
 
-Es gibt **kein Selbstbedienungs-Signup** für neue Organisationen — Houman legt
-jede neue Kunden-Organisation manuell per SQL an:
+Es gibt **kein Selbstbedienungs-Signup** für neue Organisationen — nur
+Plattform-Admins (`is_platform_admin = true`) legen neue Kunden an, und zwar
+**nicht mehr per SQL**, sondern über die Oberfläche unter
+`/admin/organization` ("Neuen Kunden einrichten"): Das Formular legt in
+einem Schritt sowohl die Organisation (inkl. eindeutigem Firmencode-Slug)
+als auch den ersten Organisations-Manager-Account (Name, E-Mail, Passwort)
+an — dieser kann sich sofort anmelden, eigene Registrierungen freigeben und
+Logo/Branding seiner Organisation selbst verwalten. Der Organisations-
+Manager lässt sich später jederzeit über dieselbe Seite durch ein anderes
+Mitglied ersetzen.
 
-```sql
-insert into organizations (name, slug) values ('<Kundenname>', '<slug-ohne-leerzeichen>');
-```
-
-Danach:
-1. Dem Kunden den `slug` mitteilen ("Firmen-Code").
-2. Der erste Nutzer des Kunden registriert sich über das normale Signup-
-   Formular mit genau diesem Firmen-Code — landet automatisch (Status
-   `pending`) in der neuen Organisation.
-3. Diesen ersten Nutzer wie gehabt per SQL befördern:
-   ```sql
-   update profiles set role = 'manager', is_admin = true where id = '<user-uuid>';
-   ```
-4. Ab jetzt kann dieser Manager/Admin innerhalb `/admin/organization` selbst
-   Logo, Name und Akzentfarbe setzen, und über `/admin` weitere Registrierungen
-   seiner eigenen Organisation genehmigen — alles automatisch auf die eigene
-   Organisation begrenzt, ohne weiteres Zutun von Houman.
-
-Bekannte, bewusste Einschränkungen dieser ersten Version (siehe auch Kommentare
-in `migration_15_organizations.sql`): keine eigenen (Sub-)Domains pro Kunde,
-kein automatisches Erkennen der Akzentfarbe aus einem hochgeladenen Logo,
-eingebaute Sidebar-Einträge (`nav_items` mit `is_builtin = true`) bleiben
-plattformweit geteilt statt pro Organisation eigenständig anpassbar.
+Bekannte, bewusste Einschränkung: keine eigenen (Sub-)Domains pro Kunde
+(Zugang läuft ausschließlich über den Firmencode auf der gemeinsamen Login-
+Seite); eingebaute Sidebar-Einträge (`nav_items` mit `is_builtin = true`)
+bleiben plattformweit geteilt statt pro Organisation eigenständig anpassbar.
 
 ## Wichtig für künftige Änderungen
 

@@ -22,7 +22,7 @@ export default function WelcomeModal({ onClose }) {
         <div className="flex items-center gap-3 mb-4">
           <Avatar name={adminName || "?"} src={adminAvatar} size={48} />
           <div>
-            <div className="font-display font-semibold text-white">Herzlich willkommen! 👋</div>
+            <div className="font-display font-semibold text-textMain">Herzlich willkommen! 👋</div>
             {adminName && <div className="text-xs text-textMuted">— {adminName}</div>}
           </div>
         </div>
@@ -31,8 +31,8 @@ export default function WelcomeModal({ onClose }) {
           gegenseitig unterstützen und Erfolge feiern.
         </p>
         <p className="text-sm text-textMuted leading-relaxed mb-5">
-          Schau dich in der <b className="text-white">Community</b> um, vernetze dich mit deinem Team über{" "}
-          <b className="text-white">Mitglieder</b>, und trau dich, Fragen zu stellen. Hier hilft jeder jedem.
+          Schau dich in der <b className="text-textMain">Community</b> um, vernetze dich mit deinem Team über{" "}
+          <b className="text-textMain">Mitglieder</b>, und trau dich, Fragen zu stellen. Hier hilft jeder jedem.
           Viel Erfolg und einen tollen Start!
         </p>
         <button onClick={onClose} className="btn w-full justify-center">Los geht's!</button>

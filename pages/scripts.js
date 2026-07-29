@@ -70,7 +70,7 @@ export default function Scripts() {
 
       <div className="card flex items-center gap-2 mb-5">
         <Icon name="search" size={15} />
-        <input className="bg-transparent border-none outline-none text-sm flex-1 text-white" placeholder="Skripte durchsuchen..." value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="bg-transparent border-none outline-none text-sm flex-1 text-textMain" placeholder="Skripte durchsuchen..." value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
       {showForm && (
@@ -92,7 +92,7 @@ export default function Scripts() {
             {items.map((s) => (
               <div key={s.id} className="card">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="font-display font-semibold text-white text-sm">{s.title}</div>
+                  <div className="font-display font-semibold text-textMain text-sm">{s.title}</div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => copy(s)} className="btn-ghost text-xs">
                       {copiedId === s.id ? "Kopiert!" : <><Icon name="copy" size={12} /> Kopieren</>}
