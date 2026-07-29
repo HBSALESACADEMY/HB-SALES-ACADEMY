@@ -15,7 +15,7 @@ export default function AdminInsights() {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", session.user.id).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("is_admin, organization_id").eq("id", session.user.id).maybeSingle();
       if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
 
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -25,7 +25,10 @@ export default function AdminInsights() {
         { data: posts }, { data: comments }, { data: kudos }, { data: logins },
         { data: callLogs },
       ] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, avatar_url, xp, status, created_at"),
+        // Explizit auf die eigene Organisation eingeschränkt — Profile sind
+        // seit der offenen Sichtbarkeit (globale Suche/Community) über RLS
+        // allein nicht mehr automatisch organisationsgebunden.
+        supabase.from("profiles").select("id, full_name, avatar_url, xp, status, created_at").eq("organization_id", me.organization_id),
         supabase.from("quiz_results").select("id"),
         supabase.from("exam_results").select("course_id, passed"),
         supabase.from("roleplay_sessions").select("evaluation_score"),

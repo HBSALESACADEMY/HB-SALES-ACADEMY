@@ -224,12 +224,23 @@ export default function Layout({ children, fullBleed }) {
       }
 
       let approvalCount = 0, suggestionCount = 0, teamReqCount = 0;
-      if (me?.role === "manager" || me?.role === "trainer") {
+      // Nutzeranfragen (status='pending') darf sehen, wer sie auch genehmigen
+      // kann: Org-Manager (nur eigene Organisation) und Plattform-Admins
+      // (organisationsübergreifend) — is_platform_admin ist unabhängig vom
+      // role-Feld, muss also separat geprüft werden, sonst verpasst ein
+      // Plattform-Admin ohne role='manager' den Badge komplett.
+      const isManager = me?.role === "manager";
+      const canSeeApprovals = isManager || me?.is_platform_admin;
+      if (isManager || me?.role === "trainer" || me?.is_platform_admin) {
         // Trainer sehen nur den Wissens-Vorschläge-Badge (Content-Verwaltung),
         // keine Nutzer-Freigaben/Team-Anfragen — die bleiben Manager-only.
-        const isManager = me?.role === "manager";
+        let approvalsQuery = null;
+        if (canSeeApprovals) {
+          approvalsQuery = supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending");
+          if (!me?.is_platform_admin) approvalsQuery = approvalsQuery.eq("organization_id", me.organization_id);
+        }
         const [a, s, t] = await Promise.all([
-          isManager ? supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending") : Promise.resolve({ count: 0 }),
+          approvalsQuery || Promise.resolve({ count: 0 }),
           supabase.from("kb_entries").select("id", { count: "exact", head: true }).eq("status", "pending"),
           isManager ? supabase.from("team_requests").select("id", { count: "exact", head: true }).eq("manager_id", session.user.id).eq("status", "pending") : Promise.resolve({ count: 0 }),
         ]);
@@ -237,9 +248,10 @@ export default function Layout({ children, fullBleed }) {
         if (mounted) { setPendingApprovals(approvalCount); setPendingSuggestions(suggestionCount); setPendingTeamRequests(teamReqCount); }
 
         const isFirstCheck = prevApprovalCount.current === null;
-        if (mounted && approvalCount > 0 && (isFirstCheck || approvalCount > prevApprovalCount.current)) {
-          const { data: latest } = await supabase.from("profiles").select("full_name")
-            .eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (mounted && canSeeApprovals && approvalCount > 0 && (isFirstCheck || approvalCount > prevApprovalCount.current)) {
+          let latestQuery = supabase.from("profiles").select("full_name").eq("status", "pending");
+          if (!me?.is_platform_admin) latestQuery = latestQuery.eq("organization_id", me.organization_id);
+          const { data: latest } = await latestQuery.order("created_at", { ascending: false }).limit(1).maybeSingle();
           setApprovalToast({ name: latest?.full_name || "Jemand", count: approvalCount });
           setTimeout(() => setApprovalToast(null), 7000);
         }

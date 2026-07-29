@@ -39,7 +39,18 @@ export default function Admin() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Neue Registrierungen sollen ohne manuelles Neuladen auftauchen: Echtzeit
+    // auf profiles-Änderungen, plus ein 20s-Poll als Fallback falls der
+    // Realtime-Kanal mal eine Änderung verpasst.
+    const channel = supabase
+      .channel("admin-users-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
+      .subscribe();
+    const interval = setInterval(load, 20000);
+    return () => { supabase.removeChannel(channel); clearInterval(interval); };
+  }, []);
 
   async function runAction(targetId, action) {
     setBusyId(targetId);
@@ -94,7 +105,10 @@ export default function Admin() {
               return (
                 <div key={u.id} className="card flex items-center gap-4 flex-wrap border border-amber/30">
                   <div className="flex-1 min-w-[180px]">
-                    <div className="font-semibold text-white text-sm">{u.full_name || "Unbenannt"}</div>
+                    <div className="font-semibold text-white text-sm flex items-center gap-2">
+                      {u.full_name || "Unbenannt"}
+                      <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Ausstehend</span>
+                    </div>
                     <div className="text-xs text-textMuted mt-1">{u.email || "–"}{isPlatformAdmin && u.organization_name ? ` · ${u.organization_name}` : ""}</div>
                   </div>
                   <div className="flex items-center gap-2">

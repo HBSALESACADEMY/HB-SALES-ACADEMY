@@ -148,12 +148,21 @@ export default function Dashboard() {
 
       if (me?.is_admin) {
         const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-        const [{ count: totalMembers }, { count: weeklyActiveCount }, { count: pendingCount }] = await Promise.all([
-          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "approved"),
-          supabase.from("login_events").select("user_id", { count: "exact", head: true }).gt("created_at", weekAgo),
-          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        const { data: myProfile } = await supabase.from("profiles").select("organization_id").eq("id", uid).maybeSingle();
+        const orgId = myProfile?.organization_id;
+        const [{ count: totalMembers }, { data: logins }, { count: pendingCount }, { data: approvedIdsData }] = await Promise.all([
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "approved").eq("organization_id", orgId),
+          supabase.from("login_events").select("user_id").gt("created_at", weekAgo),
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending").eq("organization_id", orgId),
+          supabase.from("profiles").select("id").eq("status", "approved").eq("organization_id", orgId),
         ]);
-        setAdminSnapshot({ totalMembers: totalMembers || 0, weeklyActiveCount: weeklyActiveCount || 0, pendingCount: pendingCount || 0 });
+        // Eindeutige Nutzer zählen (nicht Login-Ereignisse) — sonst kann die
+        // Zahl bei mehrfachen Logins über die tatsächliche Mitgliederzahl
+        // hinausgehen. Nur gegen aktuell genehmigte Mitglieder der eigenen
+        // Organisation zählen.
+        const approvedIds = new Set((approvedIdsData || []).map((p) => p.id));
+        const weeklyActiveCount = new Set((logins || []).map((l) => l.user_id).filter((id) => approvedIds.has(id))).size;
+        setAdminSnapshot({ totalMembers: totalMembers || 0, weeklyActiveCount, pendingCount: pendingCount || 0 });
       }
     }
     load();

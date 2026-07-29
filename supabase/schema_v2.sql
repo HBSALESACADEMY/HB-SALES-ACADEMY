@@ -511,14 +511,16 @@ language sql stable security definer as $$
 $$;
 
 -- Mitglieder der eigenen Organisation sind füreinander uneingeschränkt
--- sichtbar. Zusätzlich ist jedes freigegebene Profil grundsätzlich
--- auffindbar (nötig für die globale Suche/Community: "Profil ansehen" MUSS
--- schon vor einer Freundschaftsanfrage möglich sein).
+-- sichtbar (auch mit status='pending' — sonst sehen Manager/Admins neue
+-- Nutzeranfragen nicht). Zusätzlich ist jedes freigegebene Profil
+-- grundsätzlich auffindbar (nötig für die globale Suche/Community: "Profil
+-- ansehen" MUSS schon vor einer Freundschaftsanfrage möglich sein).
 create or replace function public.can_view_profile(target_id uuid, viewer_id uuid)
 returns boolean
 language sql stable security definer as $$
   select
     target_id = viewer_id
+    or same_org(target_id, viewer_id)
     or exists (select 1 from profiles t where t.id = target_id and t.status = 'approved')
 $$;
 
