@@ -801,10 +801,24 @@ drop policy if exists "community_groups_select_all" on community_groups;
 -- Manager bleibt auf die eigene Organisation begrenzt.
 create policy "community_groups_select_all" on community_groups for select using (true);
 drop policy if exists "community_groups_write_managers" on community_groups;
-create policy "community_groups_write_managers" on community_groups for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "community_groups_write_managers" on community_groups for insert with check (
+  exists (
+    select 1 from profiles
+    where profiles.id = auth.uid()
+      and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin)
+  )
+);
 drop policy if exists "community_groups_delete_managers" on community_groups;
 create policy "community_groups_delete_managers" on community_groups for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (
+      select 1 from profiles
+      where profiles.id = auth.uid()
+        and (profiles.role in ('manager', 'trainer') or profiles.is_admin)
+    )
+    and same_org(created_by, auth.uid())
+  )
 );
 
 -- --- community_posts ---

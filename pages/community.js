@@ -44,8 +44,8 @@ export default function Community() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const { data: me } = await supabase.from("profiles").select("role, organization_id").eq("id", session.user.id).maybeSingle();
-    setIsManager(me?.role === "manager");
+    const { data: me } = await supabase.from("profiles").select("role, organization_id, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    setIsManager(me?.role === "manager" || me?.role === "trainer" || !!me?.is_admin || !!me?.is_platform_admin);
     setMyOrgId(me?.organization_id || null);
 
     const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: commentKudos }, { data: profiles }, { data: friendships }] = await Promise.all([
