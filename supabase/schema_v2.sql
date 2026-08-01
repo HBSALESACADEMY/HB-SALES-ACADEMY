@@ -250,18 +250,20 @@ create table if not exists flashcard_progress (
 );
 
 -- Personalisierter Lernpfad: nach den 7 festen Grundkursen generiert die KI
--- fortlaufend individuelle Zusatzmodule, zugeschnitten auf die erkannten
--- Schwächen des jeweiligen Vertrieblers (siehe pages/api/personal-module-generate.js).
-create table if not exists personal_modules (
+-- fortlaufend vollständige, individuelle Zusatzkurse (gleiche Tiefe wie die
+-- Grundkurse: mehrere Module mit Theorie+MC+offener Frage, plus
+-- Abschlussprüfung), zugeschnitten auf die erkannten Schwächen des
+-- jeweiligen Vertrieblers (siehe pages/api/personal-course-generate.js und
+-- lib/resolveCourse.js).
+create table if not exists personal_courses (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
   title text not null,
+  description text not null,
+  accent text not null default '#7B2FF7',
   focus_area text not null,
-  theory text not null,
-  question text not null,
-  source_course_id text,
-  source_module_id text,
-  completed_at timestamptz,
+  modules jsonb not null,
+  exam_case jsonb not null,
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -600,7 +602,7 @@ alter table scripts enable row level security;
 alter table guides enable row level security;
 alter table flashcards enable row level security;
 alter table flashcard_progress enable row level security;
-alter table personal_modules enable row level security;
+alter table personal_courses enable row level security;
 alter table daily_challenge_completions enable row level security;
 alter table duels enable row level security;
 alter table community_groups enable row level security;
@@ -812,9 +814,9 @@ create policy "fp_upsert_own" on flashcard_progress for insert with check (auth.
 drop policy if exists "fp_update_own" on flashcard_progress;
 create policy "fp_update_own" on flashcard_progress for update using (auth.uid() = user_id);
 
--- --- personal_modules ---
-drop policy if exists "personal_modules_select" on personal_modules;
-create policy "personal_modules_select" on personal_modules for select using (
+-- --- personal_courses ---
+drop policy if exists "personal_courses_select" on personal_courses;
+create policy "personal_courses_select" on personal_courses for select using (
   user_id = auth.uid()
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (
@@ -822,8 +824,8 @@ create policy "personal_modules_select" on personal_modules for select using (
     and same_org(user_id, auth.uid())
   )
 );
-drop policy if exists "personal_modules_insert" on personal_modules;
-create policy "personal_modules_insert" on personal_modules for insert with check (
+drop policy if exists "personal_courses_insert" on personal_courses;
+create policy "personal_courses_insert" on personal_courses for insert with check (
   user_id = auth.uid()
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (
@@ -831,8 +833,6 @@ create policy "personal_modules_insert" on personal_modules for insert with chec
     and same_org(user_id, auth.uid())
   )
 );
-drop policy if exists "personal_modules_update_own" on personal_modules;
-create policy "personal_modules_update_own" on personal_modules for update using (user_id = auth.uid());
 
 -- --- daily_challenge_completions ---
 drop policy if exists "dcc_select_own" on daily_challenge_completions;

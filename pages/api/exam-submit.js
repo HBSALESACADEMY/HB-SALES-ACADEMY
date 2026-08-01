@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
+import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { callAI } from "../../lib/aiClient";
-import { COURSES } from "../../lib/curriculum";
+import { resolveCourse } from "../../lib/resolveCourse";
 
 // Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
 export const config = { maxDuration: 45 };
@@ -14,7 +15,7 @@ export default async function handler(req, res) {
 
   try {
     const { courseId, mcScore, mcTotal, capstoneAnswer } = req.body;
-    const course = COURSES.find((c) => c.id === courseId);
+    const course = await resolveCourse(courseId, getAdminSupabase());
     if (!course || !course.examCase) return res.status(400).json({ error: "Kurs nicht gefunden." });
 
     const raw = await callAI(

@@ -5,12 +5,12 @@ import Icon from "../../../components/Icon";
 import { supabase } from "../../../lib/supabaseClient";
 import { apiGetBlob } from "../../../lib/apiClient";
 import { triggerConfetti } from "../../../lib/confetti";
-import { COURSES } from "../../../lib/curriculum";
+import { useCourse } from "../../../lib/useCourse";
 
 export default function CourseDetail() {
   const router = useRouter();
   const { courseId } = router.query;
-  const course = COURSES.find((c) => c.id === courseId);
+  const { course } = useCourse(courseId);
   const [quizResults, setQuizResults] = useState([]);
   const [examResults, setExamResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +63,7 @@ export default function CourseDetail() {
 
   return (
     <Layout>
-      <button className="btn-ghost btn mb-4" onClick={() => router.push("/courses")}>← Alle Kurse</button>
+      <button className="btn-ghost btn mb-4" onClick={() => router.push(course.isPersonal ? "/lernpfad" : "/courses")}>← {course.isPersonal ? "Mein Lernpfad" : "Alle Kurse"}</button>
       <h1 className="text-2xl font-display text-textMain mb-1">{course.title}</h1>
       <p className="text-textMuted text-sm mb-6">{course.desc}</p>
 

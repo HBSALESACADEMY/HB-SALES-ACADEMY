@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
@@ -21,6 +22,7 @@ function moduleTitle(courseId, moduleId) {
 }
 
 export default function LernpfadeAdmin() {
+  const router = useRouter();
   const [allowed, setAllowed] = useState(true);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
@@ -39,17 +41,17 @@ export default function LernpfadeAdmin() {
       return;
     }
 
-    const [{ data: profiles }, { data: quiz }, { data: exams }, { data: personal }] = await Promise.all([
+    const [{ data: profiles }, { data: quiz }, { data: exams }, { data: personalCourses }] = await Promise.all([
       supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved"),
       supabase.from("quiz_results").select("*"),
       supabase.from("exam_results").select("user_id, course_id, passed"),
-      supabase.from("personal_modules").select("*"),
+      supabase.from("personal_courses").select("*"),
     ]);
 
     const quizByUser = {};
     (quiz || []).forEach((r) => { quizByUser[r.user_id] = quizByUser[r.user_id] || []; quizByUser[r.user_id].push(r); });
-    const personalByUser = {};
-    (personal || []).forEach((m) => { personalByUser[m.user_id] = personalByUser[m.user_id] || []; personalByUser[m.user_id].push(m); });
+    const coursesByUser = {};
+    (personalCourses || []).forEach((c) => { coursesByUser[c.user_id] = coursesByUser[c.user_id] || []; coursesByUser[c.user_id].push(c); });
 
     const built = (profiles || []).map((p) => {
       const results = quizByUser[p.id] || [];
@@ -60,7 +62,7 @@ export default function LernpfadeAdmin() {
         weak,
         weakTitle: weak ? moduleTitle(weak.course_id, weak.module_id) : null,
         graduated: allPassed,
-        personalModules: personalByUser[p.id] || [],
+        personalCourses: coursesByUser[p.id] || [],
       };
     }).sort((a, b) => (a.profile.full_name || "").localeCompare(b.profile.full_name || ""));
 
@@ -74,7 +76,7 @@ export default function LernpfadeAdmin() {
     setGeneratingFor(userId);
     setError("");
     try {
-      await apiPost("/api/personal-module-generate", { targetUserId: userId });
+      await apiPost("/api/personal-course-generate", { targetUserId: userId });
       await load();
     } catch (e) {
       setError(e.message || "Fehler bei der Generierung.");
@@ -97,25 +99,36 @@ export default function LernpfadeAdmin() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Lernpfade (Team)</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Erkannte Schwächen und bereits generierte persönliche Module pro Mitarbeiter:in.</p>
+      <p className="text-textMuted text-sm mb-6">Erkannte Schwächen und bereits generierte persönliche Kurse pro Mitarbeiter:in.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="flex flex-col gap-3">
-        {rows.map(({ profile, weak, weakTitle, graduated, personalModules }) => (
-          <div key={profile.id} className="card flex items-center gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="font-display font-semibold text-textMain">{profile.full_name || "Unbenannt"}</div>
-              <div className="text-xs text-textMuted mt-0.5">
-                {graduated ? "Grundausbildung abgeschlossen" : "Grundausbildung läuft"}
-                {weak && ` · Schwächstes Thema: ${weakTitle} (${Math.round(weak.ratio * 100)}%)`}
-                {!weak && " · Noch keine Ergebnisse"}
+        {rows.map(({ profile, weak, weakTitle, graduated, personalCourses }) => (
+          <div key={profile.id} className="card">
+            <div className="flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="font-display font-semibold text-textMain">{profile.full_name || "Unbenannt"}</div>
+                <div className="text-xs text-textMuted mt-0.5">
+                  {graduated ? "Grundausbildung abgeschlossen" : "Grundausbildung läuft"}
+                  {weak && ` · Schwächstes Thema: ${weakTitle} (${Math.round(weak.ratio * 100)}%)`}
+                  {!weak && " · Noch keine Ergebnisse"}
+                </div>
+                <div className="text-[10.5px] text-textMuted mt-0.5">{personalCourses.length} persönliche Kurse generiert</div>
               </div>
-              <div className="text-[10.5px] text-textMuted mt-0.5">{personalModules.length} persönliche Module generiert</div>
+              <button disabled={generatingFor === profile.id} onClick={() => generateFor(profile.id)} className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">
+                {generatingFor === profile.id ? "Wird erstellt..." : "Kurs generieren"}
+              </button>
             </div>
-            <button disabled={generatingFor === profile.id} onClick={() => generateFor(profile.id)} className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">
-              {generatingFor === profile.id ? "Generiert..." : "Modul generieren"}
-            </button>
+            {personalCourses.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-line">
+                {personalCourses.map((c) => (
+                  <button key={c.id} onClick={() => router.push(`/courses/${c.id}`)} className="text-[11.5px] px-2.5 py-1 rounded-full border border-line text-textMuted hover:text-textMain hover:border-[var(--org-color-1,#4A3565)]">
+                    {c.title}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {rows.length === 0 && <p className="text-textMuted text-sm">Keine Mitarbeiter:innen gefunden.</p>}

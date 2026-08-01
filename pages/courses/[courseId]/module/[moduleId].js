@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../../../components/Layout";
 import Icon from "../../../../components/Icon";
-import { COURSES, shuffledOptions } from "../../../../lib/curriculum";
+import { shuffledOptions } from "../../../../lib/curriculum";
+import { useCourse } from "../../../../lib/useCourse";
 import { apiPost } from "../../../../lib/apiClient";
 
 export default function ModuleRunner() {
   const router = useRouter();
   const { courseId, moduleId } = router.query;
-  const course = COURSES.find((c) => c.id === courseId);
+  const { course } = useCourse(courseId);
   const mod = course && course.modules.find((m) => m.id === moduleId);
 
   const [phase, setPhase] = useState("theory"); // theory -> mc -> open -> grading -> done

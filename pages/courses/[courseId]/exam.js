@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../../components/Layout";
 import Icon from "../../../components/Icon";
-import { COURSES, allMcQuestionsOfCourse, shuffledOptions } from "../../../lib/curriculum";
+import { allMcQuestionsOfCourse, shuffledOptions } from "../../../lib/curriculum";
+import { useCourse } from "../../../lib/useCourse";
 import { apiPost } from "../../../lib/apiClient";
 import { triggerConfetti } from "../../../lib/confetti";
 
@@ -18,7 +19,7 @@ function shuffleArray(arr) {
 export default function ExamRunner() {
   const router = useRouter();
   const { courseId } = router.query;
-  const course = COURSES.find((c) => c.id === courseId);
+  const { course } = useCourse(courseId);
 
   const [phase, setPhase] = useState("mc"); // mc -> capstone -> grading -> done
   const [questions, setQuestions] = useState(null);

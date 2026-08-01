@@ -2,7 +2,8 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import fs from "fs";
 import path from "path";
 import { requireUser } from "../../lib/supabaseServer";
-import { COURSES } from "../../lib/curriculum";
+import { getAdminSupabase } from "../../lib/supabaseAdmin";
+import { resolveCourse } from "../../lib/resolveCourse";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -11,7 +12,7 @@ export default async function handler(req, res) {
 
   try {
     const { courseId } = req.query;
-    const course = COURSES.find((c) => c.id === courseId);
+    const course = await resolveCourse(courseId, getAdminSupabase());
     if (!course) return res.status(404).json({ error: "Kurs nicht gefunden." });
 
     const { data: exam } = await auth.client
