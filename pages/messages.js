@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
+import { validateChatAttachment } from "../lib/uploadValidation";
 
 function formatPreviewTime(iso) {
   const d = new Date(iso);
@@ -241,6 +242,8 @@ export default function Messages() {
   function handleFilePick(e) {
     const file = e.target.files[0];
     if (!file) return;
+    const err = validateChatAttachment(file);
+    if (err) { alert(err); e.target.value = ""; return; }
     uploadAndSend(file, attachmentTypeFor(file));
     e.target.value = "";
   }

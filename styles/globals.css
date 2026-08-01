@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -100,21 +99,21 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   background: var(--org-bg, #12141C);
   color: var(--org-text, #EDEDF4);
   font-size: 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-inter), sans-serif;
   width: 100%;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .input:focus { outline: none; border-color: var(--org-accent, #E8368F); box-shadow: 0 0 0 3px rgb(var(--org-accent-rgb, 232 54 143) / .15); }
 .input::placeholder { color: var(--org-text-muted, #5A5F72); }
 
-textarea.input { resize: vertical; font-family: 'Inter', sans-serif; }
+textarea.input { resize: vertical; font-family: var(--font-inter), sans-serif; }
 
 .avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), sans-serif;
   font-weight: 700;
   color: #0B0D13;
   flex-shrink: 0;

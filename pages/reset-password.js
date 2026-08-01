@@ -24,7 +24,7 @@ export default function ResetPassword() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (password.length < 6) { setError("Passwort muss mindestens 6 Zeichen haben."); return; }
+    if (password.length < 10) { setError("Passwort muss mindestens 10 Zeichen haben."); return; }
     if (password !== confirm) { setError("Passwörter stimmen nicht überein."); return; }
     setLoading(true);
     try {
@@ -55,8 +55,8 @@ export default function ResetPassword() {
             <p className="text-textMuted text-sm text-center">Link wird geprüft...</p>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-              <input className="input" type="password" placeholder="Neues Passwort" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-              <input className="input" type="password" placeholder="Neues Passwort wiederholen" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} />
+              <input className="input" type="password" placeholder="Neues Passwort (mind. 10 Zeichen)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={10} />
+              <input className="input" type="password" placeholder="Neues Passwort wiederholen" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={10} />
               {error && <p className="text-coral text-xs">{error}</p>}
               <button className="btn justify-center" disabled={loading}>
                 {loading ? "..." : "Passwort speichern"}

@@ -31,8 +31,8 @@ export default async function handler(req, res) {
   if (!managerEmail || !managerEmail.trim() || !managerPassword) {
     return res.status(400).json({ error: "E-Mail und Passwort für den Organisations-Manager erforderlich." });
   }
-  if (managerPassword.length < 6) {
-    return res.status(400).json({ error: "Das Passwort muss mindestens 6 Zeichen lang sein." });
+  if (managerPassword.length < 10) {
+    return res.status(400).json({ error: "Das Passwort muss mindestens 10 Zeichen lang sein." });
   }
 
   const admin = getAdminSupabase();

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
@@ -15,6 +16,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [agbAccepted, setAgbAccepted] = useState(false);
 
   const [orgCode, setOrgCode] = useState("");
   const [resolvedOrg, setResolvedOrg] = useState(null);
@@ -96,9 +98,10 @@ export default function Login() {
         }
         playLoginChime();
       } else {
+        if (!agbAccepted) throw new Error("Bitte die AGB akzeptieren, um fortzufahren.");
         const { error } = await supabase.auth.signUp({
           email, password,
-          options: { data: { full_name: fullName, org_slug: resolvedOrg.slug } },
+          options: { data: { full_name: fullName, org_slug: resolvedOrg.slug, agb_accepted: true } },
         });
         if (error) throw error;
       }
@@ -161,9 +164,18 @@ export default function Login() {
                 <input className="input" placeholder="Vor- und Nachname" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
               )}
               <input className="input" type="email" placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <input className="input" type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+              <input className="input" type="password" placeholder="Passwort (mind. 10 Zeichen)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={10} />
+              {mode === "signup" && (
+                <label className="flex items-start gap-2 text-[11.5px] text-textMuted cursor-pointer select-none">
+                  <input type="checkbox" className="mt-0.5" checked={agbAccepted} onChange={(e) => setAgbAccepted(e.target.checked)} required />
+                  <span>
+                    Ich akzeptiere die{" "}
+                    <Link href="/agb" target="_blank" className="underline text-textMain">AGB</Link>.
+                  </span>
+                </label>
+              )}
               {error && <p className="text-coral text-xs">{error}</p>}
-              <button className="btn justify-center" disabled={loading}>
+              <button className="btn justify-center" disabled={loading || (mode === "signup" && !agbAccepted)}>
                 {loading ? "..." : mode === "login" ? "Anmelden" : "Registrieren"}
               </button>
             </form>

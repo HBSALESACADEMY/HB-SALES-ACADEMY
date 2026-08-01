@@ -75,25 +75,39 @@ create table if not exists profiles (
   team_name text,
   welcome_seen boolean not null default false,
   leaderboard_opt_out boolean not null default false,
-  is_platform_admin boolean not null default false
+  is_platform_admin boolean not null default false,
+  agb_accepted_at timestamptz
 );
 
 -- Auto-create a profile row whenever a new auth user signs up. Verlangt einen
 -- gültigen Firmen-Code (org_slug) im Signup-Formular, sonst schlägt die
 -- Registrierung sauber fehl statt eine Organisation-lose Zeile zu erzeugen.
+-- Tabellen bewusst mit "public." qualifiziert und search_path fest gesetzt:
+-- Supabase Auth führt diese Funktion als eigene, enger eingeschränkte
+-- Datenbank-Rolle (supabase_auth_admin) aus, deren search_path "public"
+-- NICHT automatisch enthält (siehe migration_21).
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare org_id uuid;
 begin
-  select id into org_id from organizations where slug = new.raw_user_meta_data->>'org_slug';
+  select id into org_id from public.organizations where slug = new.raw_user_meta_data->>'org_slug';
   if org_id is null then
     raise exception 'Unbekannter Firmen-Code.';
   end if;
-  insert into public.profiles (id, full_name, organization_id)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''), org_id);
+  insert into public.profiles (id, full_name, organization_id, agb_accepted_at)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    org_id,
+    case when (new.raw_user_meta_data->>'agb_accepted')::boolean is true then now() else null end
+  );
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

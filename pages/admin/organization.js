@@ -463,7 +463,7 @@ export default function AdminOrganization() {
               </div>
               <div>
                 <label className="text-xs text-textMuted mb-1 block">Passwort des Organisations-Managers</label>
-                <input className="input" type="password" placeholder="Mindestens 6 Zeichen" value={newManagerPassword} onChange={(e) => setNewManagerPassword(e.target.value)} />
+                <input className="input" type="password" placeholder="Mindestens 10 Zeichen" value={newManagerPassword} onChange={(e) => setNewManagerPassword(e.target.value)} minLength={10} />
               </div>
               <button disabled={creatingOrg || !newOrgName.trim() || !newManagerName.trim() || !newManagerEmail.trim() || !newManagerPassword} onClick={createOrg} className="btn text-xs disabled:opacity-40 self-start mt-1">
                 {creatingOrg ? "Legt an..." : "Anlegen"}

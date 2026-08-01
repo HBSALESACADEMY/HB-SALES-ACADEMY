@@ -28,10 +28,12 @@ module.exports = {
         teal: "#3FBFA6",
         coral: "#E5716A",
       },
+      // Selbst gehostet über next/font (siehe pages/_app.js) statt live von
+      // fonts.googleapis.com geladen — die CSS-Variablen werden dort gesetzt.
       fontFamily: {
-        display: ["'Space Grotesk'", "sans-serif"],
-        sans: ["'Inter'", "sans-serif"],
-        mono: ["'JetBrains Mono'", "monospace"],
+        display: ["var(--font-space-grotesk)", "sans-serif"],
+        sans: ["var(--font-inter)", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "monospace"],
       },
     },
   },

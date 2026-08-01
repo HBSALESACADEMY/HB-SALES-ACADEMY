@@ -5,6 +5,7 @@ import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
+import { validatePostAttachment } from "../lib/uploadValidation";
 
 export default function Community() {
   const router = useRouter();
@@ -354,7 +355,13 @@ export default function Community() {
           )}
           <label className="btn-ghost text-xs cursor-pointer px-3 py-2">
             <Icon name="download" size={13} /> {newPostFile ? newPostFile.name.slice(0, 20) : "Datei anhängen"}
-            <input type="file" className="hidden" onChange={(e) => setNewPostFile(e.target.files[0])} />
+            <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const err = validatePostAttachment(file);
+              if (err) { alert(err); e.target.value = ""; return; }
+              setNewPostFile(file);
+            }} />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-textMuted cursor-pointer select-none">
             <input type="checkbox" checked={shareGlobally} onChange={(e) => setShareGlobally(e.target.checked)} />
