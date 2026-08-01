@@ -249,6 +249,23 @@ create table if not exists flashcard_progress (
   primary key (user_id, card_id)
 );
 
+-- Personalisierter Lernpfad: nach den 7 festen Grundkursen generiert die KI
+-- fortlaufend individuelle Zusatzmodule, zugeschnitten auf die erkannten
+-- Schwächen des jeweiligen Vertrieblers (siehe pages/api/personal-module-generate.js).
+create table if not exists personal_modules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  title text not null,
+  focus_area text not null,
+  theory text not null,
+  question text not null,
+  source_course_id text,
+  source_module_id text,
+  completed_at timestamptz,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists daily_challenge_completions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
@@ -583,6 +600,7 @@ alter table scripts enable row level security;
 alter table guides enable row level security;
 alter table flashcards enable row level security;
 alter table flashcard_progress enable row level security;
+alter table personal_modules enable row level security;
 alter table daily_challenge_completions enable row level security;
 alter table duels enable row level security;
 alter table community_groups enable row level security;
@@ -654,7 +672,8 @@ drop policy if exists "quiz_select_team" on quiz_results;
 create policy "quiz_select_team" on quiz_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "quiz_results_select_admin" on quiz_results;
 create policy "quiz_results_select_admin" on quiz_results for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
 );
 
 -- --- exam_results ---
@@ -666,7 +685,8 @@ drop policy if exists "exam_select_team" on exam_results;
 create policy "exam_select_team" on exam_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "exam_results_select_admin" on exam_results;
 create policy "exam_results_select_admin" on exam_results for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
 );
 
 -- --- roleplay_sessions ---
@@ -791,6 +811,28 @@ drop policy if exists "fp_upsert_own" on flashcard_progress;
 create policy "fp_upsert_own" on flashcard_progress for insert with check (auth.uid() = user_id);
 drop policy if exists "fp_update_own" on flashcard_progress;
 create policy "fp_update_own" on flashcard_progress for update using (auth.uid() = user_id);
+
+-- --- personal_modules ---
+drop policy if exists "personal_modules_select" on personal_modules;
+create policy "personal_modules_select" on personal_modules for select using (
+  user_id = auth.uid()
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
+);
+drop policy if exists "personal_modules_insert" on personal_modules;
+create policy "personal_modules_insert" on personal_modules for insert with check (
+  user_id = auth.uid()
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
+);
+drop policy if exists "personal_modules_update_own" on personal_modules;
+create policy "personal_modules_update_own" on personal_modules for update using (user_id = auth.uid());
 
 -- --- daily_challenge_completions ---
 drop policy if exists "dcc_select_own" on daily_challenge_completions;

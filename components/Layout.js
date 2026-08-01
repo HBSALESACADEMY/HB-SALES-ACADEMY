@@ -32,11 +32,12 @@ const NAV_GROUPS = {
   dashboard: "Start",
   courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen", scripts: "Lernen", "roleplay-history": "Lernen",
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen", "leitfaden-generator": "Lernen",
-  "call-tracker": "Lernen", "einwand-trainer": "Lernen",
+  "call-tracker": "Lernen", "einwand-trainer": "Lernen", lernpfad: "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
   einwandbehandlung: "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
+  "admin-lernpfade": "Verwaltung",
 };
 function groupFor(item) {
   return NAV_GROUPS[item.key] || (item.is_builtin ? "Weiteres" : "Eigene Inhalte");
