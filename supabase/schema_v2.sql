@@ -764,10 +764,10 @@ create policy "guides_delete_own_or_manager" on guides for delete using (
 drop policy if exists "flashcards_select_all" on flashcards;
 create policy "flashcards_select_all" on flashcards for select using (same_org(created_by, auth.uid()));
 drop policy if exists "flashcards_write_managers" on flashcards;
-create policy "flashcards_write_managers" on flashcards for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "flashcards_write_managers" on flashcards for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
 drop policy if exists "flashcards_delete_managers" on flashcards;
 create policy "flashcards_delete_managers" on flashcards for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
 );
 
 -- --- flashcard_progress ---

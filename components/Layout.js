@@ -36,7 +36,7 @@ const NAV_GROUPS = {
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team",
   einwandbehandlung: "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
-  "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung",
+  "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
 };
 function groupFor(item) {
   return NAV_GROUPS[item.key] || (item.is_builtin ? "Weiteres" : "Eigene Inhalte");
@@ -446,7 +446,7 @@ export default function Layout({ children, fullBleed }) {
             // Trainer sehen zusätzlich die Content-Verwaltungsseiten (siehe
             // pages/admin/{content,suggestions,navigation}.js), aber bewusst
             // NICHT Nutzerverwaltung/Team — die bleiben Managern vorbehalten.
-            const TRAINER_NAV_IDS = ["admin-content", "admin-suggestions", "admin-navigation"];
+            const TRAINER_NAV_IDS = ["admin-content", "admin-suggestions", "admin-navigation", "admin-flashcards"];
             const visibleItems = sortedNav(navItems.filter((n) =>
               !n.requires_manager || profile?.role === "manager" ||
               (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key))

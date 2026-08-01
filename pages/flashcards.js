@@ -76,7 +76,7 @@ export default function Flashcards() {
       {!card ? (
         <div className="card text-center py-10">
           <p className="text-textMain font-semibold mb-1">{doneCount > 0 ? "Für heute geschafft! 🎉" : "Keine fälligen Karten heute."}</p>
-          <p className="text-textMuted text-sm">{doneCount > 0 ? `Du hast ${doneCount} Karte${doneCount === 1 ? "" : "n"} wiederholt.` : "Schau morgen wieder vorbei, oder ein Manager kann neue Karten anlegen."}</p>
+          <p className="text-textMuted text-sm">{doneCount > 0 ? `Du hast ${doneCount} Karte${doneCount === 1 ? "" : "n"} wiederholt.` : "Schau morgen wieder vorbei, oder ein Manager/Trainer kann unter \"Flashcards verwalten\" neue Karten anlegen."}</p>
         </div>
       ) : (
         <div className="card">
