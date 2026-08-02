@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { callAI } from "../../lib/aiClient";
 import { resolveCourse } from "../../lib/resolveCourse";
+import { notifyOrgManagers } from "../../lib/notifyManagers";
 
 // Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
 export const config = { maxDuration: 45 };
@@ -15,7 +16,8 @@ export default async function handler(req, res) {
 
   try {
     const { courseId, mcScore, mcTotal, capstoneAnswer } = req.body;
-    const course = await resolveCourse(courseId, getAdminSupabase());
+    const admin = getAdminSupabase();
+    const course = await resolveCourse(courseId, admin);
     if (!course || !course.examCase) return res.status(400).json({ error: "Kurs nicht gefunden." });
 
     const raw = await callAI(
@@ -43,6 +45,14 @@ export default async function handler(req, res) {
     if (insertError) console.error("insert exam_results failed:", insertError.message);
 
     try { await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: passed ? 150 : 30 }); } catch (e) { console.error("increment_xp failed:", e.message); }
+
+    if (passed) {
+      const { data: me } = await auth.client.from("profiles").select("full_name, organization_id").eq("id", auth.user.id).maybeSingle();
+      await notifyOrgManagers(admin, me?.organization_id, {
+        subject: `Prüfung bestanden: ${course.title}`,
+        html: `<p><strong>${me?.full_name || "Ein Vertriebler"}</strong> hat die Prüfung „${course.title}" mit ${combinedScore}% bestanden.</p>`,
+      });
+    }
 
     return res.status(200).json({ passed, combinedScore, mcPct: Math.round(mcPct), capstoneGrading: grading });
   } catch (e) {

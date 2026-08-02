@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
-import { apiGet } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { playLoginChime } from "../lib/sounds";
 import { quoteOfTheDay } from "../lib/quotes";
@@ -104,6 +104,9 @@ export default function Login() {
           options: { data: { full_name: fullName, org_slug: resolvedOrg.slug, agb_accepted: true } },
         });
         if (error) throw error;
+        // Best-effort — benachrichtigt die Manager der Organisation per E-Mail.
+        // Darf die Registrierung selbst nie blockieren, falls das fehlschlägt.
+        apiPost("/api/notify-pending-approval", {}).catch((e) => console.error("notify-pending-approval failed:", e.message));
       }
       router.push("/");
     } catch (err) {

@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   const { targetId, action } = req.body || {};
   if (!targetId || !action) return res.status(400).json({ error: "targetId und action erforderlich." });
 
-  const roleActions = ["make_manager", "remove_manager", "make_trainer", "remove_trainer"];
+  const roleActions = ["make_manager", "remove_manager", "make_trainer", "remove_trainer", "make_backend", "remove_backend"];
   if (roleActions.includes(action) && !me.is_admin && !me.is_platform_admin) {
     return res.status(403).json({ error: "Nur Admins können Rollen vergeben oder entziehen." });
   }
@@ -52,6 +52,8 @@ export default async function handler(req, res) {
     else if (action === "remove_manager") update = { role: "rep" };
     else if (action === "make_trainer") update = { role: "trainer" };
     else if (action === "remove_trainer") update = { role: "rep" };
+    else if (action === "make_backend") update = { role: "backend" };
+    else if (action === "remove_backend") update = { role: "rep" };
     else if (action === "approve") update = { status: "approved" };
     else if (action === "reject") update = { status: "rejected" };
     else if (action === "grant_admin") update = { is_admin: true };

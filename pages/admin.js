@@ -15,6 +15,8 @@ export default function Admin() {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [resetPasswordId, setResetPasswordId] = useState(null);
+  const [newPasswordValue, setNewPasswordValue] = useState("");
 
   async function load() {
     setLoading(true);
@@ -58,6 +60,20 @@ export default function Admin() {
     try {
       await apiPost("/api/admin/update-user", { targetId, action });
       await load();
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusyId(null);
+  }
+
+  async function runResetPassword(targetId) {
+    if (newPasswordValue.length < 10) { setError("Das Passwort muss mindestens 10 Zeichen lang sein."); return; }
+    setBusyId(targetId);
+    setError("");
+    try {
+      await apiPost("/api/admin/reset-password", { targetId, newPassword: newPasswordValue });
+      setResetPasswordId(null);
+      setNewPasswordValue("");
     } catch (e) {
       setError(e.message);
     }
@@ -160,7 +176,7 @@ export default function Admin() {
                     Manager-Rechte entziehen
                   </button>
                 ) : (
-                  <button disabled={busy || u.role === "trainer"} onClick={() => runAction(u.id, "make_manager")} className="btn-ghost text-xs disabled:opacity-40">
+                  <button disabled={busy || u.role === "trainer" || u.role === "backend"} onClick={() => runAction(u.id, "make_manager")} className="btn-ghost text-xs disabled:opacity-40">
                     Zum Manager machen
                   </button>
                 ))}
@@ -170,8 +186,18 @@ export default function Admin() {
                     Trainer-Rechte entziehen
                   </button>
                 ) : (
-                  <button disabled={busy || u.role === "manager"} onClick={() => runAction(u.id, "make_trainer")} className="btn-ghost text-xs disabled:opacity-40">
+                  <button disabled={busy || u.role === "manager" || u.role === "backend"} onClick={() => runAction(u.id, "make_trainer")} className="btn-ghost text-xs disabled:opacity-40">
                     Zum Trainer machen
+                  </button>
+                ))}
+
+                {(isAdmin || isPlatformAdmin) && (u.role === "backend" ? (
+                  <button disabled={busy} onClick={() => runAction(u.id, "remove_backend")} className="btn-ghost text-xs disabled:opacity-40">
+                    Backend-Rechte entziehen
+                  </button>
+                ) : (
+                  <button disabled={busy || u.role === "manager" || u.role === "trainer"} onClick={() => runAction(u.id, "make_backend")} className="btn-ghost text-xs disabled:opacity-40">
+                    Zum Backend machen
                   </button>
                 ))}
 
@@ -185,6 +211,25 @@ export default function Admin() {
                     Admin-Rechte geben
                   </button>
                 ))}
+
+                {(isAdmin || isPlatformAdmin) && (
+                  resetPasswordId === u.id ? (
+                    <span className="flex items-center gap-1.5">
+                      <input
+                        type="password" autoFocus placeholder="Neues Passwort (mind. 10 Zeichen)"
+                        className="input !w-48 !py-1.5 text-xs" value={newPasswordValue}
+                        onChange={(e) => setNewPasswordValue(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && runResetPassword(u.id)}
+                      />
+                      <button disabled={busy} onClick={() => runResetPassword(u.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
+                      <button disabled={busy} onClick={() => { setResetPasswordId(null); setNewPasswordValue(""); }} className="btn-ghost text-xs">Abbrechen</button>
+                    </span>
+                  ) : (
+                    <button disabled={busy} onClick={() => { setResetPasswordId(u.id); setNewPasswordValue(""); }} className="btn-ghost text-xs disabled:opacity-40">
+                      Passwort zurücksetzen
+                    </button>
+                  )
+                )}
 
                 {!isSelf && (
                   confirmDelete === u.id ? (

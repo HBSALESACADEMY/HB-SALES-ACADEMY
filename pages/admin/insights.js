@@ -5,6 +5,7 @@ import Avatar from "../../components/Avatar";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { COURSES } from "../../lib/curriculum";
+import { downloadCsv } from "../../lib/csv";
 
 export default function AdminInsights() {
   const [isAdmin, setIsAdmin] = useState(true);
@@ -29,9 +30,9 @@ export default function AdminInsights() {
         // seit der offenen Sichtbarkeit (globale Suche/Community) über RLS
         // allein nicht mehr automatisch organisationsgebunden.
         supabase.from("profiles").select("id, full_name, avatar_url, xp, status, created_at").eq("organization_id", me.organization_id),
-        supabase.from("quiz_results").select("id"),
-        supabase.from("exam_results").select("course_id, passed"),
-        supabase.from("roleplay_sessions").select("evaluation_score"),
+        supabase.from("quiz_results").select("id, user_id"),
+        supabase.from("exam_results").select("course_id, passed, user_id"),
+        supabase.from("roleplay_sessions").select("evaluation_score, user_id"),
         supabase.from("community_posts").select("id, user_id"),
         supabase.from("community_comments").select("id"),
         supabase.from("community_kudos").select("post_id"),
@@ -83,6 +84,33 @@ export default function AdminInsights() {
 
       const weeklyAnwahlen = (callLogs || []).reduce((s, c) => s + (c.counts?.anwahlen || 0), 0);
 
+      // Pro-Mitglied-Zeilen für den CSV-Export — Rohdaten aus den bereits
+      // geladenen Listen aggregiert, keine zusätzlichen Anfragen nötig.
+      const quizCountByUser = {};
+      (quizzes || []).forEach((q) => { quizCountByUser[q.user_id] = (quizCountByUser[q.user_id] || 0) + 1; });
+      const examsPassedByUser = {};
+      (exams || []).forEach((e) => { if (e.passed) examsPassedByUser[e.user_id] = (examsPassedByUser[e.user_id] || 0) + 1; });
+      const roleplayCountByUser = {}, roleplayScoreSumByUser = {}, roleplayScoreCountByUser = {};
+      (roleplays || []).forEach((r) => {
+        roleplayCountByUser[r.user_id] = (roleplayCountByUser[r.user_id] || 0) + 1;
+        if (r.evaluation_score != null) {
+          roleplayScoreSumByUser[r.user_id] = (roleplayScoreSumByUser[r.user_id] || 0) + r.evaluation_score;
+          roleplayScoreCountByUser[r.user_id] = (roleplayScoreCountByUser[r.user_id] || 0) + 1;
+        }
+      });
+      const activeThisWeekIds = new Set((logins || []).map((l) => l.user_id));
+
+      const memberRows = approved.map((p) => ({
+        name: p.full_name || "Unbenannt",
+        xp: p.xp || 0,
+        quizzesAbgeschlossen: quizCountByUser[p.id] || 0,
+        pruefungenBestanden: examsPassedByUser[p.id] || 0,
+        rollenspiele: roleplayCountByUser[p.id] || 0,
+        rollenspielScoreDurchschnitt: roleplayScoreCountByUser[p.id] ? Math.round(roleplayScoreSumByUser[p.id] / roleplayScoreCountByUser[p.id]) : "",
+        aktivDieseWoche: activeThisWeekIds.has(p.id) ? "Ja" : "Nein",
+        registriertAm: p.created_at ? new Date(p.created_at).toLocaleDateString("de-DE") : "",
+      }));
+
       setStats({
         totalMembers: approved.length,
         pendingMembers: pending.length,
@@ -99,6 +127,7 @@ export default function AdminInsights() {
         passedByCourse,
         topContributors,
         usageRanking,
+        memberRows,
       });
       setLoading(false);
     }
@@ -131,9 +160,22 @@ export default function AdminInsights() {
     { label: "Anwahlen diese Woche", value: stats.weeklyAnwahlen, icon: "target", color: "var(--org-color-1, #7B2FF7)" },
   ];
 
+  function exportCsv() {
+    downloadCsv(
+      `Insights-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Name", "XP", "Quiz abgeschlossen", "Prüfungen bestanden", "Rollenspiele", "Ø Rollenspiel-Score", "Aktiv diese Woche", "Registriert am"],
+      stats.memberRows.map((r) => [r.name, r.xp, r.quizzesAbgeschlossen, r.pruefungenBestanden, r.rollenspiele, r.rollenspielScoreDurchschnitt, r.aktivDieseWoche, r.registriertAm])
+    );
+  }
+
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Insights</h1>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h1 className="text-2xl font-display font-bold brand-text-gradient">Insights</h1>
+        <button onClick={exportCsv} className="btn-ghost text-xs flex-shrink-0">
+          <Icon name="download" size={13} /> Export (CSV)
+        </button>
+      </div>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Unternehmensweiter Überblick — alle Mitglieder, alle Teams.</p>
 

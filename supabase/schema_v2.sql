@@ -50,7 +50,7 @@ create table if not exists organizations (
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'rep' check (role in ('rep', 'manager', 'trainer')),
+  role text not null default 'rep' check (role in ('rep', 'manager', 'trainer', 'backend')),
   is_admin boolean not null default false,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   manager_id uuid references profiles(id) on delete set null,
@@ -472,6 +472,24 @@ create table if not exists call_log_days (
   primary key (user_id, log_date)
 );
 
+-- Leads/Termine — beim "Terminiert"-Klick im Call Tracker erfasste
+-- Kundendaten (siehe public/tools/call-tracker.html und pages/termine.js).
+create table if not exists leads (
+  id uuid primary key default gen_random_uuid(),
+  created_by uuid not null references profiles(id) on delete cascade,
+  name text not null,
+  phone text,
+  email text,
+  company text,
+  website text,
+  is_decision_maker boolean not null default false,
+  notes text,
+  recording_path text,
+  appointment_at timestamptz,
+  status text not null default 'geplant' check (status in ('geplant', 'wahrgenommen', 'abgesagt')),
+  created_at timestamptz not null default now()
+);
+
 
 -- =============================================================================
 -- 5. ADMIN, ANALYTICS & DROSSELUNG
@@ -623,6 +641,7 @@ alter table team_goals enable row level security;
 alter table team_requests enable row level security;
 alter table mentor_pairs enable row level security;
 alter table call_log_days enable row level security;
+alter table leads enable row level security;
 alter table login_attempts enable row level security;
 alter table login_events enable row level security;
 alter table page_views enable row level security;
@@ -1137,6 +1156,37 @@ create policy "call_log_days_upsert_own" on call_log_days for insert with check 
 drop policy if exists "call_log_days_update_own" on call_log_days;
 create policy "call_log_days_update_own" on call_log_days for update using (auth.uid() = user_id);
 
+-- --- leads ---
+drop policy if exists "leads_select" on leads;
+create policy "leads_select" on leads for select using (
+  created_by = auth.uid()
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(created_by, auth.uid())
+  )
+);
+drop policy if exists "leads_insert_own" on leads;
+create policy "leads_insert_own" on leads for insert with check (created_by = auth.uid());
+drop policy if exists "leads_update" on leads;
+create policy "leads_update" on leads for update using (
+  created_by = auth.uid()
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(created_by, auth.uid())
+  )
+);
+drop policy if exists "leads_delete" on leads;
+create policy "leads_delete" on leads for delete using (
+  created_by = auth.uid()
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and same_org(created_by, auth.uid())
+  )
+);
+
 -- --- login_attempts ---
 drop policy if exists "login_attempts_insert_anyone" on login_attempts;
 create policy "login_attempts_insert_anyone" on login_attempts for insert with check (true);
@@ -1196,6 +1246,18 @@ alter publication supabase_realtime add table public.conversation_reads;
 
 insert into storage.buckets (id, name, public) values ('org-logos', 'org-logos', true)
 on conflict (id) do nothing;
+
+-- Privat (public=false) — Anruf-Aufnahmen zu Leads, nur über signierte URLs
+-- erreichbar. Eigener Ordner pro Nutzer (auth.uid()), siehe RLS unten.
+insert into storage.buckets (id, name, public) values ('lead-recordings', 'lead-recordings', false)
+on conflict (id) do nothing;
+
+drop policy if exists "lead_recordings_own_folder_all" on storage.objects;
+create policy "lead_recordings_own_folder_all" on storage.objects for all using (
+  bucket_id = 'lead-recordings' and (storage.foldername(name))[1] = auth.uid()::text
+) with check (
+  bucket_id = 'lead-recordings' and (storage.foldername(name))[1] = auth.uid()::text
+);
 
 drop policy if exists "org_logos_public_read" on storage.objects;
 create policy "org_logos_public_read" on storage.objects for select using (bucket_id = 'org-logos');
