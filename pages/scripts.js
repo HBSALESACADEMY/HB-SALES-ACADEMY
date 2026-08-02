@@ -12,6 +12,7 @@ export default function Scripts() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ category: "", title: "", body: "", file: null });
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -34,7 +35,11 @@ export default function Scripts() {
   }
 
   async function saveScript() {
-    if (!form.title.trim() || !form.body.trim()) return;
+    setFormError("");
+    if (!form.title.trim() || !form.body.trim()) {
+      setFormError("Bitte Titel und Skript-Text ausfüllen.");
+      return;
+    }
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -60,7 +65,7 @@ export default function Scripts() {
       setShowForm(false);
       await load();
     } catch (e) {
-      alert("Speichern fehlgeschlagen: " + e.message);
+      setFormError("Speichern fehlgeschlagen: " + e.message);
     } finally {
       setSaving(false);
     }
@@ -86,7 +91,7 @@ export default function Scripts() {
     <Layout>
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-display font-bold brand-text-gradient">Skript-Bibliothek</h1>
-        {isManager && <button onClick={() => setShowForm(true)} className="btn text-xs flex-shrink-0">+ Neues Skript</button>}
+        {isManager && <button onClick={() => { setFormError(""); setShowForm(true); }} className="btn text-xs flex-shrink-0">+ Neues Skript</button>}
       </div>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Bewährte Gesprächsbausteine — suchen, ansehen, mit einem Klick kopieren.</p>
@@ -98,6 +103,7 @@ export default function Scripts() {
 
       {showForm && (
         <div className="card mb-5">
+          {formError && <p className="text-coral text-xs mb-2">{formError}</p>}
           <input className="input mb-2" placeholder="Kategorie (z.B. Begrüßung, Abschluss)" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
           <input className="input mb-2" placeholder="Titel" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
           <textarea className="input mb-2" rows={4} placeholder="Skript-Text..." value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} />

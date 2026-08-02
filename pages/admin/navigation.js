@@ -3,7 +3,22 @@ import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
 
-const ICONS = ["dashboard", "book", "chat", "library", "award", "lock", "flame", "users", "target"];
+const ICONS = ["dashboard", "book", "chat", "library", "award", "lock", "download", "search", "flame", "users", "target", "calendar"];
+
+function IconPicker({ value, onChange }) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {ICONS.map((ic) => (
+        <button
+          key={ic} type="button" title={ic} onClick={() => onChange(ic)}
+          className={`w-9 h-9 rounded-lg border flex items-center justify-center transition ${value === ic ? "border-amber bg-amber/10 text-amber" : "border-line text-textMuted hover:border-[var(--org-color-1,#4A3565)] hover:text-textMain"}`}
+        >
+          <Icon name={ic} size={16} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function NavigationAdmin() {
   const [isManager, setIsManager] = useState(true);
@@ -109,38 +124,37 @@ export default function NavigationAdmin() {
 
       <div className="card mb-6">
         <div className="font-semibold text-textMain text-sm mb-3">Neuen Ordner/Reiter anlegen</div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input className="input flex-1 min-w-[160px]" placeholder="Name (z. B. Produktschulungen)" value={newFolder.label} onChange={(e) => setNewFolder({ ...newFolder, label: e.target.value })} />
-          <select className="input w-auto" value={newFolder.icon} onChange={(e) => setNewFolder({ ...newFolder, icon: e.target.value })}>
-            {ICONS.map((ic) => <option key={ic} value={ic}>{ic}</option>)}
-          </select>
-          <button disabled={creating} onClick={createFolder} className="btn disabled:opacity-40">Anlegen</button>
+        <div className="flex items-center gap-2 mb-3">
+          <input className="input flex-1" placeholder="Name (z. B. Produktschulungen)" value={newFolder.label} onChange={(e) => setNewFolder({ ...newFolder, label: e.target.value })} onKeyDown={(e) => e.key === "Enter" && createFolder()} />
+          <button disabled={creating || !newFolder.label.trim()} onClick={createFolder} className="btn disabled:opacity-40 flex-shrink-0">Anlegen</button>
         </div>
+        <div className="text-xs text-textMuted mb-2">Icon wählen</div>
+        <IconPicker value={newFolder.icon} onChange={(icon) => setNewFolder({ ...newFolder, icon })} />
       </div>
 
       <div className="flex flex-col gap-2.5">
         {items.map((item, idx) => {
           const draft = drafts[item.id] || { label: item.label, icon: item.icon };
           return (
-            <div key={item.id} className={`card flex items-center gap-3 flex-wrap ${!item.visible ? "opacity-50" : ""}`}>
-              <Icon name={draft.icon} size={16} />
-              <input className="input flex-1 min-w-[140px]" value={draft.label} onChange={(e) => setDraft(item.id, { label: e.target.value })} />
-              <select className="input w-auto" value={draft.icon} onChange={(e) => setDraft(item.id, { icon: e.target.value })}>
-                {ICONS.map((ic) => <option key={ic} value={ic}>{ic}</option>)}
-              </select>
-              <button onClick={() => saveItem(item.id)} className="btn-ghost text-xs">Speichern</button>
-              <div className="flex items-center gap-1">
-                <button disabled={idx === 0} onClick={() => move(item, -1)} className="btn-ghost text-xs disabled:opacity-30">↑</button>
-                <button disabled={idx === items.length - 1} onClick={() => move(item, 1)} className="btn-ghost text-xs disabled:opacity-30">↓</button>
-              </div>
-              <button onClick={() => toggleVisible(item)} className="btn-ghost text-xs">{item.visible ? "Ausblenden" : "Einblenden"}</button>
-              <button onClick={() => deleteItem(item)} className="btn-ghost text-xs text-coral">Entfernen</button>
+            <div key={item.id} className={`card ${!item.visible ? "opacity-50" : ""}`}>
+              <div className="flex items-center gap-3 flex-wrap mb-3">
+                <Icon name={draft.icon} size={16} />
+                <input className="input flex-1 min-w-[140px]" value={draft.label} onChange={(e) => setDraft(item.id, { label: e.target.value })} />
+                <button onClick={() => saveItem(item.id)} className="btn-ghost text-xs">Speichern</button>
+                <div className="flex items-center gap-1">
+                  <button disabled={idx === 0} onClick={() => move(item, -1)} className="btn-ghost text-xs disabled:opacity-30">↑</button>
+                  <button disabled={idx === items.length - 1} onClick={() => move(item, 1)} className="btn-ghost text-xs disabled:opacity-30">↓</button>
+                </div>
+                <button onClick={() => toggleVisible(item)} className="btn-ghost text-xs">{item.visible ? "Ausblenden" : "Einblenden"}</button>
+                <button onClick={() => deleteItem(item)} className="btn-ghost text-xs text-coral">Entfernen</button>
               {item.is_builtin ? (
                 <span className="text-[10px] uppercase tracking-wide text-textMuted border border-line rounded px-1.5 py-0.5">Fest</span>
               ) : (
                 <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Ordner</span>
               )}
               {item.requires_manager && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Nur Manager</span>}
+              </div>
+              <IconPicker value={draft.icon} onChange={(icon) => setDraft(item.id, { icon })} />
             </div>
           );
         })}
