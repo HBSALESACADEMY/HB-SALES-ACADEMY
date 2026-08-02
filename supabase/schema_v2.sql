@@ -225,6 +225,8 @@ create table if not exists scripts (
   category text not null default 'Allgemein',
   title text not null,
   body text not null,
+  file_url text,
+  file_name text,
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -1258,6 +1260,11 @@ create policy "lead_recordings_own_folder_all" on storage.objects for all using 
 ) with check (
   bucket_id = 'lead-recordings' and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- Öffentlich lesbar wie course-videos/org-logos — Skript-Anhänge sind
+-- geteilte Team-Inhalte, keine sensiblen Kundendaten.
+insert into storage.buckets (id, name, public) values ('script-files', 'script-files', true)
+on conflict (id) do nothing;
 
 drop policy if exists "org_logos_public_read" on storage.objects;
 create policy "org_logos_public_read" on storage.objects for select using (bucket_id = 'org-logos');

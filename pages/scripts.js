@@ -10,7 +10,8 @@ export default function Scripts() {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ category: "", title: "", body: "" });
+  const [form, setForm] = useState({ category: "", title: "", body: "", file: null });
+  const [saving, setSaving] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -34,13 +35,35 @@ export default function Scripts() {
 
   async function saveScript() {
     if (!form.title.trim() || !form.body.trim()) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from("scripts").insert({
-      category: form.category.trim() || "Allgemein", title: form.title.trim(), body: form.body.trim(), created_by: session.user.id,
-    });
-    setForm({ category: "", title: "", body: "" });
-    setShowForm(false);
-    await load();
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      let fileUrl = null, fileName = null;
+      if (form.file) {
+        const ext = form.file.name.split(".").pop();
+        const path = `${session.user.id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("script-files").upload(path, form.file);
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("script-files").getPublicUrl(path);
+        fileUrl = pub.publicUrl;
+        fileName = form.file.name;
+      }
+
+      const { error } = await supabase.from("scripts").insert({
+        category: form.category.trim() || "Allgemein", title: form.title.trim(), body: form.body.trim(),
+        file_url: fileUrl, file_name: fileName, created_by: session.user.id,
+      });
+      if (error) throw error;
+
+      setForm({ category: "", title: "", body: "", file: null });
+      setShowForm(false);
+      await load();
+    } catch (e) {
+      alert("Speichern fehlgeschlagen: " + e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function deleteScript(id) {
@@ -78,9 +101,13 @@ export default function Scripts() {
           <input className="input mb-2" placeholder="Kategorie (z.B. Begrüßung, Abschluss)" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
           <input className="input mb-2" placeholder="Titel" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
           <textarea className="input mb-2" rows={4} placeholder="Skript-Text..." value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} />
+          <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 mb-2 w-fit">
+            <Icon name="download" size={12} /> {form.file ? form.file.name : "Datei anhängen (optional)"}
+            <input type="file" className="hidden" onChange={(e) => setForm((f) => ({ ...f, file: e.target.files[0] || null }))} />
+          </label>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowForm(false)} className="btn-ghost text-xs flex-1">Abbrechen</button>
-            <button onClick={saveScript} className="btn text-xs flex-1 justify-center">Speichern</button>
+            <button disabled={saving} onClick={() => setShowForm(false)} className="btn-ghost text-xs flex-1 disabled:opacity-40">Abbrechen</button>
+            <button disabled={saving} onClick={saveScript} className="btn text-xs flex-1 justify-center disabled:opacity-40">{saving ? "Speichert..." : "Speichern"}</button>
           </div>
         </div>
       )}
@@ -101,6 +128,11 @@ export default function Scripts() {
                   </div>
                 </div>
                 <p className="text-sm text-textMuted whitespace-pre-wrap">{s.body}</p>
+                {s.file_url && (
+                  <a href={s.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
+                    <Icon name="download" size={12} /> {s.file_name || "Anhang"}
+                  </a>
+                )}
               </div>
             ))}
           </div>
