@@ -20,6 +20,8 @@ export default function Dashboard() {
   const [adminSnapshot, setAdminSnapshot] = useState(null);
   const [pendingFriendReqs, setPendingFriendReqs] = useState([]);
   const [friendReqBusyId, setFriendReqBusyId] = useState(null);
+  const [upcomingLeads, setUpcomingLeads] = useState([]);
+  const [teamUpcomingLeads, setTeamUpcomingLeads] = useState([]);
 
   async function loadPendingFriendRequests(uid) {
     const { data: reqs } = await supabase.from("friendships").select("id, requester_id").eq("addressee_id", uid).eq("status", "pending").order("created_at", { ascending: false });
@@ -87,7 +89,7 @@ export default function Dashboard() {
       setLoading(false);
       loadPendingFriendRequests(uid);
 
-      const { data: me } = await supabase.from("profiles").select("role, is_admin, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
       setDashboardPrefs(me?.dashboard_prefs || {});
 
@@ -164,6 +166,30 @@ export default function Dashboard() {
         const weeklyActiveCount = new Set((logins || []).map((l) => l.user_id).filter((id) => approvedIds.has(id))).size;
         setAdminSnapshot({ totalMembers: totalMembers || 0, weeklyActiveCount, pendingCount: pendingCount || 0 });
       }
+
+      // Anstehende Termine — eigene für alle, teamweite zusätzlich für
+      // Manager/Admins/Backend (RLS scoped bereits auf die eigene Organisation).
+      const nowIso = new Date().toISOString();
+      const { data: myLeads } = await supabase.from("leads").select("id, name, company, appointment_at")
+        .eq("created_by", uid).eq("status", "geplant").not("appointment_at", "is", null)
+        .gte("appointment_at", nowIso).order("appointment_at", { ascending: true }).limit(5);
+      setUpcomingLeads(myLeads || []);
+
+      const canManageLeads = me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin;
+      if (canManageLeads) {
+        const { data: teamLeads } = await supabase.from("leads").select("id, name, company, appointment_at, created_by")
+          .eq("status", "geplant").not("appointment_at", "is", null)
+          .gte("appointment_at", nowIso).order("appointment_at", { ascending: true }).limit(8);
+        const creatorIds = [...new Set((teamLeads || []).map((l) => l.created_by))];
+        let creatorMap = {};
+        if (creatorIds.length) {
+          const { data: creators } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
+          (creators || []).forEach((c) => { creatorMap[c.id] = c.full_name; });
+        }
+        setTeamUpcomingLeads((teamLeads || []).map((l) => ({ ...l, creatorName: creatorMap[l.created_by] })));
+      } else {
+        setTeamUpcomingLeads([]);
+      }
     }
     load();
 
@@ -179,6 +205,7 @@ export default function Dashboard() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, load)
       .subscribe();
     // Polling-Fallback (wie im Sidebar-Badge/in der Nutzerverwaltung): falls die
     // Realtime-Verbindung mal stumm abbricht, ist das Dashboard trotzdem
@@ -244,6 +271,39 @@ export default function Dashboard() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {upcomingLeads.length > 0 && (
+            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
+              <div className="font-semibold text-textMain text-sm mb-3">📅 Anstehende Termine</div>
+              <div className="flex flex-col gap-2.5">
+                {upcomingLeads.map((l) => (
+                  <div key={l.id} className="flex items-center gap-3">
+                    <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
+                    <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                      {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {teamUpcomingLeads.length > 0 && (
+            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
+              <div className="font-semibold text-textMain text-sm mb-3">📅 Anstehende Termine im Team</div>
+              <div className="flex flex-col gap-2.5">
+                {teamUpcomingLeads.map((l) => (
+                  <div key={l.id} className="flex items-center gap-3">
+                    <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
+                    <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
+                    <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                      {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
