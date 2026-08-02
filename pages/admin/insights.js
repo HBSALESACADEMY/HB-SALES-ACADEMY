@@ -103,6 +103,10 @@ export default function AdminInsights() {
       setLoading(false);
     }
     load();
+    // Automatisch aktuell halten, ohne dass die Seite manuell neu geladen
+    // werden muss (z.B. wenn nebenbei jemand eine Prüfung besteht).
+    const interval = setInterval(load, 20000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;

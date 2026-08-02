@@ -167,8 +167,10 @@ export default function Dashboard() {
     }
     load();
 
-    // Echtzeit: neue Nachrichten/Community-Aktivität aktualisieren die Kacheln sofort,
-    // auch wenn man schon auf dem Dashboard ist (vorher nur beim erneuten Laden der Seite).
+    // Echtzeit: neue Nachrichten/Community-Aktivität/Registrierungen aktualisieren
+    // die Kacheln sofort, auch wenn man schon auf dem Dashboard ist. "profiles"
+    // fehlte hier bisher — neue, auf Freigabe wartende Registrierungen wurden
+    // dadurch nicht live erkannt (nur beim erneuten Laden der Seite).
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, load)
@@ -176,8 +178,13 @@ export default function Dashboard() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, load)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Polling-Fallback (wie im Sidebar-Badge/in der Nutzerverwaltung): falls die
+    // Realtime-Verbindung mal stumm abbricht, ist das Dashboard trotzdem
+    // spätestens nach 20 Sekunden wieder aktuell.
+    const interval = setInterval(load, 20000);
+    return () => { supabase.removeChannel(channel); clearInterval(interval); };
   }, []);
 
   const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);

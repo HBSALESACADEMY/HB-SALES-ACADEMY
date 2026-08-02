@@ -70,7 +70,11 @@ export default function LernpfadeAdmin() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function generateFor(userId) {
     setGeneratingFor(userId);
