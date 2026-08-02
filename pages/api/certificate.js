@@ -4,6 +4,12 @@ import path from "path";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { resolveCourse } from "../../lib/resolveCourse";
+import { hexToRgb, blend, textColorForColors } from "../../lib/colorMath";
+
+function hexToPdfColor(hex) {
+  const c = hexToRgb(hex) || { r: 255, g: 255, b: 255 };
+  return rgb(c.r / 255, c.g / 255, c.b / 255);
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -29,11 +35,24 @@ export default async function handler(req, res) {
     const { data: profile } = await auth.client.from("profiles").select("full_name, organization_id").eq("id", auth.user.id).maybeSingle();
     const name = (profile && profile.full_name) || auth.user.email || "Teilnehmer";
 
-    let orgLogoUrl = null;
+    let org = null;
     if (profile?.organization_id) {
-      const { data: org } = await auth.client.from("organizations").select("logo_url").eq("id", profile.organization_id).maybeSingle();
-      orgLogoUrl = org?.logo_url || null;
+      const { data } = await auth.client.from("organizations")
+        .select("name, logo_url, primary_color, background_color, text_color, muted_color")
+        .eq("id", profile.organization_id).maybeSingle();
+      org = data;
     }
+    const orgLogoUrl = org?.logo_url || null;
+    const orgName = org?.name || "HB Sales Academy";
+
+    // Gleiche Farb-Herleitung wie lib/orgBranding.js für die App selbst:
+    // explizite Organisationsfarbe hat Vorrang, sonst automatischer,
+    // WCAG-geprüfter Kontrast gegen den (ggf. eigenen) Hintergrund — das
+    // Zertifikat bleibt dadurch immer lesbar, egal welche Farben gewählt wurden.
+    const bgHex = org?.background_color || "#0A0C13";
+    const accentHex = org?.primary_color || "#E8368F";
+    const textHex = org?.text_color || textColorForColors([bgHex]);
+    const mutedHex = org?.muted_color || blend(textHex, bgHex, 0.42);
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([842, 595]); // A4 landscape
@@ -43,10 +62,10 @@ export default async function handler(req, res) {
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-    const bg = rgb(0x0a / 255, 0x0c / 255, 0x13 / 255);
-    const amber = rgb(0xe8 / 255, 0x36 / 255, 0x8f / 255);
-    const white = rgb(0.95, 0.95, 0.96);
-    const muted = rgb(0.57, 0.58, 0.62);
+    const bg = hexToPdfColor(bgHex);
+    const amber = hexToPdfColor(accentHex);
+    const white = hexToPdfColor(textHex);
+    const muted = hexToPdfColor(mutedHex);
 
     page.drawRectangle({ x: 0, y: 0, width, height, color: bg });
 
@@ -112,7 +131,7 @@ export default async function handler(req, res) {
       height - 410, fontItalic, 11, muted
     );
     centerText(
-      "im Rahmen der HB Sales Academy erfolgreich durchlaufen und in einer Kursprüfung nachgewiesen wurden.",
+      `im Rahmen der ${orgName} erfolgreich durchlaufen und in einer Kursprüfung nachgewiesen wurden.`,
       height - 428, fontItalic, 11, muted
     );
 
