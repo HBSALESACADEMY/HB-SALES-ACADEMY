@@ -22,8 +22,11 @@ const BASE_CSP = [
 // Call Tracker und Einwand-Trainer (public/tools/*.html) sind eigenständige,
 // selbst geschriebene HTML-Dateien mit einem kleinen Inline-<script>, das das
 // Organisations-Branding per Query-Param übernimmt — dafür ist hier
-// (nur für diese beiden Dateien) 'unsafe-inline' für script-src nötig.
-const TOOLS_CSP = BASE_CSP.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'");
+// (nur für diese beiden Dateien) 'unsafe-inline' für script-src nötig. Der
+// Call Tracker lädt außerdem die Supabase- und Chart.js-Bibliothek von
+// jsdelivr — ohne diese Domain in script-src bricht die komplette
+// Termin-/Team-Synchronisierung stumm ab (window.supabase bleibt undefined).
+const TOOLS_CSP = BASE_CSP.replace("script-src 'self'", "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net");
 
 const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
