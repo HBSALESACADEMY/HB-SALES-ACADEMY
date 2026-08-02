@@ -700,7 +700,8 @@ drop policy if exists "rp_select_team" on roleplay_sessions;
 create policy "rp_select_team" on roleplay_sessions for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "roleplay_sessions_select_admin" on roleplay_sessions;
 create policy "roleplay_sessions_select_admin" on roleplay_sessions for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
 );
 
 -- --- nav_items ---
@@ -1152,7 +1153,8 @@ drop policy if exists "login_events_select_managers" on login_events;
 create policy "login_events_select_managers" on login_events for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "login_events_select_admin" on login_events;
 create policy "login_events_select_admin" on login_events for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
 );
 
 -- --- page_views ---

@@ -16,6 +16,7 @@ const TYPE_META = {
 
 export default function AdminActivity() {
   const [isAdmin, setIsAdmin] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
   const [profileMap, setProfileMap] = useState({});
@@ -26,21 +27,28 @@ export default function AdminActivity() {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", session.user.id).maybeSingle();
-    if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
+    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
+    if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) { setIsAdmin(false); setLoading(false); return; }
+    setIsPlatformAdmin(!!me.is_platform_admin);
+
+    // Organisationsleiter/-Admins sehen nur die eigene Organisation — nur
+    // Plattform-Admins sehen organisationsübergreifend alles.
+    let profilesQuery = supabase.from("profiles").select("id, full_name, avatar_url");
+    if (!me.is_platform_admin) profilesQuery = profilesQuery.eq("organization_id", me.organization_id);
+    const { data: profiles } = await profilesQuery;
+    const orgUserIds = (profiles || []).map((p) => p.id);
+    const scoped = (q) => (me.is_platform_admin ? q : q.in("user_id", orgUserIds));
 
     const [
       { data: logins }, { data: quizzes }, { data: exams },
       { data: roleplays }, { data: posts }, { data: comments },
-      { data: profiles },
     ] = await Promise.all([
-      supabase.from("login_events").select("*").order("created_at", { ascending: false }).limit(150),
-      supabase.from("quiz_results").select("*").order("created_at", { ascending: false }).limit(150),
-      supabase.from("exam_results").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("roleplay_sessions").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("community_comments").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("profiles").select("id, full_name, avatar_url"),
+      scoped(supabase.from("login_events").select("*").order("created_at", { ascending: false }).limit(150)),
+      scoped(supabase.from("quiz_results").select("*").order("created_at", { ascending: false }).limit(150)),
+      scoped(supabase.from("exam_results").select("*").order("created_at", { ascending: false }).limit(100)),
+      scoped(supabase.from("roleplay_sessions").select("*").order("created_at", { ascending: false }).limit(100)),
+      scoped(supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(100)),
+      scoped(supabase.from("community_comments").select("*").order("created_at", { ascending: false }).limit(100)),
     ]);
 
     const map = {};
@@ -68,7 +76,7 @@ export default function AdminActivity() {
     return (
       <Layout>
         <h1 className="text-2xl font-display text-textMain mb-1">Aktivitäten</h1>
-        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Admin-Konten verfügbar.</p>
+        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Manager/Admin-Konten verfügbar.</p>
       </Layout>
     );
   }
@@ -80,7 +88,7 @@ export default function AdminActivity() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Aktivitäten</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Logins, Lernfortschritt und Community-Aktivität — team-weit, für alle Mitglieder.</p>
+      <p className="text-textMuted text-sm mb-6">Logins, Lernfortschritt und Community-Aktivität {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <select className="input !w-auto" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
