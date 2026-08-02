@@ -732,7 +732,9 @@ create policy "roleplay_sessions_select_admin" on roleplay_sessions for select u
 -- --- nav_items ---
 drop policy if exists "nav_items_select_all" on nav_items;
 create policy "nav_items_select_all" on nav_items for select using (
-  is_builtin = true or same_org(created_by, auth.uid())
+  is_builtin = true
+  or same_org(created_by, auth.uid())
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "nav_items_write_managers" on nav_items;
 create policy "nav_items_write_managers" on nav_items for insert with check (
@@ -751,7 +753,10 @@ create policy "nav_items_delete_managers" on nav_items for delete using (
 
 -- --- custom_courses ---
 drop policy if exists "custom_courses_select_all" on custom_courses;
-create policy "custom_courses_select_all" on custom_courses for select using (same_org(created_by, auth.uid()));
+create policy "custom_courses_select_all" on custom_courses for select using (
+  same_org(created_by, auth.uid())
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+);
 drop policy if exists "custom_courses_write_managers" on custom_courses;
 create policy "custom_courses_write_managers" on custom_courses for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
 drop policy if exists "custom_courses_update_managers" on custom_courses;
@@ -765,7 +770,10 @@ create policy "custom_courses_delete_managers" on custom_courses for delete usin
 
 -- --- custom_modules ---
 drop policy if exists "custom_modules_select_all" on custom_modules;
-create policy "custom_modules_select_all" on custom_modules for select using (same_org(created_by, auth.uid()));
+create policy "custom_modules_select_all" on custom_modules for select using (
+  same_org(created_by, auth.uid())
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+);
 drop policy if exists "custom_modules_write_managers" on custom_modules;
 create policy "custom_modules_write_managers" on custom_modules for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
 drop policy if exists "custom_modules_update_managers" on custom_modules;

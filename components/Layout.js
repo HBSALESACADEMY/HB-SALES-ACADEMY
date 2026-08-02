@@ -157,20 +157,36 @@ export default function Layout({ children, fullBleed }) {
         return;
       }
       const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-      const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
-      if (mounted) {
-        setProfile(data);
-        cachedProfile = data;
-        if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
-        if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
-        setLoadingAuth(false);
-      }
+
       // Plattform-Admins sehen bewusst die Marke der Organisation, deren
       // Firmencode sie zuletzt auf der Login-Seite eingegeben haben (session-
       // gebunden) — nicht zwingend die ihrer eigenen fest zugeordneten
       // Organisation. Für alle anderen Konten gilt immer die eigene, echte
       // organization_id.
       const activeOrgId = (data?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || data?.organization_id;
+
+      const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
+      let effectiveNav = nav || [];
+      // Plattform-Admins sehen jetzt (siehe migration_42) ALLE Organisationen
+      // eigene Ordner via RLS — hier zusätzlich auf die gerade aktive
+      // Organisation eingrenzen, sonst würden sich eigene Inhalte aller
+      // Organisationen in der Sidebar vermischen.
+      if (data?.is_platform_admin && activeOrgId) {
+        const customCreatorIds = [...new Set(effectiveNav.filter((n) => !n.is_builtin).map((n) => n.created_by))];
+        if (customCreatorIds.length) {
+          const { data: creators } = await supabase.from("profiles").select("id, organization_id").in("id", customCreatorIds);
+          const sameOrgCreatorIds = new Set((creators || []).filter((p) => p.organization_id === activeOrgId).map((p) => p.id));
+          effectiveNav = effectiveNav.filter((n) => n.is_builtin || sameOrgCreatorIds.has(n.created_by));
+        }
+      }
+
+      if (mounted) {
+        setProfile(data);
+        cachedProfile = data;
+        if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
+        if (effectiveNav.length) { setNavItems(effectiveNav); cachedNavItems = effectiveNav; }
+        setLoadingAuth(false);
+      }
       if (activeOrgId) {
         const { data: orgData } = await supabase.from("organizations").select("*").eq("id", activeOrgId).maybeSingle();
         if (mounted && orgData) {
