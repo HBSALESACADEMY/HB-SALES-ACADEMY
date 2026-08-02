@@ -104,12 +104,26 @@ export default function Login() {
           options: { data: { full_name: fullName, org_slug: resolvedOrg.slug, agb_accepted: true } },
         });
         if (error) throw error;
+
+        // Falls im Supabase-Projekt "E-Mail-Bestätigung" aktiviert ist, liefert
+        // signUp() noch KEINE aktive Sitzung — ohne Sitzung würden sowohl der
+        // Login-Eintrag als auch die Benachrichtigungs-E-Mail an den Manager
+        // stillschweigend fehlschlagen (RLS lehnt ohne auth.uid() ab), und der
+        // Nutzer würde beim Weiterleiten zum Dashboard sofort wieder zum Login
+        // zurückgeworfen. Das hier sichtbar machen statt lautlos scheitern zu lassen.
+        if (!signUpData?.session) {
+          setResetSent(false);
+          setError("Registrierung erstellt — bitte bestätige zuerst deine E-Mail-Adresse (Link wurde verschickt), dann kannst du dich anmelden.");
+          setMode("login");
+          setLoading(false);
+          return;
+        }
+
         // signUp() meldet direkt an — ohne diesen Eintrag hätte ein brandneuer
         // Account bis zur ersten "echten" Anmeldung buchstäblich keine einzige
         // Aktivität (unsichtbar in Login-Verlauf/Aktivitäten/"aktiv diese Woche").
-        if (signUpData?.user) {
-          supabase.from("login_events").insert({ user_id: signUpData.user.id }).then(({ error: leErr }) => { if (leErr) console.error("login_events insert failed:", leErr.message); });
-        }
+        const { error: leErr } = await supabase.from("login_events").insert({ user_id: signUpData.user.id });
+        if (leErr) console.error("login_events insert failed:", leErr.message);
         // Best-effort — benachrichtigt die Manager der Organisation per E-Mail.
         // Darf die Registrierung selbst nie blockieren, falls das fehlschlägt.
         apiPost("/api/notify-pending-approval", {}).catch((e) => console.error("notify-pending-approval failed:", e.message));
