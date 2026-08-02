@@ -348,13 +348,13 @@
   <div class="modal lead-modal" style="border-top-color: var(--green);">
     <h4>Termin erfasst 🎉</h4>
     <div class="modal-sub">Kundendaten erfassen (empfohlen) — landet direkt unter "Termine" in der App</div>
-    <div class="lead-field"><label>Name</label><input type="text" id="leadName" placeholder="Vor- und Nachname"></div>
-    <div class="lead-field"><label>Telefon</label><input type="tel" id="leadPhone"></div>
-    <div class="lead-field"><label>E-Mail</label><input type="email" id="leadEmail"></div>
+    <div class="lead-field"><label>Name *</label><input type="text" id="leadName" placeholder="Vor- und Nachname"></div>
+    <div class="lead-field"><label>Telefon *</label><input type="tel" id="leadPhone"></div>
+    <div class="lead-field"><label>E-Mail *</label><input type="email" id="leadEmail"></div>
+    <div class="lead-field"><label>Termin (Datum/Uhrzeit) *</label><input type="datetime-local" id="leadAppointmentAt"></div>
     <div class="lead-field"><label>Unternehmen</label><input type="text" id="leadCompany"></div>
     <div class="lead-field"><label>Aktuelle Webseite</label><input type="text" id="leadWebsite"></div>
     <label class="lead-checkbox"><input type="checkbox" id="leadDecisionMaker"> Ist Entscheider</label>
-    <div class="lead-field"><label>Termin (Datum/Uhrzeit)</label><input type="datetime-local" id="leadAppointmentAt"></div>
     <div class="lead-field"><label>Notiz</label><textarea id="leadNotes" placeholder="Was wurde besprochen?"></textarea></div>
     <div class="lead-field"><label>Recording hochladen (optional)</label><input type="file" accept="audio/*" id="leadRecording"></div>
     <button class="lead-submit" id="leadSubmit">Speichern</button>
@@ -619,13 +619,19 @@
   document.getElementById("leadSubmit").addEventListener("click", async () => {
     const submitBtn = document.getElementById("leadSubmit");
     const name = document.getElementById("leadName").value.trim();
-    if (!name){ showToast("Bitte mindestens einen Namen eingeben"); return; }
+    const phone = document.getElementById("leadPhone").value.trim();
+    const email = document.getElementById("leadEmail").value.trim();
+    const appointmentAt = document.getElementById("leadAppointmentAt").value;
+    if (!name || !phone || !email || !appointmentAt){
+      showToast("Bitte Name, Telefon, E-Mail und Termin ausfüllen");
+      return;
+    }
     submitBtn.disabled = true;
     submitBtn.textContent = "Speichert...";
     try {
-      if (!hbSupabase) throw new Error("Keine Verbindung");
+      if (!hbSupabase) throw new Error("Keine Verbindung zu Supabase (su/sk fehlen).");
       const { data: { session } } = await hbSupabase.auth.getSession();
-      if (!session) throw new Error("Nicht angemeldet");
+      if (!session) throw new Error("Nicht angemeldet.");
 
       let recordingPath = null;
       const file = document.getElementById("leadRecording").files[0];
@@ -633,28 +639,30 @@
         const ext = (file.name.split(".").pop() || "webm");
         const path = `${session.user.id}/${Date.now()}.${ext}`;
         const { error: upErr } = await hbSupabase.storage.from("lead-recordings").upload(path, file);
-        if (!upErr) recordingPath = path;
+        if (upErr) console.error("Recording-Upload fehlgeschlagen:", upErr.message);
+        else recordingPath = path;
       }
 
-      const appointmentAt = document.getElementById("leadAppointmentAt").value;
-      await hbSupabase.from("leads").insert({
+      const { error: insertErr } = await hbSupabase.from("leads").insert({
         created_by: session.user.id,
         name,
-        phone: document.getElementById("leadPhone").value.trim() || null,
-        email: document.getElementById("leadEmail").value.trim() || null,
+        phone,
+        email,
         company: document.getElementById("leadCompany").value.trim() || null,
         website: document.getElementById("leadWebsite").value.trim() || null,
         is_decision_maker: document.getElementById("leadDecisionMaker").checked,
         notes: document.getElementById("leadNotes").value.trim() || null,
         recording_path: recordingPath,
-        appointment_at: appointmentAt ? new Date(appointmentAt).toISOString() : null,
+        appointment_at: new Date(appointmentAt).toISOString(),
       });
+      if (insertErr) throw insertErr;
 
       bumpTermin();
       closeLeadModal();
       showToast("Termin & Kundendaten gespeichert");
     } catch (e) {
-      showToast("Speichern fehlgeschlagen");
+      console.error("Lead konnte nicht gespeichert werden:", e);
+      showToast("Speichern fehlgeschlagen: " + (e.message || "Unbekannter Fehler"));
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "Speichern";
