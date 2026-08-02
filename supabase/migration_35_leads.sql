@@ -71,5 +71,5 @@ create policy "lead_recordings_own_folder_all" on storage.objects for all using 
 );
 
 insert into nav_items (key, label, icon, route, is_builtin, requires_manager, order_index)
-values ('termine', 'Termine', 'target', '/termine', true, false, 17)
+values ('termine', 'Termine', 'calendar', '/termine', true, false, 17)
 on conflict (key) do nothing;
