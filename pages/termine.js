@@ -8,6 +8,8 @@ import { openProfile } from "../lib/profileModalBus";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
+const OUTCOME_LABELS = { kunde: "Kunde geworden", follow_up: "Überlegt (Follow-up)", absage: "Absage" };
+const OUTCOME_COLORS = { kunde: "teal", follow_up: "violet", absage: "coral" };
 
 export default function Termine() {
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,8 @@ export default function Termine() {
   const [playingId, setPlayingId] = useState(null);
   const [playingUrl, setPlayingUrl] = useState(null);
   const [error, setError] = useState("");
+  const [followUpId, setFollowUpId] = useState(null);
+  const [followUpDate, setFollowUpDate] = useState("");
 
   async function load() {
     setLoading(true);
@@ -61,6 +65,26 @@ export default function Termine() {
   async function updateStatus(id, status) {
     await supabase.from("leads").update({ status }).eq("id", id);
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
+  }
+
+  async function markOutcome(id, outcome) {
+    if (outcome === "follow_up") {
+      // Erst Datum für den Folgetermin abfragen, statt sofort zu speichern.
+      setFollowUpId(id);
+      setFollowUpDate("");
+      return;
+    }
+    await supabase.from("leads").update({ outcome }).eq("id", id);
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome } : l)));
+  }
+
+  async function saveFollowUp(id) {
+    if (!followUpDate) return;
+    const patch = { outcome: "follow_up", appointment_at: new Date(followUpDate).toISOString(), status: "geplant" };
+    await supabase.from("leads").update(patch).eq("id", id);
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    setFollowUpId(null);
+    setFollowUpDate("");
   }
 
   async function togglePlay(lead) {
@@ -112,6 +136,11 @@ export default function Termine() {
                     {lead.name}
                     {lead.is_decision_maker && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Entscheider</span>}
                     <span className={`text-[10px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>{STATUS_LABELS[lead.status]}</span>
+                    {lead.outcome && (
+                      <span className={`text-[10px] uppercase tracking-wide text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
+                        {OUTCOME_LABELS[lead.outcome]}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-textMuted mt-0.5">{lead.company || "Kein Unternehmen angegeben"}</div>
                 </div>
@@ -145,6 +174,22 @@ export default function Termine() {
               </div>
               {playingId === lead.id && playingUrl && (
                 <audio controls autoPlay src={playingUrl} className="w-full mt-2" />
+              )}
+
+              <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line mt-2">
+                <span className="text-[11px] text-textMuted flex-shrink-0">Ergebnis:</span>
+                {Object.keys(OUTCOME_LABELS).map((o) => (
+                  <button key={o} disabled={lead.outcome === o && o !== "follow_up"} onClick={() => markOutcome(lead.id, o)} className="btn-ghost text-xs disabled:opacity-30">
+                    {OUTCOME_LABELS[o]}
+                  </button>
+                ))}
+              </div>
+              {followUpId === lead.id && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
+                  <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
+                  <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
+                </div>
               )}
             </div>
           );

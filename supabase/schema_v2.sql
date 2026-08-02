@@ -494,6 +494,7 @@ create table if not exists leads (
   recording_path text,
   appointment_at timestamptz,
   status text not null default 'geplant' check (status in ('geplant', 'wahrgenommen', 'abgesagt')),
+  outcome text check (outcome in ('kunde', 'follow_up', 'absage')),
   created_at timestamptz not null default now()
 );
 

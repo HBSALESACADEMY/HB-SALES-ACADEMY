@@ -35,7 +35,7 @@ const NAV_GROUPS = {
   courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen", scripts: "Lernen", "roleplay-history": "Lernen",
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen", "leitfaden-generator": "Lernen",
   "einwand-trainer": "Lernen", lernpfad: "Lernen",
-  community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team", termine: "Team", "call-tracker": "Team",
+  community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team", termine: "Team", "call-tracker": "Team", kunden: "Team",
   einwandbehandlung: "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
