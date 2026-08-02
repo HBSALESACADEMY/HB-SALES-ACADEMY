@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
+import { effectiveStreak } from "../lib/streak";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -28,7 +29,7 @@ export default function DailyChallenge() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const { data: profile } = await supabase.from("profiles").select("streak_count, last_challenge_date").eq("id", session.user.id).maybeSingle();
-      setStreak(profile?.streak_count || 0);
+      setStreak(effectiveStreak(profile?.streak_count, profile?.last_challenge_date));
       const { data: existing } = await supabase.from("daily_challenge_completions")
         .select("*").eq("user_id", session.user.id).eq("challenge_date", todayStr()).maybeSingle();
       if (existing) { setAlreadyDone(true); setSelected(existing.correct ? question.correct : -1); setRevealed(true); }

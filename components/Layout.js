@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
+import { isStreakExpired, streakLossPenalty } from "../lib/streak";
 import Icon from "./Icon";
 import IconPicker from "./IconPicker";
 import Avatar from "./Avatar";
@@ -156,7 +157,18 @@ export default function Layout({ children, fullBleed }) {
         router.replace("/login");
         return;
       }
-      const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+      let { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+
+      // Streak-Verfall: es gibt keinen Hintergrund-Job, der abgelaufene
+      // Serien zurücksetzt — ohne Aktivität blieb streak_count sonst beliebig
+      // lange stehen ("Streak in Gefahr" für immer). Beim Login nachholen:
+      // Serie auf 0, plus XP-Abzug als Konsequenz (lib/streak.js).
+      if (data && data.streak_count > 0 && isStreakExpired(data.last_challenge_date)) {
+        const penalty = streakLossPenalty(data.streak_count);
+        await supabase.from("profiles").update({ streak_count: 0 }).eq("id", data.id);
+        try { await supabase.rpc("increment_xp", { uid: data.id, amount: -penalty }); } catch (e) { console.error("streak XP penalty failed:", e.message); }
+        data = { ...data, streak_count: 0, xp: Math.max(0, (data.xp || 0) - penalty) };
+      }
 
       // Plattform-Admins sehen bewusst die Marke der Organisation, deren
       // Firmencode sie zuletzt auf der Login-Seite eingegeben haben (session-

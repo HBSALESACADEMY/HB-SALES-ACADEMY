@@ -4,6 +4,7 @@ import Avatar from "./Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { computeBadges } from "../lib/badges";
 import { COURSES } from "../lib/curriculum";
+import { effectiveStreak } from "../lib/streak";
 
 const FIELD_LABELS = {
   website: "Webseite",
@@ -54,7 +55,7 @@ export default function ProfileModal({ userId, onClose }) {
       }
       setBadges(computeBadges({
         roleplayCount: roleplayCount || 0, certCount: certCount || 0, totalCourses: COURSES.length,
-        streak: profile?.streak_count || 0, quizCount: quizCount || 0, kudosReceived, isMentor: (mentorCount || 0) > 0,
+        streak: effectiveStreak(profile?.streak_count, profile?.last_challenge_date), quizCount: quizCount || 0, kudosReceived, isMentor: (mentorCount || 0) > 0,
       }));
 
       setLoading(false);

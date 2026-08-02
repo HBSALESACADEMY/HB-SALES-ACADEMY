@@ -603,7 +603,9 @@ create or replace function public.increment_xp(uid uuid, amount integer)
 returns void
 language plpgsql as $$
 begin
-  update profiles set xp = xp + amount where id = uid;
+  -- GREATEST(0, ...) verhindert negatives XP — wichtig, seit XP-Verlust
+  -- (z.B. beim Reißen einer Streak) genutzt wird, nicht nur XP-Zuwachs.
+  update profiles set xp = greatest(0, xp + amount) where id = uid;
   insert into xp_log (user_id, amount) values (uid, amount);
 end;
 $$;

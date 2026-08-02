@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { validatePostAttachment } from "../lib/uploadValidation";
+import { effectiveStreak } from "../lib/streak";
 
 export default function Community() {
   const router = useRouter();
@@ -57,7 +58,7 @@ export default function Community() {
       supabase.from("community_comment_kudos").select("*"),
       // organization_id + streak_count zusätzlich geladen — für die
       // Trennung "Meine Organisation"/"Global" und die Kudos-Wall.
-      supabase.from("profiles").select("id, full_name, avatar_url, organization_id, streak_count").eq("status", "approved"),
+      supabase.from("profiles").select("id, full_name, avatar_url, organization_id, streak_count, last_challenge_date").eq("status", "approved"),
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
     ]);
 
@@ -148,7 +149,13 @@ export default function Community() {
       xpByUser[r.user_id] = (xpByUser[r.user_id] || 0) + r.amount;
     });
     const scopedProfiles = allProfiles.filter((p) => inScope(p.id));
-    const topStreak = scopedProfiles.reduce((best, p) => (!best || (p.streak_count || 0) > (best.streak_count || 0)) ? p : best, null);
+    // Abgelaufene Serien zählen hier nicht mit — der echte DB-Wert wird erst
+    // korrigiert, sobald die betroffene Person sich wieder einloggt (siehe
+    // components/Layout.js), bis dahin würde sonst eine "tote" Serie gewinnen.
+    const topStreak = scopedProfiles.reduce((best, p) => {
+      const days = effectiveStreak(p.streak_count, p.last_challenge_date);
+      return (!best || days > best.days) ? { ...p, days } : best;
+    }, null);
 
     const topKudos = Object.entries(kudosByAuthor).sort((a, b) => b[1] - a[1])[0];
     const topXp = Object.entries(xpByUser).sort((a, b) => b[1] - a[1])[0];
@@ -156,7 +163,7 @@ export default function Community() {
     setKudosWall({
       topKudos: topKudos ? { name: nameFor(topKudos[0]), count: topKudos[1] } : null,
       topXp: topXp ? { name: nameFor(topXp[0]), amount: topXp[1] } : null,
-      topStreak: topStreak && topStreak.streak_count > 0 ? { name: topStreak.full_name, days: topStreak.streak_count } : null,
+      topStreak: topStreak && topStreak.days > 0 ? { name: topStreak.full_name, days: topStreak.days } : null,
     });
   }, [scope, orgByUserId, myOrgId, weekKudosRaw, weekXpRaw, allProfiles, profileMap]);
 
