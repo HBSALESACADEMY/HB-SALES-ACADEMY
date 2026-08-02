@@ -99,11 +99,17 @@ export default function Login() {
         playLoginChime();
       } else {
         if (!agbAccepted) throw new Error("Bitte die AGB akzeptieren, um fortzufahren.");
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email, password,
           options: { data: { full_name: fullName, org_slug: resolvedOrg.slug, agb_accepted: true } },
         });
         if (error) throw error;
+        // signUp() meldet direkt an — ohne diesen Eintrag hätte ein brandneuer
+        // Account bis zur ersten "echten" Anmeldung buchstäblich keine einzige
+        // Aktivität (unsichtbar in Login-Verlauf/Aktivitäten/"aktiv diese Woche").
+        if (signUpData?.user) {
+          supabase.from("login_events").insert({ user_id: signUpData.user.id }).then(({ error: leErr }) => { if (leErr) console.error("login_events insert failed:", leErr.message); });
+        }
         // Best-effort — benachrichtigt die Manager der Organisation per E-Mail.
         // Darf die Registrierung selbst nie blockieren, falls das fehlschlägt.
         apiPost("/api/notify-pending-approval", {}).catch((e) => console.error("notify-pending-approval failed:", e.message));

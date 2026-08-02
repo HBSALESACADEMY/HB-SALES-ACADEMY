@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 
 const TYPE_META = {
+  registered: { label: "Registriert", icon: "flame", color: "#F0B23E" },
   login: { label: "Login", icon: "logout", color: "#90939F" },
   quiz: { label: "Quiz abgeschlossen", icon: "book", color: "#00E5C7" },
   exam: { label: "Prüfung", icon: "award", color: "var(--org-accent, #E8368F)" },
@@ -33,7 +34,7 @@ export default function AdminActivity() {
 
     // Organisationsleiter/-Admins sehen nur die eigene Organisation — nur
     // Plattform-Admins sehen organisationsübergreifend alles.
-    let profilesQuery = supabase.from("profiles").select("id, full_name, avatar_url");
+    let profilesQuery = supabase.from("profiles").select("id, full_name, avatar_url, created_at");
     if (!me.is_platform_admin) profilesQuery = profilesQuery.eq("organization_id", me.organization_id);
     const { data: profiles } = await profilesQuery;
     const orgUserIds = (profiles || []).map((p) => p.id);
@@ -56,6 +57,7 @@ export default function AdminActivity() {
     setProfileMap(map);
 
     const combined = [
+      ...(profiles || []).map((p) => ({ type: "registered", user_id: p.id, created_at: p.created_at, detail: null })),
       ...(logins || []).map((e) => ({ type: "login", user_id: e.user_id, created_at: e.created_at, detail: null })),
       ...(quizzes || []).map((e) => ({ type: "quiz", user_id: e.user_id, created_at: e.created_at, detail: e.mc_total ? `${e.mc_score}/${e.mc_total} richtig` : null })),
       ...(exams || []).map((e) => ({ type: "exam", user_id: e.user_id, created_at: e.created_at, detail: e.passed ? "bestanden" : "nicht bestanden" })),
