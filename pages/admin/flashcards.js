@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
+import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
@@ -12,7 +13,7 @@ export default function FlashcardsAdmin() {
   const [generating, setGenerating] = useState(null); // courseId currently generating
   const [genMessage, setGenMessage] = useState("");
 
-  const [draft, setDraft] = useState({ tag: "", front: "", back: "" });
+  const [draft, setDraft] = useState({ tag: "", front: "", back: "", file: null });
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -52,12 +53,29 @@ export default function FlashcardsAdmin() {
     if (!draft.tag.trim() || !draft.front.trim() || !draft.back.trim()) return;
     setSaving(true);
     setError("");
-    const { data: { session } } = await supabase.auth.getSession();
-    const { error: err } = await supabase.from("flashcards").insert({
-      tag: draft.tag.trim(), front: draft.front.trim(), back: draft.back.trim(), created_by: session.user.id,
-    });
-    if (err) setError(err.message);
-    else { setDraft({ tag: "", front: "", back: "" }); await load(); }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      let fileUrl = null, fileName = null;
+      if (draft.file) {
+        const path = `${session.user.id}/${Date.now()}-${draft.file.name}`;
+        const { error: upErr } = await supabase.storage.from("content-files").upload(path, draft.file);
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("content-files").getPublicUrl(path);
+        fileUrl = pub.publicUrl;
+        fileName = draft.file.name;
+      }
+
+      const { error: err } = await supabase.from("flashcards").insert({
+        tag: draft.tag.trim(), front: draft.front.trim(), back: draft.back.trim(),
+        file_url: fileUrl, file_name: fileName, created_by: session.user.id,
+      });
+      if (err) throw err;
+      setDraft({ tag: "", front: "", back: "", file: null });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
     setSaving(false);
   }
 
@@ -112,6 +130,10 @@ export default function FlashcardsAdmin() {
           <input className="input" placeholder="Tag (z.B. Modultitel)" value={draft.tag} onChange={(e) => setDraft({ ...draft, tag: e.target.value })} />
           <textarea className="input" placeholder="Frage (Vorderseite)" rows={2} value={draft.front} onChange={(e) => setDraft({ ...draft, front: e.target.value })} />
           <textarea className="input" placeholder="Antwort (Rückseite)" rows={2} value={draft.back} onChange={(e) => setDraft({ ...draft, back: e.target.value })} />
+          <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 w-fit">
+            <Icon name="download" size={12} /> {draft.file ? draft.file.name : "Datei anhängen (optional)"}
+            <input type="file" className="hidden" onChange={(e) => setDraft({ ...draft, file: e.target.files[0] || null })} />
+          </label>
           <button disabled={saving} onClick={addCard} className="btn self-start disabled:opacity-40">{saving ? "Speichert..." : "Karte hinzufügen"}</button>
         </div>
       </div>
@@ -127,6 +149,11 @@ export default function FlashcardsAdmin() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-textMain">{c.front}</p>
                     <p className="text-xs text-textMuted mt-1">{c.back}</p>
+                    {c.file_url && (
+                      <a href={c.file_url} target="_blank" rel="noreferrer" className="text-[11px] text-teal inline-flex items-center gap-1 mt-1">
+                        <Icon name="download" size={10} /> {c.file_name || "Anhang"}
+                      </a>
+                    )}
                   </div>
                   <button onClick={() => deleteCard(c.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Löschen</button>
                 </div>

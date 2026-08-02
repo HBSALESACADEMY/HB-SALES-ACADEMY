@@ -86,7 +86,7 @@ export default function ContentAdmin() {
     setError("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      let videoUrl = null;
+      let videoUrl = null, fileUrl = null, fileName = null;
 
       if (draft.file) {
         const ext = draft.file.name.split(".").pop();
@@ -97,18 +97,30 @@ export default function ContentAdmin() {
         videoUrl = pub.publicUrl;
       }
 
+      if (draft.attachment) {
+        const ext = draft.attachment.name.split(".").pop();
+        const path = `${courseId}/${Date.now()}-${draft.attachment.name}`;
+        const { error: upErr } = await supabase.storage.from("content-files").upload(path, draft.attachment);
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("content-files").getPublicUrl(path);
+        fileUrl = pub.publicUrl;
+        fileName = draft.attachment.name;
+      }
+
       const existing = modulesByCourse[courseId] || [];
       const { error: insErr } = await supabase.from("custom_modules").insert({
         course_id: courseId,
         title: draft.title.trim(),
         content: draft.content?.trim() || null,
         video_url: videoUrl,
+        file_url: fileUrl,
+        file_name: fileName,
         order_index: existing.length,
         created_by: session.user.id,
       });
       if (insErr) throw insErr;
 
-      setModuleDrafts((prev) => ({ ...prev, [courseId]: { title: "", content: "", file: null, uploading: false } }));
+      setModuleDrafts((prev) => ({ ...prev, [courseId]: { title: "", content: "", file: null, attachment: null, uploading: false } }));
       await load();
     } catch (e) {
       setError(e.message || "Fehler beim Hinzufügen des Moduls.");
@@ -186,6 +198,11 @@ export default function ContentAdmin() {
                     <Icon name="book" size={14} />
                     <span className="text-sm flex-1">{m.title}</span>
                     {m.video_url && <span className="text-[10px] uppercase text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
+                    {m.file_url && (
+                      <a href={m.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs inline-flex items-center gap-1">
+                        <Icon name="download" size={11} /> {m.file_name || "Anhang"}
+                      </a>
+                    )}
                     <button onClick={() => deleteModule(m.id)} className="btn-ghost text-xs text-coral">Löschen</button>
                   </div>
                 ))}
@@ -195,9 +212,16 @@ export default function ContentAdmin() {
               <div className="border-t border-line pt-3 flex flex-col gap-2">
                 <input className="input" placeholder="Modultitel" value={draft.title || ""} onChange={(e) => setDraft(c.id, { title: e.target.value })} />
                 <textarea className="input" placeholder="Inhalt / Beschreibung" rows={2} value={draft.content || ""} onChange={(e) => setDraft(c.id, { content: e.target.value })} />
-                <div className="flex items-center gap-2">
-                  <input type="file" accept="video/*" onChange={(e) => setDraft(c.id, { file: e.target.files[0] })} className="text-xs text-textMuted flex-1" />
-                  <button disabled={draft.uploading} onClick={() => addModule(c.id)} className="btn disabled:opacity-40">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5">
+                    <Icon name="chat" size={12} /> {draft.file ? draft.file.name : "Video (optional)"}
+                    <input type="file" accept="video/*" className="hidden" onChange={(e) => setDraft(c.id, { file: e.target.files[0] })} />
+                  </label>
+                  <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5">
+                    <Icon name="download" size={12} /> {draft.attachment ? draft.attachment.name : "Datei anhängen (optional)"}
+                    <input type="file" className="hidden" onChange={(e) => setDraft(c.id, { attachment: e.target.files[0] })} />
+                  </label>
+                  <button disabled={draft.uploading} onClick={() => addModule(c.id)} className="btn disabled:opacity-40 ml-auto">
                     {draft.uploading ? "Lädt hoch..." : "Modul hinzufügen"}
                   </button>
                 </div>

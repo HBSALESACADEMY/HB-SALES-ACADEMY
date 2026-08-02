@@ -204,6 +204,8 @@ create table if not exists custom_modules (
   title text not null,
   content text,
   video_url text,
+  file_url text,
+  file_name text,
   order_index integer not null default 0,
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
@@ -236,6 +238,8 @@ create table if not exists flashcards (
   tag text not null default 'Allgemein',
   front text not null,
   back text not null,
+  file_url text,
+  file_name text,
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -1275,6 +1279,19 @@ drop policy if exists "script_files_manager_upload" on storage.objects;
 create policy "script_files_manager_upload" on storage.objects for insert with check (
   bucket_id = 'script-files'
   and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+);
+
+-- Gemeinsamer Bucket für Kurs-Modul- und Flashcard-Anhänge.
+insert into storage.buckets (id, name, public) values ('content-files', 'content-files', true)
+on conflict (id) do nothing;
+
+drop policy if exists "content_files_public_read" on storage.objects;
+create policy "content_files_public_read" on storage.objects for select using (bucket_id = 'content-files');
+
+drop policy if exists "content_files_manager_upload" on storage.objects;
+create policy "content_files_manager_upload" on storage.objects for insert with check (
+  bucket_id = 'content-files'
+  and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer'))
 );
 
 drop policy if exists "org_logos_public_read" on storage.objects;

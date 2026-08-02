@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
+import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
 
 export default function CustomCourseDetail() {
@@ -39,6 +40,11 @@ export default function CustomCourseDetail() {
               <video controls className="w-full rounded-lg mb-3" src={m.video_url} />
             )}
             {m.content && <p className="text-sm text-textMuted whitespace-pre-wrap">{m.content}</p>}
+            {m.file_url && (
+              <a href={m.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
+                <Icon name="download" size={12} /> {m.file_name || "Anhang herunterladen"}
+              </a>
+            )}
           </div>
         ))}
         {modules.length === 0 && <p className="text-textMuted text-sm">Noch keine Module in diesem Kurs.</p>}

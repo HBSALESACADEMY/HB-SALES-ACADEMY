@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -86,6 +87,11 @@ export default function Flashcards() {
             <>
               <div className="border-t border-line pt-4 mb-5">
                 <p className="text-textMuted text-sm">{card.back}</p>
+                {card.file_url && (
+                  <a href={card.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs mt-3 inline-flex items-center gap-1.5 w-fit">
+                    <Icon name="download" size={12} /> {card.file_name || "Anhang"}
+                  </a>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button onClick={() => rate(0)} className="btn-ghost text-xs py-2.5 text-coral border-coral/40">Nochmal</button>
