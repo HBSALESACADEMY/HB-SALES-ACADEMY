@@ -10,7 +10,7 @@ export default function Scripts() {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ category: "", title: "", body: "", file: null });
+  const [form, setForm] = useState({ category: "", title: "", body: "", file: null, visibility: "org" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -57,11 +57,11 @@ export default function Scripts() {
 
       const { error } = await supabase.from("scripts").insert({
         category: form.category.trim() || "Allgemein", title: form.title.trim(), body: form.body.trim(),
-        file_url: fileUrl, file_name: fileName, created_by: session.user.id,
+        file_url: fileUrl, file_name: fileName, visibility: form.visibility, created_by: session.user.id,
       });
       if (error) throw error;
 
-      setForm({ category: "", title: "", body: "", file: null });
+      setForm({ category: "", title: "", body: "", file: null, visibility: "org" });
       setShowForm(false);
       await load();
     } catch (e) {
@@ -111,6 +111,14 @@ export default function Scripts() {
             <Icon name="download" size={12} /> {form.file ? form.file.name : "Datei anhängen (optional)"}
             <input type="file" className="hidden" onChange={(e) => setForm((f) => ({ ...f, file: e.target.files[0] || null }))} />
           </label>
+          <div className="flex items-center gap-2 mb-3">
+            {[["org", "Ganzes Unternehmen"], ["private", "Nur für mich"]].map(([key, label]) => (
+              <button key={key} onClick={() => setForm((f) => ({ ...f, visibility: key }))}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${form.visibility === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-2">
             <button disabled={saving} onClick={() => setShowForm(false)} className="btn-ghost text-xs flex-1 disabled:opacity-40">Abbrechen</button>
             <button disabled={saving} onClick={saveScript} className="btn text-xs flex-1 justify-center disabled:opacity-40">{saving ? "Speichert..." : "Speichern"}</button>
@@ -125,7 +133,10 @@ export default function Scripts() {
             {items.map((s) => (
               <div key={s.id} className="card">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="font-display font-semibold text-textMain text-sm">{s.title}</div>
+                  <div className="font-display font-semibold text-textMain text-sm flex items-center gap-2">
+                    {s.title}
+                    {s.visibility === "private" && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Nur für dich</span>}
+                  </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => copy(s)} className="btn-ghost text-xs">
                       {copiedId === s.id ? "Kopiert!" : <><Icon name="copy" size={12} /> Kopieren</>}

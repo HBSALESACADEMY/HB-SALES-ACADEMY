@@ -229,6 +229,7 @@ create table if not exists scripts (
   body text not null,
   file_url text,
   file_name text,
+  visibility text not null default 'org' check (visibility in ('org', 'private')),
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -807,7 +808,10 @@ create policy "kb_entries_delete_managers" on kb_entries for delete using (
 
 -- --- scripts ---
 drop policy if exists "scripts_select_all" on scripts;
-create policy "scripts_select_all" on scripts for select using (same_org(created_by, auth.uid()));
+create policy "scripts_select_all" on scripts for select using (
+  created_by = auth.uid()
+  or (visibility = 'org' and same_org(created_by, auth.uid()))
+);
 drop policy if exists "scripts_insert_managers" on scripts;
 create policy "scripts_insert_managers" on scripts for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
 drop policy if exists "scripts_update_managers" on scripts;
