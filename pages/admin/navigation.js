@@ -1,24 +1,8 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
+import IconPicker from "../../components/IconPicker";
 import { supabase } from "../../lib/supabaseClient";
-
-const ICONS = ["dashboard", "book", "chat", "library", "award", "lock", "download", "search", "flame", "users", "target", "calendar"];
-
-function IconPicker({ value, onChange }) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {ICONS.map((ic) => (
-        <button
-          key={ic} type="button" title={ic} onClick={() => onChange(ic)}
-          className={`w-9 h-9 rounded-lg border flex items-center justify-center transition ${value === ic ? "border-amber bg-amber/10 text-amber" : "border-line text-textMuted hover:border-[var(--org-color-1,#4A3565)] hover:text-textMain"}`}
-        >
-          <Icon name={ic} size={16} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export default function NavigationAdmin() {
   const [isManager, setIsManager] = useState(true);

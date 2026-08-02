@@ -731,15 +731,17 @@ create policy "nav_items_select_all" on nav_items for select using (
   is_builtin = true or same_org(created_by, auth.uid())
 );
 drop policy if exists "nav_items_write_managers" on nav_items;
-create policy "nav_items_write_managers" on nav_items for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
+create policy "nav_items_write_managers" on nav_items for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+);
 drop policy if exists "nav_items_update_managers" on nav_items;
 create policy "nav_items_update_managers" on nav_items for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer'))
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
   and (is_builtin = true or same_org(created_by, auth.uid()))
 );
 drop policy if exists "nav_items_delete_managers" on nav_items;
 create policy "nav_items_delete_managers" on nav_items for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer'))
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
   and (is_builtin = true or same_org(created_by, auth.uid()))
 );
 
@@ -1265,6 +1267,15 @@ create policy "lead_recordings_own_folder_all" on storage.objects for all using 
 -- geteilte Team-Inhalte, keine sensiblen Kundendaten.
 insert into storage.buckets (id, name, public) values ('script-files', 'script-files', true)
 on conflict (id) do nothing;
+
+drop policy if exists "script_files_public_read" on storage.objects;
+create policy "script_files_public_read" on storage.objects for select using (bucket_id = 'script-files');
+
+drop policy if exists "script_files_manager_upload" on storage.objects;
+create policy "script_files_manager_upload" on storage.objects for insert with check (
+  bucket_id = 'script-files'
+  and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+);
 
 drop policy if exists "org_logos_public_read" on storage.objects;
 create policy "org_logos_public_read" on storage.objects for select using (bucket_id = 'org-logos');

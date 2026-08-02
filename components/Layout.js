@@ -5,6 +5,7 @@ import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import Icon from "./Icon";
+import IconPicker from "./IconPicker";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
 import ProfileModal from "./ProfileModal";
@@ -64,6 +65,10 @@ export default function Layout({ children, fullBleed }) {
   const [loadingAuth, setLoadingAuth] = useState(!cachedProfile);
   const [navItems, setNavItems] = useState(cachedNavItems || FALLBACK_NAV);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showNewTabForm, setShowNewTabForm] = useState(false);
+  const [newTabName, setNewTabName] = useState("");
+  const [newTabIcon, setNewTabIcon] = useState("book");
+  const [creatingTab, setCreatingTab] = useState(false);
   const [unreadCommunity, setUnreadCommunity] = useState(cachedBadges?.unreadCommunity ?? 0);
   const [unreadMessages, setUnreadMessages] = useState(cachedBadges?.unreadMessages ?? 0);
   const [pendingApprovals, setPendingApprovals] = useState(cachedBadges?.pendingApprovals ?? 0);
@@ -364,6 +369,38 @@ export default function Layout({ children, fullBleed }) {
     });
   }
 
+  async function refreshNav() {
+    const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
+    if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
+  }
+
+  // Schneller Weg für Manager/Admins, direkt aus der Sidebar heraus einen
+  // neuen Reiter anzulegen — der bisherige Weg über "Navigation verwalten"
+  // wurde als zu umständlich empfunden. Nutzt dieselbe Tabellen-Logik wie
+  // dort (pages/admin/navigation.js), nur ohne Seitenwechsel.
+  async function createNavTab() {
+    if (!newTabName.trim()) return;
+    setCreatingTab(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const key = "custom-" + Date.now();
+      const maxOrder = navItems.reduce((m, i) => Math.max(m, i.order_index), 0);
+      const { error } = await supabase.from("nav_items").insert({
+        key, label: newTabName.trim(), icon: newTabIcon, is_builtin: false,
+        requires_manager: false, order_index: maxOrder + 1, created_by: session.user.id,
+      });
+      if (error) throw error;
+      setNewTabName("");
+      setNewTabIcon("book");
+      setShowNewTabForm(false);
+      await refreshNav();
+    } catch (e) {
+      alert("Reiter konnte nicht angelegt werden: " + e.message);
+    } finally {
+      setCreatingTab(false);
+    }
+  }
+
   async function handleLogout() {
     // Alle organisationsbezogenen Caches leeren UND die angewendeten
     // Marken-CSS-Variablen zurücksetzen — sonst könnten Logo/Farben der
@@ -538,6 +575,29 @@ export default function Layout({ children, fullBleed }) {
               );
             });
           })()}
+
+          {(profile?.role === "manager" || profile?.is_admin || profile?.is_platform_admin) && (
+            <div className="px-1 pt-1">
+              {!showNewTabForm ? (
+                <button onClick={() => setShowNewTabForm(true)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full text-[#6B7086] hover:bg-surfaceRaised hover:text-textMain border border-dashed border-line">
+                  + Neuer Reiter
+                </button>
+              ) : (
+                <div className="card !p-2.5 flex flex-col gap-2">
+                  <input
+                    autoFocus className="input !py-1.5 text-xs" placeholder="Name (z.B. Produktschulungen)"
+                    value={newTabName} onChange={(e) => setNewTabName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && createNavTab()}
+                  />
+                  <IconPicker value={newTabIcon} onChange={setNewTabIcon} size={14} />
+                  <div className="flex items-center gap-1.5">
+                    <button disabled={creatingTab} onClick={() => { setShowNewTabForm(false); setNewTabName(""); }} className="btn-ghost text-xs flex-1 disabled:opacity-40">Abbrechen</button>
+                    <button disabled={creatingTab || !newTabName.trim()} onClick={createNavTab} className="btn text-xs flex-1 justify-center disabled:opacity-40">{creatingTab ? "..." : "Anlegen"}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <button onClick={() => router.push("/profile")} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surfaceRaised text-left mb-1">
           <Avatar name={profile?.full_name || "?"} src={profile?.avatar_url} size={30} />
