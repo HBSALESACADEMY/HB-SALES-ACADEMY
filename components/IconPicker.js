@@ -1,6 +1,6 @@
 import Icon from "./Icon";
 
-export const NAV_ICONS = ["dashboard", "book", "chat", "library", "award", "lock", "download", "search", "flame", "users", "target", "calendar"];
+export const NAV_ICONS = ["dashboard", "book", "chat", "library", "award", "lock", "download", "search", "flame", "users", "target", "calendar", "mic"];
 
 export default function IconPicker({ value, onChange, size = 16 }) {
   return (

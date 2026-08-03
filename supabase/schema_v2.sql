@@ -498,6 +498,23 @@ create table if not exists leads (
   created_at timestamptz not null default now()
 );
 
+-- Frei hochladbare Anruf-Aufnahmen (nicht an einen Lead gebunden) — jedes
+-- Team-Mitglied kann eine eigene Aufnahme hochladen, wählt Sichtbarkeit
+-- (Organisation oder nur für sich selbst), die KI wertet automatisch aus.
+create table if not exists call_recordings (
+  id uuid primary key default gen_random_uuid(),
+  created_by uuid not null references profiles(id) on delete cascade,
+  label text,
+  recording_path text not null,
+  file_name text,
+  visibility text not null default 'private' check (visibility in ('org', 'private')),
+  status text not null default 'pending' check (status in ('pending', 'evaluated', 'failed')),
+  evaluation_score integer,
+  evaluation_summary text,
+  evaluation_detail jsonb,
+  created_at timestamptz not null default now()
+);
+
 
 -- =============================================================================
 -- 5. ADMIN, ANALYTICS & DROSSELUNG
@@ -652,6 +669,7 @@ alter table team_requests enable row level security;
 alter table mentor_pairs enable row level security;
 alter table call_log_days enable row level security;
 alter table leads enable row level security;
+alter table call_recordings enable row level security;
 alter table login_attempts enable row level security;
 alter table login_events enable row level security;
 alter table page_views enable row level security;
@@ -1210,6 +1228,27 @@ create policy "leads_delete" on leads for delete using (
   )
 );
 
+-- --- call_recordings ---
+drop policy if exists "call_recordings_select" on call_recordings;
+create policy "call_recordings_select" on call_recordings for select using (
+  created_by = auth.uid()
+  or (visibility = 'org' and same_org(created_by, auth.uid()))
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+);
+drop policy if exists "call_recordings_insert_own" on call_recordings;
+create policy "call_recordings_insert_own" on call_recordings for insert with check (created_by = auth.uid());
+drop policy if exists "call_recordings_update_own" on call_recordings;
+create policy "call_recordings_update_own" on call_recordings for update using (created_by = auth.uid());
+drop policy if exists "call_recordings_delete" on call_recordings;
+create policy "call_recordings_delete" on call_recordings for delete using (
+  created_by = auth.uid()
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and same_org(created_by, auth.uid())
+  )
+);
+
 -- --- login_attempts ---
 drop policy if exists "login_attempts_insert_anyone" on login_attempts;
 create policy "login_attempts_insert_anyone" on login_attempts for insert with check (true);
@@ -1280,6 +1319,19 @@ create policy "lead_recordings_own_folder_all" on storage.objects for all using 
   bucket_id = 'lead-recordings' and (storage.foldername(name))[1] = auth.uid()::text
 ) with check (
   bucket_id = 'lead-recordings' and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Privater Bucket für frei hochgeladene Team-Recordings — Wiedergabe für
+-- andere (bei visibility='org') läuft über eine signierte URL, nicht über
+-- direkten Storage-Zugriff.
+insert into storage.buckets (id, name, public) values ('call-recordings', 'call-recordings', false)
+on conflict (id) do nothing;
+
+drop policy if exists "call_recordings_own_folder_all" on storage.objects;
+create policy "call_recordings_own_folder_all" on storage.objects for all using (
+  bucket_id = 'call-recordings' and (storage.foldername(name))[1] = auth.uid()::text
+) with check (
+  bucket_id = 'call-recordings' and (storage.foldername(name))[1] = auth.uid()::text
 );
 
 -- Öffentlich lesbar wie course-videos/org-logos — Skript-Anhänge sind
