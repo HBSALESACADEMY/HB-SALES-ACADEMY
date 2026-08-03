@@ -513,6 +513,7 @@ create table if not exists call_recordings (
   evaluation_summary text,
   evaluation_detail jsonb,
   outcome text check (outcome in ('positiv', 'negativ')),
+  lead_id uuid references leads(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
