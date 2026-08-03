@@ -17,6 +17,7 @@ export default function Admin() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [resetPasswordId, setResetPasswordId] = useState(null);
   const [newPasswordValue, setNewPasswordValue] = useState("");
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -170,79 +171,111 @@ export default function Admin() {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {(isAdmin || isPlatformAdmin) && (u.role === "manager" ? (
-                  <button disabled={isSelf || busy} onClick={() => runAction(u.id, "remove_manager")}
-                    className="btn-ghost text-xs disabled:opacity-40" title={isSelf ? "Du kannst dir nicht selbst die Rolle entziehen" : ""}>
-                    Manager-Rechte entziehen
-                  </button>
-                ) : (
-                  <button disabled={busy || u.role === "trainer" || u.role === "backend"} onClick={() => runAction(u.id, "make_manager")} className="btn-ghost text-xs disabled:opacity-40">
-                    Zum Manager machen
-                  </button>
-                ))}
-
-                {(isAdmin || isPlatformAdmin) && (u.role === "trainer" ? (
-                  <button disabled={busy} onClick={() => runAction(u.id, "remove_trainer")} className="btn-ghost text-xs disabled:opacity-40">
-                    Trainer-Rechte entziehen
-                  </button>
-                ) : (
-                  <button disabled={busy || u.role === "manager" || u.role === "backend"} onClick={() => runAction(u.id, "make_trainer")} className="btn-ghost text-xs disabled:opacity-40">
-                    Zum Trainer machen
-                  </button>
-                ))}
-
-                {(isAdmin || isPlatformAdmin) && (u.role === "backend" ? (
-                  <button disabled={busy} onClick={() => runAction(u.id, "remove_backend")} className="btn-ghost text-xs disabled:opacity-40">
-                    Backend-Rechte entziehen
-                  </button>
-                ) : (
-                  <button disabled={busy || u.role === "manager" || u.role === "trainer"} onClick={() => runAction(u.id, "make_backend")} className="btn-ghost text-xs disabled:opacity-40">
-                    Zum Backend machen
-                  </button>
-                ))}
-
-                {isPlatformAdmin && (u.is_admin ? (
-                  <button disabled={isSelf || busy} onClick={() => runAction(u.id, "revoke_admin")}
-                    className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40" title={isSelf ? "Du kannst dir nicht selbst die Admin-Rechte entziehen" : ""}>
-                    Admin-Rechte entziehen
-                  </button>
-                ) : (
-                  <button disabled={busy} onClick={() => runAction(u.id, "grant_admin")} className="btn-ghost text-xs text-violet border-violet/40 disabled:opacity-40">
-                    Admin-Rechte geben
-                  </button>
-                ))}
-
-                {(isAdmin || isPlatformAdmin) && (
-                  resetPasswordId === u.id ? (
-                    <span className="flex items-center gap-1.5">
-                      <input
-                        type="password" autoFocus placeholder="Neues Passwort (mind. 10 Zeichen)"
-                        className="input !w-48 !py-1.5 text-xs" value={newPasswordValue}
-                        onChange={(e) => setNewPasswordValue(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && runResetPassword(u.id)}
-                      />
-                      <button disabled={busy} onClick={() => runResetPassword(u.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
-                      <button disabled={busy} onClick={() => { setResetPasswordId(null); setNewPasswordValue(""); }} className="btn-ghost text-xs">Abbrechen</button>
-                    </span>
-                  ) : (
-                    <button disabled={busy} onClick={() => { setResetPasswordId(u.id); setNewPasswordValue(""); }} className="btn-ghost text-xs disabled:opacity-40">
-                      Passwort zurücksetzen
-                    </button>
-                  )
+                {resetPasswordId === u.id && (
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="password" autoFocus placeholder="Neues Passwort (mind. 10 Zeichen)"
+                      className="input !w-48 !py-1.5 text-xs" value={newPasswordValue}
+                      onChange={(e) => setNewPasswordValue(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && runResetPassword(u.id)}
+                    />
+                    <button disabled={busy} onClick={() => runResetPassword(u.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
+                    <button disabled={busy} onClick={() => { setResetPasswordId(null); setNewPasswordValue(""); }} className="btn-ghost text-xs">Abbrechen</button>
+                  </span>
                 )}
 
-                {!isSelf && (
-                  confirmDelete === u.id ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="text-xs text-coral">Wirklich löschen?</span>
-                      <button disabled={busy} onClick={() => runDelete(u.id)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
-                      <button disabled={busy} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
-                    </span>
-                  ) : (
-                    <button disabled={busy} onClick={() => setConfirmDelete(u.id)} className="btn-ghost text-xs text-coral disabled:opacity-40">
-                      Nutzer löschen
+                {confirmDelete === u.id && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-xs text-coral">Wirklich löschen?</span>
+                    <button disabled={busy} onClick={() => runDelete(u.id)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
+                    <button disabled={busy} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
+                  </span>
+                )}
+
+                {resetPasswordId !== u.id && confirmDelete !== u.id && (
+                  <div className="relative">
+                    <button
+                      disabled={busy}
+                      onClick={() => setOpenMenuId(openMenuId === u.id ? null : u.id)}
+                      className="btn-ghost text-xs disabled:opacity-40 inline-flex items-center gap-1"
+                    >
+                      Aktionen <span className="inline-block rotate-90"><Icon name="chevron" size={12} /></span>
                     </button>
-                  )
+
+                    {openMenuId === u.id && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                        <div className="absolute right-0 top-full mt-1 z-20 w-56 card !p-1.5 flex flex-col gap-0.5 shadow-lg">
+                          {(isAdmin || isPlatformAdmin) && (u.role === "manager" ? (
+                            <button disabled={isSelf} onClick={() => { setOpenMenuId(null); runAction(u.id, "remove_manager"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={isSelf ? "Du kannst dir nicht selbst die Rolle entziehen" : ""}>
+                              Manager-Rechte entziehen
+                            </button>
+                          ) : (
+                            <button disabled={u.role === "trainer" || u.role === "backend"} onClick={() => { setOpenMenuId(null); runAction(u.id, "make_manager"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised disabled:opacity-40 disabled:cursor-not-allowed">
+                              Zum Manager machen
+                            </button>
+                          ))}
+
+                          {(isAdmin || isPlatformAdmin) && (u.role === "trainer" ? (
+                            <button onClick={() => { setOpenMenuId(null); runAction(u.id, "remove_trainer"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised">
+                              Trainer-Rechte entziehen
+                            </button>
+                          ) : (
+                            <button disabled={u.role === "manager" || u.role === "backend"} onClick={() => { setOpenMenuId(null); runAction(u.id, "make_trainer"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised disabled:opacity-40 disabled:cursor-not-allowed">
+                              Zum Trainer machen
+                            </button>
+                          ))}
+
+                          {(isAdmin || isPlatformAdmin) && (u.role === "backend" ? (
+                            <button onClick={() => { setOpenMenuId(null); runAction(u.id, "remove_backend"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised">
+                              Backend-Rechte entziehen
+                            </button>
+                          ) : (
+                            <button disabled={u.role === "manager" || u.role === "trainer"} onClick={() => { setOpenMenuId(null); runAction(u.id, "make_backend"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised disabled:opacity-40 disabled:cursor-not-allowed">
+                              Zum Backend machen
+                            </button>
+                          ))}
+
+                          {isPlatformAdmin && (u.is_admin ? (
+                            <button disabled={isSelf} onClick={() => { setOpenMenuId(null); runAction(u.id, "revoke_admin"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised text-violet disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={isSelf ? "Du kannst dir nicht selbst die Admin-Rechte entziehen" : ""}>
+                              Admin-Rechte entziehen
+                            </button>
+                          ) : (
+                            <button onClick={() => { setOpenMenuId(null); runAction(u.id, "grant_admin"); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised text-violet">
+                              Admin-Rechte geben
+                            </button>
+                          ))}
+
+                          {(isAdmin || isPlatformAdmin) && (
+                            <button onClick={() => { setOpenMenuId(null); setResetPasswordId(u.id); setNewPasswordValue(""); }}
+                              className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised">
+                              Passwort zurücksetzen
+                            </button>
+                          )}
+
+                          {!isSelf && (
+                            <>
+                              <div className="border-t border-line my-0.5" />
+                              <button onClick={() => { setOpenMenuId(null); setConfirmDelete(u.id); }}
+                                className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-surfaceRaised text-coral">
+                                Nutzer löschen
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
