@@ -138,10 +138,11 @@ export default function Community() {
     if (match) setActiveGroup(match.id);
   }, [router.query.group, groups]);
 
-  // Kudos-Wall scope-abhängig (Meine Organisation/Global) neu berechnen —
-  // ohne Nachladen, rein aus den bereits geladenen Rohdaten.
+  // Kudos-Wall — bewusst IMMER auf die eigene Organisation beschränkt, auch
+  // wenn der Feed gerade auf "Global" steht: Highlights der Woche sollen nie
+  // organisationsübergreifend Personen zeigen.
   useEffect(() => {
-    const inScope = (userId) => scope === "global" || orgByUserId[userId] === myOrgId;
+    const inScope = (userId) => orgByUserId[userId] === myOrgId;
     const nameFor = (id) => profileMap[id]?.name || "Unbenannt";
 
     const kudosByAuthor = {};
@@ -171,7 +172,7 @@ export default function Community() {
       topXp: topXp ? { name: nameFor(topXp[0]), amount: topXp[1] } : null,
       topStreak: topStreak && topStreak.days > 0 ? { name: topStreak.full_name, days: topStreak.days } : null,
     });
-  }, [scope, orgByUserId, myOrgId, weekKudosRaw, weekXpRaw, allProfiles, profileMap]);
+  }, [orgByUserId, myOrgId, weekKudosRaw, weekXpRaw, allProfiles, profileMap]);
 
   // Echtzeit: neue Beiträge, Kommentare und Kudos erscheinen automatisch.
   useEffect(() => {
@@ -294,7 +295,7 @@ export default function Community() {
         </button>
       </div>
 
-      {kudosWall && (kudosWall.topKudos || kudosWall.topXp || kudosWall.topStreak) && (
+      {scope === "org" && kudosWall && (kudosWall.topKudos || kudosWall.topXp || kudosWall.topStreak) && (
         <div className="card mb-5">
           <div className="font-semibold text-textMain text-sm mb-3">✨ Highlights der Woche</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
