@@ -26,6 +26,7 @@ export default function Flashcards() {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [doneCount, setDoneCount] = useState(0);
+  const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -56,9 +57,10 @@ export default function Flashcards() {
   async function rate(rating) {
     const card = dueCards[index];
     const sched = nextSchedule(card.progress, rating);
-    await supabase.from("flashcard_progress").upsert({
+    const { error: err } = await supabase.from("flashcard_progress").upsert({
       user_id: selfId, card_id: card.id, ...sched, last_result: String(rating),
     });
+    if (err) { setError(err.message); return; }
     setDoneCount((n) => n + 1);
     if (index + 1 < dueCards.length) { setIndex(index + 1); setRevealed(false); }
     else { setDueCards([]); }
@@ -73,6 +75,8 @@ export default function Flashcards() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Flashcards</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Kurze Wiederholungen zu Fakten und Prinzipien — kommt automatisch dann wieder, wenn's am meisten hilft. Manche Karten wurden mit KI-Unterstützung erstellt.</p>
+
+      {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       {!card ? (
         <div className="card text-center py-10">

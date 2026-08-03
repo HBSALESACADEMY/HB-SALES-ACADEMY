@@ -15,6 +15,7 @@ export default function Members() {
   const [teamRequests, setTeamRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [actionError, setActionError] = useState("");
 
   // Globale Namenssuche (unternehmensübergreifend) — für Personen AUSSERHALB
   // der eigenen Organisation gilt hier bewusst der Freundschaftsanfrage-Weg:
@@ -93,21 +94,27 @@ export default function Members() {
 
   async function sendRequest(memberId) {
     setBusyId(memberId);
-    await supabase.from("friendships").insert({ requester_id: selfId, addressee_id: memberId });
+    setActionError("");
+    const { error } = await supabase.from("friendships").insert({ requester_id: selfId, addressee_id: memberId });
+    if (error) setActionError(error.message);
     await load();
     setBusyId(null);
   }
 
   async function respond(friendship, status) {
     setBusyId(friendship.id);
-    await supabase.from("friendships").update({ status }).eq("id", friendship.id);
+    setActionError("");
+    const { error } = await supabase.from("friendships").update({ status }).eq("id", friendship.id);
+    if (error) setActionError(error.message);
     await load();
     setBusyId(null);
   }
 
   async function sendTeamRequest(team) {
     setBusyId("team-" + team.id);
-    await supabase.from("team_requests").insert({ requester_id: selfId, manager_id: team.created_by, team_id: team.id });
+    setActionError("");
+    const { error } = await supabase.from("team_requests").insert({ requester_id: selfId, manager_id: team.created_by, team_id: team.id });
+    if (error) setActionError(error.message);
     await load();
     setBusyId(null);
   }
@@ -119,6 +126,8 @@ export default function Members() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mitglieder</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Mitglieder deiner Organisation kannst du direkt anschreiben. Für alle anderen erst eine Anfrage senden und auf Annahme warten.</p>
+
+      {actionError && <div className="card border border-coral/40 text-coral text-sm mb-4">{actionError}</div>}
 
       <div className="card mb-6">
         <div className="font-semibold text-textMain text-sm mb-3">Person finden (organisationsübergreifend)</div>

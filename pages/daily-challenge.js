@@ -22,6 +22,7 @@ export default function DailyChallenge() {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const question = pickTodaysQuestion();
 
   useEffect(() => {
@@ -40,8 +41,7 @@ export default function DailyChallenge() {
 
   async function submit(idx) {
     if (alreadyDone) return;
-    setSelected(idx);
-    setRevealed(true);
+    setError("");
     const correct = idx === question.correct;
     const { data: { session } } = await supabase.auth.getSession();
     const { data: profile } = await supabase.from("profiles").select("streak_count, last_challenge_date, xp").eq("id", session.user.id).maybeSingle();
@@ -51,9 +51,15 @@ export default function DailyChallenge() {
     if (profile?.last_challenge_date === yesterday) newStreak = (profile.streak_count || 0) + 1;
     else if (profile?.last_challenge_date === todayStr()) newStreak = profile.streak_count || 1;
 
-    await supabase.from("daily_challenge_completions").insert({ user_id: session.user.id, challenge_date: todayStr(), correct });
-    await supabase.from("profiles").update({ streak_count: newStreak, last_challenge_date: todayStr() }).eq("id", session.user.id);
+    const { error: insErr } = await supabase.from("daily_challenge_completions").insert({ user_id: session.user.id, challenge_date: todayStr(), correct });
+    if (insErr) { setError(insErr.message); return; }
+    const { error: updErr } = await supabase.from("profiles").update({ streak_count: newStreak, last_challenge_date: todayStr() }).eq("id", session.user.id);
+    if (updErr) { setError(updErr.message); return; }
     if (correct) { try { await supabase.rpc("increment_xp", { uid: session.user.id, amount: 15 }); } catch (e) {} }
+    // Erst nach bestätigtem Speichern die Antwort aufdecken — sonst zeigt die
+    // Oberfläche "erledigt", obwohl weder Ergebnis noch Serie gespeichert wurden.
+    setSelected(idx);
+    setRevealed(true);
     setStreak(newStreak);
     setAlreadyDone(true);
   }
@@ -73,6 +79,8 @@ export default function DailyChallenge() {
           <div className="text-xs text-textMuted">aktuelle Serie</div>
         </div>
       </div>
+
+      {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="card">
         <p className="text-textMain text-[15px] font-medium mb-4">{question.q}</p>

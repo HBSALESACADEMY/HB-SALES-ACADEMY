@@ -22,6 +22,7 @@ export default function ProfileModal({ userId, onClose }) {
   const [badges, setBadges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -71,7 +72,9 @@ export default function ProfileModal({ userId, onClose }) {
 
   async function sendRequest() {
     setBusy(true);
-    await supabase.from("friendships").insert({ requester_id: selfId, addressee_id: userId });
+    setActionError("");
+    const { error } = await supabase.from("friendships").insert({ requester_id: selfId, addressee_id: userId });
+    if (error) { setActionError(error.message); setBusy(false); return; }
     const { data: fr } = await supabase.from("friendships").select("*")
       .or(`and(requester_id.eq.${selfId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${selfId})`).maybeSingle();
     setFriendship(fr);
@@ -80,7 +83,9 @@ export default function ProfileModal({ userId, onClose }) {
 
   async function respond(status) {
     setBusy(true);
-    await supabase.from("friendships").update({ status }).eq("id", friendship.id);
+    setActionError("");
+    const { error } = await supabase.from("friendships").update({ status }).eq("id", friendship.id);
+    if (error) { setActionError(error.message); setBusy(false); return; }
     setFriendship((f) => ({ ...f, status }));
     setBusy(false);
   }
@@ -88,20 +93,28 @@ export default function ProfileModal({ userId, onClose }) {
   async function removeFriend() {
     if (!confirm("Freundschaft wirklich beenden?")) return;
     setBusy(true);
-    await supabase.from("friendships").delete().eq("id", friendship.id);
+    setActionError("");
+    const { error } = await supabase.from("friendships").delete().eq("id", friendship.id);
+    if (error) { setActionError(error.message); setBusy(false); return; }
     setFriendship(null);
     setBusy(false);
   }
 
   async function toggleBlock() {
     setBusy(true);
+    setActionError("");
     if (isBlocked) {
-      await supabase.from("blocks").delete().eq("blocker_id", selfId).eq("blocked_id", userId);
+      const { error } = await supabase.from("blocks").delete().eq("blocker_id", selfId).eq("blocked_id", userId);
+      if (error) { setActionError(error.message); setBusy(false); return; }
       setIsBlocked(false);
     } else {
       if (!confirm(`${target?.full_name || "Diese Person"} wirklich blockieren? Ihr könnt euch dann nicht mehr schreiben oder anfragen.`)) { setBusy(false); return; }
-      if (friendship) await supabase.from("friendships").delete().eq("id", friendship.id);
-      await supabase.from("blocks").insert({ blocker_id: selfId, blocked_id: userId });
+      if (friendship) {
+        const { error: frErr } = await supabase.from("friendships").delete().eq("id", friendship.id);
+        if (frErr) { setActionError(frErr.message); setBusy(false); return; }
+      }
+      const { error } = await supabase.from("blocks").insert({ blocker_id: selfId, blocked_id: userId });
+      if (error) { setActionError(error.message); setBusy(false); return; }
       setFriendship(null);
       setIsBlocked(true);
     }
@@ -165,6 +178,7 @@ export default function ProfileModal({ userId, onClose }) {
 
             {!isSelf && (
               <div className="flex flex-col gap-2 pt-3 border-t border-line">
+                {actionError && <p className="text-coral text-xs">{actionError}</p>}
                 {isBlocked ? (
                   <button disabled={busy} onClick={toggleBlock} className="btn-ghost text-xs disabled:opacity-40">Entsperren</button>
                 ) : (

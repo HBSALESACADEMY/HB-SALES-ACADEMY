@@ -30,6 +30,7 @@ export default function Duel() {
   const [qIndex, setQIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [selectedContact, setSelectedContact] = useState("");
+  const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -54,11 +55,13 @@ export default function Duel() {
 
   async function challenge() {
     if (!selectedContact) return;
+    setError("");
     const { data: { session } } = await supabase.auth.getSession();
     const qIds = pickRandomQuestionIds(5);
-    await supabase.from("duels").insert({
+    const { error: err } = await supabase.from("duels").insert({
       challenger_id: session.user.id, opponent_id: selectedContact, question_ids: qIds,
     });
+    if (err) { setError(err.message); return; }
     setSelectedContact("");
     await load();
   }
@@ -81,7 +84,8 @@ export default function Duel() {
       const update = isChallenger
         ? { challenger_score: newScore, status: playing.opponent_score != null ? "completed" : "challenger_done" }
         : { opponent_score: newScore, status: playing.challenger_score != null ? "completed" : "challenger_done" };
-      await supabase.from("duels").update(update).eq("id", playing.id);
+      const { error: err } = await supabase.from("duels").update(update).eq("id", playing.id);
+      if (err) setError(err.message);
       setPlaying(null);
       await load();
     }
@@ -122,6 +126,8 @@ export default function Duel() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Quiz-Duell</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Fordere einen Kollegen zu 5 Fragen heraus — wer besser abschneidet, gewinnt.</p>
+
+      {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="card mb-6">
         <div className="font-semibold text-textMain text-sm mb-3">Neues Duell starten</div>

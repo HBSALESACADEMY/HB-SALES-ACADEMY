@@ -37,6 +37,7 @@ export default function Community() {
   const [commentDrafts, setCommentDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [error, setError] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [showGroupForm, setShowGroupForm] = useState(false);
 
@@ -193,6 +194,7 @@ export default function Community() {
   async function submitPost() {
     if (!newPost.trim()) return;
     setPosting(true);
+    setError("");
     const { data: { session } } = await supabase.auth.getSession();
 
     let attachment_url = null, attachment_type = null;
@@ -204,10 +206,14 @@ export default function Community() {
         const { data: pub } = supabase.storage.from("community-uploads").getPublicUrl(path);
         attachment_url = pub.publicUrl;
         attachment_type = newPostFile.type.startsWith("image/") ? "image" : newPostFile.type.startsWith("video/") ? "video" : "file";
+      } else {
+        setError(upErr.message);
+        setPosting(false);
+        return;
       }
     }
 
-    await supabase.from("community_posts").insert({
+    const { error: insErr } = await supabase.from("community_posts").insert({
       user_id: session.user.id,
       content: newPost.trim(),
       group_id: newPostGroup || null,
@@ -215,24 +221,31 @@ export default function Community() {
       attachment_type,
       visibility: shareGlobally ? "global" : "org",
     });
+    setPosting(false);
+    if (insErr) { setError(insErr.message); return; }
+    // Erst nach bestätigtem Speichern leeren — sonst geht ein fehlgeschlagener
+    // Beitrag komplett verloren, während die Oberfläche "erfolgreich" wirkt.
     setNewPost("");
     setNewPostFile(null);
     setShareGlobally(false);
-    setPosting(false);
     await load();
   }
 
   async function createGroup() {
     if (!newGroupName.trim()) return;
+    setError("");
     const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from("community_groups").insert({ name: newGroupName.trim(), created_by: session.user.id });
+    const { error: err } = await supabase.from("community_groups").insert({ name: newGroupName.trim(), created_by: session.user.id });
+    if (err) { setError(err.message); return; }
     setNewGroupName("");
     setShowGroupForm(false);
     await load();
   }
 
   async function deleteGroup(id) {
-    await supabase.from("community_groups").delete().eq("id", id);
+    setError("");
+    const { error: err } = await supabase.from("community_groups").delete().eq("id", id);
+    if (err) { setError(err.message); return; }
     if (activeGroup === id) setActiveGroup("all");
     await load();
   }
@@ -240,30 +253,40 @@ export default function Community() {
   async function toggleKudos(postId) {
     const { data: { session } } = await supabase.auth.getSession();
     const mine = kudosByPost[postId]?.mine;
-    if (mine) await supabase.from("community_kudos").delete().eq("post_id", postId).eq("user_id", session.user.id);
-    else await supabase.from("community_kudos").insert({ post_id: postId, user_id: session.user.id });
+    const { error: err } = mine
+      ? await supabase.from("community_kudos").delete().eq("post_id", postId).eq("user_id", session.user.id)
+      : await supabase.from("community_kudos").insert({ post_id: postId, user_id: session.user.id });
+    if (err) { setError(err.message); return; }
     await load();
   }
 
   async function toggleCommentKudos(commentId) {
     const { data: { session } } = await supabase.auth.getSession();
     const mine = kudosByComment[commentId]?.mine;
-    if (mine) await supabase.from("community_comment_kudos").delete().eq("comment_id", commentId).eq("user_id", session.user.id);
-    else await supabase.from("community_comment_kudos").insert({ comment_id: commentId, user_id: session.user.id });
+    const { error: err } = mine
+      ? await supabase.from("community_comment_kudos").delete().eq("comment_id", commentId).eq("user_id", session.user.id)
+      : await supabase.from("community_comment_kudos").insert({ comment_id: commentId, user_id: session.user.id });
+    if (err) { setError(err.message); return; }
     await load();
   }
 
   async function submitComment(postId) {
     const text = commentDrafts[postId];
     if (!text?.trim()) return;
+    setError("");
     const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from("community_comments").insert({ post_id: postId, user_id: session.user.id, content: text.trim() });
+    const { error: err } = await supabase.from("community_comments").insert({ post_id: postId, user_id: session.user.id, content: text.trim() });
+    if (err) { setError(err.message); return; }
+    // Erst nach bestätigtem Speichern leeren — sonst geht ein fehlgeschlagener
+    // Kommentar komplett verloren.
     setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
     await load();
   }
 
   async function deletePost(postId) {
-    await supabase.from("community_posts").delete().eq("id", postId);
+    setError("");
+    const { error: err } = await supabase.from("community_posts").delete().eq("id", postId);
+    if (err) { setError(err.message); return; }
     await load();
   }
 
@@ -282,6 +305,8 @@ export default function Community() {
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Community</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Teilt Erfolge, Tipps, Fotos und Erfahrungen — standardmäßig nur mit eurer Organisation, optional auch global.</p>
+
+      {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="card flex items-center gap-2 mb-4">
         <Icon name="search" size={15} />

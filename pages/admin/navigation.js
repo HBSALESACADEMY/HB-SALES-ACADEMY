@@ -64,10 +64,11 @@ export default function NavigationAdmin() {
     const idx = items.findIndex((i) => i.id === item.id);
     const swapWith = items[idx + dir];
     if (!swapWith) return;
-    await Promise.all([
+    const [{ error: err1 }, { error: err2 }] = await Promise.all([
       supabase.from("nav_items").update({ order_index: swapWith.order_index }).eq("id", item.id),
       supabase.from("nav_items").update({ order_index: item.order_index }).eq("id", swapWith.id),
     ]);
+    if (err1 || err2) setError((err1 || err2).message);
     await load();
   }
 

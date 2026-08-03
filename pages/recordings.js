@@ -119,7 +119,8 @@ export default function Recordings() {
 
   async function deleteRecording(id) {
     if (!confirm("Aufnahme wirklich löschen?")) return;
-    await supabase.from("call_recordings").delete().eq("id", id);
+    const { error: err } = await supabase.from("call_recordings").delete().eq("id", id);
+    if (err) { setError(err.message); return; }
     await load();
   }
 

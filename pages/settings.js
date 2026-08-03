@@ -31,6 +31,7 @@ export default function Settings() {
   const [hiddenTiles, setHiddenTiles] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -75,9 +76,11 @@ export default function Settings() {
 
   async function save() {
     setSaved(false);
+    setError("");
     const { data: { session } } = await supabase.auth.getSession();
     const dashboard_prefs = { order: tileOrder, hidden: Array.from(hiddenTiles) };
-    await supabase.from("profiles").update({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut }).eq("id", session.user.id);
+    const { error: err } = await supabase.from("profiles").update({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut }).eq("id", session.user.id);
+    if (err) { setError(err.message); return; }
     patchCachedProfile({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut });
     setSaved(true);
   }
@@ -147,6 +150,7 @@ export default function Settings() {
 
       <button onClick={save} className="btn">Speichern</button>
       {saved && <span className="text-teal text-xs ml-3">Gespeichert!</span>}
+      {error && <span className="text-coral text-xs ml-3">{error}</span>}
     </Layout>
   );
 }

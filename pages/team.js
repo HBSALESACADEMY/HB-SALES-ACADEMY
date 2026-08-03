@@ -28,8 +28,9 @@ export default function Team() {
   async function leaveTeam(teamId) {
     if (!confirm("Team wirklich verlassen? Du kannst später jederzeit eine neue Team-Anfrage stellen.")) return;
     setLeavingId(teamId);
-    await supabase.from("team_members").delete().eq("team_id", teamId).eq("user_id", selfId);
+    const { error } = await supabase.from("team_members").delete().eq("team_id", teamId).eq("user_id", selfId);
     setLeavingId(null);
+    if (error) { alert(error.message); return; }
     await load();
   }
 

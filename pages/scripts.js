@@ -73,7 +73,8 @@ export default function Scripts() {
 
   async function deleteScript(id) {
     if (!confirm("Skript wirklich löschen?")) return;
-    await supabase.from("scripts").delete().eq("id", id);
+    const { error } = await supabase.from("scripts").delete().eq("id", id);
+    if (error) { alert(error.message); return; }
     await load();
   }
 
