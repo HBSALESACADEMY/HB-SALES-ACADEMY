@@ -16,6 +16,7 @@ export default function Recordings() {
   const [profileMap, setProfileMap] = useState({});
   const [label, setLabel] = useState("");
   const [visibility, setVisibility] = useState("private");
+  const [outcome, setOutcome] = useState(null);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -55,6 +56,7 @@ export default function Recordings() {
 
   async function upload() {
     if (!file) return;
+    if (!outcome) { setError("Bitte wähle, ob der Anruf positiv oder negativ verlaufen ist."); return; }
     const validationError = validateRecordingUpload(file);
     if (validationError) { setError(validationError); return; }
     setUploading(true);
@@ -71,11 +73,13 @@ export default function Recordings() {
         recording_path: path,
         file_name: file.name,
         visibility,
+        outcome,
       }).select().single();
       if (insErr) throw insErr;
 
       setLabel("");
       setFile(null);
+      setOutcome(null);
       await load();
 
       // Auswertung im Hintergrund anstoßen — Liste zeigt "Wird ausgewertet..."
@@ -115,7 +119,7 @@ export default function Recordings() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Recordings</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-5">Anruf-Aufnahmen hochladen — die KI wertet sie automatisch aus, egal ob das Gespräch gut oder schlecht gelaufen ist.</p>
+      <p className="text-textMuted text-sm mb-5">Anruf-Aufnahmen hochladen — du entscheidest selbst, ob sie in den Ordner "Positiv" oder "Negativ" kommen, die KI liefert dazu eine ausführliche inhaltliche Auswertung.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -127,6 +131,17 @@ export default function Recordings() {
             <Icon name="mic" size={12} /> {file ? file.name : "Audio-Datei wählen (max. 15 MB)"}
             <input type="file" accept="audio/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
           </label>
+          <div>
+            <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1.5">Ergebnis — in welchen Ordner soll die Aufnahme?</div>
+            <div className="flex items-center gap-2">
+              {[["positiv", "Positiv"], ["negativ", "Negativ"]].map(([key, l]) => (
+                <button key={key} onClick={() => setOutcome(key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${outcome === key ? (key === "positiv" ? "bg-teal text-[var(--org-button-text,#fff)] border-teal" : "bg-coral text-[var(--org-button-text,#fff)] border-coral") : "border-line text-textMuted hover:text-textMain"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {[["private", "Nur für mich"], ["team_lead", "Teamlead/Manager"], ["org", "Ganzes Unternehmen"]].map(([key, l]) => (
               <button key={key} onClick={() => setVisibility(key)}
@@ -134,7 +149,7 @@ export default function Recordings() {
                 {l}
               </button>
             ))}
-            <button disabled={uploading || !file} onClick={upload} className="btn text-xs ml-auto disabled:opacity-40">
+            <button disabled={uploading || !file || !outcome} onClick={upload} className="btn text-xs ml-auto disabled:opacity-40">
               {uploading ? "Lädt hoch..." : "Hochladen & auswerten"}
             </button>
           </div>

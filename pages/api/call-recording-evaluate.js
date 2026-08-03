@@ -47,11 +47,8 @@ export default async function handler(req, res) {
         "hätte sagen können. Gib am Ende eine konkrete Empfehlung für die nächsten Schritte (z.B. Follow-up-Timing, " +
         "worauf beim nächsten Kontakt zu achten ist). Falls in der Aufnahme kein erkennbares Verkaufsgespräch zu " +
         "hören ist, setze score auf null und erkläre das kurz in der Zusammenfassung. " +
-        "Beurteile außerdem, ob das Gespräch insgesamt als Erfolg zu werten ist (z.B. Termin, " +
-        "Abschluss oder klarer nächster Schritt vereinbart) oder als Misserfolg (Kunde hat abgelehnt, " +
-        'aufgelegt oder kein Interesse gezeigt) — als "ergebnis": "positiv" oder "negativ". ' +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit den Feldern: " +
-        '{"score": <Zahl 0-100 oder null>, "ergebnis": "positiv" oder "negativ", "zusammenfassung": "<4-6 ausführliche Sätze>", ' +
+        '{"score": <Zahl 0-100 oder null>, "zusammenfassung": "<4-6 ausführliche Sätze>", ' +
         '"phasen": [{"phase": "<Name>", "bewertung": "<2-3 Sätze Einschätzung>"}], ' +
         '"staerken": [<max 5 konkrete Punkte>], "verbesserung": [<max 5 konkrete Punkte>], ' +
         '"einwaende": [{"einwand": "<was der Kunde einwendete>", "reaktion": "<wie darauf reagiert wurde>", "bewertung": "<kurze Einschätzung>"}], ' +
@@ -67,14 +64,13 @@ export default async function handler(req, res) {
     try {
       evaluation = JSON.parse(raw.replace(/```json|```/g, "").trim());
     } catch (e) {
-      evaluation = { score: null, ergebnis: null, zusammenfassung: raw, phasen: [], staerken: [], verbesserung: [], einwaende: [], beispielsaetze: [], naechsteSchritte: "" };
+      evaluation = { score: null, zusammenfassung: raw, phasen: [], staerken: [], verbesserung: [], einwaende: [], beispielsaetze: [], naechsteSchritte: "" };
     }
 
     const { error: updateErr } = await admin.from("call_recordings").update({
       status: "evaluated",
       evaluation_score: evaluation.score,
       evaluation_summary: evaluation.zusammenfassung || "",
-      outcome: evaluation.ergebnis === "positiv" || evaluation.ergebnis === "negativ" ? evaluation.ergebnis : null,
       evaluation_detail: {
         phasen: evaluation.phasen || [],
         staerken: evaluation.staerken || [],
