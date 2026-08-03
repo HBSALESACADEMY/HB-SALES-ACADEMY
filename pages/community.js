@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Layout from "../components/Layout";
+import Layout, { patchCachedProfile } from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
@@ -118,7 +118,13 @@ export default function Community() {
     setWeekXpRaw(weekXp || []);
     setAllProfiles(profiles || []);
 
-    await supabase.from("profiles").update({ last_seen_community_at: new Date().toISOString() }).eq("id", session.user.id);
+    const seenAt = new Date().toISOString();
+    await supabase.from("profiles").update({ last_seen_community_at: seenAt }).eq("id", session.user.id);
+    // Ohne dies bleibt der veraltete Zeitstempel im Modul-Level-Cache von
+    // Layout.js hängen (siehe cachedProfile dort) — die Badge-Berechnung
+    // würde dann nach dem Verlassen dieser Seite weiterhin mit dem alten
+    // last_seen_community_at rechnen und fälschlich "ungelesen" anzeigen.
+    patchCachedProfile({ last_seen_community_at: seenAt });
   }
 
   useEffect(() => { load(); }, []);
