@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 html, body {
-  background: var(--org-bg, #0A0C13);
-  color: var(--org-text, #EDEDF4);
+  background: var(--org-bg, #14151C);
+  color: var(--org-text, #ECEDF5);
   margin: 0;
   padding: 0;
 }
@@ -14,22 +14,22 @@ html, body {
 /* Native Formularelemente (Checkboxen, Radios, Ranges) übernehmen die
    Marken-Akzentfarbe automatisch — kein CSS-Nachbau nötig. */
 input[type="checkbox"], input[type="radio"], input[type="range"] {
-  accent-color: var(--org-accent, #E8368F);
+  accent-color: var(--org-accent, #CE3A5C);
 }
 
-::selection { background: rgb(var(--org-accent-rgb, 232 54 143) / .32); color: #fff; }
+::selection { background: rgb(var(--org-accent-rgb, 206 58 92) / .32); color: #fff; }
 
-/* Signatur-Verlauf aus dem HB Sales Academy Logo: Violett → Magenta → Orange.
-   Alle drei Farben sind pro Organisation anpassbar (siehe lib/orgBranding.js,
-   setzt --org-color-1/--org-accent/--org-color-3) — ohne gesetzte Werte exakt wie bisher. */
-.brand-gradient { background: linear-gradient(90deg, var(--org-color-1, #7B2FF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF6B35) 100%); }
+/* Signatur-Verlauf: Indigo → Karmesin. Alle drei Farben sind pro Organisation
+   anpassbar (siehe lib/orgBranding.js, setzt --org-color-1/--org-accent/
+   --org-color-3) — ohne gesetzte Werte exakt wie bisher. */
+.brand-gradient { background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%); }
 .brand-stripe {
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--org-color-1, #7B2FF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF6B35) 100%);
+  background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%);
 }
 .brand-text-gradient {
-  background: linear-gradient(90deg, var(--org-color-1, #7B2FF7) 0%, var(--org-accent, #E8368F) 60%, var(--org-color-3, #FF6B35) 100%);
+  background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 60%, var(--org-color-3, #B2314F) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -41,32 +41,32 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   background: none;
   -webkit-background-clip: initial;
   background-clip: initial;
-  -webkit-text-fill-color: var(--org-heading-text, #EDEDF4);
-  color: var(--org-heading-text, #EDEDF4);
+  -webkit-text-fill-color: var(--org-heading-text, #ECEDF5);
+  color: var(--org-heading-text, #ECEDF5);
 }
 
 .card {
-  background: linear-gradient(180deg, var(--org-surface-raised, #191D29) 0%, var(--org-surface, #14161F) 100%);
-  border: 1px solid var(--org-line, #262B3D);
+  background: linear-gradient(180deg, var(--org-surface-raised, #22242F) 0%, var(--org-surface, #1C1E29) 100%);
+  border: 1px solid var(--org-line, #2F3242);
   border-radius: 14px;
   padding: 18px 20px;
   box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
   transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 .card.cursor-pointer:hover, .card[class*="hover:-translate"]:hover {
-  border-color: var(--org-color-1, #4A3565);
-  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px -14px rgba(0,0,0,.65), 0 0 0 1px rgb(var(--org-accent-rgb, 232 54 143) / .15);
+  border-color: var(--org-color-1, #35406E);
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px -14px rgba(0,0,0,.65), 0 0 0 1px rgb(var(--org-accent-rgb, 206 58 92) / .15);
 }
 
 .btn {
-  background: linear-gradient(120deg, var(--org-color-1, #8B3EF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF7A45) 100%);
+  background: linear-gradient(120deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%);
   /* Automatischer Kontrast: lib/orgBranding.js berechnet per WCAG-Formel aus
      dem SCHLECHTESTEN Punkt im Verlauf, ob helle oder dunkle Schrift lesbar
-     ist (siehe applyOrgBranding/textColorForColors). Der Fallback #12141C
-     gilt für den Standard-Verlauf selbst (helles Orange-Ende hat mit Weiß
-     nur 2.6:1 Kontrast, mit Dunkel 4.1:1) — ohne gesetzte Organisationsfarben
-     wird also ebenfalls die dunkle, lesbare Variante verwendet. */
-  color: var(--org-button-text, #12141C);
+     ist (siehe applyOrgBranding/textColorForColors). Der Fallback #FFFFFF
+     gilt für den Standard-Verlauf selbst (Indigo/Karmesin sind beide dunkel
+     genug, dass helle Schrift überall den besseren Kontrast liefert) — ohne
+     gesetzte Organisationsfarben wird also die helle Variante verwendet. */
+  color: var(--org-button-text, #FFFFFF);
   border: none;
   padding: 10px 18px;
   border-radius: 9px;
@@ -76,44 +76,44 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 16px -4px rgb(var(--org-accent-rgb, 232 54 143) / .5);
+  box-shadow: 0 4px 16px -4px rgb(var(--org-accent-rgb, 206 58 92) / .5);
   transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.btn:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 20px -4px rgb(var(--org-accent-rgb, 232 54 143) / .6); }
+.btn:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 20px -4px rgb(var(--org-accent-rgb, 206 58 92) / .6); }
 .btn:active { transform: translateY(0); }
 .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .btn-ghost {
   background: rgba(255,255,255,.02);
-  color: var(--org-text-muted, #90939F);
-  border: 1px solid var(--org-line, #262B3D);
+  color: var(--org-text-muted, #8D90A6);
+  border: 1px solid var(--org-line, #2F3242);
   border-radius: 9px;
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.btn-ghost:hover { color: var(--org-text, #fff); border-color: var(--org-color-1, #4A3565); background: rgb(var(--org-accent-rgb, 232 54 143) / .08); }
+.btn-ghost:hover { color: var(--org-text, #fff); border-color: var(--org-color-1, #35406E); background: rgb(var(--org-accent-rgb, 206 58 92) / .08); }
 
 .input {
   padding: 10px 14px;
   border-radius: 9px;
-  border: 1px solid var(--org-line, #262B3D);
-  background: var(--org-bg, #12141C);
-  color: var(--org-text, #EDEDF4);
+  border: 1px solid var(--org-line, #2F3242);
+  background: var(--org-bg, #14151C);
+  color: var(--org-text, #ECEDF5);
   font-size: 14px;
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-work-sans), sans-serif;
   width: 100%;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.input:focus { outline: none; border-color: var(--org-accent, #E8368F); box-shadow: 0 0 0 3px rgb(var(--org-accent-rgb, 232 54 143) / .15); }
-.input::placeholder { color: var(--org-text-muted, #5A5F72); }
+.input:focus { outline: none; border-color: var(--org-accent, #CE3A5C); box-shadow: 0 0 0 3px rgb(var(--org-accent-rgb, 206 58 92) / .15); }
+.input::placeholder { color: var(--org-text-muted, #5B5E70); }
 
-textarea.input { resize: vertical; font-family: var(--font-inter), sans-serif; }
+textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-serif; }
 
 .avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-family: var(--font-space-grotesk), sans-serif;
+  font-family: var(--font-fraunces), serif;
   font-weight: 700;
   color: #0B0D13;
   flex-shrink: 0;
@@ -137,8 +137,8 @@ textarea.input { resize: vertical; font-family: var(--font-inter), sans-serif; }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--org-line, #262B3D); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--org-color-1, #4A3565); }
+::-webkit-scrollbar-thumb { background: var(--org-line, #2F3242); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--org-color-1, #35406E); }
 
 /* Glanz-Effekt beim Anklicken eines Sidebar-Eintrags: der Markenverlauf läuft
    einmal links nach rechts über den Button, wie ein kurzes Aufleuchten.
@@ -156,7 +156,7 @@ textarea.input { resize: vertical; font-family: var(--font-inter), sans-serif; }
   top: 0; bottom: 0;
   left: -55%;
   width: 55%;
-  background: linear-gradient(90deg, transparent, rgb(var(--org-color-1-rgb, 123 47 247) / .55) 35%, rgb(var(--org-accent-rgb, 232 54 143) / .7) 50%, rgb(var(--org-color-3-rgb, 255 107 53) / .55) 65%, transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--org-color-1-rgb, 76 93 201) / .55) 35%, rgb(var(--org-accent-rgb, 206 58 92) / .7) 50%, rgb(var(--org-color-3-rgb, 178 49 79) / .55) 65%, transparent);
   animation: hb-shine-sweep .55s cubic-bezier(.35,0,.25,1) forwards;
   will-change: transform;
 }

@@ -127,7 +127,7 @@ export default function LernpfadeAdmin() {
             {personalCourses.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-line">
                 {personalCourses.map((c) => (
-                  <button key={c.id} onClick={() => router.push(`/courses/${c.id}`)} className="text-[11.5px] px-2.5 py-1 rounded-full border border-line text-textMuted hover:text-textMain hover:border-[var(--org-color-1,#4A3565)]">
+                  <button key={c.id} onClick={() => router.push(`/courses/${c.id}`)} className="text-[11.5px] px-2.5 py-1 rounded-full border border-line text-textMuted hover:text-textMain hover:border-[var(--org-color-1,#35406E)]">
                     {c.title}
                   </button>
                 ))}

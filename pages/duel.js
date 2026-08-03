@@ -105,7 +105,7 @@ export default function Duel() {
           <p className="text-textMain text-[15px] font-medium mb-4">{question.q}</p>
           <div className="flex flex-col gap-2">
             {question.options.map((opt, i) => (
-              <button key={i} onClick={() => answer(i)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#4A3565)] hover:bg-surfaceRaised transition">
+              <button key={i} onClick={() => answer(i)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#35406E)] hover:bg-surfaceRaised transition">
                 {opt}
               </button>
             ))}

@@ -487,7 +487,7 @@ export default function Layout({ children, fullBleed }) {
   return (
     <div className="flex flex-col md:flex-row h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
       {/* Mobile top bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[var(--org-bg,#12141C)] flex-shrink-0">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[var(--org-bg,#14151C)] flex-shrink-0">
         <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-10 w-auto" />
         <button onClick={() => setMobileNavOpen(true)} className="text-textMain p-1.5 -mr-1.5" aria-label="Menü öffnen">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
@@ -501,7 +501,7 @@ export default function Layout({ children, fullBleed }) {
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50 w-[230px] flex-shrink-0
-        bg-gradient-to-b from-[var(--org-sidebar-tint,#1F1730)] via-[#160F22] to-[var(--org-bg,#0A0C13)] border-r border-line px-3.5 py-6 flex flex-col gap-1
+        bg-gradient-to-b from-[var(--org-sidebar-tint,#1A1D33)] via-[#17181F] to-[var(--org-bg,#14151C)] border-r border-line px-3.5 py-6 flex flex-col gap-1
         transition-transform duration-200 md:translate-x-0
         ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
@@ -513,7 +513,7 @@ export default function Layout({ children, fullBleed }) {
         </div>
         <div className="px-2.5 pb-4">
           <p className="text-[11.5px] italic text-textMuted leading-snug">„{quoteOfTheDay().text}"</p>
-          {quoteOfTheDay().author && <p className="text-[10px] text-[#5A5F72] mt-0.5">— {quoteOfTheDay().author}</p>}
+          {quoteOfTheDay().author && <p className="text-[10px] text-[#5B5E70] mt-0.5">— {quoteOfTheDay().author}</p>}
         </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-0.5">
           {(() => {
@@ -585,13 +585,13 @@ export default function Layout({ children, fullBleed }) {
                               router.asPath === route ? "" : "text-[#9195A6] hover:bg-surfaceRaised hover:text-textMain"
                             }`}
                             style={router.asPath === route ? {
-                              background: "linear-gradient(90deg, rgb(var(--org-color-1-rgb, 123 47 247) / .15), rgb(var(--org-accent-rgb, 232 54 143) / .15), transparent)",
-                              boxShadow: "inset 2px 0 0 var(--org-accent, #E8368F)",
+                              background: "linear-gradient(90deg, rgb(var(--org-color-1-rgb, 76 93 201) / .15), rgb(var(--org-accent-rgb, 206 58 92) / .15), transparent)",
+                              boxShadow: "inset 2px 0 0 var(--org-accent, #CE3A5C)",
                               // Gegen den Sidebar-Hintergrund kontrastgeprüft (siehe
                               // lib/orgBranding.js setNavActiveTextVar) — nicht die
                               // rohe Akzentfarbe, damit ein sehr helles Branding hier
                               // nie unlesbar wird. Icon erbt automatisch (currentColor).
-                              color: "var(--org-nav-active-text, #E8368F)",
+                              color: "var(--org-nav-active-text, #CE3A5C)",
                             } : undefined}
                           >
                             {shineId === item.id && <span className="hb-shine" />}
@@ -661,7 +661,7 @@ export default function Layout({ children, fullBleed }) {
       <button
         onClick={() => setQuickHelpOpen(true)}
         className="fixed bottom-5 right-5 z-[190] w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
-        style={{ background: "linear-gradient(120deg, var(--org-color-1, #8B3EF7) 0%, var(--org-accent, #E8368F) 55%, var(--org-color-3, #FF7A45) 100%)", boxShadow: "0 4px 16px -4px rgb(var(--org-accent-rgb, 232 54 143) / .5)" }}
+        style={{ background: "linear-gradient(120deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%)", boxShadow: "0 4px 16px -4px rgb(var(--org-accent-rgb, 206 58 92) / .5)" }}
         title="Vertriebs-Buddy"
       >
         <span className="text-textMain text-lg">💬</span>
@@ -693,7 +693,7 @@ export default function Layout({ children, fullBleed }) {
           className="fixed bottom-24 right-5 z-[210] card !py-3 !px-4 flex items-center gap-3 shadow-lg animate-fadein cursor-pointer"
           style={{ maxWidth: 300 }}
         >
-          <Icon name="lock" color="var(--org-accent, #E8368F)" size={18} />
+          <Icon name="lock" color="var(--org-accent, #CE3A5C)" size={18} />
           <div className="text-left">
             <div className="text-sm font-semibold text-textMain">Neue Registrierung</div>
             <div className="text-xs text-textMuted">{approvalToast.name} wartet auf Freigabe{approvalToast.count > 1 ? ` — ${approvalToast.count} insgesamt offen` : ""}</div>
@@ -706,7 +706,7 @@ export default function Layout({ children, fullBleed }) {
           className="fixed bottom-5 right-5 z-[210] card !py-3 !px-4 flex items-center gap-3 shadow-lg animate-fadein cursor-pointer"
           style={{ maxWidth: 300 }}
         >
-          <Icon name="users" color="var(--org-accent, #E8368F)" size={18} />
+          <Icon name="users" color="var(--org-accent, #CE3A5C)" size={18} />
           <div className="text-left">
             <div className="text-sm font-semibold text-textMain">Neue Freundschaftsanfrage</div>
             <div className="text-xs text-textMuted">{friendToast.name} möchte sich vernetzen</div>

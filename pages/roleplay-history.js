@@ -40,7 +40,7 @@ export default function RoleplayHistory() {
                   <div className="font-semibold text-textMain text-sm">{persona?.name || "Rollenspiel"} {s.difficulty && `· ${s.difficulty}`}</div>
                   <div className="text-xs text-textMuted mt-0.5">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} {s.evaluation_score != null && `· Score ${s.evaluation_score}`}</div>
                 </div>
-                <Icon name="chevron" size={14} color="#5A5F72" />
+                <Icon name="chevron" size={14} color="#5B5E70" />
               </button>
               {s.evaluation && <p className="text-xs text-textMuted mt-2">{s.evaluation}</p>}
               {isOpen && (

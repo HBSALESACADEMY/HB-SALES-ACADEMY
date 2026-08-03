@@ -345,7 +345,7 @@ export default function Messages() {
                 className={`flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-left ${selected?.id === c.id && selected?.type === c.type ? "bg-surfaceRaised" : "hover:bg-surfaceRaised"}`}>
                 {c.type === "group" ? (
                   <div className="w-[42px] h-[42px] rounded-full bg-surfaceRaised border border-line flex items-center justify-center flex-shrink-0">
-                    <Icon name="users" size={18} color="var(--org-color-1, #7B2FF7)" />
+                    <Icon name="users" size={18} color="var(--org-color-1, #4C5DC9)" />
                   </div>
                 ) : (
                   <Avatar name={c.full_name || "?"} src={c.avatar_url} size={42} />
@@ -380,7 +380,7 @@ export default function Messages() {
                 {selected.type === "group" ? (
                   <div className="flex items-center gap-2.5">
                     <div className="w-[30px] h-[30px] rounded-full bg-surfaceRaised border border-line flex items-center justify-center">
-                      <Icon name="users" size={15} color="var(--org-color-1, #7B2FF7)" />
+                      <Icon name="users" size={15} color="var(--org-color-1, #4C5DC9)" />
                     </div>
                     <span className="font-semibold text-textMain text-sm">{selected.full_name}</span>
                   </div>

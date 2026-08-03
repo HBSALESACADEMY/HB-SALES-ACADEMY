@@ -85,10 +85,10 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [name, setName] = useState(org.name || "");
   const [slug, setSlug] = useState(org.slug || "");
   const [logoUrl, setLogoUrl] = useState(org.logo_url || "");
-  const [secondaryColor, setSecondaryColor] = useState(org.secondary_color || "#7B2FF7");
-  const [primaryColor, setPrimaryColor] = useState(org.primary_color || "#E8368F");
-  const [tertiaryColor, setTertiaryColor] = useState(org.tertiary_color || "#FF6B35");
-  const [backgroundColor, setBackgroundColor] = useState(org.background_color || "#0A0C13");
+  const [secondaryColor, setSecondaryColor] = useState(org.secondary_color || "#4C5DC9");
+  const [primaryColor, setPrimaryColor] = useState(org.primary_color || "#CE3A5C");
+  const [tertiaryColor, setTertiaryColor] = useState(org.tertiary_color || "#B2314F");
+  const [backgroundColor, setBackgroundColor] = useState(org.background_color || "#14151C");
   const [surfaceColor, setSurfaceColor] = useState(org.surface_color || "#171A24");
   const [textColor, setTextColor] = useState(org.text_color || "#EDEDF4");
   const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
@@ -237,8 +237,8 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       <div
         className="rounded-xl border p-4 mb-5"
         style={{
-          background: useCustomSurface ? surfaceColor : "linear-gradient(180deg, #191D29 0%, #14161F 100%)",
-          borderColor: "var(--org-line, #262B3D)",
+          background: useCustomSurface ? surfaceColor : "linear-gradient(180deg, #22242F 0%, #1C1E29 100%)",
+          borderColor: "var(--org-line, #2F3242)",
         }}
       >
         <div className="flex items-center gap-3 mb-3">
@@ -275,7 +275,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
             Badge
           </span>
         </div>
-        <p className="text-[11px] mt-2.5" style={{ color: useCustomSurface ? blend(textColorForColors([surfaceColor]), surfaceColor, 0.42) : "#90939F" }}>
+        <p className="text-[11px] mt-2.5" style={{ color: useCustomSurface ? blend(textColorForColors([surfaceColor]), surfaceColor, 0.42) : "#8D90A6" }}>
           So erscheinen Logo, Marken-Verlauf, Buttons, Hintergrund und Text später in der ganzen Plattform.
         </p>
       </div>
@@ -492,7 +492,7 @@ export default function AdminOrganization() {
                           Code: <span className="font-mono">{o.slug}</span> · angelegt {new Date(o.created_at).toLocaleDateString("de-DE")}
                         </div>
                       </div>
-                      <Icon name="chevron" size={14} color="#5A5F72" />
+                      <Icon name="chevron" size={14} color="#5B5E70" />
                     </button>
                     <button onClick={() => copySlug(o.slug)} className="btn-ghost text-xs flex-shrink-0">
                       {copiedSlug === o.slug ? "Kopiert!" : "Code kopieren"}

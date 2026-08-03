@@ -92,7 +92,7 @@ export default function CourseDetail() {
           </div>
 
           <div className="card">
-            <div className="flex items-center gap-2 mb-2"><Icon name="award" color="var(--org-accent, #E8368F)" /><strong className="text-sm">Kursprüfung</strong></div>
+            <div className="flex items-center gap-2 mb-2"><Icon name="award" color="var(--org-accent, #CE3A5C)" /><strong className="text-sm">Kursprüfung</strong></div>
             {passed ? (
               <div className="border-2 border-amber rounded-xl p-5 text-center" style={{ background: "rgba(240,178,62,.06)" }}>
                 <div className="text-xs text-textMuted mb-1.5">Zertifikat erhalten</div>

@@ -49,8 +49,8 @@ export default async function handler(req, res) {
     // explizite Organisationsfarbe hat Vorrang, sonst automatischer,
     // WCAG-geprüfter Kontrast gegen den (ggf. eigenen) Hintergrund — das
     // Zertifikat bleibt dadurch immer lesbar, egal welche Farben gewählt wurden.
-    const bgHex = org?.background_color || "#0A0C13";
-    const accentHex = org?.primary_color || "#E8368F";
+    const bgHex = org?.background_color || "#14151C";
+    const accentHex = org?.primary_color || "#CE3A5C";
     const textHex = org?.text_color || textColorForColors([bgHex]);
     const mutedHex = org?.muted_color || blend(textHex, bgHex, 0.42);
 

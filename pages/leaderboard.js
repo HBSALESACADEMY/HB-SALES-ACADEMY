@@ -120,7 +120,7 @@ export default function Leaderboard() {
                   <div className="font-semibold text-textMain text-sm truncate">{t.name}</div>
                   <div className="text-[11px] text-textMuted">{t.memberCount} Mitglied{t.memberCount === 1 ? "" : "er"}</div>
                 </div>
-                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #E8368F)" /> {t.xp} XP</span>
+                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #CE3A5C)" /> {t.xp} XP</span>
               </div>
             );
           })}
@@ -146,7 +146,7 @@ export default function Leaderboard() {
                     {range === "all" && <div className="text-[11px] text-textMuted">Level {level}</div>}
                   </div>
                 </button>
-                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #E8368F)" /> {r.xp || 0} XP</span>
+                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #CE3A5C)" /> {r.xp || 0} XP</span>
               </div>
             );
           })}

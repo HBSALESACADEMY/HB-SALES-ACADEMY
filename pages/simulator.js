@@ -40,7 +40,7 @@ export default function Simulator() {
           {SCENARIOS.map((s) => (
             <div key={s.id} className="card cursor-pointer hover:-translate-y-0.5 transition" onClick={() => start(s)}>
               <div className="flex items-center gap-3">
-                <Icon name="chat" color="var(--org-color-1, #7B2FF7)" />
+                <Icon name="chat" color="var(--org-color-1, #4C5DC9)" />
                 <div>
                   <div className="font-display font-semibold text-textMain">{s.title}</div>
                   <div className="text-xs text-textMuted mt-0.5">{s.intro}</div>
@@ -63,7 +63,7 @@ export default function Simulator() {
               <p className="text-textMain text-[16px] leading-relaxed mb-5">{node.text}</p>
               <div className="flex flex-col gap-2">
                 {node.options.map((opt, i) => (
-                  <button key={i} onClick={() => choose(opt)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#4A3565)] hover:bg-surfaceRaised transition">
+                  <button key={i} onClick={() => choose(opt)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#35406E)] hover:bg-surfaceRaised transition">
                     {opt.label}
                   </button>
                 ))}

@@ -230,7 +230,7 @@ export default function Dashboard() {
 
           {profile?.streak_count > 0 && profile?.last_challenge_date !== new Date().toISOString().slice(0, 10) && (
             <div className="card mb-5 border border-amber/30 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/daily-challenge")}>
-              <Icon name="flame" color="var(--org-accent, #E8368F)" size={18} />
+              <Icon name="flame" color="var(--org-accent, #CE3A5C)" size={18} />
               <span className="text-sm text-textMain flex-1">Deine {profile.streak_count}-Tage-Serie ist in Gefahr — heute noch die Tages-Challenge machen!</span>
             </div>
           )}
@@ -244,7 +244,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-1.5">
                 {onboarding.map((step) => (
                   <button key={step.key} onClick={() => router.push(step.route)} className="flex items-center gap-2.5 text-left hover:opacity-80">
-                    <span className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center text-[9px] ${step.done ? "bg-teal border-teal text-[#0A0C13]" : "border-line"}`}>
+                    <span className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center text-[9px] ${step.done ? "bg-teal border-teal text-[#14151C]" : "border-line"}`}>
                       {step.done ? "✓" : ""}
                     </span>
                     <span className={`text-sm ${step.done ? "text-textMuted line-through" : "text-textMain"}`}>{step.label}</span>
@@ -370,7 +370,7 @@ export default function Dashboard() {
                       onClick={() => router.push(t.route)}
                       className={`card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-grab active:cursor-grabbing ${draggedTileKey === t.key ? "opacity-40" : ""}`}>
                       <div className="flex items-center justify-between w-full">
-                        <Icon name={t.icon} color="var(--org-accent, #E8368F)" size={18} />
+                        <Icon name={t.icon} color="var(--org-accent, #CE3A5C)" size={18} />
                         {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
                       </div>
                       <div className="text-[13px] font-semibold text-textMain">{t.label}</div>
@@ -388,7 +388,7 @@ export default function Dashboard() {
               </div>
 
               <div className="card mb-5">
-                <div className="flex items-center gap-2 mb-3"><Icon name="award" color="var(--org-accent, #E8368F)" /><strong className="text-sm">Kurs-Übersicht</strong></div>
+                <div className="flex items-center gap-2 mb-3"><Icon name="award" color="var(--org-accent, #CE3A5C)" /><strong className="text-sm">Kurs-Übersicht</strong></div>
                 <div className="flex flex-col gap-2">
                   {COURSES.map((c) => {
                     const doneCount = c.modules.filter((m) => doneModuleIds.has(m.id)).length;
@@ -405,7 +405,7 @@ export default function Dashboard() {
               </div>
 
               <div className="card">
-                <div className="flex items-center gap-2 mb-3"><Icon name="target" color="var(--org-accent, #E8368F)" /><strong className="text-sm">Nächster Schritt</strong></div>
+                <div className="flex items-center gap-2 mb-3"><Icon name="target" color="var(--org-accent, #CE3A5C)" /><strong className="text-sm">Nächster Schritt</strong></div>
                 {nextCourse ? (
                   <>
                     <p className="text-sm text-textMuted mb-3">Weiter mit: <strong className="text-textMain">{nextCourse.title}</strong> – {nextCourse.desc}</p>

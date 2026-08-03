@@ -137,14 +137,14 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgb(var(--org-color-1-rgb, 123 47 247) / .10), transparent), radial-gradient(600px 350px at 100% 100%, rgb(var(--org-color-3-rgb, 255 107 53) / .08), transparent), var(--org-bg, transparent)" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgb(var(--org-color-1-rgb, 76 93 201) / .10), transparent), radial-gradient(600px 350px at 100% 100%, rgb(var(--org-color-3-rgb, 178 49 79) / .08), transparent), var(--org-bg, transparent)" }}>
       <div className="card w-full max-w-sm overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
         <div className="flex flex-col items-center text-center mb-5">
           <img src={resolvedOrg?.logo_url || "/logo.svg"} alt={resolvedOrg?.name || "HB Sales Academy"} className="h-20 w-auto mb-4" />
           <p className="text-[12.5px] italic text-textMuted leading-snug max-w-[260px]">„{quoteOfTheDay().text}"</p>
-          {quoteOfTheDay().author && <p className="text-[10.5px] text-[#5A5F72] mt-1">— {quoteOfTheDay().author}</p>}
+          {quoteOfTheDay().author && <p className="text-[10.5px] text-[#5B5E70] mt-1">— {quoteOfTheDay().author}</p>}
         </div>
 
         {!resolvedOrg ? (

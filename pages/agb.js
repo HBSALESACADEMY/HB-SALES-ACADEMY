@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function AGB() {
   return (
-    <div className="min-h-screen px-4 py-10" style={{ background: "var(--org-bg, #0A0C13)", color: "var(--org-text, #EDEDF4)" }}>
+    <div className="min-h-screen px-4 py-10" style={{ background: "var(--org-bg, #14151C)", color: "var(--org-text, #EDEDF4)" }}>
       <div className="max-w-2xl mx-auto">
         <div className="mb-6">
           <Link href="/login" className="text-textMuted text-xs underline">← Zurück zum Login</Link>
@@ -206,7 +206,7 @@ export default function AGB() {
             </p>
           </section>
 
-          <p className="text-[11px] text-[#5A5F72] mt-2">Stand: [Platzhalter: Datum der Veröffentlichung]</p>
+          <p className="text-[11px] text-[#5B5E70] mt-2">Stand: [Platzhalter: Datum der Veröffentlichung]</p>
         </div>
       </div>
     </div>

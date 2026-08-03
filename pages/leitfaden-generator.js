@@ -116,7 +116,7 @@ export default function GuideGenerator() {
       </div>
 
       {currentGuide && (
-        <div className="card mb-6" style={{ borderLeft: "4px solid var(--org-accent, #E8368F)" }}>
+        <div className="card mb-6" style={{ borderLeft: "4px solid var(--org-accent, #CE3A5C)" }}>
           <div className="flex items-center justify-between mb-3">
             <div className="font-display font-semibold text-textMain text-sm flex items-center gap-2">
               {currentGuide.title}
@@ -148,7 +148,7 @@ export default function GuideGenerator() {
                       {g.is_published && <span className="text-teal"> · veröffentlicht</span>}
                     </div>
                   </div>
-                  <Icon name="chevron" size={14} color="#5A5F72" />
+                  <Icon name="chevron" size={14} color="#5B5E70" />
                 </button>
                 {isOpen && (
                   <div className="mt-3 pt-3 border-t border-line">
@@ -189,7 +189,7 @@ export default function GuideGenerator() {
                         </div>
                       </div>
                     </div>
-                    <Icon name="chevron" size={14} color="#5A5F72" />
+                    <Icon name="chevron" size={14} color="#5B5E70" />
                   </button>
                   {isOpen && (
                     <div className="mt-3 pt-3 border-t border-line">
