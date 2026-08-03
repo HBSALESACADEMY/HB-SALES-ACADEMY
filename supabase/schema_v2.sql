@@ -1241,7 +1241,7 @@ create policy "call_recordings_select" on call_recordings for select using (
       is_team_lead_of(created_by, auth.uid())
       or (
         same_org(created_by, auth.uid())
-        and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+        and exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
       )
     )
   )
@@ -1357,6 +1357,7 @@ create policy "script_files_public_read" on storage.objects for select using (bu
 drop policy if exists "script_files_manager_upload" on storage.objects;
 create policy "script_files_manager_upload" on storage.objects for insert with check (
   bucket_id = 'script-files'
+  and (storage.foldername(name))[1] = auth.uid()::text
   and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
 );
 
@@ -1370,6 +1371,7 @@ create policy "content_files_public_read" on storage.objects for select using (b
 drop policy if exists "content_files_manager_upload" on storage.objects;
 create policy "content_files_manager_upload" on storage.objects for insert with check (
   bucket_id = 'content-files'
+  and (storage.foldername(name))[1] = auth.uid()::text
   and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer'))
 );
 

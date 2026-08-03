@@ -13,10 +13,24 @@ export default async function handler(req, res) {
   if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY fehlt." });
 
   try {
-    const { courseId, moduleId, answerText, mcScore, mcTotal } = req.body;
+    const { courseId, moduleId, answerText, answers } = req.body;
     const course = await resolveCourse(courseId, getAdminSupabase());
     const mod = course && course.modules.find((m) => m.id === moduleId);
     if (!mod || !mod.open) return res.status(400).json({ error: "Modul/Frage nicht gefunden." });
+
+    // Server rechnet das MC-Ergebnis selbst aus den eingereichten Antworten
+    // nach — der Client darf mcScore/mcTotal nicht selbst vorgeben, sonst
+    // ließen sich Lernpfad-Auswertung und Statistiken fälschen.
+    const correctByQuestion = {};
+    (mod.mc || []).forEach((q) => { correctByQuestion[q.q] = q.options[q.correct]; });
+    const answeredQuestions = new Set();
+    let mcScore = 0;
+    (Array.isArray(answers) ? answers : []).forEach((a) => {
+      if (!a || typeof a.q !== "string" || answeredQuestions.has(a.q) || !(a.q in correctByQuestion)) return;
+      answeredQuestions.add(a.q);
+      if (a.selected === correctByQuestion[a.q]) mcScore += 1;
+    });
+    const mcTotal = (mod.mc || []).length;
 
     const raw = await callAI(
       "Du bist ein strenger, aber fairer Trainer für Verkaufspsychologie. Du bewertest die Antwort eines Vertrieblers auf eine offene Fallstudien-Frage. " +

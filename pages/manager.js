@@ -133,10 +133,13 @@ export default function Manager() {
     const { data: { session } } = await supabase.auth.getSession();
     const { data: newTeam, error } = await supabase.from("teams").insert({ name: newTeamName.trim(), created_by: session.user.id }).select().single();
     if (!error && newTeam) {
-      await supabase.from("team_members").insert({ team_id: newTeam.id, user_id: session.user.id });
+      const { error: memErr } = await supabase.from("team_members").insert({ team_id: newTeam.id, user_id: session.user.id });
+      if (memErr) alert(memErr.message);
       setNewTeamName("");
       await load();
       await selectTeam(newTeam.id);
+    } else if (error) {
+      alert(error.message);
     }
     setCreatingTeam(false);
   }
@@ -144,7 +147,8 @@ export default function Manager() {
   async function saveTeamName() {
     if (!editingName.trim() || !selectedTeamId) return;
     setSavingName(true);
-    await supabase.from("teams").update({ name: editingName.trim() }).eq("id", selectedTeamId);
+    const { error } = await supabase.from("teams").update({ name: editingName.trim() }).eq("id", selectedTeamId);
+    if (error) { alert(error.message); setSavingName(false); return; }
     setMyTeams((prev) => prev.map((t) => t.id === selectedTeamId ? { ...t, name: editingName.trim() } : t));
     setSavingName(false);
   }
@@ -153,7 +157,8 @@ export default function Manager() {
     if (!selectedTeamId) return;
     const teamName = myTeams.find((t) => t.id === selectedTeamId)?.name;
     if (!confirm(`Team "${teamName}" wirklich löschen? Alle Zuordnungen, Ziele und Anfragen für dieses Team gehen dabei verloren.`)) return;
-    await supabase.from("teams").delete().eq("id", selectedTeamId);
+    const { error } = await supabase.from("teams").delete().eq("id", selectedTeamId);
+    if (error) { alert(error.message); return; }
     setSelectedTeamId(null);
     await load();
   }
@@ -161,7 +166,8 @@ export default function Manager() {
   async function addMember(profileId) {
     if (!selectedTeamId) return;
     setAddBusyId(profileId);
-    await supabase.from("team_members").insert({ team_id: selectedTeamId, user_id: profileId });
+    const { error } = await supabase.from("team_members").insert({ team_id: selectedTeamId, user_id: profileId });
+    if (error) alert(error.message);
     const { data: { session } } = await supabase.auth.getSession();
     await loadTeamData(selectedTeamId, session);
     setAddBusyId(null);
@@ -170,7 +176,8 @@ export default function Manager() {
   async function removeMember(profileId) {
     if (!selectedTeamId) return;
     if (!confirm("Aus diesem Team entfernen?")) return;
-    await supabase.from("team_members").delete().eq("team_id", selectedTeamId).eq("user_id", profileId);
+    const { error } = await supabase.from("team_members").delete().eq("team_id", selectedTeamId).eq("user_id", profileId);
+    if (error) { alert(error.message); return; }
     const { data: { session } } = await supabase.auth.getSession();
     await loadTeamData(selectedTeamId, session);
   }
@@ -201,17 +208,22 @@ export default function Manager() {
     setSavingGoal(true);
     const { data: { session } } = await supabase.auth.getSession();
     const week_start = mondayOfWeek(new Date()).toISOString().slice(0, 10);
-    await supabase.from("team_goals").insert({
+    const { error } = await supabase.from("team_goals").insert({
       manager_id: session.user.id, team_id: selectedTeamId, title: goalTitle.trim(), metric: goalMetric, target_count: Number(goalTarget), week_start,
     });
-    setGoalTitle("");
     setSavingGoal(false);
+    if (error) { alert(error.message); return; }
+    setGoalTitle("");
     alert("Team-Ziel für diese Woche gesetzt!");
   }
 
   async function toggleCallStatsAccess(memberId, allow) {
-    await supabase.from("profiles").update({ can_view_call_stats: allow }).eq("id", memberId);
-    setTeam((prev) => prev.map((m) => m.id === memberId ? { ...m, can_view_call_stats: allow } : m));
+    try {
+      await apiPost("/api/manager/set-call-stats-access", { memberId, allow });
+      setTeam((prev) => prev.map((m) => m.id === memberId ? { ...m, can_view_call_stats: allow } : m));
+    } catch (e) {
+      alert(e.message || "Fehler beim Speichern.");
+    }
   }
 
   function exportTeamCsv() {
@@ -232,14 +244,16 @@ export default function Manager() {
     if (!pairMentorId || !pairMenteeId || pairMentorId === pairMenteeId) return;
     setPairingBusy(true);
     const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from("mentor_pairs").insert({ mentor_id: pairMentorId, mentee_id: pairMenteeId, manager_id: session.user.id, active: true });
-    setPairMentorId(""); setPairMenteeId("");
+    const { error } = await supabase.from("mentor_pairs").insert({ mentor_id: pairMentorId, mentee_id: pairMenteeId, manager_id: session.user.id, active: true });
+    if (error) alert(error.message);
+    else { setPairMentorId(""); setPairMenteeId(""); }
     await loadTeamData(selectedTeamId, session);
     setPairingBusy(false);
   }
 
   async function dissolvePair(pairId) {
-    await supabase.from("mentor_pairs").update({ active: false }).eq("id", pairId);
+    const { error } = await supabase.from("mentor_pairs").update({ active: false }).eq("id", pairId);
+    if (error) { alert(error.message); return; }
     const { data: { session } } = await supabase.auth.getSession();
     await loadTeamData(selectedTeamId, session);
   }

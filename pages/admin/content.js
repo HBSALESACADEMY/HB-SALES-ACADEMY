@@ -99,9 +99,11 @@ export default function ContentAdmin() {
 
       if (draft.attachment) {
         // Nur die Dateiendung im Pfad — Supabase Storage lehnt manche
-        // Sonderzeichen im vollen Dateinamen mit "Invalid key" ab.
+        // Sonderzeichen im vollen Dateinamen mit "Invalid key" ab. Ordner-
+        // Präfix ist die eigene Nutzer-ID (nicht die Kurs-ID) — das ist
+        // der Präfix, den die content-files-Upload-Policy voraussetzt.
         const ext = (draft.attachment.name.split(".").pop() || "bin").toLowerCase();
-        const path = `${courseId}/${Date.now()}.${ext}`;
+        const path = `${session.user.id}/${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("content-files").upload(path, draft.attachment);
         if (upErr) throw upErr;
         const { data: pub } = supabase.storage.from("content-files").getPublicUrl(path);

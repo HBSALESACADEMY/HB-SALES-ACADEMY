@@ -13,6 +13,8 @@ const TABS = [
 
 export default function Kunden() {
   const [loading, setLoading] = useState(true);
+  const [selfId, setSelfId] = useState(null);
+  const [canDeleteTeam, setCanDeleteTeam] = useState(false);
   const [canSeeTeam, setCanSeeTeam] = useState(false);
   const [viewMode, setViewMode] = useState("own"); // 'own' | 'team'
   const [outcomeTab, setOutcomeTab] = useState("kunde"); // 'kunde' | 'absage'
@@ -35,6 +37,11 @@ export default function Kunden() {
     const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
     const canManage = !!(me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin);
     setCanSeeTeam(canManage);
+    setSelfId(session.user.id);
+    // "backend" darf Leads laut RLS zwar einsehen/bearbeiten, aber nicht
+    // löschen (leads_delete) — der Löschen-Button darf für fremde Einträge
+    // deshalb nur bei Manager/Admin/Plattform-Admin erscheinen.
+    setCanDeleteTeam(!!(me?.role === "manager" || me?.is_admin || me?.is_platform_admin));
     if (me?.role === "backend" && viewMode === "own") { setViewMode("team"); return; }
 
     let query = supabase.from("leads").select("*").eq("outcome", outcomeTab).order("created_at", { ascending: false });
@@ -225,14 +232,16 @@ export default function Kunden() {
 
                   <div className="flex items-center gap-2 mt-3 pt-2 border-t border-line">
                     <button onClick={() => startEdit(c)} className="btn-ghost text-xs">Bearbeiten</button>
-                    {confirmDelete === c.id ? (
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-xs text-coral">Wirklich löschen?</span>
-                        <button disabled={saving} onClick={() => deleteCustomer(c.id)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
-                        <button disabled={saving} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
-                      </span>
-                    ) : (
-                      <button onClick={() => setConfirmDelete(c.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                    {(c.created_by === selfId || canDeleteTeam) && (
+                      confirmDelete === c.id ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs text-coral">Wirklich löschen?</span>
+                          <button disabled={saving} onClick={() => deleteCustomer(c.id)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
+                          <button disabled={saving} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
+                        </span>
+                      ) : (
+                        <button onClick={() => setConfirmDelete(c.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                      )
                     )}
                   </div>
                 </>

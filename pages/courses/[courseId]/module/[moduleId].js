@@ -17,6 +17,7 @@ export default function ModuleRunner() {
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState(null);
   const [mcScore, setMcScore] = useState(0);
+  const [answers, setAnswers] = useState([]);
   const [shuffled, setShuffled] = useState(null);
   const [answerText, setAnswerText] = useState("");
   const [grading, setGrading] = useState(null);
@@ -43,6 +44,9 @@ export default function ModuleRunner() {
     if (selected !== null) return;
     setSelected(i);
     if (i === shuffled.correctShuffledIndex) setMcScore((s) => s + 1);
+    // Server rechnet das Ergebnis selbst nach — hier nur die tatsächliche
+    // Auswahl mitschicken, keinen vom Client vorberechneten Score vertrauen.
+    setAnswers((prev) => [...prev, { q: questions[qIndex].q, selected: shuffled.options[i] }]);
   }
 
   function nextQuestion() {
@@ -62,7 +66,7 @@ export default function ModuleRunner() {
     setError("");
     try {
       const { grading } = await apiPost("/api/quiz-grade", {
-        courseId: course.id, moduleId: mod.id, answerText, mcScore, mcTotal: questions.length,
+        courseId: course.id, moduleId: mod.id, answerText, answers,
       });
       setGrading(grading);
       setPhase("done");

@@ -3,6 +3,25 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { callAI } from "../../lib/aiClient";
 import { resolveCourse } from "../../lib/resolveCourse";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
+import { allMcQuestionsOfCourse } from "../../lib/curriculum";
+
+// Multiple-Choice-Ergebnis serverseitig aus den tatsächlich eingereichten
+// Antworten nachrechnen — der Client darf mcScore/mcTotal NICHT selbst
+// vorgeben, sonst ließe sich per manipuliertem Request jede Prüfung (und
+// damit Zertifikat + XP) fälschen. Jede Frage zählt höchstens einmal.
+function gradeMc(course, answers) {
+  const questions = allMcQuestionsOfCourse(course);
+  const correctByQuestion = {};
+  questions.forEach((q) => { correctByQuestion[q.q] = q.options[q.correct]; });
+  const answered = new Set();
+  let score = 0;
+  (Array.isArray(answers) ? answers : []).forEach((a) => {
+    if (!a || typeof a.q !== "string" || answered.has(a.q) || !(a.q in correctByQuestion)) return;
+    answered.add(a.q);
+    if (a.selected === correctByQuestion[a.q]) score += 1;
+  });
+  return { mcScore: score, mcTotal: questions.length };
+}
 
 // Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
 export const config = { maxDuration: 45 };
@@ -15,10 +34,11 @@ export default async function handler(req, res) {
   if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY fehlt." });
 
   try {
-    const { courseId, mcScore, mcTotal, capstoneAnswer } = req.body;
+    const { courseId, answers, capstoneAnswer } = req.body;
     const admin = getAdminSupabase();
     const course = await resolveCourse(courseId, admin);
     if (!course || !course.examCase) return res.status(400).json({ error: "Kurs nicht gefunden." });
+    const { mcScore, mcTotal } = gradeMc(course, answers);
 
     const raw = await callAI(
       "Du bist ein strenger, aber fairer Trainer für Verkaufspsychologie und bewertest die Abschlussfallstudie einer Kursprüfung. " +

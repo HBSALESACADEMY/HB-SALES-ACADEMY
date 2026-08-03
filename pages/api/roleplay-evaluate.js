@@ -12,6 +12,9 @@ export default async function handler(req, res) {
 
   try {
     const { personaId, scenarioId, difficulty, messages, detected } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "messages erforderlich." });
+    }
     const transcript = messages.map((m) => (m.role === "user" ? "Verkäufer" : "Kunde") + ": " + m.content).join("\n");
 
     // Bewertung UND ein optionaler Wissensdatenbank-Vorschlag laufen in EINEM Aufruf,

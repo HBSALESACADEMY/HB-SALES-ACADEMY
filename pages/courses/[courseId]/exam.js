@@ -28,6 +28,7 @@ export default function ExamRunner() {
   const [selected, setSelected] = useState(null);
   const [shuffled, setShuffled] = useState(null);
   const [mcScore, setMcScore] = useState(0);
+  const [answers, setAnswers] = useState([]);
   const [capstoneAnswer, setCapstoneAnswer] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -47,6 +48,10 @@ export default function ExamRunner() {
     if (selected !== null) return;
     setSelected(i);
     if (i === shuffled.correctShuffledIndex) setMcScore((s) => s + 1);
+    // Der Server kennt die richtige Antwort selbst und rechnet das
+    // Ergebnis eigenständig nach — hier wird nur die tatsächliche Auswahl
+    // mitgeschickt, kein vom Client vorberechneter Score vertraut.
+    setAnswers((prev) => [...prev, { q: questions[qIndex].q, selected: shuffled.options[i] }]);
   }
 
   function nextQuestion() {
@@ -66,7 +71,7 @@ export default function ExamRunner() {
     setError("");
     try {
       const data = await apiPost("/api/exam-submit", {
-        courseId: course.id, mcScore, mcTotal: questions.length, capstoneAnswer,
+        courseId: course.id, answers, capstoneAnswer,
       });
       setResult(data);
       setPhase("done");

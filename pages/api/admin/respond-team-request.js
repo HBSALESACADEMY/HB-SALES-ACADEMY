@@ -19,6 +19,8 @@ export default async function handler(req, res) {
     const { data: team } = await admin.from("teams").select("created_by").eq("id", request.team_id).maybeSingle();
     if (!team || team.created_by !== auth.user.id) return res.status(403).json({ error: "Nur der Lead dieses Teams darf antworten." });
 
+    if (request.status !== "pending") return res.status(200).json({ ok: true });
+
     if (action === "decline") {
       await admin.from("team_requests").update({ status: "declined" }).eq("id", requestId);
       return res.status(200).json({ ok: true });
