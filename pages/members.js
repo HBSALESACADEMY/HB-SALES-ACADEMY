@@ -46,12 +46,17 @@ export default function Members() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const { data: me } = await supabase.from("profiles").select("organization_id").eq("id", session.user.id).maybeSingle();
+    const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    // Plattform-Admins können sich per Firmencode "als" eine andere
+    // Organisation einloggen (sessionStorage, siehe components/Layout.js) —
+    // dann muss diese Seite die AKTIVE Organisation zeigen, nicht die
+    // eigene Heimat-Organisation des Plattform-Admin-Kontos.
+    const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
 
     const [{ data: profiles }, { data: fr }, { data: allTeams }, { data: allMemberships }, { data: myMemberships }, { data: tr }] = await Promise.all([
-      me?.organization_id
+      activeOrgId
         ? supabase.from("profiles").select("id, full_name, avatar_url, bio, company_name, role_title, website, instagram, linkedin, role")
-            .eq("organization_id", me.organization_id).eq("status", "approved").neq("id", session.user.id).order("full_name")
+            .eq("organization_id", activeOrgId).eq("status", "approved").neq("id", session.user.id).order("full_name")
         : Promise.resolve({ data: [] }),
       supabase.from("friendships").select("*").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
       supabase.from("teams").select("id, name, created_by"),
