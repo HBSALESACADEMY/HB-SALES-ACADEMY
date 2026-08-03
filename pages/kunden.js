@@ -6,16 +6,25 @@ import { openProfile } from "../lib/profileModalBus";
 
 const emptyForm = { name: "", phone: "", email: "", company: "", website: "", notes: "" };
 
+const TABS = [
+  ["kunde", "Kunden"],
+  ["absage", "Absagen"],
+];
+
 export default function Kunden() {
   const [loading, setLoading] = useState(true);
   const [canSeeTeam, setCanSeeTeam] = useState(false);
   const [viewMode, setViewMode] = useState("own"); // 'own' | 'team'
+  const [outcomeTab, setOutcomeTab] = useState("kunde"); // 'kunde' | 'absage'
   const [customers, setCustomers] = useState([]);
   const [profileMap, setProfileMap] = useState({});
   const [error, setError] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -28,7 +37,7 @@ export default function Kunden() {
     setCanSeeTeam(canManage);
     if (me?.role === "backend" && viewMode === "own") { setViewMode("team"); return; }
 
-    let query = supabase.from("leads").select("*").eq("outcome", "kunde").order("created_at", { ascending: false });
+    let query = supabase.from("leads").select("*").eq("outcome", outcomeTab).order("created_at", { ascending: false });
     if (!(canManage && viewMode === "team")) query = query.eq("created_by", session.user.id);
     const { data: rows, error: err } = await query;
     if (err) setError(err.message);
@@ -50,7 +59,7 @@ export default function Kunden() {
     load();
     const interval = setInterval(load, 20000);
     return () => clearInterval(interval);
-  }, [viewMode]);
+  }, [viewMode, outcomeTab]);
 
   async function addCustomer() {
     if (!form.name.trim()) { setError("Name ist erforderlich."); return; }
@@ -74,13 +83,61 @@ export default function Kunden() {
     await load();
   }
 
+  function startEdit(c) {
+    setEditingId(c.id);
+    setEditForm({
+      name: c.name || "",
+      phone: c.phone || "",
+      email: c.email || "",
+      company: c.company || "",
+      website: c.website || "",
+      notes: c.notes || "",
+    });
+  }
+
+  async function saveEdit(id) {
+    if (!editForm.name.trim()) { setError("Name ist erforderlich."); return; }
+    setSaving(true);
+    setError("");
+    const { error: err } = await supabase.from("leads").update({
+      name: editForm.name.trim(),
+      phone: editForm.phone.trim() || null,
+      email: editForm.email.trim() || null,
+      company: editForm.company.trim() || null,
+      website: editForm.website.trim() || null,
+      notes: editForm.notes.trim() || null,
+    }).eq("id", id);
+    if (err) { setError(err.message); setSaving(false); return; }
+    setEditingId(null);
+    setSaving(false);
+    await load();
+  }
+
+  async function deleteCustomer(id) {
+    setSaving(true);
+    const { error: err } = await supabase.from("leads").delete().eq("id", id);
+    if (err) { setError(err.message); setSaving(false); return; }
+    setConfirmDelete(null);
+    setSaving(false);
+    await load();
+  }
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Erfolge und Abschlüsse</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-5">Kunden, die aus einem Termin geworden sind — oder direkt manuell eingetragen.</p>
+      <p className="text-textMuted text-sm mb-5">Kunden, die aus einem Termin geworden sind — oder direkt manuell eingetragen. Absagen findest du im entsprechenden Reiter.</p>
+
+      <div className="flex items-center gap-2 mb-3">
+        {TABS.map(([key, label]) => (
+          <button key={key} onClick={() => { setOutcomeTab(key); setShowAddForm(false); setEditingId(null); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${outcomeTab === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex items-center justify-between gap-2 mb-5 flex-wrap">
         {canSeeTeam ? (
@@ -92,9 +149,11 @@ export default function Kunden() {
             ))}
           </div>
         ) : <div />}
-        <button onClick={() => setShowAddForm(!showAddForm)} className="btn text-xs">
-          {showAddForm ? "Abbrechen" : "+ Erfolg hinzufügen"}
-        </button>
+        {outcomeTab === "kunde" && (
+          <button onClick={() => setShowAddForm(!showAddForm)} className="btn text-xs">
+            {showAddForm ? "Abbrechen" : "+ Erfolg hinzufügen"}
+          </button>
+        )}
       </div>
 
       {showAddForm && (
@@ -121,30 +180,73 @@ export default function Kunden() {
       <div className="flex flex-col gap-3">
         {customers.map((c) => {
           const owner = profileMap[c.created_by];
+          const isEditing = editingId === c.id;
           return (
             <div key={c.id} className="card">
-              <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
-                <div className="min-w-0">
-                  <div className="font-display font-semibold text-textMain">{c.name}</div>
-                  <div className="text-xs text-textMuted mt-0.5">{c.company || "Kein Unternehmen angegeben"}</div>
+              {isEditing ? (
+                <div className="flex flex-col gap-2.5">
+                  <input className="input" placeholder="Name *" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <input className="input" placeholder="Telefon" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                    <input className="input" placeholder="E-Mail" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                    <input className="input" placeholder="Unternehmen" value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+                    <input className="input" placeholder="Website" value={editForm.website} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })} />
+                  </div>
+                  <textarea className="input" placeholder="Notiz (optional)" rows={2} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+                  <div className="flex items-center gap-2">
+                    <button disabled={saving} onClick={() => saveEdit(c.id)} className="btn text-xs disabled:opacity-40">
+                      {saving ? "Speichert..." : "Speichern"}
+                    </button>
+                    <button disabled={saving} onClick={() => setEditingId(null)} className="btn-ghost text-xs">Abbrechen</button>
+                  </div>
                 </div>
-                <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5 flex-shrink-0">Kunde</span>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted">
-                {c.phone && <span>📞 {c.phone}</span>}
-                {c.email && <span>✉️ {c.email}</span>}
-                {c.website && <span>🌐 {c.website}</span>}
-                {viewMode === "team" && owner && (
-                  <button onClick={() => openProfile(owner.id)} className="flex items-center gap-1.5 hover:text-textMain">
-                    <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
-                  </button>
-                )}
-              </div>
-              {c.notes && <p className="text-sm text-textMain mt-2">{c.notes}</p>}
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="font-display font-semibold text-textMain">{c.name}</div>
+                      <div className="text-xs text-textMuted mt-0.5">{c.company || "Kein Unternehmen angegeben"}</div>
+                    </div>
+                    <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 flex-shrink-0 border ${outcomeTab === "kunde" ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
+                      {outcomeTab === "kunde" ? "Kunde" : "Absage"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted">
+                    {c.phone && <span>📞 {c.phone}</span>}
+                    {c.email && <span>✉️ {c.email}</span>}
+                    {c.website && <span>🌐 {c.website}</span>}
+                    {viewMode === "team" && owner && (
+                      <button onClick={() => openProfile(owner.id)} className="flex items-center gap-1.5 hover:text-textMain">
+                        <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
+                      </button>
+                    )}
+                  </div>
+                  {c.notes && <p className="text-sm text-textMain mt-2">{c.notes}</p>}
+
+                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-line">
+                    <button onClick={() => startEdit(c)} className="btn-ghost text-xs">Bearbeiten</button>
+                    {confirmDelete === c.id ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-xs text-coral">Wirklich löschen?</span>
+                        <button disabled={saving} onClick={() => deleteCustomer(c.id)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
+                        <button disabled={saving} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(c.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           );
         })}
-        {customers.length === 0 && <p className="text-textMuted text-sm">Noch keine Kunden — markiere einen Termin unter "Termine" als "Kunde geworden" oder trage einen Erfolg oben direkt manuell ein.</p>}
+        {customers.length === 0 && (
+          <p className="text-textMuted text-sm">
+            {outcomeTab === "kunde"
+              ? 'Noch keine Kunden — markiere einen Termin unter "Termine" als "Kunde geworden" oder trage einen Erfolg oben direkt manuell ein.'
+              : 'Noch keine Absagen — markiere einen Termin unter "Termine" als "Absage".'}
+          </p>
+        )}
       </div>
     </Layout>
   );
