@@ -507,7 +507,7 @@ create table if not exists call_recordings (
   label text,
   recording_path text not null,
   file_name text,
-  visibility text not null default 'private' check (visibility in ('org', 'private')),
+  visibility text not null default 'private' check (visibility in ('org', 'private', 'team_lead')),
   status text not null default 'pending' check (status in ('pending', 'evaluated', 'failed')),
   evaluation_score integer,
   evaluation_summary text,
@@ -1233,6 +1233,16 @@ drop policy if exists "call_recordings_select" on call_recordings;
 create policy "call_recordings_select" on call_recordings for select using (
   created_by = auth.uid()
   or (visibility = 'org' and same_org(created_by, auth.uid()))
+  or (
+    visibility = 'team_lead'
+    and (
+      is_team_lead_of(created_by, auth.uid())
+      or (
+        same_org(created_by, auth.uid())
+        and exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+      )
+    )
+  )
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "call_recordings_insert_own" on call_recordings;

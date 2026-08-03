@@ -25,7 +25,16 @@ export default async function handler(req, res) {
       const sameOrg = owner && me && owner.organization_id === me.organization_id;
       const allowedViaOrgVisibility = recording.visibility === "org" && sameOrg;
       const allowedViaOversight = sameOrg && (me?.role === "manager" || me?.is_admin);
-      if (!me?.is_platform_admin && !allowedViaOrgVisibility && !allowedViaOversight) {
+      let allowedViaTeamLead = false;
+      if (recording.visibility === "team_lead") {
+        if (sameOrg && me?.role === "manager") {
+          allowedViaTeamLead = true;
+        } else {
+          const { data: isLead } = await admin.rpc("is_team_lead_of", { target_id: recording.created_by, viewer_id: user.id });
+          allowedViaTeamLead = !!isLead;
+        }
+      }
+      if (!me?.is_platform_admin && !allowedViaOrgVisibility && !allowedViaOversight && !allowedViaTeamLead) {
         return res.status(403).json({ error: "Kein Zugriff auf diese Aufnahme." });
       }
     }

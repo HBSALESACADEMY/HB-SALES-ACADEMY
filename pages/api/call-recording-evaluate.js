@@ -2,8 +2,9 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { callAIWithAudio } from "../../lib/aiClient";
 
-// Audio-Auswertungen brauchen deutlich mehr Zeit als reine Text-Anfragen.
-export const config = { maxDuration: 60 };
+// Audio-Auswertungen brauchen deutlich mehr Zeit als reine Text-Anfragen —
+// noch mehr seit die Auswertung ausführlicher geworden ist.
+export const config = { maxDuration: 90 };
 
 const MIME_BY_EXT = {
   mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", mp4: "audio/mp4",
@@ -35,33 +36,49 @@ export default async function handler(req, res) {
     const audioBase64 = Buffer.from(arrayBuffer).toString("base64");
 
     const raw = await callAIWithAudio(
-      "Du bist ein Trainer für Verkaufspsychologie. Höre dir die angehängte Aufnahme eines Vertriebsanrufs an und bewerte " +
-        "sie auf Deutsch, konstruktiv und konkret — unabhängig davon, ob das Gespräch positiv oder negativ verlaufen ist. " +
-        "Nenne zu den Verbesserungspunkten passende, konkrete Beispielsätze — wörtliche Formulierungen, die der/die " +
-        "Vertriebler:in an der jeweiligen Stelle im Gespräch hätte sagen können. Falls in der Aufnahme kein erkennbares " +
-        "Verkaufsgespräch zu hören ist, setze score auf null und erkläre das kurz in der Zusammenfassung. " +
+      "Du bist ein erfahrener Trainer für Verkaufspsychologie. Höre dir die angehängte Aufnahme eines Vertriebsanrufs " +
+        "vollständig und aufmerksam an und erstelle eine AUSFÜHRLICHE, konkrete Analyse auf Deutsch — unabhängig davon, " +
+        "ob das Gespräch positiv oder negativ verlaufen ist. Gehe wirklich ins Detail, nicht nur oberflächlich. " +
+        "Gliedere das Gespräch in erkennbare Phasen (z.B. Einstieg, Bedarfsermittlung, Präsentation/Angebot, " +
+        "Einwandbehandlung, Abschluss — nur die Phasen, die tatsächlich vorkommen) und bewerte jede einzeln kurz. " +
+        "Liste jeden Einwand, den der Kunde vorgebracht hat, mit der Reaktion des/der Vertriebler:in und einer " +
+        "kurzen Einschätzung, ob die Reaktion überzeugend war. Nenne zu den Verbesserungspunkten passende, konkrete " +
+        "Beispielsätze — wörtliche Formulierungen, die der/die Vertriebler:in an der jeweiligen Stelle im Gespräch " +
+        "hätte sagen können. Gib am Ende eine konkrete Empfehlung für die nächsten Schritte (z.B. Follow-up-Timing, " +
+        "worauf beim nächsten Kontakt zu achten ist). Falls in der Aufnahme kein erkennbares Verkaufsgespräch zu " +
+        "hören ist, setze score auf null und erkläre das kurz in der Zusammenfassung. " +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit den Feldern: " +
-        '{"score": <Zahl 0-100 oder null>, "staerken": [<max 3 kurze Punkte>], "verbesserung": [<max 3 kurze Punkte>], ' +
-        '"beispielsaetze": [{"moment": "<kurzer Kontext>", "satz": "<wörtlicher Beispielsatz>"}, max 3], ' +
-        '"zusammenfassung": "<2-3 Sätze>"}. Kein Text außerhalb des JSON.',
-      "Bewerte diese Anruf-Aufnahme:",
+        '{"score": <Zahl 0-100 oder null>, "zusammenfassung": "<4-6 ausführliche Sätze>", ' +
+        '"phasen": [{"phase": "<Name>", "bewertung": "<2-3 Sätze Einschätzung>"}], ' +
+        '"staerken": [<max 5 konkrete Punkte>], "verbesserung": [<max 5 konkrete Punkte>], ' +
+        '"einwaende": [{"einwand": "<was der Kunde einwendete>", "reaktion": "<wie darauf reagiert wurde>", "bewertung": "<kurze Einschätzung>"}], ' +
+        '"beispielsaetze": [{"moment": "<kurzer Kontext>", "satz": "<wörtlicher Beispielsatz>"}, max 5], ' +
+        '"naechsteSchritte": "<konkrete Empfehlung, 2-3 Sätze>"}. Kein Text außerhalb des JSON.',
+      "Bewerte diese Anruf-Aufnahme ausführlich:",
       audioBase64,
       mimeType,
-      900
+      2200
     );
 
     let evaluation;
     try {
       evaluation = JSON.parse(raw.replace(/```json|```/g, "").trim());
     } catch (e) {
-      evaluation = { score: null, staerken: [], verbesserung: [], beispielsaetze: [], zusammenfassung: raw };
+      evaluation = { score: null, zusammenfassung: raw, phasen: [], staerken: [], verbesserung: [], einwaende: [], beispielsaetze: [], naechsteSchritte: "" };
     }
 
     const { error: updateErr } = await admin.from("call_recordings").update({
       status: "evaluated",
       evaluation_score: evaluation.score,
       evaluation_summary: evaluation.zusammenfassung || "",
-      evaluation_detail: { staerken: evaluation.staerken || [], verbesserung: evaluation.verbesserung || [], beispielsaetze: evaluation.beispielsaetze || [] },
+      evaluation_detail: {
+        phasen: evaluation.phasen || [],
+        staerken: evaluation.staerken || [],
+        verbesserung: evaluation.verbesserung || [],
+        einwaende: evaluation.einwaende || [],
+        beispielsaetze: evaluation.beispielsaetze || [],
+        naechsteSchritte: evaluation.naechsteSchritte || "",
+      },
     }).eq("id", recordingId);
     if (updateErr) throw updateErr;
 

@@ -125,7 +125,7 @@ export default function Recordings() {
             <input type="file" accept="audio/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
           </label>
           <div className="flex items-center gap-2">
-            {[["private", "Nur für mich"], ["org", "Ganzes Unternehmen"]].map(([key, l]) => (
+            {[["private", "Nur für mich"], ["team_lead", "Teamlead/Manager"], ["org", "Ganzes Unternehmen"]].map(([key, l]) => (
               <button key={key} onClick={() => setVisibility(key)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${visibility === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
                 {l}
@@ -149,7 +149,8 @@ export default function Recordings() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     {r.label || "Ohne Kontext"}
-                    {r.visibility === "org" && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Team</span>}
+                    {r.visibility === "org" && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Ganzes Unternehmen</span>}
+                    {r.visibility === "team_lead" && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Teamlead/Manager</span>}
                     {r.status === "evaluated" && r.evaluation_score != null && (
                       <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Score {r.evaluation_score}</span>
                     )}
@@ -185,6 +186,19 @@ export default function Recordings() {
               )}
               {expanded && r.evaluation_detail && (
                 <div className="mt-3 pt-3 border-t border-line flex flex-col gap-3">
+                  {r.evaluation_detail.phasen?.length > 0 && (
+                    <div>
+                      <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Gesprächsphasen</div>
+                      <div className="flex flex-col gap-1.5">
+                        {r.evaluation_detail.phasen.map((p, i) => (
+                          <div key={i} className="text-xs">
+                            <span className="text-textMain font-semibold">{p.phase}: </span>
+                            <span className="text-textMuted">{p.bewertung}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {r.evaluation_detail.staerken?.length > 0 && (
                     <div>
                       <div className="text-[10.5px] uppercase tracking-wide text-teal mb-1">Stärken</div>
@@ -201,6 +215,20 @@ export default function Recordings() {
                       </ul>
                     </div>
                   )}
+                  {r.evaluation_detail.einwaende?.length > 0 && (
+                    <div>
+                      <div className="text-[10.5px] uppercase tracking-wide text-coral mb-1">Einwände</div>
+                      <div className="flex flex-col gap-2">
+                        {r.evaluation_detail.einwaende.map((e, i) => (
+                          <div key={i} className="text-xs">
+                            <div className="text-textMain">„{e.einwand}"</div>
+                            <div className="text-textMuted mt-0.5">Reaktion: {e.reaktion}</div>
+                            <div className="text-textMuted italic">{e.bewertung}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {r.evaluation_detail.beispielsaetze?.length > 0 && (
                     <div>
                       <div className="text-[10.5px] uppercase tracking-wide text-violet mb-1">Beispielsätze</div>
@@ -212,6 +240,12 @@ export default function Recordings() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {r.evaluation_detail.naechsteSchritte && (
+                    <div>
+                      <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Nächste Schritte</div>
+                      <p className="text-xs text-textMain">{r.evaluation_detail.naechsteSchritte}</p>
                     </div>
                   )}
                 </div>
