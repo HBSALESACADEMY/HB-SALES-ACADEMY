@@ -48,7 +48,11 @@ export default function Community() {
 
     const { data: me } = await supabase.from("profiles").select("role, organization_id, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
     setIsManager(me?.role === "manager" || me?.role === "trainer" || !!me?.is_admin || !!me?.is_platform_admin);
-    setMyOrgId(me?.organization_id || null);
+    // Plattform-Admins können per Firmencode "als" eine andere Organisation
+    // eingeloggt sein (sessionStorage) — dann zählt für "Meine Organisation"
+    // und die Highlights die AKTIVE Organisation, nicht die eigene Heimat-Org.
+    const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
+    setMyOrgId(activeOrgId || null);
 
     const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: commentKudos }, { data: profiles }, { data: friendships }] = await Promise.all([
       supabase.from("community_groups").select("*").order("created_at"),

@@ -67,10 +67,14 @@ export default function Messages() {
 
     const [{ data: friendships }, { data: me }, unreadInfo] = await Promise.all([
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${uid},addressee_id.eq.${uid}`),
-      supabase.from("profiles").select("organization_id").eq("id", uid).maybeSingle(),
+      supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", uid).maybeSingle(),
       getUnreadMessageInfo(supabase, uid),
     ]);
     const { unreadByConvoKey, relevantMessages, myGroupIds } = unreadInfo;
+    // Plattform-Admins können per Firmencode "als" eine andere Organisation
+    // eingeloggt sein (sessionStorage) — dann zählen deren Mitglieder als
+    // direkt anschreibbar, nicht die der eigenen Heimat-Organisation.
+    const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
 
     const friendIds = (friendships || []).map((f) => f.requester_id === uid ? f.addressee_id : f.requester_id);
     const [{ data: friendProfiles }, { data: orgColleagues }] = await Promise.all([
@@ -78,8 +82,8 @@ export default function Messages() {
       // Mitglieder der eigenen Organisation sind immer direkt anschreibbar,
       // unabhängig von einer Freundschaft — deshalb hier mit in die
       // Kontakt-/Konversationsliste aufgenommen.
-      me?.organization_id
-        ? supabase.from("profiles").select("id, full_name, avatar_url").eq("organization_id", me.organization_id).eq("status", "approved").neq("id", uid)
+      activeOrgId
+        ? supabase.from("profiles").select("id, full_name, avatar_url").eq("organization_id", activeOrgId).eq("status", "approved").neq("id", uid)
         : Promise.resolve({ data: [] }),
     ]);
     const contactById = new Map();
