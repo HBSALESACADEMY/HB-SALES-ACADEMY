@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import AIBadge from "../components/AIBadge";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { COURSES } from "../lib/curriculum";
@@ -71,7 +72,10 @@ export default function Lernpfad() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Mein Lernpfad</h1>
+      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1 flex items-center gap-2">
+        Mein Lernpfad
+        <AIBadge title="Diese Kurse werden automatisch von einer KI erstellt." />
+      </h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Vollständige, individuell auf dich zugeschnittene Kurse — erkannt aus deinen bisherigen Ergebnissen. Es gibt hier immer wieder einen neuen.</p>
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../../../components/Layout";
 import Icon from "../../../../components/Icon";
+import AIBadge from "../../../../components/AIBadge";
 import { shuffledOptions } from "../../../../lib/curriculum";
 import { useCourse } from "../../../../lib/useCourse";
 import { apiPost } from "../../../../lib/apiClient";
@@ -162,7 +163,10 @@ export default function ModuleRunner() {
               </div>
             </div>
             <div className="border-t border-line pt-4">
-              <strong className="text-sm text-textMain block mb-1.5">Feedback zur Fallstudie</strong>
+              <strong className="text-sm text-textMain flex items-center gap-2 mb-1.5">
+                Feedback zur Fallstudie
+                <AIBadge title="Diese Bewertung wurde automatisch von einer KI erstellt." />
+              </strong>
               <p className="text-sm text-textMuted leading-relaxed">{grading.feedback}</p>
               {grading.erfuellteKriterien && grading.erfuellteKriterien.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">

@@ -72,7 +72,7 @@ export default function Flashcards() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Flashcards</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Kurze Wiederholungen zu Fakten und Prinzipien — kommt automatisch dann wieder, wenn's am meisten hilft.</p>
+      <p className="text-textMuted text-sm mb-6">Kurze Wiederholungen zu Fakten und Prinzipien — kommt automatisch dann wieder, wenn's am meisten hilft. Manche Karten wurden mit KI-Unterstützung erstellt.</p>
 
       {!card ? (
         <div className="card text-center py-10">

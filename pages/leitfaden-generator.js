@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
+import AIBadge from "../components/AIBadge";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
@@ -117,7 +118,10 @@ export default function GuideGenerator() {
       {currentGuide && (
         <div className="card mb-6" style={{ borderLeft: "4px solid var(--org-accent, #E8368F)" }}>
           <div className="flex items-center justify-between mb-3">
-            <div className="font-display font-semibold text-textMain text-sm">{currentGuide.title}</div>
+            <div className="font-display font-semibold text-textMain text-sm flex items-center gap-2">
+              {currentGuide.title}
+              <AIBadge title="Dieser Leitfaden wurde von einer KI generiert." />
+            </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button onClick={() => togglePublish(currentGuide)} className="btn-ghost text-xs">
                 {currentGuide.is_published ? "Privat machen" : "Im Team veröffentlichen"}

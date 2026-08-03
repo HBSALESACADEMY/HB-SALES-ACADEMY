@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../../components/Layout";
 import Icon from "../../../components/Icon";
+import AIBadge from "../../../components/AIBadge";
 import { allMcQuestionsOfCourse, shuffledOptions } from "../../../lib/curriculum";
 import { useCourse } from "../../../lib/useCourse";
 import { apiPost } from "../../../lib/apiClient";
@@ -137,7 +138,10 @@ export default function ExamRunner() {
               {result.passed ? "Prüfung bestanden — nächster Kurs freigeschaltet, PDF-Zertifikat verfügbar!" : "Nicht bestanden (nötig: MC ≥ 80% und Fallstudie ≥ 60%). Module nochmal ansehen und erneut versuchen."}
             </p>
             <div className="border-t border-line pt-3 mb-4">
-              <strong className="text-sm text-textMain block mb-1.5">Feedback zur Fallstudie</strong>
+              <strong className="text-sm text-textMain flex items-center gap-2 mb-1.5">
+                Feedback zur Fallstudie
+                <AIBadge title="Diese Bewertung wurde automatisch von einer KI erstellt." />
+              </strong>
               <p className="text-sm text-textMuted leading-relaxed">{result.capstoneGrading.feedback}</p>
             </div>
             <button className="btn" onClick={() => router.push(`/courses/${course.id}`)}>Zurück zum Kurs</button>

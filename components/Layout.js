@@ -7,6 +7,7 @@ import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
 import Icon from "./Icon";
 import IconPicker from "./IconPicker";
+import AIBadge from "./AIBadge";
 import Avatar from "./Avatar";
 import { quoteOfTheDay } from "../lib/quotes";
 import ProfileModal from "./ProfileModal";
@@ -663,7 +664,10 @@ export default function Layout({ children, fullBleed }) {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onClick={() => setQuickHelpOpen(false)}>
           <div className="card max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <span className="font-display font-semibold text-textMain">💬 Vertriebs-Buddy</span>
+              <span className="font-display font-semibold text-textMain flex items-center gap-2">
+                💬 Vertriebs-Buddy
+                <AIBadge title="Du sprichst mit einer KI, keiner echten Person." />
+              </span>
               <button onClick={() => setQuickHelpOpen(false)} className="text-textMuted hover:text-textMain text-lg leading-none">×</button>
             </div>
             <textarea className="input mb-2" rows={2} placeholder="Kurze Verkaufsfrage stellen..." value={quickHelpQuestion} onChange={(e) => setQuickHelpQuestion(e.target.value)} />

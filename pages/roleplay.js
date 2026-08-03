@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import AIBadge from "../components/AIBadge";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { COURSES } from "../lib/curriculum";
@@ -136,7 +137,10 @@ export default function Roleplay() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display text-textMain mb-1">{persona.name}</h1>
+      <h1 className="text-2xl font-display text-textMain mb-1 flex items-center gap-2">
+        {persona.name}
+        <AIBadge label="KI-simuliert" title="Dieser Gesprächspartner ist eine KI, keine echte Person." />
+      </h1>
       <p className="text-textMuted text-sm mb-4">{persona.tagline} · Szenario: {sc.label} · Modus: {DIFFICULTY[difficulty].label}</p>
 
       <div ref={chatRef} className="flex flex-col gap-2.5 h-[320px] overflow-y-auto p-4 bg-surfaceRaised border border-line rounded-xl mb-3">
@@ -182,6 +186,7 @@ export default function Roleplay() {
         <div className="card mt-4">
           <div className="flex items-center gap-3 mb-3">
             <span className="font-mono text-xl font-bold text-textMain">{feedback.score !== null ? feedback.score + "%" : "–"}</span>
+            <AIBadge title="Diese Auswertung wurde automatisch von einer KI erstellt." />
           </div>
           <p className="text-sm text-textMuted mb-3">{feedback.zusammenfassung}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

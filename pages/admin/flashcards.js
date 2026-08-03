@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
+import AIBadge from "../../components/AIBadge";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
@@ -110,7 +111,10 @@ export default function FlashcardsAdmin() {
       {genMessage && <div className="card border border-teal/40 text-teal text-sm mb-4">{genMessage}</div>}
 
       <div className="card mb-6">
-        <div className="font-semibold text-textMain text-sm mb-3">Automatisch aus Kursinhalten generieren</div>
+        <div className="font-semibold text-textMain text-sm mb-3 flex items-center gap-2">
+          Automatisch aus Kursinhalten generieren
+          <AIBadge title="Die Karten werden von einer KI entworfen — vor Veröffentlichung prüfen/anpassen." />
+        </div>
         <div className="flex flex-col gap-2">
           {COURSES.map((c) => (
             <div key={c.id} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2">
