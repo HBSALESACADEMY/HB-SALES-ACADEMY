@@ -22,6 +22,7 @@ export default function Recordings() {
   const [playingId, setPlayingId] = useState(null);
   const [playingUrl, setPlayingUrl] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [outcomeFilter, setOutcomeFilter] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -108,6 +109,8 @@ export default function Recordings() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
+  const filteredRecordings = recordings.filter((r) => outcomeFilter === "all" || r.outcome === outcomeFilter);
+
   return (
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Recordings</h1>
@@ -138,8 +141,17 @@ export default function Recordings() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 mb-3">
+        {[["all", "Alle"], ["positiv", "Positiv"], ["negativ", "Negativ"]].map(([key, l]) => (
+          <button key={key} onClick={() => setOutcomeFilter(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${outcomeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col gap-3">
-        {recordings.map((r) => {
+        {filteredRecordings.map((r) => {
           const owner = profileMap[r.created_by];
           const isOwn = r.created_by === selfId;
           const expanded = expandedId === r.id;
@@ -153,6 +165,12 @@ export default function Recordings() {
                     {r.visibility === "team_lead" && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Teamlead/Manager</span>}
                     {r.status === "evaluated" && r.evaluation_score != null && (
                       <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Score {r.evaluation_score}</span>
+                    )}
+                    {r.outcome === "positiv" && (
+                      <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Positiv</span>
+                    )}
+                    {r.outcome === "negativ" && (
+                      <span className="text-[10px] uppercase tracking-wide text-coral border border-coral/40 rounded px-1.5 py-0.5">Negativ</span>
                     )}
                   </div>
                   {!isOwn && owner && (
@@ -253,7 +271,11 @@ export default function Recordings() {
             </div>
           );
         })}
-        {recordings.length === 0 && <p className="text-textMuted text-sm">Noch keine Aufnahmen hochgeladen.</p>}
+        {filteredRecordings.length === 0 && (
+          <p className="text-textMuted text-sm">
+            {recordings.length === 0 ? "Noch keine Aufnahmen hochgeladen." : "Keine Aufnahmen mit diesem Ergebnis."}
+          </p>
+        )}
       </div>
     </Layout>
   );

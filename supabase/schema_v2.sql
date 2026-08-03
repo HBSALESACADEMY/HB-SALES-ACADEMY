@@ -512,6 +512,7 @@ create table if not exists call_recordings (
   evaluation_score integer,
   evaluation_summary text,
   evaluation_detail jsonb,
+  outcome text check (outcome in ('positiv', 'negativ')),
   created_at timestamptz not null default now()
 );
 
