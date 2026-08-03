@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
+import AudioPlayer from "../components/AudioPlayer";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost, apiGet } from "../lib/apiClient";
 import { validateRecordingUpload } from "../lib/uploadValidation";
@@ -214,9 +215,7 @@ export default function Recordings() {
                   <button onClick={() => deleteRecording(r.id)} className="btn-ghost text-xs text-coral ml-auto">Löschen</button>
                 )}
               </div>
-              {playingId === r.id && playingUrl && (
-                <audio controls autoPlay src={playingUrl} className="w-full mt-2" />
-              )}
+              {playingId === r.id && playingUrl && <AudioPlayer src={playingUrl} />}
               {expanded && r.evaluation_detail && (
                 <div className="mt-3 pt-3 border-t border-line flex flex-col gap-3">
                   {r.evaluation_detail.phasen?.length > 0 && (

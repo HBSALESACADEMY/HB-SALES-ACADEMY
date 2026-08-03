@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
+import AudioPlayer from "../components/AudioPlayer";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
@@ -172,9 +173,7 @@ export default function Termine() {
                   </button>
                 )}
               </div>
-              {playingId === lead.id && playingUrl && (
-                <audio controls autoPlay src={playingUrl} className="w-full mt-2" />
-              )}
+              {playingId === lead.id && playingUrl && <AudioPlayer src={playingUrl} />}
 
               <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line mt-2">
                 <span className="text-[11px] text-textMuted flex-shrink-0">Ergebnis:</span>
