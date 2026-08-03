@@ -59,7 +59,10 @@ export default function FlashcardsAdmin() {
 
       let fileUrl = null, fileName = null;
       if (draft.file) {
-        const path = `${session.user.id}/${Date.now()}-${draft.file.name}`;
+        // Nur die Dateiendung im Pfad — Supabase Storage lehnt manche
+        // Sonderzeichen im vollen Dateinamen mit "Invalid key" ab.
+        const ext = (draft.file.name.split(".").pop() || "bin").toLowerCase();
+        const path = `${session.user.id}/${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("content-files").upload(path, draft.file);
         if (upErr) throw upErr;
         const { data: pub } = supabase.storage.from("content-files").getPublicUrl(path);

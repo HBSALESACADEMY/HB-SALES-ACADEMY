@@ -80,7 +80,11 @@ export default function Recordings() {
     setError("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const path = `${session.user.id}/${Date.now()}-${file.name}`;
+      // Nur die Dateiendung übernehmen, nicht den vollen Dateinamen — Supabase
+      // Storage lehnt Pfade mit bestimmten Sonderzeichen (z.B. €) mit "Invalid
+      // key" ab. Der Original-Dateiname bleibt separat in file_name erhalten.
+      const ext = (file.name.split(".").pop() || "mp3").toLowerCase();
+      const path = `${session.user.id}/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("call-recordings").upload(path, file);
       if (upErr) throw upErr;
 

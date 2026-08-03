@@ -98,8 +98,10 @@ export default function ContentAdmin() {
       }
 
       if (draft.attachment) {
-        const ext = draft.attachment.name.split(".").pop();
-        const path = `${courseId}/${Date.now()}-${draft.attachment.name}`;
+        // Nur die Dateiendung im Pfad — Supabase Storage lehnt manche
+        // Sonderzeichen im vollen Dateinamen mit "Invalid key" ab.
+        const ext = (draft.attachment.name.split(".").pop() || "bin").toLowerCase();
+        const path = `${courseId}/${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("content-files").upload(path, draft.attachment);
         if (upErr) throw upErr;
         const { data: pub } = supabase.storage.from("content-files").getPublicUrl(path);
