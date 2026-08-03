@@ -29,15 +29,15 @@ export default function LernpfadeAdmin() {
   const [generatingFor, setGeneratingFor] = useState(null);
   const [error, setError] = useState("");
 
-  async function load() {
-    setLoading(true);
+  async function load(silent) {
+    if (!silent) setLoading(true);
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
     if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) {
       setAllowed(false);
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
 
@@ -67,12 +67,12 @@ export default function LernpfadeAdmin() {
     }).sort((a, b) => (a.profile.full_name || "").localeCompare(b.profile.full_name || ""));
 
     setRows(built);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 20000);
+    const interval = setInterval(() => load(true), 20000);
     return () => clearInterval(interval);
   }, []);
 

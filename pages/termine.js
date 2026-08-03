@@ -25,8 +25,8 @@ export default function Termine() {
   const [followUpId, setFollowUpId] = useState(null);
   const [followUpDate, setFollowUpDate] = useState("");
 
-  async function load() {
-    setLoading(true);
+  async function load(silent) {
+    if (!silent) setLoading(true);
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
@@ -54,12 +54,14 @@ export default function Termine() {
         setProfileMap(map);
       }
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 20000);
+    // silent=true: kein voller Seiten-Unmount bei jedem Poll, sonst würde
+    // eine gerade abgespielte Aufnahme abrupt abbrechen.
+    const interval = setInterval(() => load(true), 20000);
     return () => clearInterval(interval);
   }, [viewMode]);
 

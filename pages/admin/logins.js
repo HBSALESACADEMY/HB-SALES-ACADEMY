@@ -13,12 +13,12 @@ export default function AdminLogins() {
 
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent) {
+    if (!silent) setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
-    if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) { setIsManager(false); setLoading(false); return; }
+    if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) { setIsManager(false); if (!silent) setLoading(false); return; }
     setIsPlatformAdmin(!!me.is_platform_admin);
 
     // Organisationsleiter/-Admins sehen nur die eigene Organisation — nur
@@ -36,12 +36,12 @@ export default function AdminLogins() {
     (profiles || []).forEach((p) => { map[p.id] = p; });
     setProfileMap(map);
     setEvents(ev || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 20000);
+    const interval = setInterval(() => load(true), 20000);
     return () => clearInterval(interval);
   }, []);
 

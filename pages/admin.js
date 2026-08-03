@@ -19,15 +19,15 @@ export default function Admin() {
   const [newPasswordValue, setNewPasswordValue] = useState("");
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent) {
+    if (!silent) setLoading(true);
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const { data: me } = await supabase.from("profiles").select("role, is_platform_admin").eq("id", session.user.id).maybeSingle();
     if (!me || (me.role !== "manager" && !me.is_platform_admin)) {
       setIsManager(false);
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
     try {
@@ -39,19 +39,21 @@ export default function Admin() {
     } catch (e) {
       setError(e.message);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   useEffect(() => {
     load();
     // Neue Registrierungen sollen ohne manuelles Neuladen auftauchen: Echtzeit
     // auf profiles-Änderungen, plus ein 20s-Poll als Fallback falls der
-    // Realtime-Kanal mal eine Änderung verpasst.
+    // Realtime-Kanal mal eine Änderung verpasst. Beide laufen "silent", sonst
+    // würde jede Änderung/jeder Poll die ganze Seite kurz durch "Lädt..."
+    // ersetzen (volles Unmount/Remount, u.a. offene Bearbeiten-Menüs schließen).
     const channel = supabase
       .channel("admin-users-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => load(true))
       .subscribe();
-    const interval = setInterval(load, 20000);
+    const interval = setInterval(() => load(true), 20000);
     return () => { supabase.removeChannel(channel); clearInterval(interval); };
   }, []);
 
