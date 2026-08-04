@@ -20,7 +20,7 @@ const FALLBACK_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard", route: "/", is_builtin: true, requires_manager: false },
   { id: "courses", label: "Kurse", icon: "book", route: "/courses", is_builtin: true, requires_manager: false },
   { id: "roleplay", label: "Rollenspiel", icon: "chat", route: "/roleplay", is_builtin: true, requires_manager: false },
-  { id: "call-tracker", label: "Call Tracker", icon: "target", route: "/call-tracker", is_builtin: true, requires_manager: false },
+  { id: "call-tracker", label: "Call Tracker", icon: "phone", route: "/call-tracker", is_builtin: true, requires_manager: false },
   { id: "einwand-trainer", label: "Einwand-Trainer", icon: "flame", route: "/einwand-trainer", is_builtin: true, requires_manager: false },
   { id: "knowledge", label: "Wissensdatenbank", icon: "library", route: "/knowledge", is_builtin: true, requires_manager: false },
   { id: "manager", label: "Team (Manager)", icon: "users", route: "/manager", is_builtin: true, requires_manager: true },
