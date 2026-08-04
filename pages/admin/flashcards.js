@@ -112,7 +112,7 @@ export default function FlashcardsAdmin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Flashcards verwalten</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Flashcards verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Lass Lernkarten automatisch aus den Kursinhalten generieren, oder lege sie manuell an. Neue Karten erscheinen sofort für alle Vertriebler:innen deiner Organisation unter "Flashcards".</p>
 

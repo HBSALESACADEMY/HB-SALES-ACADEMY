@@ -133,7 +133,7 @@ export default function Kunden() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Erfolge und Abschlüsse</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Erfolge und Abschlüsse</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-5">Kunden, die aus einem Termin geworden sind — oder direkt manuell eingetragen. Absagen findest du im entsprechenden Reiter.</p>
 

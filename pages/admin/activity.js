@@ -92,7 +92,7 @@ export default function AdminActivity() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Aktivitäten</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Aktivitäten</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Logins, Lernfortschritt und Community-Aktivität {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
 

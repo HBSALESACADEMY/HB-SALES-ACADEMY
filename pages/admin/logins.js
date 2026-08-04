@@ -61,7 +61,7 @@ export default function AdminLogins() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Login-Verlauf</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Login-Verlauf</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Wer sich wann angemeldet hat — die letzten 300 Anmeldungen {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
 

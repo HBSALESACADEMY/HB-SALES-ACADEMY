@@ -175,7 +175,7 @@ export default function AdminInsights() {
   return (
     <Layout>
       <div className="flex items-start justify-between gap-3 mb-1">
-        <h1 className="text-2xl font-display font-semibold brand-text-gradient">Insights</h1>
+        <h1 className="text-2xl font-display font-medium brand-text-gradient">Insights</h1>
         <button onClick={exportCsv} className="btn-ghost text-xs flex-shrink-0">
           <Icon name="download" size={13} /> Export (CSV)
         </button>

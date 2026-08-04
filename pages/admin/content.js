@@ -173,7 +173,7 @@ export default function ContentAdmin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Inhalte verwalten</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Inhalte verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Hier füllst du einen Ordner mit <strong className="text-textMain">Kursen und Inhalten</strong> (Module, Text, Video, Anhänge). Den Ordner selbst — also den Reiter in der Sidebar — legst du unter „Navigation verwalten" an.</p>
 

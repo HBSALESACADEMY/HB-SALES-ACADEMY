@@ -89,7 +89,7 @@ export default function Settings() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Einstellungen</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Einstellungen</h1>
       <div className="brand-stripe w-16 mb-4" />
 
       <div className="card max-w-lg mb-5">

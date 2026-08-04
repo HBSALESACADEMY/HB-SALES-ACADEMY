@@ -224,7 +224,7 @@ export default function Dashboard() {
     <Layout>
       {(profile) => (
         <>
-          <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
+          <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
           <div className="brand-stripe w-16 mb-4" />
           <p className="text-textMuted text-sm mb-6">Dein Überblick über Fortschritt und nächste Schritte.</p>
 

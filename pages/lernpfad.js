@@ -60,7 +60,7 @@ export default function Lernpfad() {
   if (!unlocked) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Mein Lernpfad</h1>
+        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Mein Lernpfad</h1>
         <div className="brand-stripe w-16 mb-4" />
         <div className="card text-center py-10">
           <p className="text-textMain font-semibold mb-1">Noch nicht freigeschaltet.</p>
@@ -72,7 +72,7 @@ export default function Lernpfad() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1 flex items-center gap-2">
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1 flex items-center gap-2">
         Mein Lernpfad
         <AIBadge title="Diese Kurse werden automatisch von einer KI erstellt." />
       </h1>
