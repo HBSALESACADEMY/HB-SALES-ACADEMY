@@ -23,6 +23,14 @@ export default function ContentAdmin() {
 
   const [moduleDrafts, setModuleDrafts] = useState({}); // courseId -> { title, content, file, uploading }
 
+  const [editingCourseId, setEditingCourseId] = useState(null);
+  const [courseEditForm, setCourseEditForm] = useState(null);
+  const [savingCourseEdit, setSavingCourseEdit] = useState(false);
+
+  const [editingModuleId, setEditingModuleId] = useState(null);
+  const [moduleEditForm, setModuleEditForm] = useState(null);
+  const [savingModuleEdit, setSavingModuleEdit] = useState(false);
+
   async function load() {
     setLoading(true);
     setError("");
@@ -160,6 +168,82 @@ export default function ContentAdmin() {
     else await load();
   }
 
+  function startEditCourse(c) {
+    setEditingCourseId(c.id);
+    setCourseEditForm({ title: c.title, description: c.description || "", color: c.color, navItemId: c.nav_item_id || "" });
+  }
+
+  async function saveEditCourse(id) {
+    if (!courseEditForm.title.trim() || !courseEditForm.navItemId) return;
+    setSavingCourseEdit(true);
+    setError("");
+    const { error: err } = await supabase.from("custom_courses").update({
+      title: courseEditForm.title.trim(),
+      description: courseEditForm.description.trim(),
+      color: courseEditForm.color,
+      nav_item_id: courseEditForm.navItemId,
+    }).eq("id", id);
+    setSavingCourseEdit(false);
+    if (err) { setError(err.message); return; }
+    setEditingCourseId(null);
+    setCourseEditForm(null);
+    await load();
+  }
+
+  function startEditModule(m) {
+    setEditingModuleId(m.id);
+    setModuleEditForm({
+      title: m.title, content: m.content || "", file: null, attachment: null,
+      existingVideoUrl: m.video_url, existingFileUrl: m.file_url, existingFileName: m.file_name,
+    });
+  }
+
+  async function saveEditModule(id) {
+    if (!moduleEditForm.title.trim()) return;
+    setSavingModuleEdit(true);
+    setError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      let videoUrl = moduleEditForm.existingVideoUrl;
+      let fileUrl = moduleEditForm.existingFileUrl, fileName = moduleEditForm.existingFileName;
+
+      if (moduleEditForm.file) {
+        const ext = moduleEditForm.file.name.split(".").pop();
+        const path = `${session.user.id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("course-videos").upload(path, moduleEditForm.file);
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("course-videos").getPublicUrl(path);
+        videoUrl = pub.publicUrl;
+      }
+      if (moduleEditForm.attachment) {
+        const ext = (moduleEditForm.attachment.name.split(".").pop() || "bin").toLowerCase();
+        const path = `${session.user.id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("content-files").upload(path, moduleEditForm.attachment);
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("content-files").getPublicUrl(path);
+        fileUrl = pub.publicUrl;
+        fileName = moduleEditForm.attachment.name;
+      }
+
+      const { error: updErr } = await supabase.from("custom_modules").update({
+        title: moduleEditForm.title.trim(),
+        content: moduleEditForm.content.trim() || null,
+        video_url: videoUrl,
+        file_url: fileUrl,
+        file_name: fileName,
+      }).eq("id", id);
+      if (updErr) throw updErr;
+
+      setEditingModuleId(null);
+      setModuleEditForm(null);
+      await load();
+    } catch (e) {
+      setError(e.message || "Fehler beim Speichern des Moduls.");
+    } finally {
+      setSavingModuleEdit(false);
+    }
+  }
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
   if (!isManager) {
@@ -211,29 +295,74 @@ export default function ContentAdmin() {
           const draft = moduleDrafts[c.id] || { title: "", content: "", file: null };
           return (
             <div key={c.id} className="card">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
-                  <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-teal mt-1">{folders.find((f) => f.id === c.nav_item_id)?.label || "Ohne Ordner"}</div>
+              {editingCourseId === c.id ? (
+                <div className="flex flex-col gap-2.5 mb-3 border-b border-line pb-3">
+                  <input className="input" placeholder="Titel" value={courseEditForm.title} onChange={(e) => setCourseEditForm({ ...courseEditForm, title: e.target.value })} />
+                  <textarea className="input" placeholder="Kurzbeschreibung" rows={2} value={courseEditForm.description} onChange={(e) => setCourseEditForm({ ...courseEditForm, description: e.target.value })} />
+                  <select className="input" value={courseEditForm.navItemId} onChange={(e) => setCourseEditForm({ ...courseEditForm, navItemId: e.target.value })}>
+                    {folders.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    {COLORS.map((col) => (
+                      <button key={col} onClick={() => setCourseEditForm({ ...courseEditForm, color: col })}
+                        className={`w-7 h-7 rounded-full border-2 ${courseEditForm.color === col ? "border-white" : "border-transparent"}`}
+                        style={{ background: COLOR_HEX[col] }} title={col} />
+                    ))}
+                    <button disabled={savingCourseEdit} onClick={() => { setEditingCourseId(null); setCourseEditForm(null); }} className="btn-ghost text-xs ml-auto disabled:opacity-40">Abbrechen</button>
+                    <button disabled={savingCourseEdit || !courseEditForm.title.trim()} onClick={() => saveEditCourse(c.id)} className="btn text-xs disabled:opacity-40">{savingCourseEdit ? "Speichert..." : "Speichern"}</button>
+                  </div>
                 </div>
-                <button onClick={() => deleteCourse(c.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Kurs löschen</button>
-              </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
+                    <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-teal mt-1">{folders.find((f) => f.id === c.nav_item_id)?.label || "Ohne Ordner"}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => startEditCourse(c)} className="btn-ghost text-xs">Bearbeiten</button>
+                    <button onClick={() => deleteCourse(c.id)} className="btn-ghost text-xs text-coral">Kurs löschen</button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2 mb-3">
-                {mods.map((m) => (
-                  <div key={m.id} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2">
-                    <Icon name="book" size={14} />
-                    <span className="text-sm flex-1">{m.title}</span>
-                    {m.video_url && <span className="text-[10px] uppercase text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
-                    {m.file_url && (
-                      <a href={m.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs inline-flex items-center gap-1">
-                        <Icon name="download" size={11} /> {m.file_name || "Anhang"}
-                      </a>
-                    )}
-                    <button onClick={() => deleteModule(m.id)} className="btn-ghost text-xs text-coral">Löschen</button>
-                  </div>
-                ))}
+                {mods.map((m) => {
+                  if (editingModuleId === m.id) {
+                    return (
+                      <div key={m.id} className="border border-line rounded-lg px-3 py-2.5 flex flex-col gap-2">
+                        <input className="input" placeholder="Modultitel" value={moduleEditForm.title} onChange={(e) => setModuleEditForm({ ...moduleEditForm, title: e.target.value })} />
+                        <textarea className="input" placeholder="Inhalt / Beschreibung" rows={2} value={moduleEditForm.content} onChange={(e) => setModuleEditForm({ ...moduleEditForm, content: e.target.value })} />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5">
+                            <Icon name="chat" size={12} /> {moduleEditForm.file ? moduleEditForm.file.name : (moduleEditForm.existingVideoUrl ? "Video ersetzen" : "Video (optional)")}
+                            <input type="file" accept="video/*" className="hidden" onChange={(e) => setModuleEditForm({ ...moduleEditForm, file: e.target.files[0] })} />
+                          </label>
+                          <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5">
+                            <Icon name="download" size={12} /> {moduleEditForm.attachment ? moduleEditForm.attachment.name : (moduleEditForm.existingFileUrl ? "Anhang ersetzen" : "Datei anhängen (optional)")}
+                            <input type="file" className="hidden" onChange={(e) => setModuleEditForm({ ...moduleEditForm, attachment: e.target.files[0] })} />
+                          </label>
+                          <button disabled={savingModuleEdit} onClick={() => { setEditingModuleId(null); setModuleEditForm(null); }} className="btn-ghost text-xs ml-auto disabled:opacity-40">Abbrechen</button>
+                          <button disabled={savingModuleEdit || !moduleEditForm.title.trim()} onClick={() => saveEditModule(m.id)} className="btn text-xs disabled:opacity-40">{savingModuleEdit ? "Speichert..." : "Speichern"}</button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={m.id} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2">
+                      <Icon name="book" size={14} />
+                      <span className="text-sm flex-1">{m.title}</span>
+                      {m.video_url && <span className="text-[10px] uppercase text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
+                      {m.file_url && (
+                        <a href={m.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs inline-flex items-center gap-1">
+                          <Icon name="download" size={11} /> {m.file_name || "Anhang"}
+                        </a>
+                      )}
+                      <button onClick={() => startEditModule(m)} className="btn-ghost text-xs">Bearbeiten</button>
+                      <button onClick={() => deleteModule(m.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                    </div>
+                  );
+                })}
                 {mods.length === 0 && <p className="text-xs text-textMuted">Noch keine Module.</p>}
               </div>
 
