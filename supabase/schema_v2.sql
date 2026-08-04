@@ -1236,8 +1236,15 @@ drop policy if exists "xp_log_insert_own" on xp_log;
 create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = user_id);
 
 -- --- teams ---
+-- is_platform_admin-Bypass: same_org() vergleicht sonst die Heimat-
+-- Organisation des Plattform-Admin-Kontos statt der per Firmencode gerade
+-- aktiv verwalteten Organisation (gleicher Grund wie bei nav_items/
+-- custom_courses, migration_53).
 drop policy if exists "teams_select_all" on teams;
-create policy "teams_select_all" on teams for select using (same_org(created_by, auth.uid()));
+create policy "teams_select_all" on teams for select using (
+  same_org(created_by, auth.uid())
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+);
 drop policy if exists "teams_insert_managers" on teams;
 create policy "teams_insert_managers" on teams for insert with check (
   exists (select 1 from profiles where id = auth.uid() and role = 'manager')
@@ -1249,10 +1256,17 @@ create policy "teams_delete_own" on teams for delete using (created_by = auth.ui
 
 -- --- team_members ---
 drop policy if exists "team_members_select_all" on team_members;
-create policy "team_members_select_all" on team_members for select using (same_org(user_id, auth.uid()));
+create policy "team_members_select_all" on team_members for select using (
+  same_org(user_id, auth.uid())
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+);
 drop policy if exists "team_members_insert_lead" on team_members;
 create policy "team_members_insert_lead" on team_members for insert with check (
-  is_lead_of_team(team_id, auth.uid()) and same_org(user_id, auth.uid())
+  is_lead_of_team(team_id, auth.uid())
+  and (
+    same_org(user_id, auth.uid())
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 drop policy if exists "team_members_delete_lead_or_self" on team_members;
 create policy "team_members_delete_lead_or_self" on team_members for delete using (
