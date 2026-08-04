@@ -739,7 +739,10 @@ create policy "quiz_select_team" on quiz_results for select using (is_team_lead_
 drop policy if exists "quiz_results_select_admin" on quiz_results;
 create policy "quiz_results_select_admin" on quiz_results for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
 );
 
 -- --- exam_results ---
@@ -752,7 +755,10 @@ create policy "exam_select_team" on exam_results for select using (is_team_lead_
 drop policy if exists "exam_results_select_admin" on exam_results;
 create policy "exam_results_select_admin" on exam_results for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
 );
 
 -- --- roleplay_sessions ---
@@ -765,7 +771,10 @@ create policy "rp_select_team" on roleplay_sessions for select using (is_team_le
 drop policy if exists "roleplay_sessions_select_admin" on roleplay_sessions;
 create policy "roleplay_sessions_select_admin" on roleplay_sessions for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
 );
 
 -- --- nav_items ---
@@ -1375,7 +1384,10 @@ create policy "login_events_select_managers" on login_events for select using (i
 drop policy if exists "login_events_select_admin" on login_events;
 create policy "login_events_select_admin" on login_events for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid()))
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
 );
 
 -- --- page_views ---
@@ -1383,7 +1395,11 @@ drop policy if exists "page_views_insert_own" on page_views;
 create policy "page_views_insert_own" on page_views for insert with check (auth.uid() = user_id);
 drop policy if exists "page_views_select_admin" on page_views;
 create policy "page_views_select_admin" on page_views for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) and same_org(user_id, auth.uid())
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
 );
 
 -- --- ai_request_log ---
