@@ -4,6 +4,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 const ALL_QUESTIONS = (() => {
   const out = [];
@@ -38,8 +39,13 @@ export default function Duel() {
     if (!session) return;
     setSelfId(session.user.id);
 
+    const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const activeOrgId = getActiveOrgId(me);
+
     const [{ data: profiles }, { data: myDuels }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name").eq("status", "approved").neq("id", session.user.id).order("full_name"),
+      activeOrgId
+        ? supabase.from("profiles").select("id, full_name").eq("status", "approved").eq("organization_id", activeOrgId).neq("id", session.user.id).order("full_name")
+        : Promise.resolve({ data: [] }),
       supabase.from("duels").select("*").or(`challenger_id.eq.${session.user.id},opponent_id.eq.${session.user.id}`).order("created_at", { ascending: false }),
     ]);
     setContacts(profiles || []);

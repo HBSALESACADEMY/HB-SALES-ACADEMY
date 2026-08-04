@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Avatar from "./Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 export default function WelcomeModal({ onClose }) {
   const [adminName, setAdminName] = useState(null);
@@ -8,7 +9,14 @@ export default function WelcomeModal({ onClose }) {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from("profiles").select("full_name, avatar_url").eq("is_admin", true).limit(1).maybeSingle();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const activeOrgId = getActiveOrgId(me);
+      if (!activeOrgId) return;
+      // Ohne Organisationsfilter konnte hier ein Admin aus einer FREMDEN
+      // Firma als "Willkommens"-Absender erscheinen.
+      const { data } = await supabase.from("profiles").select("full_name, avatar_url").eq("is_admin", true).eq("organization_id", activeOrgId).limit(1).maybeSingle();
       setAdminName(data?.full_name || null);
       setAdminAvatar(data?.avatar_url || null);
     }

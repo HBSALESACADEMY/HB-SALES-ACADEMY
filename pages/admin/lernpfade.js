@@ -4,6 +4,7 @@ import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
+import { getActiveOrgId } from "../../lib/activeOrg";
 
 function weakestModule(quizResults) {
   if (!quizResults.length) return null;
@@ -34,15 +35,18 @@ export default function LernpfadeAdmin() {
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
     if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) {
       setAllowed(false);
       if (!silent) setLoading(false);
       return;
     }
+    const activeOrgId = getActiveOrgId(me);
 
     const [{ data: profiles }, { data: quiz }, { data: exams }, { data: personalCourses }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved"),
+      activeOrgId
+        ? supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved").eq("organization_id", activeOrgId)
+        : Promise.resolve({ data: [] }),
       supabase.from("quiz_results").select("*"),
       supabase.from("exam_results").select("user_id, course_id, passed"),
       supabase.from("personal_courses").select("*"),

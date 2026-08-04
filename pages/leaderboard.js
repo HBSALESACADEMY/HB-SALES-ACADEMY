@@ -4,6 +4,7 @@ import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 function rangeStart(range) {
   const d = new Date();
@@ -35,8 +36,20 @@ export default function Leaderboard() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) setSelfId(session.user.id);
 
+    // profiles ist RLS-seitig bewusst organisationsübergreifend lesbar (für
+    // die globale Personensuche/Community) — die Rangliste braucht aber
+    // explizit nur die EIGENE Organisation, sonst tauchen fremde Firmen
+    // im "unternehmensweiten" Ranking auf.
+    let activeOrgId = null;
+    if (session) {
+      const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      activeOrgId = getActiveOrgId(me);
+    }
+
     const [{ data: profiles }, { data: friendships }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, xp, avatar_url").eq("status", "approved").eq("leaderboard_opt_out", false),
+      activeOrgId
+        ? supabase.from("profiles").select("id, full_name, xp, avatar_url").eq("status", "approved").eq("leaderboard_opt_out", false).eq("organization_id", activeOrgId)
+        : Promise.resolve({ data: [] }),
       session ? supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`) : Promise.resolve({ data: [] }),
     ]);
 
