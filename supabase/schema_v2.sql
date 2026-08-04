@@ -1305,7 +1305,11 @@ drop policy if exists "mentor_pairs_select_participant" on mentor_pairs;
 create policy "mentor_pairs_select_participant" on mentor_pairs for select using (auth.uid() = mentor_id or auth.uid() = mentee_id or auth.uid() = manager_id);
 drop policy if exists "mentor_pairs_insert_manager" on mentor_pairs;
 create policy "mentor_pairs_insert_manager" on mentor_pairs for insert with check (
-  auth.uid() = manager_id and same_org(mentor_id, auth.uid()) and same_org(mentee_id, auth.uid())
+  auth.uid() = manager_id
+  and (
+    (same_org(mentor_id, auth.uid()) and same_org(mentee_id, auth.uid()))
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 drop policy if exists "mentor_pairs_update_manager" on mentor_pairs;
 create policy "mentor_pairs_update_manager" on mentor_pairs for update using (auth.uid() = manager_id);
