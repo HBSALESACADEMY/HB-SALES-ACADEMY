@@ -8,7 +8,7 @@ export default function AGB() {
           <Link href="/login" className="text-textMuted text-xs underline">← Zurück zum Login</Link>
         </div>
 
-        <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Allgemeine Geschäftsbedingungen</h1>
+        <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Allgemeine Geschäftsbedingungen</h1>
         <div className="brand-stripe w-16 mb-6" />
 
         <div className="card mb-6 border border-amber/40 text-sm text-textMuted leading-relaxed">

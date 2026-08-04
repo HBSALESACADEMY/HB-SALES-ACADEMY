@@ -166,7 +166,7 @@ export default function Recordings() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Recordings</h1>
+      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Recordings</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-5">Anruf-Aufnahmen hochladen — du entscheidest selbst, ob sie in den Ordner "Positiv" oder "Negativ" kommen, die KI liefert dazu eine ausführliche inhaltliche Auswertung.</p>
 

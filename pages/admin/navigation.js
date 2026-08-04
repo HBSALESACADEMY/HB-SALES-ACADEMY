@@ -113,7 +113,7 @@ export default function NavigationAdmin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Navigation verwalten</h1>
+      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Navigation verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-3">Hier legst du nur die <strong>Struktur der Sidebar</strong> fest: Reiter/Ordner anlegen, umbenennen, Icon ändern, Reihenfolge ändern, ausblenden oder entfernen — auch die fest eingebauten. Entfernen löscht bei eigenen Ordnern auch deren Kurse; bei fest eingebauten Seiten verschwindet nur der Sidebar-Link, die Seite bleibt erreichbar.</p>
       <div className="card border border-violet/30 mb-6 flex items-center justify-between gap-3 flex-wrap">

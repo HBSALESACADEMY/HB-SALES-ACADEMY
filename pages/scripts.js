@@ -96,7 +96,7 @@ export default function Scripts() {
   return (
     <Layout>
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-display font-bold brand-text-gradient">Skript-Bibliothek</h1>
+        <h1 className="text-2xl font-display font-semibold brand-text-gradient">Skript-Bibliothek</h1>
         {isManager && <button onClick={() => { setFormError(""); setShowForm(true); }} className="btn text-xs flex-shrink-0">+ Neues Skript</button>}
       </div>
       <div className="brand-stripe w-16 mb-4" />

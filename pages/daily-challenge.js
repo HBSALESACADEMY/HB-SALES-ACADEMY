@@ -68,7 +68,7 @@ export default function DailyChallenge() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Tages-Challenge</h1>
+      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Tages-Challenge</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Eine Frage pro Tag, für alle im Team gleich. Baue deine Serie auf!</p>
 

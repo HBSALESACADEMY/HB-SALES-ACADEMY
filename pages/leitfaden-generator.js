@@ -93,7 +93,7 @@ export default function GuideGenerator() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Leitfaden-Generator</h1>
+      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Leitfaden-Generator</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">
         Individueller Gesprächsleitfaden für Cold Calls und Closing Calls — kein starres Skript zum Ablesen,

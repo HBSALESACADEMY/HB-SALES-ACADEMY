@@ -302,7 +302,7 @@ export default function Community() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Community</h1>
+      <h1 className="text-2xl font-display font-semibold brand-text-gradient mb-1">Community</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Teilt Erfolge, Tipps, Fotos und Erfahrungen — standardmäßig nur mit eurer Organisation, optional auch global.</p>
 
