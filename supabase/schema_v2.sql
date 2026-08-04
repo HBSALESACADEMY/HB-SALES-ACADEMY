@@ -571,12 +571,16 @@ $$;
 
 -- Vergleicht die organization_id zweier Personen — die Mandanten-Grenze,
 -- auf der praktisch alle anderen Sichtbarkeits-Prüfungen aufbauen.
+-- "is not distinct from" statt "=": NULL = NULL ist in SQL nie true, würde
+-- also same_org(x, x) für ein Profil OHNE organization_id (z.B. ein
+-- Plattform-Admin-Konto ohne feste Heimat-Organisation) sogar beim Vergleich
+-- mit sich selbst fehlschlagen lassen.
 create or replace function public.same_org(a uuid, b uuid)
 returns boolean
 language sql stable security definer as $$
   select exists (
     select 1 from profiles pa, profiles pb
-    where pa.id = a and pb.id = b and pa.organization_id = pb.organization_id
+    where pa.id = a and pb.id = b and pa.organization_id is not distinct from pb.organization_id
   );
 $$;
 
