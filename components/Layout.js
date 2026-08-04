@@ -5,6 +5,7 @@ import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
+import { getActiveOrgId } from "../lib/activeOrg";
 import Icon from "./Icon";
 import IconPicker from "./IconPicker";
 import AIBadge from "./AIBadge";
@@ -145,6 +146,7 @@ export default function Layout({ children, fullBleed }) {
   }, [router.asPath]);
 
   const [org, setOrg] = useState(cachedOrg);
+  const [activeOrgId, setActiveOrgId] = useState(null);
 
   // Sofort aus dem Cache anwenden (kein Flackern beim Seitenwechsel), bevor
   // load() unten die Organisation ggf. neu vom Server nachlädt.
@@ -178,31 +180,32 @@ export default function Layout({ children, fullBleed }) {
         }
       }
 
-      // Plattform-Admins sehen bewusst die Marke der Organisation, deren
-      // Firmencode sie zuletzt auf der Login-Seite eingegeben haben (session-
-      // gebunden) — nicht zwingend die ihrer eigenen fest zugeordneten
-      // Organisation. Für alle anderen Konten gilt immer die eigene, echte
-      // organization_id.
-      const activeOrgId = (data?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || data?.organization_id;
+      // "Teamlead" ist keine gespeicherte Rolle, sondern die Tatsache,
+      // mindestens ein Team gegründet zu haben — bestimmt u.a., ob die
+      // Inhalte-Verwaltungsseiten (Skripte, eigene Kurse, Flashcards,
+      // Wissensdatenbank) in der Sidebar sichtbar sind (siehe unten).
+      if (data) {
+        const { data: ownTeams } = await supabase.from("teams").select("id").eq("created_by", data.id).limit(1);
+        data = { ...data, is_team_lead: (ownTeams || []).length > 0 };
+      }
+
+      const activeOrgId = getActiveOrgId(data);
 
       const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
       let effectiveNav = nav || [];
-      // Plattform-Admins sehen jetzt (siehe migration_42) ALLE Organisationen
-      // eigene Ordner via RLS — hier zusätzlich auf die gerade aktive
-      // Organisation eingrenzen, sonst würden sich eigene Inhalte aller
-      // Organisationen in der Sidebar vermischen.
-      if (data?.is_platform_admin && activeOrgId) {
-        const customCreatorIds = [...new Set(effectiveNav.filter((n) => !n.is_builtin).map((n) => n.created_by))];
-        if (customCreatorIds.length) {
-          const { data: creators } = await supabase.from("profiles").select("id, organization_id").in("id", customCreatorIds);
-          const sameOrgCreatorIds = new Set((creators || []).filter((p) => p.organization_id === activeOrgId).map((p) => p.id));
-          effectiveNav = effectiveNav.filter((n) => n.is_builtin || sameOrgCreatorIds.has(n.created_by));
-        }
+      // Eigene Ordner tragen jetzt ein explizites organization_id (siehe
+      // migration_53) — direkt darauf eingrenzen, statt es (fehleranfällig)
+      // aus der Heimat-Organisation des/der Erstellenden abzuleiten. Nötig
+      // für Plattform-Admins, die per RLS alle Organisationen sehen dürfen,
+      // aber in der Sidebar nur die gerade aktive angezeigt bekommen sollen.
+      if (activeOrgId) {
+        effectiveNav = effectiveNav.filter((n) => n.is_builtin || n.organization_id === activeOrgId);
       }
 
       if (mounted) {
         setProfile(data);
         cachedProfile = data;
+        setActiveOrgId(activeOrgId);
         if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
         if (effectiveNav.length) { setNavItems(effectiveNav); cachedNavItems = effectiveNav; }
         setLoadingAuth(false);
@@ -407,7 +410,12 @@ export default function Layout({ children, fullBleed }) {
 
   async function refreshNav() {
     const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
-    if (nav && nav.length) { setNavItems(nav); cachedNavItems = nav; }
+    // Dieselbe Eingrenzung auf die aktive Organisation wie im initialen Laden
+    // oben — sonst würde ein gerade angelegter Reiter hier kurz erscheinen
+    // und beim nächsten vollen Laden (z.B. Seitenwechsel) wieder verschwinden.
+    let effectiveNav = nav || [];
+    if (activeOrgId) effectiveNav = effectiveNav.filter((n) => n.is_builtin || n.organization_id === activeOrgId);
+    if (effectiveNav.length) { setNavItems(effectiveNav); cachedNavItems = effectiveNav; }
   }
 
   // Schneller Weg für Manager/Admins, direkt aus der Sidebar heraus einen
@@ -424,6 +432,7 @@ export default function Layout({ children, fullBleed }) {
       const { error } = await supabase.from("nav_items").insert({
         key, label: newTabName.trim(), icon: newTabIcon, is_builtin: false,
         requires_manager: false, order_index: maxOrder + 1, created_by: session.user.id,
+        organization_id: activeOrgId,
       });
       if (error) throw error;
       setNewTabName("");
@@ -521,9 +530,16 @@ export default function Layout({ children, fullBleed }) {
             // pages/admin/{content,suggestions,navigation}.js), aber bewusst
             // NICHT Nutzerverwaltung/Team — die bleiben Managern vorbehalten.
             const TRAINER_NAV_IDS = ["admin-content", "admin-suggestions", "admin-navigation", "admin-flashcards"];
+            // Teamleads und Org-/Plattform-Admins dürfen dieselben Inhalte
+            // verwalten wie Manager/Trainer — siehe is_team_lead() in der
+            // RLS-Policy (migration_52). "admin-navigation" bewusst NICHT
+            // enthalten, das bleibt bei Manager/Trainer/Admin.
+            const ELEVATED_NAV_IDS = ["admin-content", "admin-suggestions", "admin-flashcards", "scripts"];
+            const isElevated = profile?.is_admin || profile?.is_platform_admin || profile?.is_team_lead;
             const visibleItems = sortedNav(navItems.filter((n) =>
               !n.requires_manager || profile?.role === "manager" ||
-              (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key))
+              (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key)) ||
+              (isElevated && ELEVATED_NAV_IDS.includes(n.key))
             ));
             const byCategory = {};
             visibleItems.forEach((item) => {

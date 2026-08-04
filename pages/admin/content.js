@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
+import { getActiveOrgId } from "../../lib/activeOrg";
 
 const COLORS = ["amber", "teal", "coral", "violet"];
 const COLOR_HEX = { amber: "var(--org-accent, #CE3A5C)", teal: "#00E5C7", coral: "#FF4D6D", violet: "var(--org-color-1, #4C5DC9)" };
 
 export default function ContentAdmin() {
+  const router = useRouter();
   const [isManager, setIsManager] = useState(true);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
@@ -16,6 +19,7 @@ export default function ContentAdmin() {
   const [newCourse, setNewCourse] = useState({ title: "", description: "", color: "amber", navItemId: "" });
   const [creatingCourse, setCreatingCourse] = useState(false);
   const [folders, setFolders] = useState([]);
+  const [activeOrgId, setActiveOrgId] = useState(null);
 
   const [moduleDrafts, setModuleDrafts] = useState({}); // courseId -> { title, content, file, uploading }
 
@@ -24,17 +28,33 @@ export default function ContentAdmin() {
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-    if (!me || (me.role !== "manager" && me.role !== "trainer")) {
+    const [{ data: me }, { data: ownTeams }] = await Promise.all([
+      supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle(),
+      supabase.from("teams").select("id").eq("created_by", session.user.id).limit(1),
+    ]);
+    // Teamleads dürfen eigene Kurse/Module genauso verwalten wie Manager/
+    // Trainer/Admins — siehe is_team_lead() in der RLS-Policy (migration_52).
+    const isTeamLead = (ownTeams || []).length > 0;
+    if (!me || (me.role !== "manager" && me.role !== "trainer" && !me.is_admin && !me.is_platform_admin && !isTeamLead)) {
       setIsManager(false);
       setLoading(false);
       return;
     }
-    const { data: cs, error: cErr } = await supabase.from("custom_courses").select("*").order("order_index");
+    const orgId = getActiveOrgId(me);
+    setActiveOrgId(orgId);
+
+    // Beides auf die gerade AKTIVE Organisation eingegrenzt — sonst würden
+    // Plattform-Admins hier Kurse/Ordner aller Organisationen gemischt sehen
+    // (siehe migration_53).
+    const { data: cs, error: cErr } = orgId
+      ? await supabase.from("custom_courses").select("*").eq("organization_id", orgId).order("order_index")
+      : await supabase.from("custom_courses").select("*").order("order_index");
     if (cErr) setError(cErr.message);
     setCourses(cs || []);
 
-    const { data: fld } = await supabase.from("nav_items").select("*").eq("is_builtin", false).order("order_index");
+    const { data: fld } = orgId
+      ? await supabase.from("nav_items").select("*").eq("is_builtin", false).eq("organization_id", orgId).order("order_index")
+      : await supabase.from("nav_items").select("*").eq("is_builtin", false).order("order_index");
     setFolders(fld || []);
     setNewCourse((prev) => ({ ...prev, navItemId: prev.navItemId || (fld && fld[0] ? fld[0].id : "") }));
 
@@ -62,6 +82,7 @@ export default function ContentAdmin() {
       nav_item_id: newCourse.navItemId,
       order_index: courses.length,
       created_by: session.user.id,
+      organization_id: activeOrgId,
     });
     if (err) setError(err.message);
     else { setNewCourse({ title: "", description: "", color: "amber", navItemId: newCourse.navItemId }); await load(); }
@@ -145,7 +166,7 @@ export default function ContentAdmin() {
     return (
       <Layout>
         <h1 className="text-2xl font-display text-textMain mb-1">Inhalte verwalten</h1>
-        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
+        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Manager, Trainer, Teamleads und Admins verfügbar.</p>
       </Layout>
     );
   }
@@ -154,7 +175,7 @@ export default function ContentAdmin() {
     <Layout>
       <h1 className="text-2xl font-display font-bold brand-text-gradient mb-1">Inhalte verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Lege eigene Kurse mit Modulen an — Text und optional ein Video pro Modul. Jeder Kurs gehört zu einem Ordner, der als eigener Reiter in der Sidebar erscheint (Ordner anlegen unter "Navigation verwalten").</p>
+      <p className="text-textMuted text-sm mb-6">Hier füllst du einen Ordner mit <strong className="text-textMain">Kursen und Inhalten</strong> (Module, Text, Video, Anhänge). Den Ordner selbst — also den Reiter in der Sidebar — legst du unter „Navigation verwalten" an.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -164,7 +185,10 @@ export default function ContentAdmin() {
           <input className="input" placeholder="Titel" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} />
           <textarea className="input" placeholder="Kurzbeschreibung" rows={2} value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} />
           {folders.length === 0 ? (
-            <p className="text-xs text-coral">Noch kein Ordner vorhanden. Leg zuerst unter "Navigation verwalten" einen Ordner an, bevor du einen Kurs erstellst.</p>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-coral">Noch kein Ordner vorhanden. Leg zuerst einen Ordner an, bevor du einen Kurs erstellst.</p>
+              <button onClick={() => router.push("/admin/navigation")} className="btn-ghost text-xs flex-shrink-0">Zu „Navigation verwalten"</button>
+            </div>
           ) : (
             <select className="input" value={newCourse.navItemId} onChange={(e) => setNewCourse({ ...newCourse, navItemId: e.target.value })}>
               {folders.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}

@@ -18,8 +18,13 @@ export default function Scripts() {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-      setIsManager(me?.role === "manager");
+      const [{ data: me }, { data: ownTeams }] = await Promise.all([
+        supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle(),
+        supabase.from("teams").select("id").eq("created_by", session.user.id).limit(1),
+      ]);
+      // Teamleads dürfen Skripte genauso verwalten wie Manager/Admins — siehe
+      // is_team_lead() in der RLS-Policy (migration_52).
+      setIsManager(me?.role === "manager" || !!me?.is_admin || !!me?.is_platform_admin || (ownTeams || []).length > 0);
     }
     const { data } = await supabase.from("scripts").select("*").order("category").order("title");
     setScripts(data || []);

@@ -184,7 +184,12 @@ create table if not exists nav_items (
   visible boolean not null default true,
   order_index integer not null default 0,
   created_by uuid references profiles(id) on delete set null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Explizit gesetzt (nicht aus created_by/profiles.organization_id
+  -- abgeleitet) — sonst gehört ein Ordner, den ein Plattform-Admin per
+  -- Firmencode für eine andere Organisation anlegt, fälschlich zu dessen
+  -- eigener Heimat-Organisation (siehe migration_53).
+  organization_id uuid references organizations(id) on delete cascade
 );
 
 create table if not exists custom_courses (
@@ -195,7 +200,8 @@ create table if not exists custom_courses (
   order_index integer not null default 0,
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
-  nav_item_id uuid references nav_items(id) on delete cascade
+  nav_item_id uuid references nav_items(id) on delete cascade,
+  organization_id uuid references organizations(id) on delete cascade
 );
 
 create table if not exists custom_modules (
@@ -595,6 +601,15 @@ language sql stable security definer as $$
   select exists (select 1 from teams where id = tid and created_by = uid);
 $$;
 
+-- Prüft, ob uid IRGENDEIN Team leitet (unabhängig davon, welches) — genutzt,
+-- um Teamleads dieselben Inhalte-Verwaltungsrechte zu geben wie Manager/
+-- Trainer (Skripte, eigene Kurse/Module, Flashcards, Wissensdatenbank).
+create or replace function public.is_team_lead(uid uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (select 1 from teams where created_by = uid);
+$$;
+
 -- Prüft, ob zwei Personen mindestens ein gemeinsames Team haben (für can_view_profile).
 create or replace function public.shares_team_with(a uuid, b uuid)
 returns boolean
@@ -754,10 +769,15 @@ create policy "roleplay_sessions_select_admin" on roleplay_sessions for select u
 );
 
 -- --- nav_items ---
+-- organization_id ist EXPLIZIT gesetzt (nicht aus created_by abgeleitet) —
+-- sonst gehört ein Ordner, den ein Plattform-Admin per Firmencode für Org X
+-- anlegt, fälschlich zur eigenen Heimat-Organisation des Plattform-Admins
+-- und verschwindet für Org X wieder (same_org() verglich bisher IMMER die
+-- Heimat-Organisation des Erstellers, nicht die gerade aktive).
 drop policy if exists "nav_items_select_all" on nav_items;
 create policy "nav_items_select_all" on nav_items for select using (
   is_builtin = true
-  or same_org(created_by, auth.uid())
+  or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "nav_items_write_managers" on nav_items;
@@ -767,46 +787,99 @@ create policy "nav_items_write_managers" on nav_items for insert with check (
 drop policy if exists "nav_items_update_managers" on nav_items;
 create policy "nav_items_update_managers" on nav_items for update using (
   exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-  and (is_builtin = true or same_org(created_by, auth.uid()))
+  and (
+    is_builtin = true
+    or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 drop policy if exists "nav_items_delete_managers" on nav_items;
 create policy "nav_items_delete_managers" on nav_items for delete using (
   exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-  and (is_builtin = true or same_org(created_by, auth.uid()))
+  and (
+    is_builtin = true
+    or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 
 -- --- custom_courses ---
+-- organization_id ist EXPLIZIT gesetzt (nicht aus created_by abgeleitet) —
+-- gleicher Grund wie bei nav_items: same_org() verglich bisher die Heimat-
+-- Organisation des/der Erstellenden statt der gerade aktiven Organisation.
 drop policy if exists "custom_courses_select_all" on custom_courses;
 create policy "custom_courses_select_all" on custom_courses for select using (
-  same_org(created_by, auth.uid())
+  organization_id = (select organization_id from profiles where profiles.id = auth.uid())
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "custom_courses_write_managers" on custom_courses;
-create policy "custom_courses_write_managers" on custom_courses for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
+create policy "custom_courses_write_managers" on custom_courses for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+  or is_team_lead(auth.uid())
+);
 drop policy if exists "custom_courses_update_managers" on custom_courses;
 create policy "custom_courses_update_managers" on custom_courses for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and (
+    organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 drop policy if exists "custom_courses_delete_managers" on custom_courses;
 create policy "custom_courses_delete_managers" on custom_courses for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and (
+    organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 
 -- --- custom_modules ---
+-- Organisation wird über den ÜBERGEORDNETEN Kurs geprüft (custom_courses.
+-- organization_id), nicht über same_org(created_by,...) — ein Modul gehört
+-- immer zur Organisation seines Kurses, unabhängig davon, wer es angelegt hat.
 drop policy if exists "custom_modules_select_all" on custom_modules;
 create policy "custom_modules_select_all" on custom_modules for select using (
-  same_org(created_by, auth.uid())
+  exists (
+    select 1 from custom_courses cc where cc.id = custom_modules.course_id
+    and cc.organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  )
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "custom_modules_write_managers" on custom_modules;
-create policy "custom_modules_write_managers" on custom_modules for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
+create policy "custom_modules_write_managers" on custom_modules for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+  or is_team_lead(auth.uid())
+);
 drop policy if exists "custom_modules_update_managers" on custom_modules;
 create policy "custom_modules_update_managers" on custom_modules for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and (
+    exists (
+      select 1 from custom_courses cc where cc.id = custom_modules.course_id
+      and cc.organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    )
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 drop policy if exists "custom_modules_delete_managers" on custom_modules;
 create policy "custom_modules_delete_managers" on custom_modules for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and (
+    exists (
+      select 1 from custom_courses cc where cc.id = custom_modules.course_id
+      and cc.organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    )
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
 );
 
 -- --- kb_entries ---
@@ -814,17 +887,26 @@ drop policy if exists "kb_entries_select_approved" on kb_entries;
 create policy "kb_entries_select_approved" on kb_entries for select using (status = 'approved' and same_org(created_by, auth.uid()));
 drop policy if exists "kb_entries_select_managers_all" on kb_entries;
 create policy "kb_entries_select_managers_all" on kb_entries for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_insert_pending" on kb_entries;
 create policy "kb_entries_insert_pending" on kb_entries for insert with check (status = 'pending');
 drop policy if exists "kb_entries_update_managers" on kb_entries;
 create policy "kb_entries_update_managers" on kb_entries for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_delete_managers" on kb_entries;
 create policy "kb_entries_delete_managers" on kb_entries for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and same_org(created_by, auth.uid())
 );
 
 -- --- scripts ---
@@ -834,14 +916,23 @@ create policy "scripts_select_all" on scripts for select using (
   or (visibility = 'org' and same_org(created_by, auth.uid()))
 );
 drop policy if exists "scripts_insert_managers" on scripts;
-create policy "scripts_insert_managers" on scripts for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager'));
+create policy "scripts_insert_managers" on scripts for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
+  or is_team_lead(auth.uid())
+);
 drop policy if exists "scripts_update_managers" on scripts;
 create policy "scripts_update_managers" on scripts for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and same_org(created_by, auth.uid())
 );
 drop policy if exists "scripts_delete_managers" on scripts;
 create policy "scripts_delete_managers" on scripts for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and same_org(created_by, auth.uid())
 );
 
 -- --- guides ---
@@ -863,10 +954,16 @@ create policy "guides_delete_own_or_manager" on guides for delete using (
 drop policy if exists "flashcards_select_all" on flashcards;
 create policy "flashcards_select_all" on flashcards for select using (same_org(created_by, auth.uid()));
 drop policy if exists "flashcards_write_managers" on flashcards;
-create policy "flashcards_write_managers" on flashcards for insert with check (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')));
+create policy "flashcards_write_managers" on flashcards for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+  or is_team_lead(auth.uid())
+);
 drop policy if exists "flashcards_delete_managers" on flashcards;
 create policy "flashcards_delete_managers" on flashcards for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('manager', 'trainer')) and same_org(created_by, auth.uid())
+  (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    or is_team_lead(auth.uid())
+  ) and same_org(created_by, auth.uid())
 );
 
 -- --- flashcard_progress ---

@@ -22,8 +22,14 @@ export default function FlashcardsAdmin() {
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-    if (!me || (me.role !== "manager" && me.role !== "trainer")) {
+    const [{ data: me }, { data: ownTeams }] = await Promise.all([
+      supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle(),
+      supabase.from("teams").select("id").eq("created_by", session.user.id).limit(1),
+    ]);
+    // Teamleads dürfen Flashcards genauso verwalten wie Manager/Trainer/
+    // Admins — siehe is_team_lead() in der RLS-Policy (migration_52).
+    const isTeamLead = (ownTeams || []).length > 0;
+    if (!me || (me.role !== "manager" && me.role !== "trainer" && !me.is_admin && !me.is_platform_admin && !isTeamLead)) {
       setIsManager(false);
       setLoading(false);
       return;
@@ -96,7 +102,7 @@ export default function FlashcardsAdmin() {
     return (
       <Layout>
         <h1 className="text-2xl font-display text-textMain mb-1">Flashcards verwalten</h1>
-        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" oder "trainer" verfügbar.</p>
+        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Manager, Trainer, Teamleads und Admins verfügbar.</p>
       </Layout>
     );
   }
