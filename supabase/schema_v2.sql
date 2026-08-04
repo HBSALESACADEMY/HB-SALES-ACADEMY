@@ -523,21 +523,6 @@ create table if not exists call_recordings (
   created_at timestamptz not null default now()
 );
 
--- CRM-Anbindung (Close): jeder Nutzer verbindet sein eigenes Close-Konto über
--- einen persönlichen API-Key. Bewusst NICHT in profiles gespeichert, damit
--- der Key nie über eine (später vielleicht großzügigere) profiles-Policy für
--- Kollegen sichtbar werden kann — eigene Tabelle, RLS ausschließlich auf den
--- eigenen Nutzer beschränkt.
-create table if not exists crm_connections (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references profiles(id) on delete cascade unique,
-  provider text not null default 'close' check (provider in ('close')),
-  api_key text not null,
-  close_user_id text,
-  close_user_email text,
-  connected_at timestamptz not null default now()
-);
-
 
 -- =============================================================================
 -- 5. ADMIN, ANALYTICS & DROSSELUNG
@@ -702,7 +687,6 @@ alter table mentor_pairs enable row level security;
 alter table call_log_days enable row level security;
 alter table leads enable row level security;
 alter table call_recordings enable row level security;
-alter table crm_connections enable row level security;
 alter table login_attempts enable row level security;
 alter table login_events enable row level security;
 alter table page_views enable row level security;
@@ -1372,26 +1356,6 @@ create policy "call_recordings_delete" on call_recordings for delete using (
     exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
     and same_org(created_by, auth.uid())
   )
-);
-
--- --- crm_connections ---
--- Strikt auf den eigenen Nutzer beschränkt, kein Kollegen- oder Admin-Zugriff
--- — der Close-API-Key ist ein persönliches Geheimnis.
-drop policy if exists "crm_connections_select_own" on crm_connections;
-create policy "crm_connections_select_own" on crm_connections for select using (
-  user_id = auth.uid()
-);
-drop policy if exists "crm_connections_insert_own" on crm_connections;
-create policy "crm_connections_insert_own" on crm_connections for insert with check (
-  user_id = auth.uid()
-);
-drop policy if exists "crm_connections_update_own" on crm_connections;
-create policy "crm_connections_update_own" on crm_connections for update using (
-  user_id = auth.uid()
-);
-drop policy if exists "crm_connections_delete_own" on crm_connections;
-create policy "crm_connections_delete_own" on crm_connections for delete using (
-  user_id = auth.uid()
 );
 
 -- --- login_attempts ---

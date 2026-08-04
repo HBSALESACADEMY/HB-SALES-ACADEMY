@@ -297,10 +297,6 @@
     <div id="totalLabel">Anwahlen: <b id="totalToday">0</b></div>
   </div>
   <div class="readonly-note" id="readonlyNote">Nur-Ansicht — Zählen geht nur im Tab "Heute"</div>
-  <div id="closeStatsBar" style="display:none; font-size:12px; color:var(--muted); padding:8px 12px; margin-bottom:10px; border:1px solid var(--line); border-radius:10px; align-items:center; gap:6px;">
-    <span style="width:7px; height:7px; border-radius:50%; background:var(--violet); flex-shrink:0;"></span>
-    <span>Aus Close (automatisch, zusätzlich zur manuellen Zählung): <b id="closeOutgoingToday" style="color:var(--white);">0</b> ausgehende Anrufe heute</span>
-  </div>
 
   <div class="grid" id="cardGrid"></div>
 
@@ -735,26 +731,6 @@
     if (su && sk && window.supabase) hbSupabase = window.supabase.createClient(su, sk);
   } catch (e) { /* Sync einfach überspringen */ }
 
-  // Ausgehende Anrufe automatisch aus Close gezählt — läuft PARALLEL zu den
-  // manuellen Positiv/Negativ-Buttons oben, ersetzt sie nicht. Zeigt sich nur,
-  // wenn der Nutzer sein Close-Konto unter "CRM" verbunden hat.
-  async function loadCloseStats() {
-    if (!hbSupabase) return;
-    try {
-      const { data: { session } } = await hbSupabase.auth.getSession();
-      if (!session) return;
-      const res = await fetch("/api/crm/call-stats", { headers: { Authorization: "Bearer " + session.access_token } });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.connected) return;
-      const today = new Date().toISOString().slice(0, 10);
-      const count = (data.byDay && data.byDay[today]) || 0;
-      document.getElementById("closeOutgoingToday").textContent = count;
-      const bar = document.getElementById("closeStatsBar");
-      bar.style.display = "flex";
-    } catch (e) { /* Close-Sync ist optional, Tool bleibt ohne sie voll funktionsfähig */ }
-  }
-
   let syncTimer = null;
   function syncToSupabase() {
     if (!hbSupabase) return;
@@ -1002,7 +978,6 @@
     applyReadonlyState();
     renderAllCounts();
     renderReasons();
-    loadCloseStats();
   }
 
   init();
