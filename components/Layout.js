@@ -674,14 +674,16 @@ export default function Layout({ children, fullBleed }) {
       </main>
       {openProfileId && <ProfileModal userId={openProfileId} onClose={() => setOpenProfileId(null)} />}
 
-      <button
-        onClick={() => setQuickHelpOpen(true)}
-        className="fixed bottom-5 right-5 z-[190] w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
-        style={{ background: "linear-gradient(120deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%)", boxShadow: "0 4px 16px -4px rgb(var(--org-accent-rgb, 206 58 92) / .5)" }}
-        title="Vertriebs-Buddy"
-      >
-        <span className="text-textMain text-lg">💬</span>
-      </button>
+      {router.pathname !== "/messages" && (
+        <button
+          onClick={() => setQuickHelpOpen(true)}
+          className="fixed bottom-5 right-5 z-[190] w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+          style={{ background: "linear-gradient(120deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%)", boxShadow: "0 4px 16px -4px rgb(var(--org-accent-rgb, 206 58 92) / .5)" }}
+          title="Vertriebs-Buddy"
+        >
+          <span className="text-textMain text-lg">💬</span>
+        </button>
+      )}
 
       {quickHelpOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onClick={() => setQuickHelpOpen(false)}>
