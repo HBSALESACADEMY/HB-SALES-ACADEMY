@@ -323,14 +323,27 @@ export default function Recordings() {
               {playingId === r.id && playingUrl && <AudioPlayer src={playingUrl} />}
               {expanded && r.evaluation_detail && (
                 <div className="mt-3 pt-3 border-t border-line flex flex-col gap-3">
+                  {r.evaluation_detail.gespraechsstruktur && (
+                    <div>
+                      <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Gesprächsaufbau</div>
+                      <p className="text-xs text-textMuted">{r.evaluation_detail.gespraechsstruktur}</p>
+                    </div>
+                  )}
                   {r.evaluation_detail.phasen?.length > 0 && (
                     <div>
                       <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Gesprächsphasen</div>
-                      <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-col gap-2">
                         {r.evaluation_detail.phasen.map((p, i) => (
                           <div key={i} className="text-xs">
-                            <span className="text-textMain font-semibold">{p.phase}: </span>
-                            <span className="text-textMuted">{p.bewertung}</span>
+                            <div className="text-textMain font-semibold">
+                              {p.phase}{p.anteil && <span className="text-textMuted font-normal"> · {p.anteil}</span>}
+                            </div>
+                            {p.kernpunkte?.length > 0 && (
+                              <ul className="text-textMuted list-disc pl-4 space-y-0.5 mt-0.5">
+                                {p.kernpunkte.map((k, ki) => <li key={ki}>{k}</li>)}
+                              </ul>
+                            )}
+                            <div className="text-textMuted mt-0.5">{p.bewertung}</div>
                           </div>
                         ))}
                       </div>
