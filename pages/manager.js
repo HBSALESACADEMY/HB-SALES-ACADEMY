@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { COURSES } from "../lib/curriculum";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -42,7 +43,7 @@ export default function Manager() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
     setSelfId(session.user.id);
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
+    const { data: me } = await supabase.from("profiles").select("role, organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
     if (!me || me.role !== "manager") { setIsManager(false); setLoading(false); return null; }
 
     const { data: teams } = await supabase.from("teams").select("*").eq("created_by", session.user.id).order("created_at");
@@ -53,9 +54,18 @@ export default function Manager() {
   async function loadTeamData(teamId, session) {
     if (!teamId) { setLoading(false); return; }
 
+    // "Mitglieder hinzufügen" darf nur Profile der EIGENEN Organisation
+    // anbieten — ohne diesen Filter kamen hier Namen aus fremden Firmen
+    // (RLS blockt das Hinzufügen dann zwar zu Recht, aber die Suche sollte
+    // sie erst gar nicht als Option zeigen).
+    const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const activeOrgId = getActiveOrgId(me);
+
     const [{ data: memberRows }, { data: allApproved }] = await Promise.all([
       supabase.from("team_members").select("user_id, profiles:user_id(*)").eq("team_id", teamId),
-      supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved"),
+      activeOrgId
+        ? supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved").eq("organization_id", activeOrgId)
+        : Promise.resolve({ data: [] }),
     ]);
     setAllProfiles(allApproved || []);
 
@@ -93,7 +103,9 @@ export default function Manager() {
     setPrincipleCounts(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6));
 
     const { data: existingPairs } = await supabase.from("mentor_pairs").select("*, mentor:mentor_id(full_name), mentee:mentee_id(full_name)").eq("manager_id", session.user.id).eq("active", true);
-    const teamMemberIdSet = new Set(memberIds);
+    // Team-Lead selbst mit aufnehmen — sonst verschwindet ein Paar, in dem
+    // man sich selbst als Mentor/Mentee eingetragen hat, aus der Anzeige.
+    const teamMemberIdSet = new Set([...memberIds, session.user.id]);
     setPairs((existingPairs || []).filter((p) => teamMemberIdSet.has(p.mentor_id) && teamMemberIdSet.has(p.mentee_id)));
 
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -274,6 +286,9 @@ export default function Manager() {
     p.id !== selfId && !memberIdsInTeam.has(p.id) &&
     (p.full_name || "").toLowerCase().includes(addQuery.toLowerCase())
   );
+  // team schließt einen selbst als Team-Lead bewusst aus (siehe loadTeamData) —
+  // für die Mentor-Auswahl soll man sich aber selbst als Mentor eintragen können.
+  const mentorCandidates = selfId ? [{ id: selfId, full_name: "Ich" }, ...team] : team;
 
   return (
     <Layout>
@@ -383,12 +398,12 @@ export default function Manager() {
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <select className="input !w-auto flex-1 min-w-[140px]" value={pairMentorId} onChange={(e) => setPairMentorId(e.target.value)}>
                 <option value="">Mentor wählen...</option>
-                {team.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
+                {mentorCandidates.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
               </select>
               <span className="text-textMuted text-xs">→</span>
               <select className="input !w-auto flex-1 min-w-[140px]" value={pairMenteeId} onChange={(e) => setPairMenteeId(e.target.value)}>
                 <option value="">Mentee wählen...</option>
-                {team.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
+                {mentorCandidates.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
               </select>
               <button disabled={pairingBusy || !pairMentorId || !pairMenteeId || pairMentorId === pairMenteeId} onClick={formPair} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
                 {pairingBusy ? "..." : "Paar bilden"}
