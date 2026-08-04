@@ -323,8 +323,8 @@
   <div id="teamPanel" style="display:none;">
     <div class="summary" style="margin-bottom:18px;">
       <h3>Team-Übersicht (letzte 7 Tage)</h3>
-      <div class="sub" style="font-size:12px; color:var(--muted); margin-top:-8px; margin-bottom:14px;">Nur für Manager-Konten sichtbar.</div>
-      <div id="teamNoAccess" style="display:none; font-size:13px; color:var(--muted); padding: 8px 0;">Diese Ansicht ist nur für Manager-Konten verfügbar.</div>
+      <div class="sub" style="font-size:12px; color:var(--muted); margin-top:-8px; margin-bottom:14px;">Nur sichtbar, wenn du mindestens ein Team leitest.</div>
+      <div id="teamNoAccess" style="display:none; font-size:13px; color:var(--muted); padding: 8px 0;">Diese Ansicht ist nur sichtbar, wenn du mindestens ein Team leitest (siehe "Team (Manager)" in der Sidebar).</div>
       <div id="teamContent" style="display:none;">
         <canvas id="teamMembersChart"></canvas>
         <canvas id="teamReasonsChart"></canvas>
@@ -867,20 +867,23 @@
     try {
       const { data: { session } } = await hbSupabase.auth.getSession();
       if (!session) { loadingEl.style.display = "none"; noAccessEl.style.display = "block"; return; }
-      const { data: me } = await hbSupabase.from("profiles").select("role, manager_id, can_view_call_stats").eq("id", session.user.id).maybeSingle();
 
-      // Zugriff: entweder man ist selbst Team-Lead, oder der eigene Team-Lead hat einem die Sicht freigegeben.
-      let teamManagerId = null;
-      if (me?.role === "manager") teamManagerId = session.user.id;
-      else if (me?.can_view_call_stats && me?.manager_id) teamManagerId = me.manager_id;
-      if (!teamManagerId) { loadingEl.style.display = "none"; noAccessEl.style.display = "block"; return; }
+      // Team-Zugehörigkeit läuft über teams/team_members (siehe pages/manager.js),
+      // NICHT mehr über das veraltete, nirgends mehr gepflegte profiles.manager_id.
+      // Zugriff: man muss mindestens ein Team leiten (teams.created_by = man selbst).
+      const { data: myTeams } = await hbSupabase.from("teams").select("id").eq("created_by", session.user.id);
+      const leadTeamIds = (myTeams || []).map(t => t.id);
+      if (!leadTeamIds.length) { loadingEl.style.display = "none"; noAccessEl.style.display = "block"; return; }
 
-      const { data: members } = await hbSupabase.from("profiles").select("id, full_name").eq("manager_id", teamManagerId);
-      const allIds = [teamManagerId, ...(members || []).map(m => m.id)];
-      const nameById = {};
-      if (teamManagerId === session.user.id) nameById[teamManagerId] = "Ich";
-      (members || []).forEach(m => { nameById[m.id] = m.full_name || "Unbenannt"; });
-      if (!nameById[teamManagerId]) nameById[teamManagerId] = "Team-Lead";
+      const { data: memberships } = await hbSupabase.from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", leadTeamIds);
+      const nameById = { [session.user.id]: "Ich" };
+      const memberIds = [];
+      (memberships || []).forEach(m => {
+        if (m.user_id === session.user.id || nameById[m.user_id]) return;
+        memberIds.push(m.user_id);
+        nameById[m.user_id] = m.profiles?.full_name || "Unbenannt";
+      });
+      const allIds = [session.user.id, ...memberIds];
 
       const since = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
       const { data: logs } = await hbSupabase.from("call_log_days").select("*").in("user_id", allIds).gte("log_date", since);
