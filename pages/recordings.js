@@ -349,6 +349,22 @@ export default function Recordings() {
                       </div>
                     </div>
                   )}
+                  {(r.evaluation_detail.tonalitaet || r.evaluation_detail.anrede) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {r.evaluation_detail.tonalitaet && (
+                        <div>
+                          <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Tonalität</div>
+                          <p className="text-xs text-textMuted">{r.evaluation_detail.tonalitaet}</p>
+                        </div>
+                      )}
+                      {r.evaluation_detail.anrede && (
+                        <div>
+                          <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Anrede (Sie/Du)</div>
+                          <p className="text-xs text-textMuted">{r.evaluation_detail.anrede}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {r.evaluation_detail.staerken?.length > 0 && (
                     <div>
                       <div className="text-[10.5px] uppercase tracking-wide text-teal mb-1">Stärken</div>

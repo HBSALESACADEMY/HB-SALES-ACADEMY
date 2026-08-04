@@ -54,6 +54,12 @@ export default async function handler(req, res) {
         "Follow-up-Timing, worauf beim nächsten Kontakt zu achten ist, welches Thema als nächstes vertieft werden sollte). " +
         "Falls in der Aufnahme kein erkennbares Verkaufsgespräch zu hören ist, setze score auf null und erkläre das kurz " +
         "in der Zusammenfassung. " +
+        "Achte außerdem gezielt auf zwei weitere Kriterien, die auch in den Score einfließen sollen: " +
+        "1) TONALITÄT — wie klingt der/die Vertriebler:in stimmlich? Sicher oder unsicher, freundlich oder distanziert, " +
+        "monoton oder mit Betonung, zu schnell/zu langsam gesprochen, souverän oder nervös, wirkt es einstudiert oder " +
+        "natürlich. 2) ANREDE (Sie/Du) — welche Anredeform wurde verwendet, war sie über das ganze Gespräch konsistent " +
+        "oder gab es einen ungewollten Wechsel, und passt die gewählte Form zum Kontext/zur Beziehung zum Kunden (z.B. " +
+        "unpassend duzend bei einem förmlichen Erstkontakt, oder unnötig steif gesiezt trotz erkennbar lockerer Beziehung). " +
         "Zitiere außerdem bis zu 6 konkrete, WÖRTLICHE Formulierungen, die der/die Vertriebler:in tatsächlich im " +
         "Gespräch gesagt hat und die verbesserungswürdig waren (z.B. Füllwörter, unsichere/weiche Formulierungen, " +
         "missverständliche oder zu komplizierte Sätze) — mit jeweils einer korrigierten, besseren Version derselben Aussage. " +
@@ -63,6 +69,8 @@ export default async function handler(req, res) {
         '{"score": <Zahl 0-100 oder null>, "zusammenfassung": "<4-6 ausführliche Sätze>", ' +
         '"gespraechsstruktur": "<4-6 ausführliche Sätze zum Gesamtaufbau: Reihenfolge der Phasen, Übergänge, Tempo, Gesprächsanteil>", ' +
         '"phasen": [{"phase": "<Name>", "anteil": "<grober Anteil, z.B. ca. 20%>", "kernpunkte": [<2-4 Stichpunkte, was inhaltlich besprochen wurde>], "bewertung": "<3-4 Sätze ausführliche Einschätzung>"}], ' +
+        '"tonalitaet": "<3-4 Sätze zur Stimme/Tonalität: Sicherheit, Freundlichkeit, Sprechtempo, Betonung, Wirkung>", ' +
+        '"anrede": "<2-3 Sätze zur Sie/Du-Form: welche Form verwendet wurde, ob konsistent, ob passend zum Kontext>", ' +
         '"staerken": [<max 6 konkrete Punkte>], "verbesserung": [<max 6 konkrete Punkte>], ' +
         '"einwaende": [{"einwand": "<was der Kunde einwendete>", "reaktion": "<wie darauf reagiert wurde>", "bewertung": "<kurze Einschätzung>"}], ' +
         '"beispielsaetze": [{"moment": "<kurzer Kontext>", "satz": "<wörtlicher Beispielsatz>"}, max 6], ' +
@@ -78,7 +86,7 @@ export default async function handler(req, res) {
     try {
       evaluation = JSON.parse(raw.replace(/```json|```/g, "").trim());
     } catch (e) {
-      evaluation = { score: null, zusammenfassung: raw, gespraechsstruktur: "", phasen: [], staerken: [], verbesserung: [], einwaende: [], beispielsaetze: [], phrasenKorrektur: [], naechsteSchritte: "" };
+      evaluation = { score: null, zusammenfassung: raw, gespraechsstruktur: "", phasen: [], tonalitaet: "", anrede: "", staerken: [], verbesserung: [], einwaende: [], beispielsaetze: [], phrasenKorrektur: [], naechsteSchritte: "" };
     }
 
     const { error: updateErr } = await admin.from("call_recordings").update({
@@ -88,6 +96,8 @@ export default async function handler(req, res) {
       evaluation_detail: {
         gespraechsstruktur: evaluation.gespraechsstruktur || "",
         phasen: evaluation.phasen || [],
+        tonalitaet: evaluation.tonalitaet || "",
+        anrede: evaluation.anrede || "",
         staerken: evaluation.staerken || [],
         verbesserung: evaluation.verbesserung || [],
         einwaende: evaluation.einwaende || [],
