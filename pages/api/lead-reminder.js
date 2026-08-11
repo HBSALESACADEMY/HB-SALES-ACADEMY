@@ -59,7 +59,8 @@ export default async function handler(req, res) {
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
     const extraEmails = (extra || []).map((e) => e.email);
-    if (extraEmails.length) await sendEmail({ to: extraEmails, subject, html });
+    // Einzeln statt als Sammel-Anfrage, siehe Kommentar in notifyManagers.js.
+    await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html })));
 
     return res.status(200).json({ ok: true });
   } catch (e) {
