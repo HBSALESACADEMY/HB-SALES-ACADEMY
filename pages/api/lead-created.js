@@ -57,10 +57,17 @@ export default async function handler(req, res) {
         const html =
           `<p><strong>${me.full_name || "Ein/e Vertriebler:in"}</strong> hat einen neuen Termin erfasst${orgName ? ` bei ${orgName}` : ""}:</p>` +
           `<p><strong>${name}</strong>${company ? ` (${company})` : ""}<br/>` +
-          `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}</p>` +
+          `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}<br/>` +
+          `Telefon: ${phone}<br/>` +
+          `E-Mail: ${email}` +
+          (website ? `<br/>Webseite: ${website}` : "") +
+          (isDecisionMaker ? `<br/>Entscheider:in: Ja` : "") +
+          `</p>` +
+          (notes ? `<p>${notes}</p>` : "") +
           (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
         const subject = `Neuer Termin: ${name}`;
+        const fromName = orgName || "HB Sales Academy";
 
         // Org-Manager (bestehendes Muster, siehe lib/notifyManagers.js) +
         // zusätzlich frei konfigurierte Adressen (siehe notification_emails,
@@ -68,14 +75,14 @@ export default async function handler(req, res) {
         // alle Plattform-Admin-Konten (organisationsübergreifend), analog zu
         // den Freischaltungs-Benachrichtigungen.
         await Promise.all([
-          notifyOrgManagers(admin, effectiveOrgId, { subject, html }),
-          notifyPlatformAdmins(admin, { subject, html }),
+          notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName }),
+          notifyPlatformAdmins(admin, { subject, html, fromName }),
         ]);
 
         const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
         const extraEmails = (extra || []).map((e) => e.email);
         // Einzeln statt als Sammel-Anfrage, siehe Kommentar in notifyManagers.js.
-        await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html })));
+        await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html, fromName })));
       }
     } catch (notifyErr) {
       console.error("Termin-Benachrichtigung fehlgeschlagen:", notifyErr.message);

@@ -38,6 +38,9 @@ export default async function handler(req, res) {
     }
     if (!effectiveOrgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
+    const { data: org } = await admin.from("organizations").select("name").eq("id", effectiveOrgId).maybeSingle();
+    const orgName = org?.name || null;
+
     const appointmentText = lead.appointment_at
       ? new Date(lead.appointment_at).toLocaleString("de-DE", { dateStyle: "full", timeStyle: "short" })
       : "noch offen";
@@ -45,22 +48,27 @@ export default async function handler(req, res) {
     const link = appUrl ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
     const html =
-      `<p><strong>Erinnerung</strong> an den Termin mit <strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}:</p>` +
-      `<p>Termin: ${appointmentText}</p>` +
+      `<p><strong>Erinnerung</strong> an den Termin mit <strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}${orgName ? ` bei ${orgName}` : ""}:</p>` +
+      `<p>Termin: ${appointmentText}` +
+      (lead.phone ? `<br/>Telefon: ${lead.phone}` : "") +
+      (lead.email ? `<br/>E-Mail: ${lead.email}` : "") +
+      (lead.website ? `<br/>Webseite: ${lead.website}` : "") +
+      `</p>` +
       (lead.notes ? `<p>${lead.notes}</p>` : "") +
       (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
     const subject = `Erinnerung: Termin mit ${lead.name}`;
+    const fromName = orgName || "HB Sales Academy";
 
     await Promise.all([
-      notifyOrgManagers(admin, effectiveOrgId, { subject, html }),
-      notifyPlatformAdmins(admin, { subject, html }),
+      notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName }),
+      notifyPlatformAdmins(admin, { subject, html, fromName }),
     ]);
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
     const extraEmails = (extra || []).map((e) => e.email);
     // Einzeln statt als Sammel-Anfrage, siehe Kommentar in notifyManagers.js.
-    await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html })));
+    await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html, fromName })));
 
     return res.status(200).json({ ok: true });
   } catch (e) {
