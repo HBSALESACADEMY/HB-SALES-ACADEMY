@@ -34,6 +34,8 @@ export default function Termine() {
   const [showEmailManager, setShowEmailManager] = useState(false);
   const [reminderSendingId, setReminderSendingId] = useState(null);
   const [reminderSentId, setReminderSentId] = useState(null);
+  const [editingEmailId, setEditingEmailId] = useState(null);
+  const [emailDraft, setEmailDraft] = useState("");
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -163,7 +165,11 @@ export default function Termine() {
     setReminderSendingId(lead.id);
     setError("");
     try {
-      await apiPost("/api/lead-reminder", { leadId: lead.id });
+      const result = await apiPost("/api/lead-reminder", { leadId: lead.id });
+      if (result?.skipped) {
+        setError("E-Mail-Versand ist auf dem Server nicht konfiguriert (RESEND_API_KEY fehlt) — es wurde nichts verschickt.");
+        return;
+      }
       setReminderSentId(lead.id);
       setTimeout(() => setReminderSentId((cur) => (cur === lead.id ? null : cur)), 3000);
     } catch (e) {
@@ -171,6 +177,35 @@ export default function Termine() {
     } finally {
       setReminderSendingId(null);
     }
+  }
+
+  function isValidEmail(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  }
+
+  function startEditEmail(lead) {
+    setEditingEmailId(lead.id);
+    setEmailDraft(lead.email || "");
+    setError("");
+  }
+
+  async function saveEmail(lead) {
+    const value = emailDraft.trim();
+    if (value && !isValidEmail(value)) {
+      setError("Bitte eine gültige E-Mail-Adresse eingeben (z.B. name@beispiel.de).");
+      return;
+    }
+    const { error: err } = await supabase.from("leads").update({ email: value || null }).eq("id", lead.id);
+    if (err) { setError(err.message); return; }
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, email: value || null } : l)));
+    setEditingEmailId(null);
+  }
+
+  async function clearEmail(lead) {
+    const { error: err } = await supabase.from("leads").update({ email: null }).eq("id", lead.id);
+    if (err) { setError(err.message); return; }
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, email: null } : l)));
+    setEditingEmailId(null);
   }
 
   function formatAppointment(iso) {
@@ -262,9 +297,32 @@ export default function Termine() {
                 <div className="text-xs font-mono text-textMain flex-shrink-0">{formatAppointment(lead.appointment_at)}</div>
               </div>
 
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted mb-2">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted mb-2 items-center">
                 {lead.phone && <span>📞 {lead.phone}</span>}
-                {lead.email && <span>✉️ {lead.email}</span>}
+                {editingEmailId === lead.id ? (
+                  <span className="flex items-center gap-1.5">
+                    ✉️
+                    <input
+                      type="email"
+                      autoFocus
+                      className="input !py-1 !px-2 text-xs w-48"
+                      value={emailDraft}
+                      onChange={(e) => setEmailDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEmail(lead);
+                        if (e.key === "Escape") setEditingEmailId(null);
+                      }}
+                      placeholder="name@beispiel.de"
+                    />
+                    <button onClick={() => saveEmail(lead)} className="btn-ghost text-xs !px-1.5">Speichern</button>
+                    <button onClick={() => setEditingEmailId(null)} className="btn-ghost text-xs !px-1.5">Abbrechen</button>
+                    {lead.email && <button onClick={() => clearEmail(lead)} className="btn-ghost text-xs !px-1.5 text-coral">Löschen</button>}
+                  </span>
+                ) : (
+                  <button onClick={() => startEditEmail(lead)} className="hover:text-textMain flex items-center gap-1">
+                    ✉️ {lead.email || <span className="italic">Keine E-Mail — hinzufügen</span>}
+                  </button>
+                )}
                 {lead.website && <span>🌐 {lead.website}</span>}
                 {viewMode === "team" && owner && (
                   <button onClick={() => openProfile(owner.id)} className="flex items-center gap-1.5 hover:text-textMain">
