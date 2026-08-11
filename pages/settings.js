@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout, { patchCachedProfile } from "../components/Layout";
 import { supabase } from "../lib/supabaseClient";
+import { apiGetBlob } from "../lib/apiClient";
 
 const CONTACT_FIELDS = [
   { key: "bio", label: "Über mich" },
@@ -32,6 +33,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -83,6 +85,22 @@ export default function Settings() {
     if (err) { setError(err.message); return; }
     patchCachedProfile({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut });
     setSaved(true);
+  }
+
+  async function exportData() {
+    setExporting(true);
+    try {
+      const blob = await apiGetBlob("/api/export-data");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "meine-daten.json";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
@@ -146,6 +164,14 @@ export default function Settings() {
             );
           })}
         </div>
+      </div>
+
+      <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">Meine Daten</div>
+        <p className="text-xs text-textMuted mb-4">Lade eine Kopie aller dir zugeordneten Daten herunter (Profil, Leads, Aufnahmen-Metadaten, Quiz-/Prüfungsergebnisse, Rollenspiele, Community-Beiträge u.a.) — dein Auskunfts- und Mitnahmerecht nach Art. 15/20 DSGVO.</p>
+        <button onClick={exportData} disabled={exporting} className="btn-ghost text-xs disabled:opacity-40">
+          {exporting ? "Wird erstellt..." : "Daten exportieren (JSON)"}
+        </button>
       </div>
 
       <button onClick={save} className="btn">Speichern</button>

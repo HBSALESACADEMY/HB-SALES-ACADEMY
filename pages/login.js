@@ -193,7 +193,9 @@ export default function Login() {
                   <input type="checkbox" className="mt-0.5" checked={agbAccepted} onChange={(e) => setAgbAccepted(e.target.checked)} required />
                   <span>
                     Ich akzeptiere die{" "}
-                    <Link href="/agb" target="_blank" className="underline text-textMain">AGB</Link>.
+                    <Link href="/agb" target="_blank" className="underline text-textMain">AGB</Link>
+                    {" "}und die{" "}
+                    <Link href="/datenschutz" target="_blank" className="underline text-textMain">Datenschutzerklärung</Link>.
                   </span>
                 </label>
               )}

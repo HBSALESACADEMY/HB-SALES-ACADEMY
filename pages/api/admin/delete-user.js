@@ -32,6 +32,18 @@ export default async function handler(req, res) {
       }
     }
 
+    // Storage-Dateien (Anruf-/Lead-Aufnahmen) hängen NICHT an einer Foreign
+    // Key-Kaskade — die Datenbank-Kaskade beim Löschen des Nutzers räumt nur
+    // die Zeilen weg, nicht die eigentlichen Audiodateien im Speicher. Ohne
+    // das hier blieben personenbezogene Aufnahmen verwaist und dauerhaft
+    // gespeichert liegen (DSGVO: Löschung muss auch die Datei selbst treffen).
+    for (const bucket of ["call-recordings", "lead-recordings"]) {
+      const { data: files } = await admin.storage.from(bucket).list(targetId);
+      if (files?.length) {
+        await admin.storage.from(bucket).remove(files.map((f) => `${targetId}/${f.name}`));
+      }
+    }
+
     // Deletes the auth.users row; the profiles row (and all quiz/exam/roleplay
     // rows referencing it) cascade-deletes automatically via foreign keys.
     const { error } = await admin.auth.admin.deleteUser(targetId);

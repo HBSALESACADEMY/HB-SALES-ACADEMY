@@ -122,8 +122,15 @@ export default function Kunden() {
 
   async function deleteCustomer(id) {
     setSaving(true);
+    const lead = customers.find((c) => c.id === id);
     const { error: err } = await supabase.from("leads").delete().eq("id", id);
     if (err) { setError(err.message); setSaving(false); return; }
+    // Ohne das hier würde die eigentliche Audiodatei im Speicher liegen
+    // bleiben — nur der Datenbank-Eintrag verschwindet sonst (DSGVO: Löschung
+    // muss auch die Datei selbst treffen, nicht nur die Metadaten).
+    if (lead?.recording_path) {
+      await supabase.storage.from("lead-recordings").remove([lead.recording_path]);
+    }
     setConfirmDelete(null);
     setSaving(false);
     await load();

@@ -145,6 +145,8 @@ export default function AGB() {
             <p className="mt-2">
               (4) Mit Beendigung des Vertrags kann der Anbieter die dem jeweiligen Nutzerkonto zugeordneten Daten nach
               Ablauf einer angemessenen Frist löschen, soweit keine gesetzlichen Aufbewahrungspflichten entgegenstehen.
+              Näheres zu Speicherfristen einzelner Datenkategorien regelt die{" "}
+              <Link href="/datenschutz" className="underline text-textMain">Datenschutzerklärung</Link>.
             </p>
           </section>
 
@@ -175,10 +177,10 @@ export default function AGB() {
           <section>
             <h2 className="text-textMain font-display font-semibold text-base mb-2">§ 10 Datenschutz</h2>
             <p>
-              Informationen zur Verarbeitung personenbezogener Daten enthält die gesonderte Datenschutzerklärung
-              [Platzhalter: Link zur Datenschutzerklärung, sobald verfügbar]. Bei der Verarbeitung personenbezogener
-              Daten von Mitarbeitenden des Kunden im Auftrag des Kunden schließen die Parteien auf Anforderung einen
-              Auftragsverarbeitungsvertrag gemäß Art. 28 DSGVO.
+              Informationen zur Verarbeitung personenbezogener Daten enthält die gesonderte{" "}
+              <Link href="/datenschutz" className="underline text-textMain">Datenschutzerklärung</Link>. Bei der
+              Verarbeitung personenbezogener Daten von Mitarbeitenden des Kunden im Auftrag des Kunden schließen die
+              Parteien auf Anforderung einen Auftragsverarbeitungsvertrag gemäß Art. 28 DSGVO.
             </p>
           </section>
 

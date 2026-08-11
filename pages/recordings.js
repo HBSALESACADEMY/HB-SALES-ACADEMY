@@ -119,8 +119,15 @@ export default function Recordings() {
 
   async function deleteRecording(id) {
     if (!confirm("Aufnahme wirklich löschen?")) return;
+    const rec = recordings.find((r) => r.id === id);
     const { error: err } = await supabase.from("call_recordings").delete().eq("id", id);
     if (err) { setError(err.message); return; }
+    // Ohne das hier würde die eigentliche Audiodatei im Speicher liegen
+    // bleiben — nur der Datenbank-Eintrag verschwindet sonst (DSGVO: Löschung
+    // muss auch die Datei selbst treffen, nicht nur die Metadaten).
+    if (rec?.recording_path) {
+      await supabase.storage.from("call-recordings").remove([rec.recording_path]);
+    }
     await load();
   }
 
