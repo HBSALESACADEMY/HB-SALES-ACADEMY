@@ -155,6 +155,13 @@ create table if not exists exam_results (
   score integer not null,
   total integer not null,
   passed boolean not null,
+  -- Aufschlüsselung, damit man dauerhaft nachsehen kann, warum ein Ergebnis
+  -- so ausfiel (nicht nur beim einmaligen Ergebnis-Bildschirm direkt nach
+  -- der Prüfung) — analog zu quiz_results.open_feedback.
+  mc_score integer,
+  mc_total integer,
+  capstone_score integer,
+  capstone_feedback jsonb,
   created_at timestamptz not null default now()
 );
 

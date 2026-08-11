@@ -36,17 +36,19 @@ export default async function handler(req, res) {
       "Du bist ein strenger, aber fairer Trainer für Verkaufspsychologie. Du bewertest die Antwort eines Vertrieblers auf eine offene Fallstudien-Frage. " +
         "Bewertungskriterien (Rubrik): " + JSON.stringify(mod.open.keyPoints) + ". " +
         "Antworte AUSSCHLIESSLICH als valides JSON-Objekt: " +
-        '{"score": <Zahl 0-100>, "feedback": "<3-5 Sätze konstruktives Feedback auf Deutsch, was gut war und was fehlt>", "erfuellteKriterien": [<Liste der erfüllten Kriterien aus der Rubrik, als kurze Strings>]}. ' +
+        '{"score": <Zahl 0-100>, "feedback": "<3-5 Sätze konstruktives Feedback auf Deutsch, was gut war und was fehlt>", ' +
+        '"erfuellteKriterien": [<Liste der erfüllten Kriterien, wörtlich aus der Rubrik übernommen>], ' +
+        '"fehlendeKriterien": [<Liste der NICHT erfüllten Kriterien, wörtlich aus der Rubrik übernommen — konkret das, was für 100% noch fehlt>]}. ' +
         "Kein Text außerhalb des JSON.",
       [{ role: "user", content: "Frage: " + mod.open.prompt + "\n\nAntwort des Vertrieblers: " + answerText }],
-      500
+      600
     );
 
     let grading;
     try {
       grading = JSON.parse(raw.replace(/```json|```/g, "").trim());
     } catch (e) {
-      grading = { score: 50, feedback: raw, erfuellteKriterien: [] };
+      grading = { score: 50, feedback: raw, erfuellteKriterien: [], fehlendeKriterien: [] };
     }
 
     const { error: insertError } = await auth.client.from("quiz_results").insert({

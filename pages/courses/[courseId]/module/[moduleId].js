@@ -179,6 +179,16 @@ export default function ModuleRunner() {
                   ))}
                 </div>
               )}
+              {grading.fehlendeKriterien && grading.fehlendeKriterien.length > 0 && (
+                <>
+                  <div className="text-[10.5px] uppercase tracking-wide text-amber mt-3 mb-1.5">Für 100% fehlt noch</div>
+                  <div className="flex flex-wrap gap-2">
+                    {grading.fehlendeKriterien.map((k, i) => (
+                      <span key={i} className="text-[11.5px] px-2.5 py-1 rounded-full border border-amber text-amber" style={{ background: "rgba(240,178,62,.1)" }}>{k}</span>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <button className="btn mt-5" onClick={() => router.push(`/courses/${course.id}`)}>Zurück zum Kurs</button>
           </div>

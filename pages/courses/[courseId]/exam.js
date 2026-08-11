@@ -147,7 +147,23 @@ export default function ExamRunner() {
                 Feedback zur Fallstudie
                 <AIBadge title="Diese Bewertung wurde automatisch von einer KI erstellt." />
               </strong>
-              <p className="text-sm text-textMuted leading-relaxed">{result.capstoneGrading.feedback}</p>
+              <p className="text-sm text-textMuted leading-relaxed mb-3">{result.capstoneGrading.feedback}</p>
+              {result.capstoneGrading.erfuellteKriterien?.length > 0 && (
+                <div className="mb-2.5">
+                  <div className="text-[10.5px] uppercase tracking-wide text-teal mb-1">Erfüllt</div>
+                  <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
+                    {result.capstoneGrading.erfuellteKriterien.map((k, i) => <li key={i}>{k}</li>)}
+                  </ul>
+                </div>
+              )}
+              {result.capstoneGrading.fehlendeKriterien?.length > 0 && (
+                <div>
+                  <div className="text-[10.5px] uppercase tracking-wide text-amber mb-1">Für 100% fehlt noch</div>
+                  <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
+                    {result.capstoneGrading.fehlendeKriterien.map((k, i) => <li key={i}>{k}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
             <button className="btn" onClick={() => router.push(`/courses/${course.id}`)}>Zurück zum Kurs</button>
           </div>
