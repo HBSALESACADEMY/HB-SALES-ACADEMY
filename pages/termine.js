@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -6,6 +7,7 @@ import AudioPlayer from "../components/AudioPlayer";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -13,6 +15,7 @@ const OUTCOME_LABELS = { kunde: "Kunde geworden", follow_up: "Überlegt (Follow-
 const OUTCOME_COLORS = { kunde: "teal", follow_up: "violet", absage: "coral" };
 
 export default function Termine() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [canSeeTeam, setCanSeeTeam] = useState(false);
   const [viewMode, setViewMode] = useState("own"); // 'own' | 'team'
@@ -24,6 +27,12 @@ export default function Termine() {
   const [error, setError] = useState("");
   const [followUpId, setFollowUpId] = useState(null);
   const [followUpDate, setFollowUpDate] = useState("");
+  const [highlightId, setHighlightId] = useState(null);
+  const [notificationEmails, setNotificationEmails] = useState([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [showEmailManager, setShowEmailManager] = useState(false);
+  const leadRefs = useRef({});
 
   async function load(silent) {
     if (!silent) setLoading(true);
@@ -32,12 +41,15 @@ export default function Termine() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
     const canManage = !!(me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin);
     setCanSeeTeam(canManage);
+    // Ein per E-Mail verlinkter Termin kann auch jemand anderem gehören —
+    // dann automatisch in die Team-Ansicht wechseln, um ihn zu finden.
+    const wantsTeamForDeepLink = !!router.query.leadId && canManage && viewMode === "own";
     // Backend-Accounts haben normalerweise keine eigenen Leads — direkt die
     // Team-Ansicht zeigen statt einer leeren "Meine"-Liste.
-    if (me?.role === "backend" && viewMode === "own") { setViewMode("team"); return; }
+    if ((me?.role === "backend" || wantsTeamForDeepLink) && viewMode === "own") { setViewMode("team"); return; }
 
     let query = supabase.from("leads").select("*").order("appointment_at", { ascending: true, nullsFirst: false });
     if (!(canManage && viewMode === "team")) query = query.eq("created_by", session.user.id);
@@ -54,16 +66,60 @@ export default function Termine() {
         setProfileMap(map);
       }
     }
+
+    if (canManage) {
+      const activeOrgId = getActiveOrgId(me);
+      if (activeOrgId) {
+        const { data: emails } = await supabase.from("notification_emails").select("*").eq("organization_id", activeOrgId).order("created_at");
+        setNotificationEmails(emails || []);
+      }
+    }
     if (!silent) setLoading(false);
   }
 
   useEffect(() => {
+    if (!router.isReady) return;
     load();
     // silent=true: kein voller Seiten-Unmount bei jedem Poll, sonst würde
     // eine gerade abgespielte Aufnahme abrupt abbrechen.
     const interval = setInterval(() => load(true), 20000);
     return () => clearInterval(interval);
-  }, [viewMode]);
+  }, [viewMode, router.isReady, router.query.leadId]);
+
+  // Deep-Link aus der Termin-Benachrichtigungsmail (?leadId=...): zum
+  // passenden Termin scrollen und ihn kurz hervorheben.
+  useEffect(() => {
+    const leadId = router.query.leadId;
+    if (!leadId || !leads.length) return;
+    const el = leadRefs.current[leadId];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightId(leadId);
+      const t = setTimeout(() => setHighlightId(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [router.query.leadId, leads]);
+
+  async function addNotificationEmail() {
+    const email = newEmail.trim();
+    if (!email) return;
+    setSavingEmail(true);
+    setError("");
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const activeOrgId = getActiveOrgId(me);
+    const { error: err } = await supabase.from("notification_emails").insert({ organization_id: activeOrgId, email, created_by: session.user.id });
+    setSavingEmail(false);
+    if (err) { setError(err.message); return; }
+    setNewEmail("");
+    await load(true);
+  }
+
+  async function removeNotificationEmail(id) {
+    const { error: err } = await supabase.from("notification_emails").delete().eq("id", id);
+    if (err) { setError(err.message); return; }
+    setNotificationEmails((prev) => prev.filter((e) => e.id !== id));
+  }
 
   async function updateStatus(id, status) {
     await supabase.from("leads").update({ status }).eq("id", id);
@@ -116,12 +172,47 @@ export default function Termine() {
       <p className="text-textMuted text-sm mb-5">Beim Call Tracker erfasste Kundendaten und Termine.</p>
 
       {canSeeTeam && (
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
           {[["own", "Meine"], ["team", "Alle im Team"]].map(([key, label]) => (
             <button key={key} onClick={() => setViewMode(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${viewMode === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
               {label}
             </button>
           ))}
+          <button onClick={() => setShowEmailManager((v) => !v)} className="btn-ghost text-xs ml-auto">
+            <Icon name="send" size={12} /> Benachrichtigungen
+          </button>
+        </div>
+      )}
+
+      {showEmailManager && (
+        <div className="card mb-5">
+          <div className="font-semibold text-textMain text-sm mb-1">E-Mail-Benachrichtigungen bei neuen Terminen</div>
+          <p className="text-xs text-textMuted mb-3">
+            Manager, Admins und Team-Leads eurer Organisation bekommen automatisch eine E-Mail. Zusätzliche Adressen
+            (z.B. ein gemeinsames Postfach) könnt ihr hier eintragen.
+          </p>
+          <div className="flex flex-col gap-2 mb-3">
+            {notificationEmails.map((e) => (
+              <div key={e.id} className="flex items-center gap-2 text-sm">
+                <span className="text-textMain flex-1">{e.email}</span>
+                <button onClick={() => removeNotificationEmail(e.id)} className="btn-ghost text-xs text-coral">Entfernen</button>
+              </div>
+            ))}
+            {notificationEmails.length === 0 && <p className="text-textMuted text-xs">Noch keine zusätzlichen Adressen eingetragen.</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="input flex-1"
+              type="email"
+              placeholder="zusaetzliche@adresse.de"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addNotificationEmail()}
+            />
+            <button disabled={savingEmail || !newEmail.trim()} onClick={addNotificationEmail} className="btn text-xs flex-shrink-0 disabled:opacity-40">
+              {savingEmail ? "..." : "Hinzufügen"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -131,8 +222,13 @@ export default function Termine() {
         {leads.map((lead) => {
           const owner = profileMap[lead.created_by];
           const statusColor = STATUS_COLORS[lead.status];
+          const isHighlighted = highlightId === lead.id;
           return (
-            <div key={lead.id} className="card">
+            <div
+              key={lead.id}
+              ref={(el) => { leadRefs.current[lead.id] = el; }}
+              className={`card transition ${isHighlighted ? "ring-2 ring-amber" : ""}`}
+            >
               <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">

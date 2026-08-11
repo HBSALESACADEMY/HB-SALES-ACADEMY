@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     if (lead.created_by !== user.id) {
       const { data: me } = await client.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", user.id).maybeSingle();
       const { data: owner } = await admin.from("profiles").select("organization_id").eq("id", lead.created_by).maybeSingle();
-      const isManagerOfOrg = me && (me.role === "manager" || me.is_admin) && owner && owner.organization_id === me.organization_id;
+      const isManagerOfOrg = me && (me.role === "manager" || me.role === "backend" || me.is_admin) && owner && owner.organization_id === me.organization_id;
       if (!me?.is_platform_admin && !isManagerOfOrg) {
         return res.status(403).json({ error: "Kein Zugriff auf diese Aufnahme." });
       }

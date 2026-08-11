@@ -24,10 +24,10 @@ export default async function handler(req, res) {
       const { data: owner } = await admin.from("profiles").select("organization_id").eq("id", recording.created_by).maybeSingle();
       const sameOrg = owner && me && owner.organization_id === me.organization_id;
       const allowedViaOrgVisibility = recording.visibility === "org" && sameOrg;
-      const allowedViaOversight = sameOrg && (me?.role === "manager" || me?.is_admin);
+      const allowedViaOversight = sameOrg && (me?.role === "manager" || me?.role === "backend" || me?.is_admin);
       let allowedViaTeamLead = false;
       if (recording.visibility === "team_lead") {
-        if (sameOrg && me?.role === "manager") {
+        if (sameOrg && (me?.role === "manager" || me?.role === "backend")) {
           allowedViaTeamLead = true;
         } else {
           const { data: isLead } = await admin.rpc("is_team_lead_of", { target_id: recording.created_by, viewer_id: user.id });

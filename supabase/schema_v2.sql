@@ -511,6 +511,18 @@ create table if not exists leads (
   created_at timestamptz not null default now()
 );
 
+-- Konfigurierbare Zusatz-Empfänger für automatische Termin-Benachrichtigungen
+-- (zusätzlich zu den Org-Managern) — verwaltbar durch Manager, die
+-- "backend"-Rolle, Admins und Plattform-Admins.
+create table if not exists notification_emails (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  email text not null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (organization_id, email)
+);
+
 -- Frei hochladbare Anruf-Aufnahmen (nicht an einen Lead gebunden) — jedes
 -- Team-Mitglied kann eine eigene Aufnahme hochladen, wählt Sichtbarkeit
 -- (Organisation oder nur für sich selbst), die KI wertet automatisch aus.
@@ -697,6 +709,7 @@ alter table team_requests enable row level security;
 alter table mentor_pairs enable row level security;
 alter table call_log_days enable row level security;
 alter table leads enable row level security;
+alter table notification_emails enable row level security;
 alter table call_recordings enable row level security;
 alter table login_attempts enable row level security;
 alter table login_events enable row level security;
@@ -1403,6 +1416,32 @@ create policy "leads_delete" on leads for delete using (
   or (
     exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
     and same_org(created_by, auth.uid())
+  )
+);
+
+-- --- notification_emails ---
+drop policy if exists "notification_emails_select" on notification_emails;
+create policy "notification_emails_select" on notification_emails for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'backend') or profiles.is_admin))
+    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  )
+);
+drop policy if exists "notification_emails_insert" on notification_emails;
+create policy "notification_emails_insert" on notification_emails for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'backend') or profiles.is_admin))
+    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  )
+);
+drop policy if exists "notification_emails_delete" on notification_emails;
+create policy "notification_emails_delete" on notification_emails for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'backend') or profiles.is_admin))
+    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
   )
 );
 

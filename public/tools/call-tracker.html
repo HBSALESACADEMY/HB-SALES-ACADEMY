@@ -644,19 +644,24 @@
         else recordingPath = path;
       }
 
-      const { error: insertErr } = await hbSupabase.from("leads").insert({
-        created_by: session.user.id,
-        name,
-        phone,
-        email,
-        company: document.getElementById("leadCompany").value.trim() || null,
-        website: document.getElementById("leadWebsite").value.trim() || null,
-        is_decision_maker: document.getElementById("leadDecisionMaker").checked,
-        notes: document.getElementById("leadNotes").value.trim() || null,
-        recording_path: recordingPath,
-        appointment_at: new Date(appointmentAt).toISOString(),
+      // Läuft über eine Server-Route statt eines direkten Inserts, damit beim
+      // Speichern automatisch eine Termin-Benachrichtigung ausgelöst werden
+      // kann (siehe pages/api/lead-created.js).
+      const createRes = await fetch("/api/lead-created", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({
+          name, phone, email,
+          company: document.getElementById("leadCompany").value.trim() || null,
+          website: document.getElementById("leadWebsite").value.trim() || null,
+          isDecisionMaker: document.getElementById("leadDecisionMaker").checked,
+          notes: document.getElementById("leadNotes").value.trim() || null,
+          recordingPath,
+          appointmentAt: new Date(appointmentAt).toISOString(),
+        }),
       });
-      if (insertErr) throw insertErr;
+      const createBody = await createRes.json().catch(() => ({}));
+      if (!createRes.ok) throw new Error(createBody.error || "Termin konnte nicht gespeichert werden.");
 
       bumpTermin();
       closeLeadModal();
