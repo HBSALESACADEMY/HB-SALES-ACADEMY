@@ -1,6 +1,6 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { notifyOrgManagers, notifyPlatformAdmins } from "../../lib/notifyManagers";
+import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 
 // Läuft anstelle des früheren direkten Client-Inserts aus dem Call Tracker
@@ -69,15 +69,15 @@ export default async function handler(req, res) {
         const subject = `Neuer Termin: ${name}`;
         const fromName = orgName || "HB Sales Academy";
 
-        // Org-Manager (bestehendes Muster, siehe lib/notifyManagers.js) +
-        // zusätzlich frei konfigurierte Adressen (siehe notification_emails,
-        // verwaltbar von Manager/Backend/Admin auf der Termine-Seite) +
-        // alle Plattform-Admin-Konten (organisationsübergreifend), analog zu
-        // den Freischaltungs-Benachrichtigungen.
-        await Promise.all([
-          notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName }),
-          notifyPlatformAdmins(admin, { subject, html, fromName }),
-        ]);
+        // Nur die Manager/Admins DIESER Organisation (bestehendes Muster,
+        // siehe lib/notifyManagers.js) + deren frei konfigurierte
+        // Zusatz-Adressen (notification_emails, verwaltbar auf der
+        // Termine-Seite) — bewusst NICHT organisationsübergreifend an alle
+        // Plattform-Admins, jede Organisation bekommt nur ihre eigenen
+        // Termin-Benachrichtigungen. Das ist anders als bei den
+        // Freischaltungs-Benachrichtigungen (notify-pending-approval.js),
+        // wo der Plattform-Betreiber bewusst alles sehen soll.
+        await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName });
 
         const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
         const extraEmails = (extra || []).map((e) => e.email);

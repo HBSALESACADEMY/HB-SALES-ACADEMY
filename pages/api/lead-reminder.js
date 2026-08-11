@@ -1,13 +1,13 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { notifyOrgManagers, notifyPlatformAdmins } from "../../lib/notifyManagers";
+import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 
 // Manuelle Erinnerung an einen bestehenden Termin — geht NICHT an die
 // Kund:in, sondern an dieselben Empfänger wie die automatische
-// Termin-Benachrichtigung (siehe lead-created.js): Org-Manager,
-// Plattform-Admins, plus konfigurierte Zusatz-Adressen. Wer den Lead sehen
-// darf (RLS leads_select), darf auch die Erinnerung auslösen.
+// Termin-Benachrichtigung (siehe lead-created.js): nur die Manager/Admins
+// DIESER Organisation plus deren konfigurierte Zusatz-Adressen. Wer den
+// Lead sehen darf (RLS leads_select), darf auch die Erinnerung auslösen.
 export const config = { maxDuration: 20 };
 
 export default async function handler(req, res) {
@@ -60,10 +60,7 @@ export default async function handler(req, res) {
     const subject = `Erinnerung: Termin mit ${lead.name}`;
     const fromName = orgName || "HB Sales Academy";
 
-    await Promise.all([
-      notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName }),
-      notifyPlatformAdmins(admin, { subject, html, fromName }),
-    ]);
+    await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName });
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
     const extraEmails = (extra || []).map((e) => e.email);
