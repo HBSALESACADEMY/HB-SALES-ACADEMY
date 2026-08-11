@@ -646,7 +646,12 @@
 
       // Läuft über eine Server-Route statt eines direkten Inserts, damit beim
       // Speichern automatisch eine Termin-Benachrichtigung ausgelöst werden
-      // kann (siehe pages/api/lead-created.js).
+      // kann (siehe pages/api/lead-created.js). activeOrgId: für Plattform-
+      // Admins, die per Firmencode "als" eine andere Organisation unterwegs
+      // sind (sessionStorage, wird als iframe auf derselben Origin geteilt) —
+      // sonst würde die Benachrichtigung an die eigene Heimat-Organisation
+      // statt die gerade aktive gehen (gleicher Grund wie beim Zertifikat).
+      const activeOrgId = (() => { try { return sessionStorage.getItem("hb_active_org_id") || null; } catch (e) { return null; } })();
       const createRes = await fetch("/api/lead-created", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
@@ -658,6 +663,7 @@
           notes: document.getElementById("leadNotes").value.trim() || null,
           recordingPath,
           appointmentAt: new Date(appointmentAt).toISOString(),
+          activeOrgId,
         }),
       });
       const createBody = await createRes.json().catch(() => ({}));

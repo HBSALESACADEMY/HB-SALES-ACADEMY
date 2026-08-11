@@ -5,7 +5,7 @@ import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import AudioPlayer from "../components/AudioPlayer";
 import { supabase } from "../lib/supabaseClient";
-import { apiGet } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
 
@@ -32,6 +32,8 @@ export default function Termine() {
   const [newEmail, setNewEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
   const [showEmailManager, setShowEmailManager] = useState(false);
+  const [reminderSendingId, setReminderSendingId] = useState(null);
+  const [reminderSentId, setReminderSentId] = useState(null);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -157,6 +159,20 @@ export default function Termine() {
     }
   }
 
+  async function sendReminder(lead) {
+    setReminderSendingId(lead.id);
+    setError("");
+    try {
+      await apiPost("/api/lead-reminder", { leadId: lead.id });
+      setReminderSentId(lead.id);
+      setTimeout(() => setReminderSentId((cur) => (cur === lead.id ? null : cur)), 3000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setReminderSendingId(null);
+    }
+  }
+
   function formatAppointment(iso) {
     if (!iso) return "Kein Termin-Zeitpunkt";
     const d = new Date(iso);
@@ -265,8 +281,18 @@ export default function Termine() {
                     Als „{STATUS_LABELS[s]}" markieren
                   </button>
                 ))}
+                {lead.email && lead.status === "geplant" && (
+                  <button
+                    disabled={reminderSendingId === lead.id}
+                    onClick={() => sendReminder(lead)}
+                    className={`btn-ghost text-xs ${lead.recording_path ? "" : "ml-auto"} disabled:opacity-40`}
+                  >
+                    <Icon name="send" size={12} />{" "}
+                    {reminderSendingId === lead.id ? "Sende..." : reminderSentId === lead.id ? "Erinnerung gesendet ✓" : "Erinnerung senden"}
+                  </button>
+                )}
                 {lead.recording_path && (
-                  <button onClick={() => togglePlay(lead)} className="btn-ghost text-xs ml-auto">
+                  <button onClick={() => togglePlay(lead)} className={`btn-ghost text-xs ${lead.email && lead.status === "geplant" ? "" : "ml-auto"}`}>
                     <Icon name="chat" size={12} /> {playingId === lead.id ? "Aufnahme ausblenden" : "Aufnahme abspielen"}
                   </button>
                 )}
