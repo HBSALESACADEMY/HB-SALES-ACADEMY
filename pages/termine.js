@@ -165,7 +165,10 @@ export default function Termine() {
     setReminderSendingId(lead.id);
     setError("");
     try {
-      const result = await apiPost("/api/lead-reminder", { leadId: lead.id });
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const activeOrgId = getActiveOrgId(me);
+      const result = await apiPost("/api/lead-reminder", { leadId: lead.id, activeOrgId });
       if (result?.skipped) {
         setError("E-Mail-Versand ist auf dem Server nicht konfiguriert (RESEND_API_KEY fehlt) — es wurde nichts verschickt.");
         return;
@@ -339,18 +342,19 @@ export default function Termine() {
                     Als „{STATUS_LABELS[s]}" markieren
                   </button>
                 ))}
-                {lead.email && lead.status === "geplant" && (
+                {lead.status === "geplant" && (
                   <button
                     disabled={reminderSendingId === lead.id}
+                    title="Schickt eine Erinnerungsmail an Manager/Admins und die eingetragenen Benachrichtigungs-Adressen, nicht an die Kund:in."
                     onClick={() => sendReminder(lead)}
                     className={`btn-ghost text-xs ${lead.recording_path ? "" : "ml-auto"} disabled:opacity-40`}
                   >
                     <Icon name="send" size={12} />{" "}
-                    {reminderSendingId === lead.id ? "Sende..." : reminderSentId === lead.id ? "Erinnerung gesendet ✓" : "Erinnerung senden"}
+                    {reminderSendingId === lead.id ? "Sende..." : reminderSentId === lead.id ? "Team erinnert ✓" : "Team erinnern"}
                   </button>
                 )}
                 {lead.recording_path && (
-                  <button onClick={() => togglePlay(lead)} className={`btn-ghost text-xs ${lead.email && lead.status === "geplant" ? "" : "ml-auto"}`}>
+                  <button onClick={() => togglePlay(lead)} className={`btn-ghost text-xs ${lead.status === "geplant" ? "" : "ml-auto"}`}>
                     <Icon name="chat" size={12} /> {playingId === lead.id ? "Aufnahme ausblenden" : "Aufnahme abspielen"}
                   </button>
                 )}

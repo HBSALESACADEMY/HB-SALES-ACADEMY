@@ -1,11 +1,13 @@
 import { requireUser } from "../../lib/supabaseServer";
+import { getAdminSupabase } from "../../lib/supabaseAdmin";
+import { notifyOrgManagers, notifyPlatformAdmins } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 
-// Manuelle Termin-Erinnerung per E-Mail an den/die Kund:in (nicht an die
-// eigene Organisation — das ist die separate automatische Benachrichtigung
-// in lead-created.js). Wer den Lead sehen darf (RLS leads_select: eigene,
-// oder Manager/Backend/Admin derselben Organisation, oder Plattform-Admin),
-// darf auch die Erinnerung auslösen — keine zusätzliche Rechteprüfung nötig.
+// Manuelle Erinnerung an einen bestehenden Termin — geht NICHT an die
+// Kund:in, sondern an dieselben Empfänger wie die automatische
+// Termin-Benachrichtigung (siehe lead-created.js): Org-Manager,
+// Plattform-Admins, plus konfigurierte Zusatz-Adressen. Wer den Lead sehen
+// darf (RLS leads_select), darf auch die Erinnerung auslösen.
 export const config = { maxDuration: 20 };
 
 export default async function handler(req, res) {
@@ -14,31 +16,52 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { client, user } = auth;
 
-  const { leadId } = req.body || {};
+  const { leadId, activeOrgId } = req.body || {};
   if (!leadId) return res.status(400).json({ error: "leadId erforderlich." });
 
   try {
     const { data: lead, error: leadErr } = await client.from("leads").select("*").eq("id", leadId).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return res.status(404).json({ error: "Termin nicht gefunden — oder kein Zugriff." });
-    if (!lead.email) return res.status(400).json({ error: "Für diesen Termin ist keine E-Mail-Adresse hinterlegt." });
 
-    const { data: me } = await client.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(200).json({ ok: true, skipped: true });
+    }
+
+    const admin = getAdminSupabase();
+    const { data: me } = await client.from("profiles").select("organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
+    // Firmencode-Muster wie in lead-created.js/certificate.js: nur akzeptieren,
+    // wenn wirklich Plattform-Admin oder es ohnehin die eigene Organisation ist.
+    let effectiveOrgId = me?.organization_id || null;
+    if (activeOrgId && (me?.is_platform_admin || activeOrgId === me?.organization_id)) {
+      effectiveOrgId = activeOrgId;
+    }
+    if (!effectiveOrgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
     const appointmentText = lead.appointment_at
       ? new Date(lead.appointment_at).toLocaleString("de-DE", { dateStyle: "full", timeStyle: "short" })
-      : "in Kürze";
+      : "noch offen";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    const link = appUrl ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
     const html =
-      `<p>Hallo ${lead.name || ""},</p>` +
-      `<p>kurze Erinnerung an unseren Termin am <strong>${appointmentText}</strong>.</p>` +
+      `<p><strong>Erinnerung</strong> an den Termin mit <strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}:</p>` +
+      `<p>Termin: ${appointmentText}</p>` +
       (lead.notes ? `<p>${lead.notes}</p>` : "") +
-      `<p>Viele Grüße${me?.full_name ? `<br/>${me.full_name}` : ""}</p>`;
+      (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
-    const result = await sendEmail({ to: lead.email, subject: "Erinnerung an unseren Termin", html });
-    if (result?.error) return res.status(502).json({ error: "E-Mail-Versand fehlgeschlagen." });
+    const subject = `Erinnerung: Termin mit ${lead.name}`;
 
-    return res.status(200).json({ ok: true, skipped: !!result?.skipped });
+    await Promise.all([
+      notifyOrgManagers(admin, effectiveOrgId, { subject, html }),
+      notifyPlatformAdmins(admin, { subject, html }),
+    ]);
+
+    const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
+    const extraEmails = (extra || []).map((e) => e.email);
+    if (extraEmails.length) await sendEmail({ to: extraEmails, subject, html });
+
+    return res.status(200).json({ ok: true });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e.message || "Erinnerung konnte nicht gesendet werden." });
