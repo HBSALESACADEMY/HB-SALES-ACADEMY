@@ -1,6 +1,6 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { notifyOrgManagers } from "../../lib/notifyManagers";
+import { notifyOrgManagers, notifyPlatformAdmins } from "../../lib/notifyManagers";
 
 // Wird direkt nach einer erfolgreichen Registrierung vom Client aufgerufen
 // (siehe pages/login.js) — benachrichtigt die Manager/Admins der Organisation
@@ -20,11 +20,17 @@ export default async function handler(req, res) {
     const orgName = org?.name || "eurer Organisation";
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
-    await notifyOrgManagers(admin, me.organization_id, {
-      subject: `Neue Registrierung wartet auf Freigabe — ${orgName}`,
-      html: `<p><strong>${me.full_name || "Ein neuer Nutzer"}</strong> hat sich bei ${orgName} registriert und wartet auf Freigabe.</p>` +
-        (appUrl ? `<p><a href="${appUrl}/admin">Jetzt freigeben</a></p>` : ""),
-    });
+    const html = `<p><strong>${me.full_name || "Ein neuer Nutzer"}</strong> hat sich bei ${orgName} registriert und wartet auf Freigabe.</p>` +
+      (appUrl ? `<p><a href="${appUrl}/admin" target="_blank" rel="noopener noreferrer">Jetzt freigeben →</a></p>` : "");
+
+    // Org-Manager (nur diese Organisation) + zusätzlich alle Plattform-
+    // Admin-Konten (organisationsübergreifend), damit der Plattform-Betreiber
+    // über jede Freischaltung informiert bleibt, nicht nur die jeweilige
+    // Organisation selbst.
+    await Promise.all([
+      notifyOrgManagers(admin, me.organization_id, { subject: `Neue Registrierung wartet auf Freigabe — ${orgName}`, html }),
+      notifyPlatformAdmins(admin, { subject: `Neue Registrierung wartet auf Freigabe — ${orgName}`, html }),
+    ]);
 
     return res.status(200).json({ ok: true });
   } catch (e) {
