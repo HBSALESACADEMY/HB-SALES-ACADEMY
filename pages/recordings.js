@@ -26,6 +26,7 @@ export default function Recordings() {
   const [playingUrl, setPlayingUrl] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [outcomeFilter, setOutcomeFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [myLeads, setMyLeads] = useState([]);
   const [leadId, setLeadId] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -167,9 +168,22 @@ export default function Recordings() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
-  const filteredRecordings = recordings.filter((r) => outcomeFilter === "all" || r.outcome === outcomeFilter);
   const leadMap = {};
   myLeads.forEach((l) => { leadMap[l.id] = l; });
+
+  const q = searchQuery.trim().toLowerCase();
+  const filteredRecordings = recordings.filter((r) => {
+    if (outcomeFilter !== "all" && r.outcome !== outcomeFilter) return false;
+    if (!q) return true;
+    const owner = profileMap[r.created_by];
+    const assignedLead = r.lead_id ? leadMap[r.lead_id] : null;
+    const haystack = [
+      r.label, r.file_name, r.evaluation_summary,
+      assignedLead?.name, assignedLead?.company,
+      owner?.full_name,
+    ].filter(Boolean).join(" ").toLowerCase();
+    return haystack.includes(q);
+  });
 
   return (
     <Layout>
@@ -216,6 +230,16 @@ export default function Recordings() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="card flex items-center gap-2 mb-3">
+        <Icon name="search" size={15} />
+        <input
+          className="bg-transparent border-none outline-none text-sm flex-1 text-textMain"
+          placeholder="Aufnahmen durchsuchen (Kontext, Kunde, Ersteller:in, Auswertung)..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       <div className="flex items-center gap-2 mb-3">
@@ -441,7 +465,7 @@ export default function Recordings() {
         })}
         {filteredRecordings.length === 0 && (
           <p className="text-textMuted text-sm">
-            {recordings.length === 0 ? "Noch keine Aufnahmen hochgeladen." : "Keine Aufnahmen mit diesem Ergebnis."}
+            {recordings.length === 0 ? "Noch keine Aufnahmen hochgeladen." : q ? "Keine Aufnahmen gefunden." : "Keine Aufnahmen mit diesem Ergebnis."}
           </p>
         )}
       </div>
