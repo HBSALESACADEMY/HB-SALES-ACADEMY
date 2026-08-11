@@ -32,14 +32,25 @@ export default async function handler(req, res) {
 
     if (!exam) return res.status(403).json({ error: "Kein bestandenes Prüfungsergebnis für diesen Kurs gefunden." });
 
-    const { data: profile } = await auth.client.from("profiles").select("full_name, organization_id").eq("id", auth.user.id).maybeSingle();
+    const { data: profile } = await auth.client.from("profiles").select("full_name, organization_id, is_platform_admin").eq("id", auth.user.id).maybeSingle();
     const name = (profile && profile.full_name) || auth.user.email || "Teilnehmer";
 
+    // Für Plattform-Admins, die per Firmencode "als" eine andere Organisation
+    // unterwegs sind: profile.organization_id ist nur deren eigene Heimat-
+    // Organisation, nicht die gerade aktive — die kommt vom Client (kennt nur
+    // er via sessionStorage) und wird hier nur akzeptiert, wenn der Aufrufer
+    // wirklich Plattform-Admin ist oder es ohnehin die eigene Organisation ist.
+    const { orgId } = req.query;
+    let effectiveOrgId = profile?.organization_id || null;
+    if (orgId && (profile?.is_platform_admin || orgId === profile?.organization_id)) {
+      effectiveOrgId = orgId;
+    }
+
     let org = null;
-    if (profile?.organization_id) {
+    if (effectiveOrgId) {
       const { data } = await auth.client.from("organizations")
         .select("name, logo_url, primary_color, background_color, text_color, muted_color")
-        .eq("id", profile.organization_id).maybeSingle();
+        .eq("id", effectiveOrgId).maybeSingle();
       org = data;
     }
     const orgLogoUrl = org?.logo_url || null;

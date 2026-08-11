@@ -6,6 +6,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { apiGetBlob } from "../../../lib/apiClient";
 import { triggerConfetti } from "../../../lib/confetti";
 import { useCourse } from "../../../lib/useCourse";
+import { getActiveOrgId } from "../../../lib/activeOrg";
 
 // Fallback für Zeilen, die vor der fehlendeKriterien-Ergänzung entstanden
 // sind: aus der Rubrik einfach das herausrechnen, was die KI als erfüllt
@@ -85,7 +86,16 @@ export default function CourseDetail() {
   async function downloadCertificate() {
     setDownloading(true);
     try {
-      const blob = await apiGetBlob(`/api/certificate?courseId=${course.id}`);
+      // Als Plattform-Admin, der per Firmencode "als" eine andere Organisation
+      // eingeloggt ist, kennt der Server profile.organization_id nur die
+      // eigene Heimat-Organisation — die per Firmencode aktive Organisation
+      // steckt nur im Browser (sessionStorage) und muss explizit mitgegeben
+      // werden, sonst zeigt das Zertifikat fälschlich Standard-Branding.
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const activeOrgId = getActiveOrgId(me);
+      const orgParam = activeOrgId ? `&orgId=${activeOrgId}` : "";
+      const blob = await apiGetBlob(`/api/certificate?courseId=${course.id}${orgParam}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `Zertifikat-${course.id}.pdf`;
