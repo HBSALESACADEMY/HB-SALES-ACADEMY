@@ -302,94 +302,98 @@ export default function Dashboard() {
             </div>
           )}
 
-          {pendingFriendReqs.length > 0 && (
-            <div className="card mb-5">
-              <div className="font-semibold text-textMain text-sm mb-3">Freundschaftsanfragen</div>
-              <div className="flex flex-col gap-2.5">
-                {pendingFriendReqs.map((r) => {
-                  const busy = friendReqBusyId === r.id;
-                  return (
-                    <div key={r.id} className="flex items-center gap-3">
-                      <Avatar name={r.profile?.full_name || "?"} src={r.profile?.avatar_url} size={32} />
-                      <span className="text-sm text-textMain flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button disabled={busy} onClick={() => respondFriendRequest(r.id, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
-                        <button disabled={busy} onClick={() => respondFriendRequest(r.id, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {upcomingLeads.length > 0 && (
-            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
-              <div className="font-semibold text-textMain text-sm mb-3">📅 Anstehende Termine</div>
-              <div className="flex flex-col gap-2.5">
-                {upcomingLeads.map((l) => (
-                  <div key={l.id} className="flex items-center gap-3">
-                    <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
-                    <span className="text-xs font-mono text-textMuted flex-shrink-0">
-                      {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+          {(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0 || teamUpcomingLeads.length > 0) && (
+            <div className="card mb-5 flex flex-col gap-4">
+              {pendingFriendReqs.length > 0 && (
+                <div>
+                  <div className="font-semibold text-textMain text-sm mb-2.5">🤝 Freundschaftsanfragen</div>
+                  <div className="flex flex-col gap-2.5">
+                    {pendingFriendReqs.map((r) => {
+                      const busy = friendReqBusyId === r.id;
+                      return (
+                        <div key={r.id} className="flex items-center gap-3">
+                          <Avatar name={r.profile?.full_name || "?"} src={r.profile?.avatar_url} size={32} />
+                          <span className="text-sm text-textMain flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button disabled={busy} onClick={() => respondFriendRequest(r.id, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                            <button disabled={busy} onClick={() => respondFriendRequest(r.id, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {teamUpcomingLeads.length > 0 && (
-            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
-              <div className="font-semibold text-textMain text-sm mb-3">📅 Anstehende Termine im Team</div>
-              <div className="flex flex-col gap-2.5">
-                {teamUpcomingLeads.map((l) => (
-                  <div key={l.id} className="flex items-center gap-3">
-                    <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
-                    <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
-                    <span className="text-xs font-mono text-textMuted flex-shrink-0">
-                      {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+              {myMentions.length > 0 && (
+                <div className={pendingFriendReqs.length > 0 ? "pt-4 border-t border-line" : ""}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5">🔔 Erwähnungen</div>
+                  <div className="flex flex-col gap-2">
+                    {myMentions.map((m) => (
+                      <button key={m.id} onClick={() => router.push(m.route)} className="text-left text-sm hover:opacity-80">
+                        <span className="text-amber font-semibold">{m.actorName}</span>{" "}
+                        <span className="text-textMuted">hat dich erwähnt — {m.label}</span>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {myMentions.length > 0 && (
-            <div className="card mb-5">
-              <div className="font-semibold text-textMain text-sm mb-3">🔔 Erwähnungen</div>
-              <div className="flex flex-col gap-2">
-                {myMentions.map((m) => (
-                  <button key={m.id} onClick={() => router.push(m.route)} className="text-left text-sm hover:opacity-80">
-                    <span className="text-amber font-semibold">{m.actorName}</span>{" "}
-                    <span className="text-textMuted">hat dich erwähnt — {m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+              {myOpenTasks.length > 0 && (
+                <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0) ? "pt-4 border-t border-line" : ""}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>✅ Offene Aufgaben</div>
+                  <div className="flex flex-col gap-2">
+                    {myOpenTasks.map((t) => {
+                      const urgency = taskUrgency(t.due_date, false);
+                      const style = urgency ? URGENCY_STYLES[urgency.level] : null;
+                      return (
+                        <div key={t.id} onClick={() => router.push("/termine")} className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 cursor-pointer ${style ? `${style.border} ${style.bg}` : "border-line"}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-textMain font-medium truncate">{t.title}</div>
+                            <div className="text-xs text-textMuted truncate">Termin: {t.leadName} · von {t.assignedByName}</div>
+                          </div>
+                          {urgency && (
+                            <span className={`text-xs font-semibold flex-shrink-0 ${style.text}`}>{urgency.countdown}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-          {myOpenTasks.length > 0 && (
-            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
-              <div className="font-semibold text-textMain text-sm mb-3">✅ Offene Aufgaben</div>
-              <div className="flex flex-col gap-2">
-                {myOpenTasks.map((t) => {
-                  const urgency = taskUrgency(t.due_date, false);
-                  const style = urgency ? URGENCY_STYLES[urgency.level] : null;
-                  return (
-                    <div key={t.id} className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 ${style ? `${style.border} ${style.bg}` : "border-line"}`}>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-textMain font-medium truncate">{t.title}</div>
-                        <div className="text-xs text-textMuted truncate">Termin: {t.leadName} · von {t.assignedByName}</div>
+              {upcomingLeads.length > 0 && (
+                <div onClick={() => router.push("/termine")} className={`cursor-pointer ${(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0) ? "pt-4 border-t border-line" : ""}`}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5">📅 Anstehende Termine</div>
+                  <div className="flex flex-col gap-2.5">
+                    {upcomingLeads.map((l) => (
+                      <div key={l.id} className="flex items-center gap-3">
+                        <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
+                        <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                          {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       </div>
-                      {urgency && (
-                        <span className={`text-xs font-semibold flex-shrink-0 ${style.text}`}>{urgency.countdown}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {teamUpcomingLeads.length > 0 && (
+                <div onClick={() => router.push("/termine")} className={`cursor-pointer ${(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0) ? "pt-4 border-t border-line" : ""}`}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5">📅 Anstehende Termine im Team</div>
+                  <div className="flex flex-col gap-2.5">
+                    {teamUpcomingLeads.map((l) => (
+                      <div key={l.id} className="flex items-center gap-3">
+                        <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
+                        <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
+                        <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                          {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
