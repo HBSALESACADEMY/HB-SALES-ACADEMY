@@ -73,6 +73,7 @@ export default function Community() {
   const [pollVotesByPost, setPollVotesByPost] = useState({});
   const [newPollOptions, setNewPollOptions] = useState(["", ""]);
   const [showPollForm, setShowPollForm] = useState(false);
+  const [pollDurationHours, setPollDurationHours] = useState("24");
 
   async function load() {
     setLoading(true);
@@ -381,6 +382,10 @@ export default function Community() {
       }
     }
 
+    const pollExpiresAt = showPollForm && pollDurationHours !== "unlimited"
+      ? new Date(Date.now() + Number(pollDurationHours) * 60 * 60 * 1000).toISOString()
+      : null;
+
     const { data: newRow, error: insErr } = await supabase.from("community_posts").insert({
       user_id: session.user.id,
       content: newPost.trim(),
@@ -389,6 +394,7 @@ export default function Community() {
       attachment_type,
       visibility: shareGlobally ? "global" : "org",
       organization_id: myOrgId,
+      poll_expires_at: showPollForm ? pollExpiresAt : null,
     }).select().single();
     setPosting(false);
     if (insErr) { setError(insErr.message); return; }
@@ -414,6 +420,7 @@ export default function Community() {
     setShareGlobally(false);
     setShowPollForm(false);
     setNewPollOptions(["", ""]);
+    setPollDurationHours("24");
     await load();
   }
 
@@ -730,10 +737,20 @@ export default function Community() {
                 )}
               </div>
             ))}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {newPollOptions.length < 6 && (
                 <button onClick={() => setNewPollOptions((prev) => [...prev, ""])} className="btn-ghost text-xs">+ Option</button>
               )}
+              <label className="flex items-center gap-1.5 text-xs text-textMuted">
+                Läuft ab:
+                <select className="input !w-auto !py-1 text-xs" value={pollDurationHours} onChange={(e) => setPollDurationHours(e.target.value)}>
+                  <option value="1">nach 1 Stunde</option>
+                  <option value="24">nach 1 Tag</option>
+                  <option value="72">nach 3 Tagen</option>
+                  <option value="168">nach 1 Woche</option>
+                  <option value="unlimited">nie</option>
+                </select>
+              </label>
               <button onClick={() => { setShowPollForm(false); setNewPollOptions(["", ""]); }} className="btn-ghost text-xs text-coral">Umfrage entfernen</button>
             </div>
           </div>
@@ -815,24 +832,41 @@ export default function Community() {
                 <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{renderContent(p.content)}</p>
               )}
 
-              {pollOptions.length > 0 && (
-                <div className="flex flex-col gap-1.5 mb-3">
-                  {pollOptions.map((o) => {
-                    const count = pollVotes.countByOption[o.id] || 0;
-                    const pct = pollTotal > 0 ? Math.round((count / pollTotal) * 100) : 0;
-                    const mine = pollVotes.mineOptionId === o.id;
-                    return (
-                      <button key={o.id} onClick={() => votePoll(p.id, o.id)} className={`relative text-left text-xs rounded-lg border px-3 py-2 overflow-hidden ${mine ? "border-amber" : "border-line"}`}>
-                        <div className="absolute inset-y-0 left-0 bg-amber/15" style={{ width: `${pct}%` }} />
-                        <div className="relative flex items-center justify-between gap-2">
-                          <span className={mine ? "text-amber font-semibold" : "text-textMain"}>{o.label}</span>
-                          <span className="text-textMuted flex-shrink-0">{pct}% ({count})</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {pollOptions.length > 0 && (() => {
+                const pollExpired = p.poll_expires_at && new Date(p.poll_expires_at) < new Date();
+                return (
+                  <div className="mb-3">
+                    <div className="flex flex-col gap-1.5">
+                      {pollOptions.map((o) => {
+                        const count = pollVotes.countByOption[o.id] || 0;
+                        const pct = pollTotal > 0 ? Math.round((count / pollTotal) * 100) : 0;
+                        const mine = pollVotes.mineOptionId === o.id;
+                        return (
+                          <button
+                            key={o.id}
+                            disabled={pollExpired}
+                            onClick={() => votePoll(p.id, o.id)}
+                            className={`relative text-left text-xs rounded-lg border px-3 py-2 overflow-hidden ${mine ? "border-amber" : "border-line"} ${pollExpired ? "cursor-default opacity-80" : ""}`}
+                          >
+                            <div className="absolute inset-y-0 left-0 bg-amber/15" style={{ width: `${pct}%` }} />
+                            <div className="relative flex items-center justify-between gap-2">
+                              <span className={mine ? "text-amber font-semibold" : "text-textMain"}>{o.label}</span>
+                              <span className="text-textMuted flex-shrink-0">{pct}% ({count})</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[10px] text-textMuted mt-1">
+                      {pollExpired
+                        ? "Umfrage beendet"
+                        : p.poll_expires_at
+                        ? `Läuft bis ${new Date(p.poll_expires_at).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                        : "Läuft unbegrenzt"}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {p.attachment_url && p.attachment_type === "image" && (
                 <img src={p.attachment_url} alt="" className="rounded-lg max-h-96 w-auto mb-3 border border-line" />

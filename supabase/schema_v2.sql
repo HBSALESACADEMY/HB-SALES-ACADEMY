@@ -348,7 +348,10 @@ create table if not exists community_posts (
   -- Plattform-Admins per Firmencode (siehe migration_62).
   organization_id uuid references organizations(id) on delete set null,
   -- Von Managern/Admins oben im Feed festgehalten (migration_64).
-  pinned boolean not null default false
+  pinned boolean not null default false,
+  -- Ablaufzeitpunkt einer optionalen Umfrage — danach kein Abstimmen mehr
+  -- möglich (migration_66). NULL = keine Umfrage oder unbegrenzt.
+  poll_expires_at timestamptz
 );
 
 create table if not exists community_comments (
@@ -1292,6 +1295,10 @@ create policy "community_poll_votes_insert_own" on community_poll_votes for inse
       select 1 from community_posts cp where cp.id = community_poll_votes.post_id
       and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
     )
+  )
+  and not exists (
+    select 1 from community_posts cp where cp.id = community_poll_votes.post_id
+    and cp.poll_expires_at is not null and cp.poll_expires_at < now()
   )
 );
 drop policy if exists "community_poll_votes_delete_own" on community_poll_votes;
