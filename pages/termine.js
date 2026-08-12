@@ -42,6 +42,20 @@ export default function Termine() {
   const [emailDraft, setEmailDraft] = useState("");
   const [editingLeadId, setEditingLeadId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
+  const [orgMembers, setOrgMembers] = useState([]);
+  const [commentsByLead, setCommentsByLead] = useState({});
+  const [tasksByLead, setTasksByLead] = useState({});
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [commentSending, setCommentSending] = useState(null);
+  const [showCommentsFor, setShowCommentsFor] = useState(null);
+  // Mention-Autocomplete in Kommentaren: leadId der aktiven Eingabe.
+  const [commentMentionTarget, setCommentMentionTarget] = useState(null);
+  const [commentMentionQuery, setCommentMentionQuery] = useState("");
+  const [commentMentionStart, setCommentMentionStart] = useState(-1);
+  const commentInputRefs = useRef({});
+  const [showTaskFormFor, setShowTaskFormFor] = useState(null);
+  const [taskDraft, setTaskDraft] = useState({ assignedTo: "", title: "", dueDate: "" });
+  const [taskSaving, setTaskSaving] = useState(false);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -80,13 +94,51 @@ export default function Termine() {
       }
     }
 
-    if (canManage) {
-      const activeOrgId = getActiveOrgId(me);
-      if (activeOrgId) {
-        const { data: emails } = await supabase.from("notification_emails").select("*").eq("organization_id", activeOrgId).order("created_at");
-        setNotificationEmails(emails || []);
-      }
+    const activeOrgId = getActiveOrgId(me);
+    if (canManage && activeOrgId) {
+      const { data: emails } = await supabase.from("notification_emails").select("*").eq("organization_id", activeOrgId).order("created_at");
+      setNotificationEmails(emails || []);
     }
+    // Für @Erwähnungen in Kommentaren und die Aufgaben-Zuweisung — alle
+    // Mitglieder der aktiven Organisation, unabhängig von der Rolle.
+    if (activeOrgId) {
+      const { data: members } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("organization_id", activeOrgId).eq("status", "approved");
+      setOrgMembers(members || []);
+    }
+
+    const leadIds = (leadRows || []).map((l) => l.id);
+    if (leadIds.length) {
+      const [{ data: comments }, { data: tasks }] = await Promise.all([
+        supabase.from("lead_comments").select("*").in("lead_id", leadIds).order("created_at", { ascending: true }),
+        supabase.from("lead_tasks").select("*").in("lead_id", leadIds).order("created_at", { ascending: true }),
+      ]);
+      const cByLead = {};
+      (comments || []).forEach((c) => { cByLead[c.lead_id] = cByLead[c.lead_id] || []; cByLead[c.lead_id].push(c); });
+      setCommentsByLead(cByLead);
+      const tByLead = {};
+      (tasks || []).forEach((t) => { tByLead[t.lead_id] = tByLead[t.lead_id] || []; tByLead[t.lead_id].push(t); });
+      setTasksByLead(tByLead);
+      // profileMap wird auch für Kommentar-/Aufgaben-Autoren gebraucht, nicht
+      // nur für Termin-Ersteller:innen in der Team-Ansicht.
+      const authorIds = [...new Set([
+        ...(comments || []).map((c) => c.user_id),
+        ...(tasks || []).flatMap((t) => [t.assigned_to, t.assigned_by]),
+      ])].filter((id) => !profileMap[id]);
+      if (authorIds.length) {
+        const { data: authorProfiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", authorIds);
+        if (authorProfiles?.length) {
+          setProfileMap((prev) => {
+            const next = { ...prev };
+            authorProfiles.forEach((p) => { next[p.id] = p; });
+            return next;
+          });
+        }
+      }
+    } else {
+      setCommentsByLead({});
+      setTasksByLead({});
+    }
+
     if (!silent) setLoading(false);
   }
 
@@ -184,6 +236,127 @@ export default function Termine() {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     setEditingLeadId(null);
     setEditDraft(null);
+  }
+
+  function detectMention(text, caret) {
+    const upto = text.slice(0, caret);
+    const at = upto.lastIndexOf("@");
+    if (at === -1) return null;
+    const between = upto.slice(at + 1);
+    if (/\s/.test(between)) return null;
+    return { start: at, query: between };
+  }
+
+  function handleCommentMentionChange(leadId, text, caret) {
+    const m = detectMention(text, caret);
+    if (m) {
+      setCommentMentionTarget(leadId);
+      setCommentMentionStart(m.start);
+      setCommentMentionQuery(m.query);
+    } else if (commentMentionTarget === leadId) {
+      setCommentMentionTarget(null);
+    }
+  }
+
+  const commentMentionResults = commentMentionTarget == null ? [] : orgMembers
+    .filter((p) => p.id !== selfId && (!commentMentionQuery || (p.full_name || "").toLowerCase().includes(commentMentionQuery.toLowerCase())))
+    .slice(0, 6);
+
+  function selectCommentMention(profile) {
+    const name = profile.full_name || "Unbenannt";
+    const leadId = commentMentionTarget;
+    const current = commentDrafts[leadId] || "";
+    const next = current.slice(0, commentMentionStart) + `@${name} ` + current.slice(commentMentionStart + 1 + commentMentionQuery.length);
+    setCommentDrafts((prev) => ({ ...prev, [leadId]: next }));
+    setCommentMentionTarget(null);
+    setCommentMentionQuery("");
+    setCommentMentionStart(-1);
+    requestAnimationFrame(() => commentInputRefs.current[leadId]?.focus());
+  }
+
+  function extractMentionedIds(text) {
+    const names = orgMembers.map((p) => ({ id: p.id, name: p.full_name })).filter((p) => p.name).sort((a, b) => b.name.length - a.name.length);
+    if (!text || !names.length) return [];
+    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
+    const ids = new Set();
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const found = names.find((n) => n.name === match[1]);
+      if (found && found.id !== selfId) ids.add(found.id);
+    }
+    return [...ids];
+  }
+
+  function renderCommentContent(text) {
+    const names = orgMembers.map((p) => ({ id: p.id, name: p.full_name })).filter((p) => p.name).sort((a, b) => b.name.length - a.name.length);
+    if (!text || !names.length) return text;
+    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      const found = names.find((n) => n.name === match[1]);
+      parts.push(
+        <span key={match.index} className="text-amber font-semibold cursor-pointer hover:underline" onClick={() => openProfile(found.id)}>
+          @{match[1]}
+        </span>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts;
+  }
+
+  async function submitComment(leadId) {
+    const text = commentDrafts[leadId];
+    if (!text?.trim()) return;
+    setCommentSending(leadId);
+    setError("");
+    try {
+      const mentionedIds = extractMentionedIds(text);
+      const { comment } = await apiPost("/api/lead-comment", { leadId, content: text.trim(), mentionedIds });
+      setCommentsByLead((prev) => ({ ...prev, [leadId]: [...(prev[leadId] || []), comment] }));
+      setCommentDrafts((prev) => ({ ...prev, [leadId]: "" }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCommentSending(null);
+    }
+  }
+
+  async function submitTask(leadId) {
+    if (!taskDraft.assignedTo || !taskDraft.title.trim()) return;
+    setTaskSaving(true);
+    setError("");
+    try {
+      const { task } = await apiPost("/api/lead-task", { leadId, assignedTo: taskDraft.assignedTo, title: taskDraft.title.trim(), dueDate: taskDraft.dueDate || null });
+      setTasksByLead((prev) => ({ ...prev, [leadId]: [...(prev[leadId] || []), task] }));
+      setTaskDraft({ assignedTo: "", title: "", dueDate: "" });
+      setShowTaskFormFor(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setTaskSaving(false);
+    }
+  }
+
+  async function toggleTaskDone(task) {
+    const { error: err } = await supabase.from("lead_tasks").update({ done: !task.done }).eq("id", task.id);
+    if (err) { setError(err.message); return; }
+    setTasksByLead((prev) => ({
+      ...prev,
+      [task.lead_id]: (prev[task.lead_id] || []).map((t) => (t.id === task.id ? { ...t, done: !task.done } : t)),
+    }));
+  }
+
+  async function deleteTask(task) {
+    const { error: err } = await supabase.from("lead_tasks").delete().eq("id", task.id);
+    if (err) { setError(err.message); return; }
+    setTasksByLead((prev) => ({
+      ...prev,
+      [task.lead_id]: (prev[task.lead_id] || []).filter((t) => t.id !== task.id),
+    }));
   }
 
   async function updateStatus(id, status) {
@@ -289,6 +462,8 @@ export default function Termine() {
       <InfoCard>
         <strong>Team erinnern</strong> schickt eine Erinnerungsmail an Manager/Admins eurer Organisation und die unter "Benachrichtigungen" eingetragenen Adressen — <strong>nicht</strong> an die Kund:in.
         Die E-Mail-Adresse bei einem Termin lässt sich direkt anklicken, um sie zu bearbeiten oder zu löschen.
+        Unter <strong>Kommentare</strong> könnt ihr euch intern zu einem Termin austauschen, mit <strong>@Name</strong> jemanden erwähnen (bekommt eine Mail).
+        Unter <strong>Aufgaben</strong> lässt sich jemandem aus eurer Organisation eine Aufgabe zu einem Termin zuweisen.
         Termine können bei Bedarf komplett gelöscht werden (inkl. zugehöriger Aufnahme).
       </InfoCard>
 
@@ -452,6 +627,85 @@ export default function Termine() {
                   <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
                 </div>
               )}
+
+              {(() => {
+                const comments = commentsByLead[lead.id] || [];
+                const tasks = tasksByLead[lead.id] || [];
+                const openTasksCount = tasks.filter((t) => !t.done).length;
+                return (
+                  <div className="pt-2 mt-2 border-t border-line">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button onClick={() => setShowCommentsFor((cur) => (cur === lead.id ? null : lead.id))} className="btn-ghost text-xs">
+                        <Icon name="chat" size={12} /> Kommentare{comments.length > 0 ? ` (${comments.length})` : ""}
+                      </button>
+                      <button onClick={() => setShowTaskFormFor((cur) => (cur === lead.id ? null : lead.id))} className="btn-ghost text-xs">
+                        ✅ Aufgaben{tasks.length > 0 ? ` (${openTasksCount}/${tasks.length} offen)` : ""}
+                      </button>
+                    </div>
+
+                    {showCommentsFor === lead.id && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {comments.map((c) => (
+                          <div key={c.id} className="text-xs">
+                            <span className="font-semibold text-textMain cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>
+                              {profileMap[c.user_id]?.full_name || "Unbenannt"}:
+                            </span>{" "}
+                            <span className="text-textMuted">{renderCommentContent(c.content)}</span>
+                          </div>
+                        ))}
+                        {comments.length === 0 && <p className="text-textMuted text-xs">Noch keine Kommentare.</p>}
+                        <div className="relative flex items-center gap-2">
+                          <input
+                            ref={(el) => { commentInputRefs.current[lead.id] = el; }}
+                            className="input flex-1 text-xs"
+                            placeholder="Kommentieren... (@ um jemanden zu erwähnen)"
+                            value={commentDrafts[lead.id] || ""}
+                            onChange={(e) => { setCommentDrafts((prev) => ({ ...prev, [lead.id]: e.target.value })); handleCommentMentionChange(lead.id, e.target.value, e.target.selectionStart); }}
+                            onKeyUp={(e) => e.key !== "Enter" && handleCommentMentionChange(lead.id, e.target.value, e.target.selectionStart)}
+                            onKeyDown={(e) => e.key === "Enter" && submitComment(lead.id)}
+                            onBlur={() => setTimeout(() => setCommentMentionTarget((t) => (t === lead.id ? null : t)), 150)}
+                          />
+                          <button disabled={commentSending === lead.id} onClick={() => submitComment(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Senden</button>
+                          {commentMentionTarget === lead.id && commentMentionResults.length > 0 && (
+                            <div className="absolute z-10 bottom-full mb-1 left-0 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-[var(--card-bg,#1a1d29)] shadow-lg">
+                              {commentMentionResults.map((p) => (
+                                <button key={p.id} onMouseDown={(e) => { e.preventDefault(); selectCommentMention(p); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs hover:bg-white/5">
+                                  <Avatar name={p.full_name || "?"} src={p.avatar_url} size={20} /> {p.full_name || "Unbenannt"}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {showTaskFormFor === lead.id && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {tasks.map((t) => (
+                          <div key={t.id} className="flex items-center gap-2 text-xs">
+                            <input type="checkbox" checked={t.done} onChange={() => toggleTaskDone(t)} />
+                            <span className={`flex-1 ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</span>
+                            <span className="text-textMuted flex-shrink-0">{profileMap[t.assigned_to]?.full_name || "Unbenannt"}</span>
+                            {t.due_date && <span className="text-textMuted flex-shrink-0">bis {new Date(t.due_date).toLocaleDateString("de-DE")}</span>}
+                            <button onClick={() => deleteTask(t)} className="btn-ghost !px-1 text-[10px] text-coral flex-shrink-0">×</button>
+                          </div>
+                        ))}
+                        {tasks.length === 0 && <p className="text-textMuted text-xs">Noch keine Aufgaben.</p>}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <select className="input !w-auto !py-1 text-xs" value={taskDraft.assignedTo} onChange={(e) => setTaskDraft((d) => ({ ...d, assignedTo: e.target.value }))}>
+                            <option value="">Person wählen...</option>
+                            {orgMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
+                          </select>
+                          <input className="input !py-1 text-xs flex-1" placeholder="Aufgabe" value={taskDraft.title} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} />
+                          <input type="date" className="input !py-1 text-xs" value={taskDraft.dueDate} onChange={(e) => setTaskDraft((d) => ({ ...d, dueDate: e.target.value }))} />
+                          <button disabled={taskSaving || !taskDraft.assignedTo || !taskDraft.title.trim()} onClick={() => submitTask(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Zuweisen</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {editingLeadId === lead.id && (
                 <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-line">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
