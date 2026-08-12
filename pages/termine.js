@@ -57,6 +57,9 @@ export default function Termine() {
   const [showTaskFormFor, setShowTaskFormFor] = useState(null);
   const [taskDraft, setTaskDraft] = useState({ assignedTo: "", title: "", dueDate: "" });
   const [taskSaving, setTaskSaving] = useState(false);
+  const [expandedLeadId, setExpandedLeadId] = useState(null);
+  const [leadSearchQuery, setLeadSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -152,18 +155,22 @@ export default function Termine() {
     return () => clearInterval(interval);
   }, [viewMode, router.isReady, router.query.leadId]);
 
-  // Deep-Link aus der Termin-Benachrichtigungsmail (?leadId=...): zum
-  // passenden Termin scrollen und ihn kurz hervorheben.
+  // Deep-Link aus der Termin-Benachrichtigungsmail (?leadId=...): Kachel
+  // aufklappen, zum passenden Termin scrollen und ihn kurz hervorheben.
   useEffect(() => {
     const leadId = router.query.leadId;
     if (!leadId || !leads.length) return;
-    const el = leadRefs.current[leadId];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightId(leadId);
-      const t = setTimeout(() => setHighlightId(null), 4000);
-      return () => clearTimeout(t);
-    }
+    setExpandedLeadId(leadId);
+    // Kurz warten, bis die aufgeklappte Karte im DOM steht, bevor gescrollt wird.
+    const t1 = setTimeout(() => {
+      const el = leadRefs.current[leadId];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightId(leadId);
+        setTimeout(() => setHighlightId(null), 4000);
+      }
+    }, 50);
+    return () => clearTimeout(t1);
   }, [router.query.leadId, leads]);
 
   async function addNotificationEmail() {
@@ -454,6 +461,13 @@ export default function Termine() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
+  const filteredLeads = leads.filter((lead) => {
+    const q = leadSearchQuery.trim().toLowerCase();
+    const matchesQuery = !q || [lead.name, lead.company, lead.phone, lead.email].some((f) => (f || "").toLowerCase().includes(q));
+    const matchesDate = !dateFilter || (lead.appointment_at && lead.appointment_at.slice(0, 10) === dateFilter);
+    return matchesQuery && matchesDate;
+  });
+
   return (
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Termine</h1>
@@ -515,17 +529,68 @@ export default function Termine() {
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
-      <div className="flex flex-col gap-3">
-        {leads.map((lead) => {
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="card flex items-center gap-2 !py-2 flex-1 min-w-[200px]">
+          <Icon name="search" size={14} />
+          <input
+            className="bg-transparent border-none outline-none text-sm flex-1 text-textMain"
+            placeholder="Nach Name, Firma, Telefon oder E-Mail suchen..."
+            value={leadSearchQuery}
+            onChange={(e) => setLeadSearchQuery(e.target.value)}
+          />
+        </div>
+        <input type="date" className="input !w-auto !py-2 text-sm" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+        {(leadSearchQuery || dateFilter) && (
+          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); }} className="btn-ghost text-xs">Filter zurücksetzen</button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filteredLeads.map((lead) => {
           const owner = profileMap[lead.created_by];
           const statusColor = STATUS_COLORS[lead.status];
           const isHighlighted = highlightId === lead.id;
+          const isExpanded = expandedLeadId === lead.id;
+          const leadComments = commentsByLead[lead.id] || [];
+          const leadTasks = tasksByLead[lead.id] || [];
+          const openTaskCount = leadTasks.filter((t) => !t.done).length;
+
+          if (!isExpanded) {
+            return (
+              <button
+                key={lead.id}
+                ref={(el) => { leadRefs.current[lead.id] = el; }}
+                onClick={() => setExpandedLeadId(lead.id)}
+                className={`card text-left flex flex-col gap-1.5 hover:-translate-y-0.5 transition ${isHighlighted ? "ring-2 ring-amber" : ""}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display font-semibold text-textMain text-sm truncate">{lead.name}</span>
+                  <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
+                </div>
+                <div className="text-xs text-textMuted truncate">{lead.company || "Kein Unternehmen angegeben"}</div>
+                <div className="text-xs font-mono text-textMain">{formatAppointment(lead.appointment_at)}</div>
+                {viewMode === "team" && owner && (
+                  <div className="flex items-center gap-1.5 text-xs text-textMuted mt-0.5">
+                    <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
+                  </div>
+                )}
+                {(openTaskCount > 0 || leadComments.length > 0) && (
+                  <div className="flex items-center gap-2 text-[10px] text-textMuted mt-1 pt-1.5 border-t border-line">
+                    {openTaskCount > 0 && <span>✅ {openTaskCount} offen</span>}
+                    {leadComments.length > 0 && <span>💬 {leadComments.length}</span>}
+                  </div>
+                )}
+              </button>
+            );
+          }
+
           return (
             <div
               key={lead.id}
               ref={(el) => { leadRefs.current[lead.id] = el; }}
-              className={`card transition ${isHighlighted ? "ring-2 ring-amber" : ""}`}
+              className={`card transition sm:col-span-2 lg:col-span-3 ${isHighlighted ? "ring-2 ring-amber" : ""}`}
             >
+              <button onClick={() => setExpandedLeadId(null)} className="btn-ghost text-xs mb-2">← Zur Übersicht</button>
               <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
@@ -765,6 +830,7 @@ export default function Termine() {
             </div>
           );
         })}
+        {filteredLeads.length === 0 && leads.length > 0 && <p className="text-textMuted text-sm">Keine Termine gefunden.</p>}
         {leads.length === 0 && <p className="text-textMuted text-sm">Noch keine Termine erfasst — beim "Terminiert"-Klick im Call Tracker landen sie hier.</p>}
       </div>
     </Layout>
