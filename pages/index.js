@@ -180,8 +180,10 @@ export default function Dashboard() {
 
       const canManageLeads = me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin;
       if (canManageLeads) {
+        // Eigene Termine werden schon oben in "Anstehende Termine" gezeigt —
+        // hier ausschließen, sonst tauchen sie doppelt auf.
         const { data: teamLeads } = await supabase.from("leads").select("id, name, company, appointment_at, created_by")
-          .eq("status", "geplant").not("appointment_at", "is", null)
+          .eq("status", "geplant").not("appointment_at", "is", null).neq("created_by", uid)
           .gte("appointment_at", nowIso).order("appointment_at", { ascending: true }).limit(8);
         const creatorIds = [...new Set((teamLeads || []).map((l) => l.created_by))];
         let creatorMap = {};
@@ -308,7 +310,7 @@ export default function Dashboard() {
                 <div>
                   <div className="font-semibold text-textMain text-sm mb-2.5">🤝 Freundschaftsanfragen</div>
                   <div className="flex flex-col gap-2.5">
-                    {pendingFriendReqs.map((r) => {
+                    {pendingFriendReqs.slice(0, 3).map((r) => {
                       const busy = friendReqBusyId === r.id;
                       return (
                         <div key={r.id} className="flex items-center gap-3">
@@ -321,6 +323,7 @@ export default function Dashboard() {
                         </div>
                       );
                     })}
+                    {pendingFriendReqs.length > 3 && <span className="text-xs text-textMuted">+{pendingFriendReqs.length - 3} weitere</span>}
                   </div>
                 </div>
               )}
@@ -329,12 +332,13 @@ export default function Dashboard() {
                 <div className={pendingFriendReqs.length > 0 ? "pt-4 border-t border-line" : ""}>
                   <div className="font-semibold text-textMain text-sm mb-2.5">🔔 Erwähnungen</div>
                   <div className="flex flex-col gap-2">
-                    {myMentions.map((m) => (
+                    {myMentions.slice(0, 3).map((m) => (
                       <button key={m.id} onClick={() => router.push(m.route)} className="text-left text-sm hover:opacity-80">
                         <span className="text-amber font-semibold">{m.actorName}</span>{" "}
                         <span className="text-textMuted">hat dich erwähnt — {m.label}</span>
                       </button>
                     ))}
+                    {myMentions.length > 3 && <span className="text-xs text-textMuted">+{myMentions.length - 3} weitere</span>}
                   </div>
                 </div>
               )}
@@ -343,7 +347,7 @@ export default function Dashboard() {
                 <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0) ? "pt-4 border-t border-line" : ""}>
                   <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>✅ Offene Aufgaben</div>
                   <div className="flex flex-col gap-2">
-                    {myOpenTasks.map((t) => {
+                    {myOpenTasks.slice(0, 3).map((t) => {
                       const urgency = taskUrgency(t.due_date, false);
                       const style = urgency ? URGENCY_STYLES[urgency.level] : null;
                       return (
@@ -358,32 +362,34 @@ export default function Dashboard() {
                         </div>
                       );
                     })}
+                    {myOpenTasks.length > 3 && <span className="text-xs text-textMuted">+{myOpenTasks.length - 3} weitere</span>}
                   </div>
                 </div>
               )}
 
               {upcomingLeads.length > 0 && (
-                <div onClick={() => router.push("/termine")} className={`cursor-pointer ${(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0) ? "pt-4 border-t border-line" : ""}`}>
-                  <div className="font-semibold text-textMain text-sm mb-2.5">📅 Anstehende Termine</div>
+                <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0) ? "pt-4 border-t border-line" : ""}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>📅 Anstehende Termine</div>
                   <div className="flex flex-col gap-2.5">
-                    {upcomingLeads.map((l) => (
-                      <div key={l.id} className="flex items-center gap-3">
+                    {upcomingLeads.slice(0, 3).map((l) => (
+                      <div key={l.id} onClick={() => router.push("/termine")} className="flex items-center gap-3 cursor-pointer">
                         <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
                         <span className="text-xs font-mono text-textMuted flex-shrink-0">
                           {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
                     ))}
+                    {upcomingLeads.length > 3 && <span className="text-xs text-textMuted">+{upcomingLeads.length - 3} weitere</span>}
                   </div>
                 </div>
               )}
 
               {teamUpcomingLeads.length > 0 && (
-                <div onClick={() => router.push("/termine")} className={`cursor-pointer ${(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0) ? "pt-4 border-t border-line" : ""}`}>
-                  <div className="font-semibold text-textMain text-sm mb-2.5">📅 Anstehende Termine im Team</div>
+                <div className={`${(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0) ? "pt-4 border-t border-line" : ""}`}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>📅 Anstehende Termine im Team</div>
                   <div className="flex flex-col gap-2.5">
-                    {teamUpcomingLeads.map((l) => (
-                      <div key={l.id} className="flex items-center gap-3">
+                    {teamUpcomingLeads.slice(0, 3).map((l) => (
+                      <div key={l.id} onClick={() => router.push("/termine")} className="flex items-center gap-3 cursor-pointer">
                         <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
                         <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
                         <span className="text-xs font-mono text-textMuted flex-shrink-0">
@@ -391,6 +397,7 @@ export default function Dashboard() {
                         </span>
                       </div>
                     ))}
+                    {teamUpcomingLeads.length > 3 && <span className="text-xs text-textMuted">+{teamUpcomingLeads.length - 3} weitere</span>}
                   </div>
                 </div>
               )}
@@ -477,20 +484,26 @@ export default function Dashboard() {
               </div>
 
               <div className="card mb-5">
-                <div className="flex items-center gap-2 mb-3"><Icon name="award" color="var(--org-accent, #CE3A5C)" /><strong className="text-sm">Kurs-Übersicht</strong></div>
-                <div className="flex flex-col gap-2">
-                  {COURSES.map((c) => {
-                    const doneCount = c.modules.filter((m) => doneModuleIds.has(m.id)).length;
-                    const passed = examResults.some((r) => r.course_id === c.id && r.passed);
-                    return (
-                      <div key={c.id} className="flex items-center gap-3 text-sm">
-                        <span style={{ color: c.accent }}>{passed ? <Icon name="check" size={14} /> : <Icon name="book" size={14} />}</span>
-                        <span className="flex-1 text-textMain">{c.title}</span>
-                        <span className="text-textMuted font-mono text-xs">{doneCount}/{c.modules.length} Module</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <button onClick={() => setShowCourseList((v) => !v)} className="flex items-center gap-2 w-full text-left">
+                  <Icon name="award" color="var(--org-accent, #CE3A5C)" />
+                  <strong className="text-sm flex-1">Kurs-Übersicht</strong>
+                  <span className="text-xs text-textMuted">{showCourseList ? "Einklappen" : "Alle anzeigen"}</span>
+                </button>
+                {showCourseList && (
+                  <div className="flex flex-col gap-2 mt-3">
+                    {COURSES.map((c) => {
+                      const doneCount = c.modules.filter((m) => doneModuleIds.has(m.id)).length;
+                      const passed = examResults.some((r) => r.course_id === c.id && r.passed);
+                      return (
+                        <div key={c.id} className="flex items-center gap-3 text-sm">
+                          <span style={{ color: c.accent }}>{passed ? <Icon name="check" size={14} /> : <Icon name="book" size={14} />}</span>
+                          <span className="flex-1 text-textMain">{c.title}</span>
+                          <span className="text-textMuted font-mono text-xs">{doneCount}/{c.modules.length} Module</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="card">
