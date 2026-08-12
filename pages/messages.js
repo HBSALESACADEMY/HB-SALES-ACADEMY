@@ -46,6 +46,7 @@ export default function Messages() {
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupMembers, setNewGroupMembers] = useState(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
   const scrollRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -308,6 +309,12 @@ export default function Messages() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
+  const filteredConversations = conversations.filter((c) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (c.full_name || "").toLowerCase().includes(q) || (c.lastMessage?.content || "").toLowerCase().includes(q);
+  });
+
   return (
     <Layout fullBleed>
       <div className="flex h-full gap-3">
@@ -315,6 +322,15 @@ export default function Messages() {
           <div className="flex items-center justify-between px-2 mb-2">
             <h1 className="text-lg font-display text-textMain">Nachrichten</h1>
             <button onClick={() => setShowNewGroup(true)} className="btn-ghost text-xs px-2 py-1" title="Neue Gruppe">+ Gruppe</button>
+          </div>
+
+          <div className="px-1 mb-2">
+            <input
+              className="input !py-1.5 text-xs w-full"
+              placeholder="Chats durchsuchen..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
 
           {showNewGroup && (
@@ -336,7 +352,7 @@ export default function Messages() {
             </div>
           )}
 
-          {conversations.map((c) => {
+          {filteredConversations.map((c) => {
             const preview = c.lastMessage
               ? (c.lastMessage.sender_id === selfId ? "Du: " : "") + (c.lastMessage.content || (c.lastMessage.attachment_type === "image" ? "📷 Foto" : c.lastMessage.attachment_type === "audio" ? "🎤 Sprachnachricht" : c.lastMessage.attachment_type === "video" ? "🎬 Video" : "📎 Datei"))
               : "Noch keine Nachrichten";
@@ -363,6 +379,9 @@ export default function Messages() {
               </button>
             );
           })}
+          {filteredConversations.length === 0 && conversations.length > 0 && !showNewGroup && (
+            <div className="px-3 text-xs text-textMuted">Keine Chats gefunden.</div>
+          )}
           {conversations.length === 0 && !showNewGroup && (
             <div className="px-3 text-xs text-textMuted">
               Noch niemand zum Schreiben. <button onClick={() => router.push("/members")} className="underline text-amber">Mitglieder ansehen</button> — Kollegen deiner Organisation kannst du direkt anschreiben, alle anderen erst nach einer Anfrage.
