@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [teamUpcomingLeads, setTeamUpcomingLeads] = useState([]);
   const [myMentions, setMyMentions] = useState([]);
   const [myOpenTasks, setMyOpenTasks] = useState([]);
+  const [showCourseList, setShowCourseList] = useState(false);
 
   async function loadPendingFriendRequests(uid) {
     const { data: reqs } = await supabase.from("friendships").select("id, requester_id").eq("addressee_id", uid).eq("status", "pending").order("created_at", { ascending: false });
