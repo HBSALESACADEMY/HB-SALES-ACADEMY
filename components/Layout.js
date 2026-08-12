@@ -244,7 +244,12 @@ export default function Layout({ children, fullBleed }) {
       const { total: msgCount } = await getUnreadMessageInfo(supabase, uid);
       if (mounted) setUnreadMessages(msgCount || 0);
 
-      const { data: me } = { data: cachedProfile };
+      // Frisch aus der DB statt aus cachedProfile: dieser Effekt lauscht auch
+      // auf Realtime-Änderungen an "profiles" — inklusive des eigenen Updates
+      // von last_seen_community_at beim Besuch der Community-Seite. Mit dem
+      // (evtl. noch nicht gepatchten) cachedProfile lief das in ein Rennen,
+      // bei dem der Badge direkt nach dem "Gesehen"-Markieren wieder auftauchte.
+      const { data: me } = await supabase.from("profiles").select("role, organization_id, is_platform_admin, last_seen_community_at").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
       const [{ count: postCount }, { count: commentCount }] = await Promise.all([
         supabase.from("community_posts").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", session.user.id),
