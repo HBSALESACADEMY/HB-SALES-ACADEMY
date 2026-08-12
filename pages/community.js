@@ -435,6 +435,9 @@ export default function Community() {
     await load();
   }
 
+  // Reaktionen nur lokal aktualisieren statt die ganze Seite neu zu laden —
+  // ein voller load() würde kurz die Ladeanzeige zeigen und die Liste
+  // unmounten, wodurch man beim Scrollen zurück nach oben "fliegt".
   async function setReaction(postId, reaction) {
     const { data: { session } } = await supabase.auth.getSession();
     const mine = kudosByPost[postId]?.mine;
@@ -443,7 +446,13 @@ export default function Community() {
       const { error: err } = await supabase.from("community_kudos").insert({ post_id: postId, user_id: session.user.id, reaction });
       if (err) { setError(err.message); return; }
     }
-    await load();
+    setKudosByPost((prev) => {
+      const current = prev[postId] || { counts: {}, mine: null };
+      const counts = { ...current.counts };
+      if (mine) counts[mine] = Math.max(0, (counts[mine] || 0) - 1);
+      if (mine !== reaction) counts[reaction] = (counts[reaction] || 0) + 1;
+      return { ...prev, [postId]: { counts, mine: mine === reaction ? null : reaction } };
+    });
   }
 
   async function setCommentReaction(commentId, reaction) {
@@ -454,7 +463,13 @@ export default function Community() {
       const { error: err } = await supabase.from("community_comment_kudos").insert({ comment_id: commentId, user_id: session.user.id, reaction });
       if (err) { setError(err.message); return; }
     }
-    await load();
+    setKudosByComment((prev) => {
+      const current = prev[commentId] || { counts: {}, mine: null };
+      const counts = { ...current.counts };
+      if (mine) counts[mine] = Math.max(0, (counts[mine] || 0) - 1);
+      if (mine !== reaction) counts[reaction] = (counts[reaction] || 0) + 1;
+      return { ...prev, [commentId]: { counts, mine: mine === reaction ? null : reaction } };
+    });
   }
 
   async function submitComment(postId) {
@@ -518,7 +533,13 @@ export default function Community() {
       const { error: err } = await supabase.from("community_poll_votes").insert({ post_id: postId, option_id: optionId, user_id: session.user.id });
       if (err) { setError(err.message); return; }
     }
-    await load();
+    setPollVotesByPost((prev) => {
+      const current = prev[postId] || { countByOption: {}, mineOptionId: null };
+      const countByOption = { ...current.countByOption };
+      if (mineOptionId) countByOption[mineOptionId] = Math.max(0, (countByOption[mineOptionId] || 0) - 1);
+      if (mineOptionId !== optionId) countByOption[optionId] = (countByOption[optionId] || 0) + 1;
+      return { ...prev, [postId]: { countByOption, mineOptionId: mineOptionId === optionId ? null : optionId } };
+    });
   }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
@@ -614,21 +635,21 @@ export default function Community() {
               <div className="text-center">
                 <div className="text-lg">🔥</div>
                 <div className="text-sm text-textMain font-semibold">{kudosWall.topKudos.name}</div>
-                <div className="text-xs text-textMuted">{kudosWall.topKudos.count} Kudos erhalten</div>
+                <div className="text-xs text-textMuted">Meiste Kudos diese Woche</div>
               </div>
             )}
             {kudosWall.topXp && (
               <div className="text-center">
                 <div className="text-lg">📈</div>
                 <div className="text-sm text-textMain font-semibold">{kudosWall.topXp.name}</div>
-                <div className="text-xs text-textMuted">{kudosWall.topXp.amount} XP diese Woche</div>
+                <div className="text-xs text-textMuted">Meiste XP diese Woche</div>
               </div>
             )}
             {kudosWall.topStreak && (
               <div className="text-center">
                 <div className="text-lg">⚡</div>
                 <div className="text-sm text-textMain font-semibold">{kudosWall.topStreak.name}</div>
-                <div className="text-xs text-textMuted">{kudosWall.topStreak.days} Tage Serie</div>
+                <div className="text-xs text-textMuted">Längste Serie</div>
               </div>
             )}
           </div>
