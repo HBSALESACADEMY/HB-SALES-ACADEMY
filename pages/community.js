@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Layout, { patchCachedProfile } from "../components/Layout";
 import Icon from "../components/Icon";
@@ -36,6 +36,13 @@ export default function Community() {
   const [newPostFile, setNewPostFile] = useState(null);
   const [shareGlobally, setShareGlobally] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState({});
+  // Mention-Autocomplete (@Name): "compose" für das Post-Feld, sonst die
+  // post.id des Kommentarfelds. mentionStart ist die Zeichenposition des "@".
+  const [mentionTarget, setMentionTarget] = useState(null);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStart, setMentionStart] = useState(-1);
+  const postTextareaRef = useRef(null);
+  const commentInputRefs = useRef({});
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
@@ -190,6 +197,83 @@ export default function Community() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Findet ein aktives "@..."-Muster direkt vor der Cursor-Position (ohne
+  // Leerzeichen dazwischen), damit während des Tippens Vorschläge erscheinen.
+  function detectMention(text, caret) {
+    const upto = text.slice(0, caret);
+    const at = upto.lastIndexOf("@");
+    if (at === -1) return null;
+    const between = upto.slice(at + 1);
+    if (/\s/.test(between)) return null;
+    return { start: at, query: between };
+  }
+
+  function handleMentionChange(target, text, caret) {
+    const m = detectMention(text, caret);
+    if (m) {
+      setMentionTarget(target);
+      setMentionStart(m.start);
+      setMentionQuery(m.query);
+    } else if (mentionTarget === target) {
+      setMentionTarget(null);
+    }
+  }
+
+  // Vorschlagsliste richtet sich danach, ob der Beitrag/Kommentar organisations-
+  // intern oder global sichtbar ist bzw. wird — global geteilte Inhalte können
+  // auch Mitglieder anderer Organisationen erwähnen, org-interne nur die eigenen.
+  const mentionScopeGlobal = mentionTarget === "compose"
+    ? shareGlobally
+    : mentionTarget != null && posts.find((p) => p.id === mentionTarget)?.visibility === "global";
+  const mentionPool = mentionScopeGlobal ? allProfiles : allProfiles.filter((p) => (p.organization_id || null) === myOrgId);
+  const mentionResults = mentionTarget == null ? [] : mentionPool
+    .filter((p) => p.id !== selfId && (!mentionQuery || (p.full_name || "").toLowerCase().includes(mentionQuery.toLowerCase())))
+    .slice(0, 6);
+
+  function selectMention(profile) {
+    const name = profile.full_name || "Unbenannt";
+    const insertion = `@${name} `;
+    if (mentionTarget === "compose") {
+      const next = newPost.slice(0, mentionStart) + insertion + newPost.slice(mentionStart + 1 + mentionQuery.length);
+      setNewPost(next);
+      requestAnimationFrame(() => postTextareaRef.current?.focus());
+    } else {
+      const postId = mentionTarget;
+      const current = commentDrafts[postId] || "";
+      const next = current.slice(0, mentionStart) + insertion + current.slice(mentionStart + 1 + mentionQuery.length);
+      setCommentDrafts((prev) => ({ ...prev, [postId]: next }));
+      requestAnimationFrame(() => commentInputRefs.current[postId]?.focus());
+    }
+    setMentionTarget(null);
+    setMentionQuery("");
+    setMentionStart(-1);
+  }
+
+  // Hebt "@Name" im angezeigten Text hervor, wenn der Name zu einem
+  // bekannten Profil gehört (längste Namen zuerst, damit z.B. "@Anna Meyer"
+  // nicht schon bei "@Anna" abgeschnitten wird) — klickbar zum Profil.
+  function renderContent(text) {
+    if (!text) return text;
+    const names = allProfiles.map((p) => ({ id: p.id, name: p.full_name })).filter((p) => p.name).sort((a, b) => b.name.length - a.name.length);
+    if (!names.length) return text;
+    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      const found = names.find((n) => n.name === match[1]);
+      parts.push(
+        <span key={match.index} className="text-amber font-semibold cursor-pointer hover:underline" onClick={() => openProfile(found.id)}>
+          @{match[1]}
+        </span>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts;
+  }
 
   async function submitPost() {
     if (!newPost.trim()) return;
@@ -391,8 +475,26 @@ export default function Community() {
         )}
       </div>
 
-      <div className="card mb-6">
-        <textarea className="input" placeholder="Was gibt's Neues? Ein Erfolg, ein Tipp, ein Foto..." rows={3} value={newPost} onChange={(e) => setNewPost(e.target.value)} />
+      <div className="card mb-6 relative">
+        <textarea
+          ref={postTextareaRef}
+          className="input"
+          placeholder="Was gibt's Neues? Ein Erfolg, ein Tipp, ein Foto... (@ um jemanden zu erwähnen)"
+          rows={3}
+          value={newPost}
+          onChange={(e) => { setNewPost(e.target.value); handleMentionChange("compose", e.target.value, e.target.selectionStart); }}
+          onKeyUp={(e) => handleMentionChange("compose", e.target.value, e.target.selectionStart)}
+          onBlur={() => setTimeout(() => setMentionTarget((t) => (t === "compose" ? null : t)), 150)}
+        />
+        {mentionTarget === "compose" && mentionResults.length > 0 && (
+          <div className="absolute z-10 mt-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-[var(--card-bg,#1a1d29)] shadow-lg">
+            {mentionResults.map((p) => (
+              <button key={p.id} onMouseDown={(e) => { e.preventDefault(); selectMention(p); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs hover:bg-white/5">
+                <Avatar name={p.full_name || "?"} src={p.avatar_url} size={20} /> {p.full_name || "Unbenannt"}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-2.5 flex-wrap">
           {groups.length > 0 && (
             <select className="input !w-auto text-xs" value={newPostGroup} onChange={(e) => setNewPostGroup(e.target.value)}>
@@ -440,7 +542,7 @@ export default function Community() {
                   <button onClick={() => deletePost(p.id)} className="btn-ghost text-xs text-coral">Löschen</button>
                 )}
               </div>
-              <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{p.content}</p>
+              <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{renderContent(p.content)}</p>
 
               {p.attachment_url && p.attachment_type === "image" && (
                 <img src={p.attachment_url} alt="" className="rounded-lg max-h-96 w-auto mb-3 border border-line" />
@@ -476,7 +578,7 @@ export default function Community() {
                           <div className="text-xs flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-semibold text-textMain cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>{profileMap[c.user_id]?.name || "Unbenannt"}:</span>
-                              <span className="text-textMuted">{c.content}</span>
+                              <span className="text-textMuted">{renderContent(c.content)}</span>
                               {isTop && (
                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber/15 text-amber font-semibold flex-shrink-0">🏆 Top-Antwort</span>
                               )}
@@ -491,11 +593,27 @@ export default function Community() {
                   </div>
                 );
               })()}
-              <div className="flex items-center gap-2 mt-3">
-                <input className="input flex-1 text-xs" placeholder="Kommentieren..." value={commentDrafts[p.id] || ""}
-                  onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                  onKeyDown={(e) => e.key === "Enter" && submitComment(p.id)} />
+              <div className="flex items-center gap-2 mt-3 relative">
+                <input
+                  ref={(el) => { commentInputRefs.current[p.id] = el; }}
+                  className="input flex-1 text-xs"
+                  placeholder="Kommentieren... (@ um jemanden zu erwähnen)"
+                  value={commentDrafts[p.id] || ""}
+                  onChange={(e) => { setCommentDrafts((prev) => ({ ...prev, [p.id]: e.target.value })); handleMentionChange(p.id, e.target.value, e.target.selectionStart); }}
+                  onKeyUp={(e) => e.key !== "Enter" && handleMentionChange(p.id, e.target.value, e.target.selectionStart)}
+                  onKeyDown={(e) => e.key === "Enter" && submitComment(p.id)}
+                  onBlur={() => setTimeout(() => setMentionTarget((t) => (t === p.id ? null : t)), 150)}
+                />
                 <button onClick={() => submitComment(p.id)} className="btn-ghost text-xs">Senden</button>
+                {mentionTarget === p.id && mentionResults.length > 0 && (
+                  <div className="absolute z-10 bottom-full mb-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-[var(--card-bg,#1a1d29)] shadow-lg">
+                    {mentionResults.map((mp) => (
+                      <button key={mp.id} onMouseDown={(e) => { e.preventDefault(); selectMention(mp); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs hover:bg-white/5">
+                        <Avatar name={mp.full_name || "?"} src={mp.avatar_url} size={20} /> {mp.full_name || "Unbenannt"}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );
