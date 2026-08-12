@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { validatePostAttachment } from "../lib/uploadValidation";
+import { getActiveOrgId } from "../lib/activeOrg";
 import { effectiveStreak } from "../lib/streak";
 
 export default function Community() {
@@ -52,8 +53,7 @@ export default function Community() {
     // Plattform-Admins können per Firmencode "als" eine andere Organisation
     // eingeloggt sein (sessionStorage) — dann zählt für "Meine Organisation"
     // und die Highlights die AKTIVE Organisation, nicht die eigene Heimat-Org.
-    const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
-    setMyOrgId(activeOrgId || null);
+    setMyOrgId(getActiveOrgId(me));
 
     const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: commentKudos }, { data: profiles }, { data: friendships }] = await Promise.all([
       supabase.from("community_groups").select("*").order("created_at"),
@@ -220,6 +220,7 @@ export default function Community() {
       attachment_url,
       attachment_type,
       visibility: shareGlobally ? "global" : "org",
+      organization_id: myOrgId,
     });
     setPosting(false);
     if (insErr) { setError(insErr.message); return; }
@@ -296,7 +297,10 @@ export default function Community() {
   // Beiträge, die zusätzlich global geteilt wurden). "Global" zeigt nur
   // bewusst organisationsübergreifend geteilte Beiträge, unabhängig von der
   // Organisation der Autorin/des Autors.
-  const scopedPosts = posts.filter((p) => scope === "global" ? p.visibility === "global" : orgByUserId[p.user_id] === myOrgId);
+  // organization_id ist die beim Erstellen AKTIVE Organisation (siehe
+  // migration_62) — Fallback auf orgByUserId nur für den Fall, dass die
+  // Migration in dieser Umgebung noch nicht eingespielt wurde.
+  const scopedPosts = posts.filter((p) => scope === "global" ? p.visibility === "global" : (p.organization_id || orgByUserId[p.user_id]) === myOrgId);
   const visiblePosts = (activeGroup === "all" ? scopedPosts : scopedPosts.filter((p) => p.group_id === activeGroup))
     .filter((p) => !searchQuery.trim() || p.content.toLowerCase().includes(searchQuery.toLowerCase()));
 

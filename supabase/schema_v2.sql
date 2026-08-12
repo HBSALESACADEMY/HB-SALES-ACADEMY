@@ -342,7 +342,11 @@ create table if not exists community_posts (
   attachment_type text,
   -- 'org' = nur für die eigene Organisation sichtbar (Standard), 'global' =
   -- bewusst mit allen Organisationen geteilt.
-  visibility text not null default 'org' check (visibility in ('org', 'global'))
+  visibility text not null default 'org' check (visibility in ('org', 'global')),
+  -- Die beim Erstellen AKTIVE Organisation (siehe lib/activeOrg.js), nicht
+  -- zwingend die Heimat-Organisation des/der Autor:in — relevant für
+  -- Plattform-Admins per Firmencode (siehe migration_62).
+  organization_id uuid references organizations(id) on delete set null
 );
 
 create table if not exists community_comments (
@@ -1096,7 +1100,14 @@ create policy "community_posts_select_all" on community_posts for select using (
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "community_posts_insert_own" on community_posts;
-create policy "community_posts_insert_own" on community_posts for insert with check (auth.uid() = user_id);
+create policy "community_posts_insert_own" on community_posts for insert with check (
+  auth.uid() = user_id
+  and (
+    organization_id is null
+    or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  )
+);
 drop policy if exists "community_posts_delete_own_or_manager" on community_posts;
 create policy "community_posts_delete_own_or_manager" on community_posts for delete using (
   auth.uid() = user_id

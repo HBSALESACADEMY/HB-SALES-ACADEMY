@@ -18,6 +18,9 @@ export default function Termine() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [canSeeTeam, setCanSeeTeam] = useState(false);
+  const [canDeleteTeam, setCanDeleteTeam] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [viewMode, setViewMode] = useState("own"); // 'own' | 'team'
   const [leads, setLeads] = useState([]);
   const [profileMap, setProfileMap] = useState({});
@@ -48,6 +51,9 @@ export default function Termine() {
     const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
     const canManage = !!(me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin);
     setCanSeeTeam(canManage);
+    // Deckt sich mit der leads_delete-RLS-Policy: backend-Rolle darf zwar
+    // verwalten/sehen, aber keine fremden Termine löschen.
+    setCanDeleteTeam(!!(me?.role === "manager" || me?.is_admin || me?.is_platform_admin));
     // Ein per E-Mail verlinkter Termin kann auch jemand anderem gehören —
     // dann automatisch in die Team-Ansicht wechseln, um ihn zu finden.
     const wantsTeamForDeepLink = !!router.query.leadId && canManage && viewMode === "own";
@@ -123,6 +129,20 @@ export default function Termine() {
     const { error: err } = await supabase.from("notification_emails").delete().eq("id", id);
     if (err) { setError(err.message); return; }
     setNotificationEmails((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  async function deleteTermin(lead) {
+    setDeleting(true);
+    const { error: err } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (err) { setError(err.message); setDeleting(false); return; }
+    // Sonst bliebe die Aufnahme im Speicher liegen, nur der Datenbank-Eintrag
+    // würde verschwinden (DSGVO: Löschung muss auch die Datei selbst treffen).
+    if (lead.recording_path) {
+      await supabase.storage.from("lead-recordings").remove([lead.recording_path]);
+    }
+    setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+    setConfirmDelete(null);
+    setDeleting(false);
   }
 
   async function updateStatus(id, status) {
@@ -374,6 +394,19 @@ export default function Termine() {
                   <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
                   <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
                   <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
+                </div>
+              )}
+              {(lead.created_by === selfId || canDeleteTeam) && (
+                <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-line">
+                  {confirmDelete === lead.id ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-xs text-coral">Termin wirklich löschen?</span>
+                      <button disabled={deleting} onClick={() => deleteTermin(lead)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
+                      <button disabled={deleting} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setConfirmDelete(lead.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                  )}
                 </div>
               )}
             </div>
