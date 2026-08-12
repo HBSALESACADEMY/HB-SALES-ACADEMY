@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../components/Layout";
+import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import AudioPlayer from "../components/AudioPlayer";
@@ -244,6 +245,12 @@ export default function Termine() {
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Termine</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-5">Beim Call Tracker erfasste Kundendaten und Termine.</p>
+
+      <InfoCard>
+        <strong>Team erinnern</strong> schickt eine Erinnerungsmail an Manager/Admins eurer Organisation und die unter "Benachrichtigungen" eingetragenen Adressen — <strong>nicht</strong> an die Kund:in.
+        Die E-Mail-Adresse bei einem Termin lässt sich direkt anklicken, um sie zu bearbeiten oder zu löschen.
+        Termine können bei Bedarf komplett gelöscht werden (inkl. zugehöriger Aufnahme).
+      </InfoCard>
 
       {canSeeTeam && (
         <div className="flex items-center gap-2 mb-5 flex-wrap">

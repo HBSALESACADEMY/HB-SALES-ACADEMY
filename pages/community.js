@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Layout, { patchCachedProfile } from "../components/Layout";
+import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
@@ -573,6 +574,14 @@ export default function Community() {
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Community</h1>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Teilt Erfolge, Tipps, Fotos und Erfahrungen — standardmäßig nur mit eurer Organisation, optional auch global.</p>
+
+      <InfoCard>
+        Mit <strong>@Name</strong> könnt ihr jemanden erwähnen (Vorschläge erscheinen beim Tippen) — die Person bekommt beim nächsten Besuch eine Benachrichtigung.
+        Mit <strong>#Stichwort</strong> setzt ihr ein Hashtag, das oben als Filter-Chip anklickbar wird.
+        Mit 🔥👍❤️😂 könnt ihr auf Beiträge und Kommentare reagieren.
+        Manager/Admins können wichtige Beiträge <strong>anpinnen</strong> (📌, erscheinen zuerst) und ihr könnt beim Posten eine <strong>Umfrage</strong> anhängen.
+        Eigene Beiträge lassen sich nachträglich bearbeiten oder löschen.
+      </InfoCard>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
