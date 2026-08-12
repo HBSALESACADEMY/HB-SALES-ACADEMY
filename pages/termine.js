@@ -393,7 +393,16 @@ export default function Termine() {
                     ✉️ {lead.email || <span className="italic">Keine E-Mail — hinzufügen</span>}
                   </button>
                 )}
-                {lead.website && <span>🌐 {lead.website}</span>}
+                {lead.website && (
+                  <a
+                    href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-textMain hover:underline"
+                  >
+                    🌐 {lead.website}
+                  </a>
+                )}
                 {viewMode === "team" && owner && (
                   <button onClick={() => openProfile(owner.id)} className="flex items-center gap-1.5 hover:text-textMain">
                     <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
