@@ -1127,11 +1127,22 @@ create policy "community_groups_delete_managers" on community_groups for delete 
 -- --- community_posts ---
 -- visibility='org' (Standard) ist nur für die eigene Organisation sichtbar;
 -- visibility='global' bewusst für alle. Komplett getrennte Communities.
+-- community_post_same_org: wie same_org, aber nutzt bevorzugt die auf dem
+-- Beitrag selbst gespeicherte organization_id (die beim Erstellen AKTIVE
+-- Organisation, siehe migration_62) statt der Heimat-Organisation des/der
+-- Autor:in — relevant für Plattform-Admins per Firmencode (migration_65).
+create or replace function public.community_post_same_org(p_org uuid, p_author uuid, viewer uuid)
+returns boolean
+language sql stable security definer as $$
+  select coalesce(p_org, (select organization_id from profiles where profiles.id = p_author))
+       = (select organization_id from profiles where profiles.id = viewer);
+$$;
+
 drop policy if exists "community_posts_select_all" on community_posts;
 create policy "community_posts_select_all" on community_posts for select using (
   visibility = 'global'
-  or same_org(user_id, auth.uid())
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or community_post_same_org(organization_id, user_id, auth.uid())
 );
 drop policy if exists "community_posts_insert_own" on community_posts;
 create policy "community_posts_insert_own" on community_posts for insert with check (
@@ -1146,7 +1157,10 @@ drop policy if exists "community_posts_delete_own_or_manager" on community_posts
 create policy "community_posts_delete_own_or_manager" on community_posts for delete using (
   auth.uid() = user_id
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
+    and community_post_same_org(organization_id, user_id, auth.uid())
+  )
 );
 -- Bearbeiten (Inhalt) + Anpinnen (migration_64) — dieselben Rechte wie beim
 -- Löschen, plus is_admin zusätzlich zu role='manager'.
@@ -1156,7 +1170,7 @@ create policy "community_posts_update_own_or_manager" on community_posts for upd
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (
     exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
+    and community_post_same_org(organization_id, user_id, auth.uid())
   )
 );
 
@@ -1166,7 +1180,7 @@ create policy "community_comments_select_all" on community_comments for select u
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or exists (
     select 1 from community_posts cp where cp.id = community_comments.post_id
-    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+    and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
 );
 drop policy if exists "community_comments_insert_own" on community_comments;
@@ -1176,7 +1190,7 @@ create policy "community_comments_insert_own" on community_comments for insert w
     exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
     or exists (
       select 1 from community_posts cp where cp.id = community_comments.post_id
-      and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+      and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
     )
   )
 );
@@ -1202,7 +1216,7 @@ create policy "community_kudos_select_all" on community_kudos for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or exists (
     select 1 from community_posts cp where cp.id = community_kudos.post_id
-    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+    and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
 );
 drop policy if exists "community_kudos_insert_own" on community_kudos;
@@ -1212,7 +1226,7 @@ create policy "community_kudos_insert_own" on community_kudos for insert with ch
     exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
     or exists (
       select 1 from community_posts cp where cp.id = community_kudos.post_id
-      and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+      and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
     )
   )
 );
@@ -1227,7 +1241,7 @@ create policy "community_comment_kudos_select_all" on community_comment_kudos fo
     select 1 from community_comments cc
     join community_posts cp on cp.id = cc.post_id
     where cc.id = community_comment_kudos.comment_id
-    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+    and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
 );
 drop policy if exists "community_comment_kudos_insert_own" on community_comment_kudos;
@@ -1239,7 +1253,7 @@ create policy "community_comment_kudos_insert_own" on community_comment_kudos fo
       select 1 from community_comments cc
       join community_posts cp on cp.id = cc.post_id
       where cc.id = community_comment_kudos.comment_id
-      and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+      and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
     )
   )
 );
@@ -1254,7 +1268,7 @@ create policy "community_poll_options_select_all" on community_poll_options for 
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or exists (
     select 1 from community_posts cp where cp.id = community_poll_options.post_id
-    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+    and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
 );
 drop policy if exists "community_poll_options_insert_own_post" on community_poll_options;
@@ -1266,7 +1280,7 @@ create policy "community_poll_votes_select_all" on community_poll_votes for sele
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or exists (
     select 1 from community_posts cp where cp.id = community_poll_votes.post_id
-    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+    and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
 );
 drop policy if exists "community_poll_votes_insert_own" on community_poll_votes;
@@ -1276,7 +1290,7 @@ create policy "community_poll_votes_insert_own" on community_poll_votes for inse
     exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
     or exists (
       select 1 from community_posts cp where cp.id = community_poll_votes.post_id
-      and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+      and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
     )
   )
 );
