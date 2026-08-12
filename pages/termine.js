@@ -208,6 +208,13 @@ export default function Termine() {
     setDeleting(false);
   }
 
+  // profileMap wird erst beim nächsten Neuladen (alle 20s) um gerade erst
+  // zugewiesene/erwähnte Personen ergänzt — orgMembers ist schon vollständig
+  // und lokal sofort verfügbar, deshalb als Fallback statt "Unbenannt".
+  function nameFor(id) {
+    return profileMap[id]?.full_name || orgMembers.find((m) => m.id === id)?.full_name || (id === selfId ? "Ich" : "Unbenannt");
+  }
+
   function toLocalDatetimeValue(iso) {
     if (!iso) return "";
     const d = new Date(iso);
@@ -712,8 +719,8 @@ export default function Termine() {
                               <div className="flex-1 min-w-0">
                                 <div className={`font-semibold text-sm ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</div>
                                 <div className="text-[11px] text-textMuted flex items-center gap-x-3 gap-y-0.5 flex-wrap mt-1">
-                                  <span>👤 Zugewiesen an: <strong className="text-textMain font-normal">{profileMap[t.assigned_to]?.full_name || "Unbenannt"}</strong></span>
-                                  <span>von {profileMap[t.assigned_by]?.full_name || "Unbenannt"}</span>
+                                  <span>👤 Zugewiesen an: <strong className="text-textMain font-normal">{nameFor(t.assigned_to)}</strong></span>
+                                  <span>von {nameFor(t.assigned_by)}</span>
                                   {t.due_date && (
                                     <span>🕐 {new Date(t.due_date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                                   )}
@@ -742,7 +749,7 @@ export default function Termine() {
                         {comments.map((c) => (
                           <div key={c.id} className="text-xs">
                             <span className="font-semibold text-textMain cursor-pointer hover:underline" onClick={() => openProfile(c.user_id)}>
-                              {profileMap[c.user_id]?.full_name || "Unbenannt"}:
+                              {nameFor(c.user_id)}:
                             </span>{" "}
                             <span className="text-textMuted">{renderCommentContent(c.content)}</span>
                           </div>
