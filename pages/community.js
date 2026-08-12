@@ -74,6 +74,7 @@ export default function Community() {
   const [newPollOptions, setNewPollOptions] = useState(["", ""]);
   const [showPollForm, setShowPollForm] = useState(false);
   const [pollDurationHours, setPollDurationHours] = useState("24");
+  const [pollCustomExpiry, setPollCustomExpiry] = useState("");
 
   async function load() {
     setLoading(true);
@@ -382,9 +383,14 @@ export default function Community() {
       }
     }
 
-    const pollExpiresAt = showPollForm && pollDurationHours !== "unlimited"
-      ? new Date(Date.now() + Number(pollDurationHours) * 60 * 60 * 1000).toISOString()
-      : null;
+    let pollExpiresAt = null;
+    if (showPollForm) {
+      if (pollDurationHours === "custom") {
+        pollExpiresAt = pollCustomExpiry ? new Date(pollCustomExpiry).toISOString() : null;
+      } else if (pollDurationHours !== "unlimited") {
+        pollExpiresAt = new Date(Date.now() + Number(pollDurationHours) * 60 * 60 * 1000).toISOString();
+      }
+    }
 
     const { data: newRow, error: insErr } = await supabase.from("community_posts").insert({
       user_id: session.user.id,
@@ -421,6 +427,7 @@ export default function Community() {
     setShowPollForm(false);
     setNewPollOptions(["", ""]);
     setPollDurationHours("24");
+    setPollCustomExpiry("");
     await load();
   }
 
@@ -749,8 +756,18 @@ export default function Community() {
                   <option value="72">nach 3 Tagen</option>
                   <option value="168">nach 1 Woche</option>
                   <option value="unlimited">nie</option>
+                  <option value="custom">eigenes Datum...</option>
                 </select>
               </label>
+              {pollDurationHours === "custom" && (
+                <input
+                  type="datetime-local"
+                  className="input !w-auto !py-1 text-xs"
+                  min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                  value={pollCustomExpiry}
+                  onChange={(e) => setPollCustomExpiry(e.target.value)}
+                />
+              )}
               <button onClick={() => { setShowPollForm(false); setNewPollOptions(["", ""]); }} className="btn-ghost text-xs text-coral">Umfrage entfernen</button>
             </div>
           </div>
@@ -779,7 +796,7 @@ export default function Community() {
             <input type="checkbox" checked={shareGlobally} onChange={(e) => setShareGlobally(e.target.checked)} />
             Auch in der globalen Community teilen
           </label>
-          <button disabled={posting || !newPost.trim()} onClick={submitPost} className="btn ml-auto disabled:opacity-40">Posten</button>
+          <button disabled={posting || !newPost.trim() || (showPollForm && pollDurationHours === "custom" && !pollCustomExpiry)} onClick={submitPost} className="btn ml-auto disabled:opacity-40">Posten</button>
         </div>
       </div>
 
