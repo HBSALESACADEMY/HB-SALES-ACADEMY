@@ -40,6 +40,8 @@ export default function Termine() {
   const [reminderSentId, setReminderSentId] = useState(null);
   const [editingEmailId, setEditingEmailId] = useState(null);
   const [emailDraft, setEmailDraft] = useState("");
+  const [editingLeadId, setEditingLeadId] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -144,6 +146,44 @@ export default function Termine() {
     setLeads((prev) => prev.filter((l) => l.id !== lead.id));
     setConfirmDelete(null);
     setDeleting(false);
+  }
+
+  function toLocalDatetimeValue(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  function startEditLead(lead) {
+    setEditingLeadId(lead.id);
+    setEditDraft({
+      name: lead.name || "",
+      phone: lead.phone || "",
+      company: lead.company || "",
+      website: lead.website || "",
+      notes: lead.notes || "",
+      is_decision_maker: !!lead.is_decision_maker,
+      appointment_at: toLocalDatetimeValue(lead.appointment_at),
+    });
+    setError("");
+  }
+
+  async function saveEditLead(id) {
+    if (!editDraft.name.trim()) { setError("Name darf nicht leer sein."); return; }
+    const patch = {
+      name: editDraft.name.trim(),
+      phone: editDraft.phone.trim() || null,
+      company: editDraft.company.trim() || null,
+      website: editDraft.website.trim() || null,
+      notes: editDraft.notes.trim() || null,
+      is_decision_maker: editDraft.is_decision_maker,
+      appointment_at: editDraft.appointment_at ? new Date(editDraft.appointment_at).toISOString() : null,
+    };
+    const { error: err } = await supabase.from("leads").update(patch).eq("id", id);
+    if (err) { setError(err.message); return; }
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    setEditingLeadId(null);
+    setEditDraft(null);
   }
 
   async function updateStatus(id, status) {
@@ -403,16 +443,40 @@ export default function Termine() {
                   <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
                 </div>
               )}
-              {(lead.created_by === selfId || canDeleteTeam) && (
+              {editingLeadId === lead.id && (
+                <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-line">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input className="input !py-1.5 text-xs" placeholder="Name" value={editDraft.name} onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))} />
+                    <input className="input !py-1.5 text-xs" placeholder="Telefon" value={editDraft.phone} onChange={(e) => setEditDraft((d) => ({ ...d, phone: e.target.value }))} />
+                    <input className="input !py-1.5 text-xs" placeholder="Unternehmen" value={editDraft.company} onChange={(e) => setEditDraft((d) => ({ ...d, company: e.target.value }))} />
+                    <input className="input !py-1.5 text-xs" placeholder="Webseite" value={editDraft.website} onChange={(e) => setEditDraft((d) => ({ ...d, website: e.target.value }))} />
+                    <input type="datetime-local" className="input !py-1.5 text-xs" value={editDraft.appointment_at} onChange={(e) => setEditDraft((d) => ({ ...d, appointment_at: e.target.value }))} />
+                    <label className="flex items-center gap-1.5 text-xs text-textMuted">
+                      <input type="checkbox" checked={editDraft.is_decision_maker} onChange={(e) => setEditDraft((d) => ({ ...d, is_decision_maker: e.target.checked }))} /> Entscheider:in
+                    </label>
+                  </div>
+                  <textarea className="input !py-1.5 text-xs" rows={2} placeholder="Notizen" value={editDraft.notes} onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))} />
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => saveEditLead(lead.id)} className="btn-ghost text-xs">Speichern</button>
+                    <button onClick={() => { setEditingLeadId(null); setEditDraft(null); }} className="btn-ghost text-xs">Abbrechen</button>
+                  </div>
+                </div>
+              )}
+              {(lead.created_by === selfId || canSeeTeam) && (
                 <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-line">
-                  {confirmDelete === lead.id ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="text-xs text-coral">Termin wirklich löschen?</span>
-                      <button disabled={deleting} onClick={() => deleteTermin(lead)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
-                      <button disabled={deleting} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
-                    </span>
-                  ) : (
-                    <button onClick={() => setConfirmDelete(lead.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                  {editingLeadId !== lead.id && (
+                    <button onClick={() => startEditLead(lead)} className="btn-ghost text-xs">Bearbeiten</button>
+                  )}
+                  {(lead.created_by === selfId || canDeleteTeam) && (
+                    confirmDelete === lead.id ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-xs text-coral">Termin wirklich löschen?</span>
+                        <button disabled={deleting} onClick={() => deleteTermin(lead)} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
+                        <button disabled={deleting} onClick={() => setConfirmDelete(null)} className="btn-ghost text-xs">Abbrechen</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(lead.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                    )
                   )}
                 </div>
               )}
