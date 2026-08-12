@@ -9,11 +9,27 @@ import { validatePostAttachment } from "../lib/uploadValidation";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { effectiveStreak } from "../lib/streak";
 
+const REACTION_TYPES = [
+  { key: "flame", emoji: "🔥" },
+  { key: "thumbsup", emoji: "👍" },
+  { key: "heart", emoji: "❤️" },
+  { key: "laugh", emoji: "😂" },
+];
+
+function totalReactions(entry) {
+  if (!entry) return 0;
+  return Object.values(entry.counts || {}).reduce((a, b) => a + b, 0);
+}
+
 export default function Community() {
   const router = useRouter();
   const [selfId, setSelfId] = useState(null);
   const [friendIds, setFriendIds] = useState(new Set());
   const [isManager, setIsManager] = useState(false);
+  // Deckt sich mit der community_posts_update_own_or_manager-RLS-Policy
+  // (anders als isManager: KEINE trainer-Rolle, sonst würde ein Anpinnen-
+  // Klick durch eine trainer-Rolle serverseitig an der RLS scheitern).
+  const [canModerate, setCanModerate] = useState(false);
   const [groups, setGroups] = useState([]);
   const [activeGroup, setActiveGroup] = useState("all"); // "all" | group.id
   // "org" = nur die eigene Organisation (Standard, strikt getrennt von
@@ -48,6 +64,14 @@ export default function Community() {
   const [error, setError] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [showGroupForm, setShowGroupForm] = useState(false);
+  const [mentionNotifications, setMentionNotifications] = useState([]);
+  const [activeHashtag, setActiveHashtag] = useState(null);
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [pollOptionsByPost, setPollOptionsByPost] = useState({});
+  const [pollVotesByPost, setPollVotesByPost] = useState({});
+  const [newPollOptions, setNewPollOptions] = useState(["", ""]);
+  const [showPollForm, setShowPollForm] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -57,12 +81,13 @@ export default function Community() {
 
     const { data: me } = await supabase.from("profiles").select("role, organization_id, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
     setIsManager(me?.role === "manager" || me?.role === "trainer" || !!me?.is_admin || !!me?.is_platform_admin);
+    setCanModerate(me?.role === "manager" || !!me?.is_admin || !!me?.is_platform_admin);
     // Plattform-Admins können per Firmencode "als" eine andere Organisation
     // eingeloggt sein (sessionStorage) — dann zählt für "Meine Organisation"
     // und die Highlights die AKTIVE Organisation, nicht die eigene Heimat-Org.
     setMyOrgId(getActiveOrgId(me));
 
-    const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: commentKudos }, { data: profiles }, { data: friendships }] = await Promise.all([
+    const [{ data: groups }, { data: posts }, { data: comments }, { data: kudos }, { data: commentKudos }, { data: profiles }, { data: friendships }, { data: mentions }, { data: pollOptions }, { data: pollVotes }] = await Promise.all([
       supabase.from("community_groups").select("*").order("created_at"),
       supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(80),
       supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
@@ -72,7 +97,29 @@ export default function Community() {
       // Trennung "Meine Organisation"/"Global" und die Kudos-Wall.
       supabase.from("profiles").select("id, full_name, avatar_url, organization_id, streak_count, last_challenge_date").eq("status", "approved"),
       supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`),
+      supabase.from("community_notifications").select("*").eq("user_id", session.user.id).eq("read", false).order("created_at", { ascending: false }).limit(20),
+      supabase.from("community_poll_options").select("*").order("position"),
+      supabase.from("community_poll_votes").select("*"),
     ]);
+
+    const optByPost = {};
+    (pollOptions || []).forEach((o) => { optByPost[o.post_id] = optByPost[o.post_id] || []; optByPost[o.post_id].push(o); });
+    setPollOptionsByPost(optByPost);
+
+    const votesByPost = {};
+    (pollVotes || []).forEach((v) => {
+      votesByPost[v.post_id] = votesByPost[v.post_id] || { countByOption: {}, mineOptionId: null };
+      votesByPost[v.post_id].countByOption[v.option_id] = (votesByPost[v.post_id].countByOption[v.option_id] || 0) + 1;
+      if (v.user_id === session.user.id) votesByPost[v.post_id].mineOptionId = v.option_id;
+    });
+    setPollVotesByPost(votesByPost);
+
+    setMentionNotifications(mentions || []);
+    if (mentions?.length) {
+      // Direkt als gelesen markieren, sobald sie geladen/angezeigt werden —
+      // dasselbe simple "beim Betreten gesehen"-Muster wie last_seen_community_at.
+      await supabase.from("community_notifications").update({ read: true }).eq("user_id", session.user.id).eq("read", false);
+    }
 
     setFriendIds(new Set((friendships || []).map((f) => f.requester_id === session.user.id ? f.addressee_id : f.requester_id)));
 
@@ -90,17 +137,17 @@ export default function Community() {
 
     const kByPost = {};
     (kudos || []).forEach((k) => {
-      kByPost[k.post_id] = kByPost[k.post_id] || { count: 0, mine: false };
-      kByPost[k.post_id].count += 1;
-      if (k.user_id === session.user.id) kByPost[k.post_id].mine = true;
+      kByPost[k.post_id] = kByPost[k.post_id] || { counts: {}, mine: null };
+      kByPost[k.post_id].counts[k.reaction] = (kByPost[k.post_id].counts[k.reaction] || 0) + 1;
+      if (k.user_id === session.user.id) kByPost[k.post_id].mine = k.reaction;
     });
     setKudosByPost(kByPost);
 
     const kByComment = {};
     (commentKudos || []).forEach((k) => {
-      kByComment[k.comment_id] = kByComment[k.comment_id] || { count: 0, mine: false };
-      kByComment[k.comment_id].count += 1;
-      if (k.user_id === session.user.id) kByComment[k.comment_id].mine = true;
+      kByComment[k.comment_id] = kByComment[k.comment_id] || { counts: {}, mine: null };
+      kByComment[k.comment_id].counts[k.reaction] = (kByComment[k.comment_id].counts[k.reaction] || 0) + 1;
+      if (k.user_id === session.user.id) kByComment[k.comment_id].mine = k.reaction;
     });
     setKudosByComment(kByComment);
 
@@ -250,25 +297,61 @@ export default function Community() {
     setMentionStart(-1);
   }
 
-  // Hebt "@Name" im angezeigten Text hervor, wenn der Name zu einem
-  // bekannten Profil gehört (längste Namen zuerst, damit z.B. "@Anna Meyer"
-  // nicht schon bei "@Anna" abgeschnitten wird) — klickbar zum Profil.
+  function knownNames() {
+    return allProfiles.map((p) => ({ id: p.id, name: p.full_name })).filter((p) => p.name).sort((a, b) => b.name.length - a.name.length);
+  }
+
+  // Wer per @Name im Text erwähnt wurde (für Benachrichtigungen beim Senden),
+  // ohne sich selbst — man muss sich nicht selbst benachrichtigen.
+  function extractMentionedIds(text) {
+    const names = knownNames();
+    if (!text || !names.length) return [];
+    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
+    const ids = new Set();
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const found = names.find((n) => n.name === match[1]);
+      if (found && found.id !== selfId) ids.add(found.id);
+    }
+    return [...ids];
+  }
+
+  function extractHashtags(text) {
+    if (!text) return [];
+    const tags = new Set();
+    const pattern = /#([\p{L}\p{N}_]+)/gu;
+    let match;
+    while ((match = pattern.exec(text)) !== null) tags.add(match[1].toLowerCase());
+    return [...tags];
+  }
+
+  // Hebt "@Name" (bekannte Profile) und "#Hashtag" im angezeigten Text
+  // hervor — @Name ist zum Profil klickbar, #Hashtag filtert den Feed.
   function renderContent(text) {
     if (!text) return text;
-    const names = allProfiles.map((p) => ({ id: p.id, name: p.full_name })).filter((p) => p.name).sort((a, b) => b.name.length - a.name.length);
-    if (!names.length) return text;
-    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
+    const names = knownNames();
+    const mentionAlt = names.length ? names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") : null;
+    const pattern = new RegExp((mentionAlt ? `@(${mentionAlt})(?!\\S)|` : "") + `#([\\p{L}\\p{N}_]+)`, "gu");
     const parts = [];
     let lastIndex = 0;
     let match;
     while ((match = pattern.exec(text)) !== null) {
       if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-      const found = names.find((n) => n.name === match[1]);
-      parts.push(
-        <span key={match.index} className="text-amber font-semibold cursor-pointer hover:underline" onClick={() => openProfile(found.id)}>
-          @{match[1]}
-        </span>
-      );
+      if (match[1]) {
+        const found = names.find((n) => n.name === match[1]);
+        parts.push(
+          <span key={match.index} className="text-amber font-semibold cursor-pointer hover:underline" onClick={() => openProfile(found.id)}>
+            @{match[1]}
+          </span>
+        );
+      } else if (match[2]) {
+        const tag = match[2];
+        parts.push(
+          <span key={match.index} className="text-violet font-semibold cursor-pointer hover:underline" onClick={() => setActiveHashtag((cur) => (cur === tag.toLowerCase() ? null : tag.toLowerCase()))}>
+            #{tag}
+          </span>
+        );
+      }
       lastIndex = match.index + match[0].length;
     }
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
@@ -297,7 +380,7 @@ export default function Community() {
       }
     }
 
-    const { error: insErr } = await supabase.from("community_posts").insert({
+    const { data: newRow, error: insErr } = await supabase.from("community_posts").insert({
       user_id: session.user.id,
       content: newPost.trim(),
       group_id: newPostGroup || null,
@@ -305,14 +388,31 @@ export default function Community() {
       attachment_type,
       visibility: shareGlobally ? "global" : "org",
       organization_id: myOrgId,
-    });
+    }).select().single();
     setPosting(false);
     if (insErr) { setError(insErr.message); return; }
+
+    const mentionedIds = extractMentionedIds(newPost);
+    if (mentionedIds.length) {
+      await supabase.from("community_notifications").insert(
+        mentionedIds.map((uid) => ({ user_id: uid, actor_id: session.user.id, type: "mention_post", post_id: newRow.id }))
+      );
+    }
+
+    const pollLabels = newPollOptions.map((o) => o.trim()).filter(Boolean);
+    if (showPollForm && pollLabels.length >= 2) {
+      await supabase.from("community_poll_options").insert(
+        pollLabels.map((label, i) => ({ post_id: newRow.id, label, position: i }))
+      );
+    }
+
     // Erst nach bestätigtem Speichern leeren — sonst geht ein fehlgeschlagener
     // Beitrag komplett verloren, während die Oberfläche "erfolgreich" wirkt.
     setNewPost("");
     setNewPostFile(null);
     setShareGlobally(false);
+    setShowPollForm(false);
+    setNewPollOptions(["", ""]);
     await load();
   }
 
@@ -335,23 +435,25 @@ export default function Community() {
     await load();
   }
 
-  async function toggleKudos(postId) {
+  async function setReaction(postId, reaction) {
     const { data: { session } } = await supabase.auth.getSession();
     const mine = kudosByPost[postId]?.mine;
-    const { error: err } = mine
-      ? await supabase.from("community_kudos").delete().eq("post_id", postId).eq("user_id", session.user.id)
-      : await supabase.from("community_kudos").insert({ post_id: postId, user_id: session.user.id });
-    if (err) { setError(err.message); return; }
+    if (mine) await supabase.from("community_kudos").delete().eq("post_id", postId).eq("user_id", session.user.id);
+    if (mine !== reaction) {
+      const { error: err } = await supabase.from("community_kudos").insert({ post_id: postId, user_id: session.user.id, reaction });
+      if (err) { setError(err.message); return; }
+    }
     await load();
   }
 
-  async function toggleCommentKudos(commentId) {
+  async function setCommentReaction(commentId, reaction) {
     const { data: { session } } = await supabase.auth.getSession();
     const mine = kudosByComment[commentId]?.mine;
-    const { error: err } = mine
-      ? await supabase.from("community_comment_kudos").delete().eq("comment_id", commentId).eq("user_id", session.user.id)
-      : await supabase.from("community_comment_kudos").insert({ comment_id: commentId, user_id: session.user.id });
-    if (err) { setError(err.message); return; }
+    if (mine) await supabase.from("community_comment_kudos").delete().eq("comment_id", commentId).eq("user_id", session.user.id);
+    if (mine !== reaction) {
+      const { error: err } = await supabase.from("community_comment_kudos").insert({ comment_id: commentId, user_id: session.user.id, reaction });
+      if (err) { setError(err.message); return; }
+    }
     await load();
   }
 
@@ -360,8 +462,16 @@ export default function Community() {
     if (!text?.trim()) return;
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
-    const { error: err } = await supabase.from("community_comments").insert({ post_id: postId, user_id: session.user.id, content: text.trim() });
+    const { data: newComment, error: err } = await supabase.from("community_comments").insert({ post_id: postId, user_id: session.user.id, content: text.trim() }).select().single();
     if (err) { setError(err.message); return; }
+
+    const mentionedIds = extractMentionedIds(text.trim());
+    if (mentionedIds.length) {
+      await supabase.from("community_notifications").insert(
+        mentionedIds.map((uid) => ({ user_id: uid, actor_id: session.user.id, type: "mention_comment", post_id: postId, comment_id: newComment.id }))
+      );
+    }
+
     // Erst nach bestätigtem Speichern leeren — sonst geht ein fehlgeschlagener
     // Kommentar komplett verloren.
     setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
@@ -372,6 +482,42 @@ export default function Community() {
     setError("");
     const { error: err } = await supabase.from("community_posts").delete().eq("id", postId);
     if (err) { setError(err.message); return; }
+    await load();
+  }
+
+  function startEditPost(p) {
+    setEditingPostId(p.id);
+    setEditDraft(p.content);
+  }
+
+  async function saveEditPost(postId) {
+    if (!editDraft.trim()) return;
+    setError("");
+    const { error: err } = await supabase.from("community_posts").update({ content: editDraft.trim() }).eq("id", postId);
+    if (err) { setError(err.message); return; }
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, content: editDraft.trim() } : p)));
+    setEditingPostId(null);
+  }
+
+  async function togglePin(p) {
+    setError("");
+    const { error: err } = await supabase.from("community_posts").update({ pinned: !p.pinned }).eq("id", p.id);
+    if (err) { setError(err.message); return; }
+    setPosts((prev) => prev.map((row) => (row.id === p.id ? { ...row, pinned: !p.pinned } : row)));
+  }
+
+  function updatePollOptionDraft(index, value) {
+    setNewPollOptions((prev) => prev.map((v, i) => (i === index ? value : v)));
+  }
+
+  async function votePoll(postId, optionId) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const mineOptionId = pollVotesByPost[postId]?.mineOptionId;
+    if (mineOptionId) await supabase.from("community_poll_votes").delete().eq("post_id", postId).eq("user_id", session.user.id);
+    if (mineOptionId !== optionId) {
+      const { error: err } = await supabase.from("community_poll_votes").insert({ post_id: postId, option_id: optionId, user_id: session.user.id });
+      if (err) { setError(err.message); return; }
+    }
     await load();
   }
 
@@ -386,7 +532,20 @@ export default function Community() {
   // Migration in dieser Umgebung noch nicht eingespielt wurde.
   const scopedPosts = posts.filter((p) => scope === "global" ? p.visibility === "global" : (p.organization_id || orgByUserId[p.user_id]) === myOrgId);
   const visiblePosts = (activeGroup === "all" ? scopedPosts : scopedPosts.filter((p) => p.group_id === activeGroup))
-    .filter((p) => !searchQuery.trim() || p.content.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter((p) => !searchQuery.trim() || p.content.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((p) => !activeHashtag || extractHashtags(p.content).includes(activeHashtag))
+    // Angepinnte Beiträge zuerst, danach wie gewohnt chronologisch.
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+  // Häufigste Hashtags aus den aktuell sichtbaren (scope-/gruppengefilterten)
+  // Beiträgen, für die Vorschlags-Chips.
+  const trendingHashtags = (() => {
+    const counts = {};
+    (activeGroup === "all" ? scopedPosts : scopedPosts.filter((p) => p.group_id === activeGroup)).forEach((p) => {
+      extractHashtags(p.content).forEach((t) => { counts[t] = (counts[t] || 0) + 1; });
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([tag]) => tag);
+  })();
 
   return (
     <Layout>
@@ -396,10 +555,45 @@ export default function Community() {
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
+      {mentionNotifications.length > 0 && (
+        <div className="card border border-amber/40 mb-4">
+          <div className="font-semibold text-textMain text-sm mb-2">Du wurdest erwähnt</div>
+          <div className="flex flex-col gap-1.5">
+            {mentionNotifications.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => {
+                  const el = document.getElementById(`post-${n.post_id}`);
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                className="text-left text-xs text-textMuted hover:text-textMain"
+              >
+                <span className="text-amber font-semibold">{profileMap[n.actor_id]?.name || "Jemand"}</span>{" "}
+                hat dich {n.type === "mention_comment" ? "in einem Kommentar" : "in einem Beitrag"} erwähnt
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card flex items-center gap-2 mb-4">
         <Icon name="search" size={15} />
         <input className="bg-transparent border-none outline-none text-sm flex-1 text-textMain" placeholder="Beiträge durchsuchen..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
       </div>
+
+      {trendingHashtags.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          {trendingHashtags.map((tag) => (
+            <button key={tag} onClick={() => setActiveHashtag((cur) => (cur === tag ? null : tag))}
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${activeHashtag === tag ? "bg-violet text-white border-violet" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
+              #{tag}
+            </button>
+          ))}
+          {activeHashtag && (
+            <button onClick={() => setActiveHashtag(null)} className="text-xs text-textMuted hover:text-textMain">Filter zurücksetzen</button>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-4">
         <button onClick={() => setScope("org")}
@@ -479,7 +673,7 @@ export default function Community() {
         <textarea
           ref={postTextareaRef}
           className="input"
-          placeholder="Was gibt's Neues? Ein Erfolg, ein Tipp, ein Foto... (@ um jemanden zu erwähnen)"
+          placeholder="Was gibt's Neues? Ein Erfolg, ein Tipp, ein Foto... (@ erwähnt jemanden, # setzt ein Hashtag)"
           rows={3}
           value={newPost}
           onChange={(e) => { setNewPost(e.target.value); handleMentionChange("compose", e.target.value, e.target.selectionStart); }}
@@ -493,6 +687,25 @@ export default function Community() {
                 <Avatar name={p.full_name || "?"} src={p.avatar_url} size={20} /> {p.full_name || "Unbenannt"}
               </button>
             ))}
+          </div>
+        )}
+        {showPollForm && (
+          <div className="flex flex-col gap-1.5 mt-2.5 border-t border-line pt-2.5">
+            <div className="text-xs text-textMuted mb-0.5">Umfrage-Optionen (mind. 2):</div>
+            {newPollOptions.map((opt, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input className="input !py-1.5 text-xs flex-1" placeholder={`Option ${i + 1}`} value={opt} onChange={(e) => updatePollOptionDraft(i, e.target.value)} />
+                {newPollOptions.length > 2 && (
+                  <button onClick={() => setNewPollOptions((prev) => prev.filter((_, idx) => idx !== i))} className="btn-ghost text-xs !px-1.5 text-coral">×</button>
+                )}
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              {newPollOptions.length < 6 && (
+                <button onClick={() => setNewPollOptions((prev) => [...prev, ""])} className="btn-ghost text-xs">+ Option</button>
+              )}
+              <button onClick={() => { setShowPollForm(false); setNewPollOptions(["", ""]); }} className="btn-ghost text-xs text-coral">Umfrage entfernen</button>
+            </div>
           </div>
         )}
         <div className="flex items-center gap-2 mt-2.5 flex-wrap">
@@ -512,6 +725,9 @@ export default function Community() {
               setNewPostFile(file);
             }} />
           </label>
+          {!showPollForm && (
+            <button onClick={() => setShowPollForm(true)} className="btn-ghost text-xs">📊 Umfrage</button>
+          )}
           <label className="flex items-center gap-1.5 text-xs text-textMuted cursor-pointer select-none">
             <input type="checkbox" checked={shareGlobally} onChange={(e) => setShareGlobally(e.target.checked)} />
             Auch in der globalen Community teilen
@@ -522,11 +738,16 @@ export default function Community() {
 
       <div className="flex flex-col gap-4">
         {visiblePosts.map((p) => {
-          const kudos = kudosByPost[p.id] || { count: 0, mine: false };
+          const kudos = kudosByPost[p.id] || { counts: {}, mine: null };
           const comments = commentsByPost[p.id] || [];
           const authorName = profileMap[p.user_id]?.name || "Unbenannt";
+          const canEditThis = p.user_id === selfId;
+          const canDeleteThis = p.user_id === selfId || canModerate;
+          const pollOptions = pollOptionsByPost[p.id] || [];
+          const pollVotes = pollVotesByPost[p.id] || { countByOption: {}, mineOptionId: null };
+          const pollTotal = Object.values(pollVotes.countByOption).reduce((a, b) => a + b, 0);
           return (
-            <div key={p.id} className={`card ${friendIds.has(p.user_id) ? "border border-violet/25" : ""}`}>
+            <div key={p.id} id={`post-${p.id}`} className={`card ${p.pinned ? "border border-amber/40" : friendIds.has(p.user_id) ? "border border-violet/25" : ""}`}>
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80" onClick={() => openProfile(p.user_id)}>
                   <Avatar name={authorName} src={profileMap[p.user_id]?.avatar} size={34} />
@@ -534,15 +755,54 @@ export default function Community() {
                     <div className="font-semibold text-textMain text-sm flex items-center gap-1.5">
                       {authorName}
                       {friendIds.has(p.user_id) && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet/15 text-violet font-semibold">Freund</span>}
+                      {p.pinned && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber/15 text-amber font-semibold">📌 Angepinnt</span>}
                     </div>
                     <div className="text-[11px] text-textMuted">{new Date(p.created_at).toLocaleString("de-DE")}</div>
                   </div>
                 </div>
-                {p.user_id === selfId && (
-                  <button onClick={() => deletePost(p.id)} className="btn-ghost text-xs text-coral">Löschen</button>
-                )}
+                <div className="flex items-center gap-1">
+                  {canModerate && (
+                    <button onClick={() => togglePin(p)} className="btn-ghost text-xs">{p.pinned ? "Lösen" : "Anpinnen"}</button>
+                  )}
+                  {canEditThis && editingPostId !== p.id && (
+                    <button onClick={() => startEditPost(p)} className="btn-ghost text-xs">Bearbeiten</button>
+                  )}
+                  {canDeleteThis && (
+                    <button onClick={() => deletePost(p.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{renderContent(p.content)}</p>
+
+              {editingPostId === p.id ? (
+                <div className="mb-3">
+                  <textarea className="input" rows={3} value={editDraft} onChange={(e) => setEditDraft(e.target.value)} />
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <button disabled={!editDraft.trim()} onClick={() => saveEditPost(p.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
+                    <button onClick={() => setEditingPostId(null)} className="btn-ghost text-xs">Abbrechen</button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{renderContent(p.content)}</p>
+              )}
+
+              {pollOptions.length > 0 && (
+                <div className="flex flex-col gap-1.5 mb-3">
+                  {pollOptions.map((o) => {
+                    const count = pollVotes.countByOption[o.id] || 0;
+                    const pct = pollTotal > 0 ? Math.round((count / pollTotal) * 100) : 0;
+                    const mine = pollVotes.mineOptionId === o.id;
+                    return (
+                      <button key={o.id} onClick={() => votePoll(p.id, o.id)} className={`relative text-left text-xs rounded-lg border px-3 py-2 overflow-hidden ${mine ? "border-amber" : "border-line"}`}>
+                        <div className="absolute inset-y-0 left-0 bg-amber/15" style={{ width: `${pct}%` }} />
+                        <div className="relative flex items-center justify-between gap-2">
+                          <span className={mine ? "text-amber font-semibold" : "text-textMain"}>{o.label}</span>
+                          <span className="text-textMuted flex-shrink-0">{pct}% ({count})</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {p.attachment_url && p.attachment_type === "image" && (
                 <img src={p.attachment_url} alt="" className="rounded-lg max-h-96 w-auto mb-3 border border-line" />
@@ -556,20 +816,29 @@ export default function Community() {
                 </a>
               )}
 
-              <button onClick={() => toggleKudos(p.id)} className={`btn-ghost text-xs flex items-center gap-1.5 ${kudos.mine ? "text-amber border-amber/40" : ""}`}>
-                <Icon name="flame" size={13} /> {kudos.count || 0}
-              </button>
+              <div className="flex items-center gap-1">
+                {REACTION_TYPES.map((r) => {
+                  const count = kudos.counts?.[r.key] || 0;
+                  const mine = kudos.mine === r.key;
+                  return (
+                    <button key={r.key} onClick={() => setReaction(p.id, r.key)} className={`btn-ghost !px-1.5 !py-1 text-xs flex items-center gap-1 ${mine ? "text-amber border-amber/40" : ""}`}>
+                      <span>{r.emoji}</span>{count > 0 && <span>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
 
               {comments.length > 0 && (() => {
-                // Meiste Likes zuerst; bei Gleichstand bleibt die
+                // Meiste Reaktionen zuerst; bei Gleichstand bleibt die
                 // chronologische Reihenfolge erhalten (stabile Sortierung).
-                const sortedComments = [...comments].sort((a, b) => (kudosByComment[b.id]?.count || 0) - (kudosByComment[a.id]?.count || 0));
-                const topCount = kudosByComment[sortedComments[0]?.id]?.count || 0;
+                const sortedComments = [...comments].sort((a, b) => totalReactions(kudosByComment[b.id]) - totalReactions(kudosByComment[a.id]));
+                const topCount = totalReactions(kudosByComment[sortedComments[0]?.id]);
                 return (
                   <div className="flex flex-col gap-2.5 mt-3 pt-3 border-t border-line">
                     {sortedComments.map((c) => {
-                      const cKudos = kudosByComment[c.id] || { count: 0, mine: false };
-                      const isTop = topCount > 0 && cKudos.count === topCount;
+                      const cKudos = kudosByComment[c.id] || { counts: {}, mine: null };
+                      const cTotal = totalReactions(cKudos);
+                      const isTop = topCount > 0 && cTotal === topCount;
                       return (
                         <div key={c.id} className="flex items-start gap-2">
                           <button onClick={() => openProfile(c.user_id)} className="flex-shrink-0">
@@ -583,9 +852,17 @@ export default function Community() {
                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber/15 text-amber font-semibold flex-shrink-0">🏆 Top-Antwort</span>
                               )}
                             </div>
-                            <button onClick={() => toggleCommentKudos(c.id)} className={`btn-ghost !py-0.5 !px-1.5 text-[10px] mt-1 inline-flex items-center gap-1 ${cKudos.mine ? "text-amber border-amber/40" : ""}`}>
-                              <Icon name="flame" size={10} /> {cKudos.count || 0}
-                            </button>
+                            <div className="flex items-center gap-0.5 mt-1">
+                              {REACTION_TYPES.map((r) => {
+                                const count = cKudos.counts?.[r.key] || 0;
+                                const mine = cKudos.mine === r.key;
+                                return (
+                                  <button key={r.key} onClick={() => setCommentReaction(c.id, r.key)} className={`btn-ghost !py-0.5 !px-1 text-[10px] inline-flex items-center gap-0.5 ${mine ? "text-amber border-amber/40" : ""}`}>
+                                    <span>{r.emoji}</span>{count > 0 && <span>{count}</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       );

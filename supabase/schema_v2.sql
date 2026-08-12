@@ -346,7 +346,9 @@ create table if not exists community_posts (
   -- Die beim Erstellen AKTIVE Organisation (siehe lib/activeOrg.js), nicht
   -- zwingend die Heimat-Organisation des/der Autor:in — relevant für
   -- Plattform-Admins per Firmencode (siehe migration_62).
-  organization_id uuid references organizations(id) on delete set null
+  organization_id uuid references organizations(id) on delete set null,
+  -- Von Managern/Admins oben im Feed festgehalten (migration_64).
+  pinned boolean not null default false
 );
 
 create table if not exists community_comments (
@@ -357,10 +359,24 @@ create table if not exists community_comments (
   created_at timestamptz not null default now()
 );
 
+-- Benachrichtigt Mitglieder bei @Name-Erwähnungen (siehe migration_63).
+create table if not exists community_notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  actor_id uuid not null references profiles(id) on delete cascade,
+  type text not null check (type in ('mention_post', 'mention_comment')),
+  post_id uuid not null references community_posts(id) on delete cascade,
+  comment_id uuid references community_comments(id) on delete cascade,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists community_kudos (
   post_id uuid not null references community_posts(id) on delete cascade,
   user_id uuid not null references profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
+  -- 'flame' (Standard) | 'thumbsup' | 'heart' | 'laugh' (migration_64).
+  reaction text not null default 'flame' check (reaction in ('flame', 'thumbsup', 'heart', 'laugh')),
   primary key (post_id, user_id)
 );
 
@@ -371,7 +387,25 @@ create table if not exists community_comment_kudos (
   comment_id uuid not null references community_comments(id) on delete cascade,
   user_id uuid not null references profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
+  reaction text not null default 'flame' check (reaction in ('flame', 'thumbsup', 'heart', 'laugh')),
   primary key (comment_id, user_id)
+);
+
+-- Einfache Einfachauswahl-Umfragen innerhalb eines Beitrags (migration_64).
+create table if not exists community_poll_options (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references community_posts(id) on delete cascade,
+  label text not null,
+  position int not null default 0
+);
+
+create table if not exists community_poll_votes (
+  id uuid primary key default gen_random_uuid(),
+  option_id uuid not null references community_poll_options(id) on delete cascade,
+  post_id uuid not null references community_posts(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (post_id, user_id)
 );
 
 create table if not exists friendships (
@@ -1114,6 +1148,17 @@ create policy "community_posts_delete_own_or_manager" on community_posts for del
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
 );
+-- Bearbeiten (Inhalt) + Anpinnen (migration_64) — dieselben Rechte wie beim
+-- Löschen, plus is_admin zusätzlich zu role='manager'.
+drop policy if exists "community_posts_update_own_or_manager" on community_posts;
+create policy "community_posts_update_own_or_manager" on community_posts for update using (
+  auth.uid() = user_id
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and same_org(user_id, auth.uid())
+  )
+);
 
 -- --- community_comments --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_comments_select_all" on community_comments;
@@ -1141,6 +1186,15 @@ create policy "community_comments_delete_own_or_manager" on community_comments f
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
 );
+
+-- --- community_notifications --- (Erwähnungs-Benachrichtigungen, migration_63)
+alter table community_notifications enable row level security;
+drop policy if exists "community_notifications_select_own" on community_notifications;
+create policy "community_notifications_select_own" on community_notifications for select using (user_id = auth.uid());
+drop policy if exists "community_notifications_insert_actor" on community_notifications;
+create policy "community_notifications_insert_actor" on community_notifications for insert with check (actor_id = auth.uid());
+drop policy if exists "community_notifications_update_own" on community_notifications;
+create policy "community_notifications_update_own" on community_notifications for update using (user_id = auth.uid());
 
 -- --- community_kudos --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_kudos_select_all" on community_kudos;
@@ -1191,6 +1245,43 @@ create policy "community_comment_kudos_insert_own" on community_comment_kudos fo
 );
 drop policy if exists "community_comment_kudos_delete_own" on community_comment_kudos;
 create policy "community_comment_kudos_delete_own" on community_comment_kudos for delete using (auth.uid() = user_id);
+
+-- --- community_poll_options / community_poll_votes --- (migration_64)
+alter table community_poll_options enable row level security;
+alter table community_poll_votes enable row level security;
+drop policy if exists "community_poll_options_select_all" on community_poll_options;
+create policy "community_poll_options_select_all" on community_poll_options for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or exists (
+    select 1 from community_posts cp where cp.id = community_poll_options.post_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
+drop policy if exists "community_poll_options_insert_own_post" on community_poll_options;
+create policy "community_poll_options_insert_own_post" on community_poll_options for insert with check (
+  exists (select 1 from community_posts cp where cp.id = community_poll_options.post_id and cp.user_id = auth.uid())
+);
+drop policy if exists "community_poll_votes_select_all" on community_poll_votes;
+create policy "community_poll_votes_select_all" on community_poll_votes for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or exists (
+    select 1 from community_posts cp where cp.id = community_poll_votes.post_id
+    and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+  )
+);
+drop policy if exists "community_poll_votes_insert_own" on community_poll_votes;
+create policy "community_poll_votes_insert_own" on community_poll_votes for insert with check (
+  auth.uid() = user_id
+  and (
+    exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+    or exists (
+      select 1 from community_posts cp where cp.id = community_poll_votes.post_id
+      and (cp.visibility = 'global' or same_org(cp.user_id, auth.uid()))
+    )
+  )
+);
+drop policy if exists "community_poll_votes_delete_own" on community_poll_votes;
+create policy "community_poll_votes_delete_own" on community_poll_votes for delete using (auth.uid() = user_id);
 
 -- --- friendships ---
 drop policy if exists "friendships_select_own" on friendships;
