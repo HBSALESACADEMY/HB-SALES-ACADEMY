@@ -658,7 +658,7 @@ export default function Community() {
               <div className="text-center">
                 <div className="text-lg">🔥</div>
                 <div className="text-sm text-textMain font-semibold">{kudosWall.topKudos.name}</div>
-                <div className="text-xs text-textMuted">Meiste Kudos diese Woche</div>
+                <div className="text-xs text-textMuted">Meiste Reaktionen diese Woche</div>
               </div>
             )}
             {kudosWall.topXp && (
