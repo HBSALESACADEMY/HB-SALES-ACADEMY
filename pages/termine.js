@@ -634,12 +634,39 @@ export default function Termine() {
                 const openTasksCount = tasks.filter((t) => !t.done).length;
                 return (
                   <div className="pt-2 mt-2 border-t border-line">
+                    {tasks.length > 0 && (
+                      <div className="flex flex-col gap-1.5 mb-2.5">
+                        <span className="text-[10px] text-textMuted font-semibold uppercase tracking-wide">Aufgaben</span>
+                        {tasks.map((t) => {
+                          const overdue = t.due_date && !t.done && new Date(t.due_date) < new Date();
+                          return (
+                            <div key={t.id} className={`flex items-start gap-2 text-xs rounded-lg border px-2.5 py-2 ${t.done ? "border-line opacity-60" : overdue ? "border-coral/50" : "border-line"}`}>
+                              <input type="checkbox" checked={t.done} onChange={() => toggleTaskDone(t)} className="mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className={`font-medium ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</div>
+                                <div className="text-[11px] text-textMuted flex items-center gap-x-3 gap-y-0.5 flex-wrap mt-0.5">
+                                  <span>👤 Zugewiesen an: <strong className="text-textMain font-normal">{profileMap[t.assigned_to]?.full_name || "Unbenannt"}</strong></span>
+                                  <span>von {profileMap[t.assigned_by]?.full_name || "Unbenannt"}</span>
+                                  {t.due_date && (
+                                    <span className={overdue ? "text-coral font-semibold" : ""}>
+                                      🕐 {overdue ? "Überfällig seit " : "Fällig: "}
+                                      {new Date(t.due_date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button onClick={() => deleteTask(t)} className="btn-ghost !px-1.5 text-[10px] text-coral flex-shrink-0">×</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 flex-wrap">
                       <button onClick={() => setShowCommentsFor((cur) => (cur === lead.id ? null : lead.id))} className="btn-ghost text-xs">
                         <Icon name="chat" size={12} /> Kommentare{comments.length > 0 ? ` (${comments.length})` : ""}
                       </button>
                       <button onClick={() => setShowTaskFormFor((cur) => (cur === lead.id ? null : lead.id))} className="btn-ghost text-xs">
-                        ✅ Aufgaben{tasks.length > 0 ? ` (${openTasksCount}/${tasks.length} offen)` : ""}
+                        + Aufgabe zuweisen{openTasksCount > 0 ? ` (${openTasksCount} offen)` : ""}
                       </button>
                     </div>
 
@@ -681,20 +708,6 @@ export default function Termine() {
 
                     {showTaskFormFor === lead.id && (
                       <div className="mt-2 flex flex-col gap-2">
-                        {tasks.map((t) => (
-                          <div key={t.id} className="flex items-center gap-2 text-xs">
-                            <input type="checkbox" checked={t.done} onChange={() => toggleTaskDone(t)} />
-                            <span className={`flex-1 ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</span>
-                            <span className="text-textMuted flex-shrink-0">→ {profileMap[t.assigned_to]?.full_name || "Unbenannt"}</span>
-                            {t.due_date && (
-                              <span className="text-textMuted flex-shrink-0">
-                                bis {new Date(t.due_date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                            )}
-                            <button onClick={() => deleteTask(t)} className="btn-ghost !px-1 text-[10px] text-coral flex-shrink-0">×</button>
-                          </div>
-                        ))}
-                        {tasks.length === 0 && <p className="text-textMuted text-xs">Noch keine Aufgaben.</p>}
                         <div className="flex items-center gap-2 flex-wrap">
                           <select className="input !w-auto !py-1 text-xs" value={taskDraft.assignedTo} onChange={(e) => setTaskDraft((d) => ({ ...d, assignedTo: e.target.value }))}>
                             <option value="">Person wählen...</option>
