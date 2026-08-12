@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -635,26 +636,27 @@ export default function Termine() {
                 return (
                   <div className="pt-2 mt-2 border-t border-line">
                     {tasks.length > 0 && (
-                      <div className="flex flex-col gap-1.5 mb-2.5">
+                      <div className="flex flex-col gap-2 mb-3">
                         <span className="text-[10px] text-textMuted font-semibold uppercase tracking-wide">Aufgaben</span>
                         {tasks.map((t) => {
-                          const overdue = t.due_date && !t.done && new Date(t.due_date) < new Date();
+                          const urgency = taskUrgency(t.due_date, t.done);
+                          const style = urgency ? URGENCY_STYLES[urgency.level] : null;
                           return (
-                            <div key={t.id} className={`flex items-start gap-2 text-xs rounded-lg border px-2.5 py-2 ${t.done ? "border-line opacity-60" : overdue ? "border-coral/50" : "border-line"}`}>
-                              <input type="checkbox" checked={t.done} onChange={() => toggleTaskDone(t)} className="mt-0.5 flex-shrink-0" />
+                            <div key={t.id} className={`flex items-start gap-2.5 text-xs rounded-lg border-2 px-3 py-2.5 ${t.done ? "border-line opacity-60" : style ? `${style.border} ${style.bg}` : "border-line"}`}>
+                              <input type="checkbox" checked={t.done} onChange={() => toggleTaskDone(t)} className="mt-0.5 flex-shrink-0 w-4 h-4" />
                               <div className="flex-1 min-w-0">
-                                <div className={`font-medium ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</div>
-                                <div className="text-[11px] text-textMuted flex items-center gap-x-3 gap-y-0.5 flex-wrap mt-0.5">
+                                <div className={`font-semibold text-sm ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</div>
+                                <div className="text-[11px] text-textMuted flex items-center gap-x-3 gap-y-0.5 flex-wrap mt-1">
                                   <span>👤 Zugewiesen an: <strong className="text-textMain font-normal">{profileMap[t.assigned_to]?.full_name || "Unbenannt"}</strong></span>
                                   <span>von {profileMap[t.assigned_by]?.full_name || "Unbenannt"}</span>
                                   {t.due_date && (
-                                    <span className={overdue ? "text-coral font-semibold" : ""}>
-                                      🕐 {overdue ? "Überfällig seit " : "Fällig: "}
-                                      {new Date(t.due_date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                    </span>
+                                    <span>🕐 {new Date(t.due_date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                                   )}
                                 </div>
                               </div>
+                              {urgency && (
+                                <span className={`text-xs font-bold flex-shrink-0 px-2 py-1 rounded-full ${style.text} ${style.bg || "bg-white/5"}`}>{urgency.countdown}</span>
+                              )}
                               <button onClick={() => deleteTask(t)} className="btn-ghost !px-1.5 text-[10px] text-coral flex-shrink-0">×</button>
                             </div>
                           );

@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
+import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -372,18 +373,22 @@ export default function Dashboard() {
           {myOpenTasks.length > 0 && (
             <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
               <div className="font-semibold text-textMain text-sm mb-3">✅ Offene Aufgaben</div>
-              <div className="flex flex-col gap-2.5">
-                {myOpenTasks.map((t) => (
-                  <div key={t.id} className="flex items-center gap-3">
-                    <span className="text-sm text-textMain flex-1 truncate">{t.title}</span>
-                    <span className="text-xs text-textMuted flex-shrink-0">Termin: {t.leadName} · von {t.assignedByName}</span>
-                    {t.due_date && (
-                      <span className="text-xs font-mono text-textMuted flex-shrink-0">
-                        bis {new Date(t.due_date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(t.due_date).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                  </div>
-                ))}
+              <div className="flex flex-col gap-2">
+                {myOpenTasks.map((t) => {
+                  const urgency = taskUrgency(t.due_date, false);
+                  const style = urgency ? URGENCY_STYLES[urgency.level] : null;
+                  return (
+                    <div key={t.id} className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 ${style ? `${style.border} ${style.bg}` : "border-line"}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-textMain font-medium truncate">{t.title}</div>
+                        <div className="text-xs text-textMuted truncate">Termin: {t.leadName} · von {t.assignedByName}</div>
+                      </div>
+                      {urgency && (
+                        <span className={`text-xs font-semibold flex-shrink-0 ${style.text}`}>{urgency.countdown}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
