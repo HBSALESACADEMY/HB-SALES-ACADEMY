@@ -13,6 +13,9 @@ const TYPE_META = {
   roleplay: { label: "Rollenspiel", icon: "chat", color: "var(--org-color-1, #4C5DC9)" },
   community_post: { label: "Community-Beitrag", icon: "users", color: "#F0B23E" },
   community_comment: { label: "Community-Kommentar", icon: "users", color: "#F0B23E" },
+  lead: { label: "Termin erfasst", icon: "calendar", color: "#00E5C7" },
+  lead_comment: { label: "Termin-Kommentar", icon: "chat", color: "var(--org-color-1, #4C5DC9)" },
+  lead_task: { label: "Aufgabe zugewiesen", icon: "target", color: "var(--org-accent, #CE3A5C)" },
 };
 
 export default function AdminActivity() {
@@ -38,11 +41,12 @@ export default function AdminActivity() {
     if (!me.is_platform_admin) profilesQuery = profilesQuery.eq("organization_id", me.organization_id);
     const { data: profiles } = await profilesQuery;
     const orgUserIds = (profiles || []).map((p) => p.id);
-    const scoped = (q) => (me.is_platform_admin ? q : q.in("user_id", orgUserIds));
+    const scoped = (q, col = "user_id") => (me.is_platform_admin ? q : q.in(col, orgUserIds));
 
     const [
       { data: logins }, { data: quizzes }, { data: exams },
       { data: roleplays }, { data: posts }, { data: comments },
+      { data: leadRows }, { data: leadComments }, { data: leadTasks },
     ] = await Promise.all([
       scoped(supabase.from("login_events").select("*").order("created_at", { ascending: false }).limit(150)),
       scoped(supabase.from("quiz_results").select("*").order("created_at", { ascending: false }).limit(150)),
@@ -50,11 +54,24 @@ export default function AdminActivity() {
       scoped(supabase.from("roleplay_sessions").select("*").order("created_at", { ascending: false }).limit(100)),
       scoped(supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(100)),
       scoped(supabase.from("community_comments").select("*").order("created_at", { ascending: false }).limit(100)),
+      scoped(supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(100), "created_by"),
+      scoped(supabase.from("lead_comments").select("*").order("created_at", { ascending: false }).limit(100)),
+      scoped(supabase.from("lead_tasks").select("*").order("created_at", { ascending: false }).limit(100), "assigned_by"),
     ]);
 
     const map = {};
     (profiles || []).forEach((p) => { map[p.id] = p; });
     setProfileMap(map);
+
+    // Termin-Namen für die Kommentar-/Aufgaben-Detailzeile nachladen — die
+    // referenzierten Termine sind evtl. nicht (mehr) in den letzten 100
+    // Zeilen von leadRows enthalten.
+    const referencedLeadIds = [...new Set([...(leadComments || []).map((c) => c.lead_id), ...(leadTasks || []).map((t) => t.lead_id)])];
+    const { data: referencedLeads } = referencedLeadIds.length
+      ? await supabase.from("leads").select("id, name").in("id", referencedLeadIds)
+      : { data: [] };
+    const leadNameById = {};
+    (referencedLeads || []).forEach((l) => { leadNameById[l.id] = l.name; });
 
     const combined = [
       ...(profiles || []).map((p) => ({ type: "registered", user_id: p.id, created_at: p.created_at, detail: null })),
@@ -64,6 +81,9 @@ export default function AdminActivity() {
       ...(roleplays || []).map((e) => ({ type: "roleplay", user_id: e.user_id, created_at: e.created_at, detail: e.evaluation_score != null ? `Score ${e.evaluation_score}` : null })),
       ...(posts || []).map((e) => ({ type: "community_post", user_id: e.user_id, created_at: e.created_at, detail: e.content?.slice(0, 60) })),
       ...(comments || []).map((e) => ({ type: "community_comment", user_id: e.user_id, created_at: e.created_at, detail: e.content?.slice(0, 60) })),
+      ...(leadRows || []).map((l) => ({ type: "lead", user_id: l.created_by, created_at: l.created_at, detail: `${l.name}${l.company ? ` · ${l.company}` : ""}` })),
+      ...(leadComments || []).map((c) => ({ type: "lead_comment", user_id: c.user_id, created_at: c.created_at, detail: `${leadNameById[c.lead_id] || "Termin"}: ${c.content?.slice(0, 60)}` })),
+      ...(leadTasks || []).map((t) => ({ type: "lead_task", user_id: t.assigned_by, created_at: t.created_at, detail: `${t.title} → ${map[t.assigned_to]?.full_name || "Unbenannt"} (${leadNameById[t.lead_id] || "Termin"})` })),
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     setEvents(combined);
