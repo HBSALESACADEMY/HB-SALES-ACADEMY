@@ -567,8 +567,20 @@ create table if not exists lead_tasks (
   assigned_to uuid not null references profiles(id) on delete cascade,
   assigned_by uuid not null references profiles(id) on delete cascade,
   title text not null,
-  due_date date,
+  due_date timestamptz,
   done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- Persistierte Erwähnungen bei Termin-Kommentaren (analog zu
+-- community_notifications) — fürs Dashboard (migration_68).
+create table if not exists lead_mentions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  actor_id uuid not null references profiles(id) on delete cascade,
+  lead_id uuid not null references leads(id) on delete cascade,
+  comment_id uuid references lead_comments(id) on delete cascade,
+  read boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -1653,6 +1665,15 @@ create policy "lead_tasks_delete_own_or_manager" on lead_tasks for delete using 
     and same_org(l.created_by, auth.uid())
   )
 );
+
+-- --- lead_mentions --- (migration_68)
+alter table lead_mentions enable row level security;
+drop policy if exists "lead_mentions_select_own" on lead_mentions;
+create policy "lead_mentions_select_own" on lead_mentions for select using (user_id = auth.uid());
+drop policy if exists "lead_mentions_insert_actor" on lead_mentions;
+create policy "lead_mentions_insert_actor" on lead_mentions for insert with check (actor_id = auth.uid());
+drop policy if exists "lead_mentions_update_own" on lead_mentions;
+create policy "lead_mentions_update_own" on lead_mentions for update using (user_id = auth.uid());
 
 -- --- notification_emails ---
 drop policy if exists "notification_emails_select" on notification_emails;

@@ -22,6 +22,8 @@ export default function Dashboard() {
   const [friendReqBusyId, setFriendReqBusyId] = useState(null);
   const [upcomingLeads, setUpcomingLeads] = useState([]);
   const [teamUpcomingLeads, setTeamUpcomingLeads] = useState([]);
+  const [myMentions, setMyMentions] = useState([]);
+  const [myOpenTasks, setMyOpenTasks] = useState([]);
 
   async function loadPendingFriendRequests(uid) {
     const { data: reqs } = await supabase.from("friendships").select("id, requester_id").eq("addressee_id", uid).eq("status", "pending").order("created_at", { ascending: false });
@@ -190,6 +192,48 @@ export default function Dashboard() {
       } else {
         setTeamUpcomingLeads([]);
       }
+
+      // Erwähnungen (Community + Termin-Kommentare) und offene, mir
+      // zugewiesene Aufgaben — beides ungelesen bzw. noch nicht erledigt.
+      const [{ data: communityMentions }, { data: leadMentions }, { data: openTasks }] = await Promise.all([
+        supabase.from("community_notifications").select("*").eq("user_id", uid).eq("read", false).order("created_at", { ascending: false }).limit(10),
+        supabase.from("lead_mentions").select("*").eq("user_id", uid).eq("read", false).order("created_at", { ascending: false }).limit(10),
+        supabase.from("lead_tasks").select("*").eq("assigned_to", uid).eq("done", false).order("due_date", { ascending: true, nullsFirst: false }).limit(10),
+      ]);
+
+      const mentionActorIds = [...new Set([...(communityMentions || []).map((m) => m.actor_id), ...(leadMentions || []).map((m) => m.actor_id)])];
+      const leadIdsForMentions = [...new Set((leadMentions || []).map((m) => m.lead_id))];
+      const leadIdsForTasks = [...new Set((openTasks || []).map((t) => t.lead_id))];
+      const taskAssignerIds = [...new Set((openTasks || []).map((t) => t.assigned_by))];
+      const allNameIds = [...new Set([...mentionActorIds, ...taskAssignerIds])];
+      const allLeadIds = [...new Set([...leadIdsForMentions, ...leadIdsForTasks])];
+
+      const [{ data: nameProfiles }, { data: mentionLeads }] = await Promise.all([
+        allNameIds.length ? supabase.from("profiles").select("id, full_name").in("id", allNameIds) : Promise.resolve({ data: [] }),
+        allLeadIds.length ? supabase.from("leads").select("id, name").in("id", allLeadIds) : Promise.resolve({ data: [] }),
+      ]);
+      const nameById = {};
+      (nameProfiles || []).forEach((p) => { nameById[p.id] = p.full_name; });
+      const leadNameById = {};
+      (mentionLeads || []).forEach((l) => { leadNameById[l.id] = l.name; });
+
+      const mentions = [
+        ...(communityMentions || []).map((m) => ({
+          id: `c:${m.id}`, actorName: nameById[m.actor_id] || "Jemand",
+          label: m.type === "mention_comment" ? "in einem Community-Kommentar" : "in einem Community-Beitrag",
+          route: `/community?postId=${m.post_id}`,
+        })),
+        ...(leadMentions || []).map((m) => ({
+          id: `l:${m.id}`, actorName: nameById[m.actor_id] || "Jemand",
+          label: `beim Termin mit ${leadNameById[m.lead_id] || "Unbenannt"}`,
+          route: `/termine?leadId=${m.lead_id}`,
+        })),
+      ];
+      setMyMentions(mentions);
+
+      setMyOpenTasks((openTasks || []).map((t) => ({
+        ...t, leadName: leadNameById[t.lead_id] || "Unbenannt", assignedByName: nameById[t.assigned_by] || "Jemand",
+      })));
     }
     load();
 
@@ -206,6 +250,9 @@ export default function Dashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_tasks" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_mentions" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_notifications" }, load)
       .subscribe();
     // Polling-Fallback (wie im Sidebar-Badge/in der Nutzerverwaltung): falls die
     // Realtime-Verbindung mal stumm abbricht, ist das Dashboard trotzdem
@@ -302,6 +349,39 @@ export default function Dashboard() {
                     <span className="text-xs font-mono text-textMuted flex-shrink-0">
                       {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                     </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {myMentions.length > 0 && (
+            <div className="card mb-5">
+              <div className="font-semibold text-textMain text-sm mb-3">🔔 Erwähnungen</div>
+              <div className="flex flex-col gap-2">
+                {myMentions.map((m) => (
+                  <button key={m.id} onClick={() => router.push(m.route)} className="text-left text-sm hover:opacity-80">
+                    <span className="text-amber font-semibold">{m.actorName}</span>{" "}
+                    <span className="text-textMuted">hat dich erwähnt — {m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {myOpenTasks.length > 0 && (
+            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/termine")}>
+              <div className="font-semibold text-textMain text-sm mb-3">✅ Offene Aufgaben</div>
+              <div className="flex flex-col gap-2.5">
+                {myOpenTasks.map((t) => (
+                  <div key={t.id} className="flex items-center gap-3">
+                    <span className="text-sm text-textMain flex-1 truncate">{t.title}</span>
+                    <span className="text-xs text-textMuted flex-shrink-0">Termin: {t.leadName} · von {t.assignedByName}</span>
+                    {t.due_date && (
+                      <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                        bis {new Date(t.due_date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(t.due_date).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

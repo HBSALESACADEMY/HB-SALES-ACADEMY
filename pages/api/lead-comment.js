@@ -36,6 +36,12 @@ export default async function handler(req, res) {
         const { data: eligible } = await admin.from("profiles").select("id").in("id", ids).eq("organization_id", leadOwner?.organization_id || null);
         const eligibleIds = (eligible || []).map((p) => p.id);
         if (eligibleIds.length) {
+          // Persistiert (nicht nur E-Mail), damit die Erwähnung auch im
+          // Dashboard auftaucht (siehe migration_68).
+          await client.from("lead_mentions").insert(
+            eligibleIds.map((uid) => ({ user_id: uid, actor_id: user.id, lead_id: leadId, comment_id: comment.id }))
+          );
+
           const { data: me } = await client.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
           const { data: authList } = await admin.auth.admin.listUsers({ perPage: 1000 });
           const emailById = new Map((authList?.users || []).map((u) => [u.id, u.email]));

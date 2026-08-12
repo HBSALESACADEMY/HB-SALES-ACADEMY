@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     if (!lead) return res.status(404).json({ error: "Termin nicht gefunden — oder kein Zugriff." });
 
     const { data: task, error: insErr } = await client.from("lead_tasks").insert({
-      lead_id: leadId, assigned_to: assignedTo, assigned_by: user.id, title: title.trim(), due_date: dueDate || null,
+      lead_id: leadId, assigned_to: assignedTo, assigned_by: user.id, title: title.trim(), due_date: dueDate ? new Date(dueDate).toISOString() : null,
     }).select().single();
     if (insErr) throw insErr;
 
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
             const subject = `Neue Aufgabe: ${title.trim()}`;
             const html =
               `<p><strong>${me?.full_name || "Jemand"}</strong> hat dir eine Aufgabe zum Termin mit <strong>${lead.name}</strong> zugewiesen:</p>` +
-              `<p><strong>${title.trim()}</strong>${dueDate ? `<br/>Fällig: ${new Date(dueDate).toLocaleDateString("de-DE")}` : ""}</p>` +
+              `<p><strong>${title.trim()}</strong>${dueDate ? `<br/>Fällig: ${new Date(dueDate).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}` : ""}</p>` +
               (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
             await sendEmail({ to, subject, html });
           }

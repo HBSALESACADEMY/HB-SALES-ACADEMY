@@ -685,8 +685,12 @@ export default function Termine() {
                           <div key={t.id} className="flex items-center gap-2 text-xs">
                             <input type="checkbox" checked={t.done} onChange={() => toggleTaskDone(t)} />
                             <span className={`flex-1 ${t.done ? "line-through text-textMuted" : "text-textMain"}`}>{t.title}</span>
-                            <span className="text-textMuted flex-shrink-0">{profileMap[t.assigned_to]?.full_name || "Unbenannt"}</span>
-                            {t.due_date && <span className="text-textMuted flex-shrink-0">bis {new Date(t.due_date).toLocaleDateString("de-DE")}</span>}
+                            <span className="text-textMuted flex-shrink-0">→ {profileMap[t.assigned_to]?.full_name || "Unbenannt"}</span>
+                            {t.due_date && (
+                              <span className="text-textMuted flex-shrink-0">
+                                bis {new Date(t.due_date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            )}
                             <button onClick={() => deleteTask(t)} className="btn-ghost !px-1 text-[10px] text-coral flex-shrink-0">×</button>
                           </div>
                         ))}
@@ -697,7 +701,7 @@ export default function Termine() {
                             {orgMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
                           </select>
                           <input className="input !py-1 text-xs flex-1" placeholder="Aufgabe" value={taskDraft.title} onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))} />
-                          <input type="date" className="input !py-1 text-xs" value={taskDraft.dueDate} onChange={(e) => setTaskDraft((d) => ({ ...d, dueDate: e.target.value }))} />
+                          <input type="datetime-local" className="input !py-1 text-xs" value={taskDraft.dueDate} onChange={(e) => setTaskDraft((d) => ({ ...d, dueDate: e.target.value }))} />
                           <button disabled={taskSaving || !taskDraft.assignedTo || !taskDraft.title.trim()} onClick={() => submitTask(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Zuweisen</button>
                         </div>
                       </div>

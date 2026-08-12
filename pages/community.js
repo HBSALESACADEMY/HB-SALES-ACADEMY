@@ -67,6 +67,7 @@ export default function Community() {
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [mentionNotifications, setMentionNotifications] = useState([]);
   const [activeHashtag, setActiveHashtag] = useState(null);
+  const [highlightPostId, setHighlightPostId] = useState(null);
   const [editingPostId, setEditingPostId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
   const [pollOptionsByPost, setPollOptionsByPost] = useState({});
@@ -199,6 +200,20 @@ export default function Community() {
     const match = groups.find((g) => g.name === groupName);
     if (match) setActiveGroup(match.id);
   }, [router.query.group, groups]);
+
+  // Direktsprung aus einer Erwähnungs-Benachrichtigung (z.B. vom Dashboard,
+  // ?postId=...) — zum passenden Beitrag scrollen und kurz hervorheben.
+  useEffect(() => {
+    const postId = router.query.postId;
+    if (!postId || !posts.length) return;
+    const el = document.getElementById(`post-${postId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightPostId(postId);
+      const t = setTimeout(() => setHighlightPostId(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [router.query.postId, posts]);
 
   // Kudos-Wall — bewusst IMMER auf die eigene Organisation beschränkt, auch
   // wenn der Feed gerade auf "Global" steht: Highlights der Woche sollen nie
@@ -811,7 +826,7 @@ export default function Community() {
           const pollVotes = pollVotesByPost[p.id] || { countByOption: {}, mineOptionId: null };
           const pollTotal = Object.values(pollVotes.countByOption).reduce((a, b) => a + b, 0);
           return (
-            <div key={p.id} id={`post-${p.id}`} className={`card ${p.pinned ? "border border-amber/40" : friendIds.has(p.user_id) ? "border border-violet/25" : ""}`}>
+            <div key={p.id} id={`post-${p.id}`} className={`card ${highlightPostId === p.id ? "ring-2 ring-amber" : p.pinned ? "border border-amber/40" : friendIds.has(p.user_id) ? "border border-violet/25" : ""}`}>
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80" onClick={() => openProfile(p.user_id)}>
                   <Avatar name={authorName} src={profileMap[p.user_id]?.avatar} size={34} />
