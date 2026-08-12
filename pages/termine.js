@@ -104,9 +104,14 @@ export default function Termine() {
       setNotificationEmails(emails || []);
     }
     // Für @Erwähnungen in Kommentaren und die Aufgaben-Zuweisung — alle
-    // Mitglieder der aktiven Organisation, unabhängig von der Rolle.
+    // Mitglieder der aktiven Organisation, unabhängig von der Rolle. Zusätzlich
+    // immer sich selbst mit einschließen: Plattform-Admins, die per Firmencode
+    // "als" eine andere Organisation unterwegs sind, haben eine abweichende
+    // Heimat-Organisation und würden sonst aus der eigenen Liste fallen.
     if (activeOrgId) {
-      const { data: members } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("organization_id", activeOrgId).eq("status", "approved");
+      const { data: members } = await supabase.from("profiles").select("id, full_name, avatar_url")
+        .eq("status", "approved")
+        .or(`organization_id.eq.${activeOrgId},id.eq.${session.user.id}`);
       setOrgMembers(members || []);
     }
 
