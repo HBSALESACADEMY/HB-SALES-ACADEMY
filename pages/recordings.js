@@ -46,7 +46,8 @@ export default function Recordings() {
     // RLS regelt die Sichtbarkeit bereits vollständig (eigene + organisationsweit
     // freigegebene + Plattform-Admin sieht alles) — kein manueller Filter nötig.
     const [{ data, error: err }, { data: leadRows }] = await Promise.all([
-      supabase.from("call_recordings").select("*").order("created_at", { ascending: false }),
+      // Obergrenze, damit die Liste nicht unbegrenzt mit der Zeit mitwächst.
+      supabase.from("call_recordings").select("*").order("created_at", { ascending: false }).limit(300),
       supabase.from("leads").select("id, name, company").eq("created_by", session.user.id).order("created_at", { ascending: false }),
     ]);
     if (err) setError(err.message);

@@ -85,20 +85,33 @@ export default function Manager() {
     }
 
     const memberProfiles = (memberRows || []).map((r) => r.profiles).filter((p) => p && p.id !== session.user.id);
-    const enriched = await Promise.all(memberProfiles.map(async (m) => {
-      const [{ data: qr }, { data: er }, { data: rp }] = await Promise.all([
-        supabase.from("quiz_results").select("module_id, mc_score, mc_total").eq("user_id", m.id),
-        supabase.from("exam_results").select("passed").eq("user_id", m.id),
-        supabase.from("roleplay_sessions").select("detected_principles").eq("user_id", m.id),
-      ]);
-      const doneModules = new Set((qr || []).map((r) => r.module_id)).size;
-      const avgMc = qr && qr.length ? Math.round(qr.reduce((s, r) => s + (r.mc_total ? r.mc_score / r.mc_total : 0), 0) / qr.length * 100) : null;
-      const certs = (er || []).filter((r) => r.passed).length;
-      (rp || []).forEach((r) => {
+    // Drei gebündelte Anfragen für das ganze Team statt drei pro Mitglied —
+    // bei größeren Teams sonst 3×N statt 3 Datenbank-Anfragen.
+    const memberIdsForStats = memberProfiles.map((m) => m.id);
+    const [{ data: allQr }, { data: allEr }, { data: allRp }] = memberIdsForStats.length
+      ? await Promise.all([
+          supabase.from("quiz_results").select("user_id, module_id, mc_score, mc_total").in("user_id", memberIdsForStats),
+          supabase.from("exam_results").select("user_id, passed").in("user_id", memberIdsForStats),
+          supabase.from("roleplay_sessions").select("user_id, detected_principles").in("user_id", memberIdsForStats),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }];
+    const qrByUser = {}, erByUser = {}, rpByUser = {};
+    (allQr || []).forEach((r) => { (qrByUser[r.user_id] = qrByUser[r.user_id] || []).push(r); });
+    (allEr || []).forEach((r) => { (erByUser[r.user_id] = erByUser[r.user_id] || []).push(r); });
+    (allRp || []).forEach((r) => { (rpByUser[r.user_id] = rpByUser[r.user_id] || []).push(r); });
+
+    const enriched = memberProfiles.map((m) => {
+      const qr = qrByUser[m.id] || [];
+      const er = erByUser[m.id] || [];
+      const rp = rpByUser[m.id] || [];
+      const doneModules = new Set(qr.map((r) => r.module_id)).size;
+      const avgMc = qr.length ? Math.round(qr.reduce((s, r) => s + (r.mc_total ? r.mc_score / r.mc_total : 0), 0) / qr.length * 100) : null;
+      const certs = er.filter((r) => r.passed).length;
+      rp.forEach((r) => {
         (r.detected_principles || []).forEach((p) => { counts[p] = (counts[p] || 0) + 1; });
       });
-      return { ...m, doneModules, totalModules, avgMc, certs, roleplayCount: (rp || []).length };
-    }));
+      return { ...m, doneModules, totalModules, avgMc, certs, roleplayCount: rp.length };
+    });
     setTeam(enriched);
     setPrincipleCounts(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6));
 

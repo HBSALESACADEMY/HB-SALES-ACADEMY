@@ -72,7 +72,9 @@ export default async function handler(req, res) {
     });
     if (insertError) console.error("insert exam_results failed:", insertError.message);
 
-    try { await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: passed ? 150 : 30 }); } catch (e) { console.error("increment_xp failed:", e.message); }
+    // increment_xp ist nur für den Service-Role-Client aufrufbar (siehe
+    // migration_70) — der RLS-gebundene auth.client hat dafür kein Recht mehr.
+    try { await getAdminSupabase().rpc("increment_xp", { uid: auth.user.id, amount: passed ? 150 : 30 }); } catch (e) { console.error("increment_xp failed:", e.message); }
 
     if (passed) {
       const { data: me } = await auth.client.from("profiles").select("full_name, organization_id").eq("id", auth.user.id).maybeSingle();

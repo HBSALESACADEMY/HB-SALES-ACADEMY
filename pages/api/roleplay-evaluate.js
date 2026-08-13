@@ -1,4 +1,5 @@
 import { requireUser } from "../../lib/supabaseServer";
+import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { callAI } from "../../lib/aiClient";
 
 // Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
@@ -72,7 +73,9 @@ export default async function handler(req, res) {
     }
 
     const xpGain = 30;
-    try { await auth.client.rpc("increment_xp", { uid: auth.user.id, amount: xpGain }); } catch (e) { console.error("increment_xp failed:", e.message); }
+    // increment_xp ist nur für den Service-Role-Client aufrufbar (siehe
+    // migration_70) — der RLS-gebundene auth.client hat dafür kein Recht mehr.
+    try { await getAdminSupabase().rpc("increment_xp", { uid: auth.user.id, amount: xpGain }); } catch (e) { console.error("increment_xp failed:", e.message); }
 
     return res.status(200).json({ evaluation });
   } catch (e) {

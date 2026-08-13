@@ -179,14 +179,17 @@ export default function Messages() {
     setSelected(contact);
     setShowList(false);
     let data;
+    // Nur die letzten 500 Nachrichten, damit ein extrem langer Verlauf nicht
+    // unbegrenzt mitwächst — absteigend abfragen (neueste zuerst), dann für
+    // die chronologische Anzeige wieder umdrehen.
     if (contact.type === "group") {
-      const res = await supabase.from("direct_messages").select("*").eq("group_id", contact.id).order("created_at", { ascending: true });
-      data = res.data;
+      const res = await supabase.from("direct_messages").select("*").eq("group_id", contact.id).order("created_at", { ascending: false }).limit(500);
+      data = (res.data || []).reverse();
     } else {
       const res = await supabase.from("direct_messages").select("*")
         .or(`and(sender_id.eq.${uid},recipient_id.eq.${contact.id}),and(sender_id.eq.${contact.id},recipient_id.eq.${uid})`)
-        .order("created_at", { ascending: true });
-      data = res.data;
+        .order("created_at", { ascending: false }).limit(500);
+      data = (res.data || []).reverse();
     }
     const resolved = await resolveAttachments(data || []);
     setThread(resolved);
@@ -198,13 +201,13 @@ export default function Messages() {
   async function refreshThread() {
     let data;
     if (selected.type === "group") {
-      const res = await supabase.from("direct_messages").select("*").eq("group_id", selected.id).order("created_at", { ascending: true });
-      data = res.data;
+      const res = await supabase.from("direct_messages").select("*").eq("group_id", selected.id).order("created_at", { ascending: false }).limit(500);
+      data = (res.data || []).reverse();
     } else {
       const res = await supabase.from("direct_messages").select("*")
         .or(`and(sender_id.eq.${selfId},recipient_id.eq.${selected.id}),and(sender_id.eq.${selected.id},recipient_id.eq.${selfId})`)
-        .order("created_at", { ascending: true });
-      data = res.data;
+        .order("created_at", { ascending: false }).limit(500);
+      data = (res.data || []).reverse();
     }
     const resolved = await resolveAttachments(data || []);
     setThread(resolved);

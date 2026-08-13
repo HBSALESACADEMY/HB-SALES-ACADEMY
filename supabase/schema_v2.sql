@@ -730,17 +730,27 @@ language sql stable security definer as $$
     or exists (select 1 from profiles t where t.id = target_id and t.status = 'approved')
 $$;
 
--- Atomarer XP-Zuwachs + Protokoll-Eintrag, aufgerufen via supabase.rpc('increment_xp', ...)
+-- Atomarer XP-Zuwachs + Protokoll-Eintrag, aufgerufen via supabase.rpc('increment_xp', ...).
+-- Nur für service_role aufrufbar (siehe Grants unten, migration_70) — jede
+-- eingeloggte Person hätte die Funktion sonst per Browser-Konsole mit
+-- beliebiger uid/amount aufrufen können, unabhängig von jeder Spiellogik.
 create or replace function public.increment_xp(uid uuid, amount integer)
 returns void
 language plpgsql as $$
+declare
+  bounded_amount integer := greatest(-1000, least(1000, amount));
 begin
   -- GREATEST(0, ...) verhindert negatives XP — wichtig, seit XP-Verlust
   -- (z.B. beim Reißen einer Streak) genutzt wird, nicht nur XP-Zuwachs.
-  update profiles set xp = greatest(0, xp + amount) where id = uid;
-  insert into xp_log (user_id, amount) values (uid, amount);
+  update profiles set xp = greatest(0, xp + bounded_amount) where id = uid;
+  insert into xp_log (user_id, amount) values (uid, bounded_amount);
 end;
 $$;
+
+revoke execute on function public.increment_xp(uuid, integer) from public;
+revoke execute on function public.increment_xp(uuid, integer) from anon;
+revoke execute on function public.increment_xp(uuid, integer) from authenticated;
+grant execute on function public.increment_xp(uuid, integer) to service_role;
 
 
 -- =============================================================================

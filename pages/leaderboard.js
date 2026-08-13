@@ -47,8 +47,10 @@ export default function Leaderboard() {
     }
 
     const [{ data: profiles }, { data: friendships }] = await Promise.all([
+      // Großzügige Obergrenze — verhindert unbegrenztes Wachstum, ohne bei
+      // realistischen Organisationsgrößen die Rangliste zu verfälschen.
       activeOrgId
-        ? supabase.from("profiles").select("id, full_name, xp, avatar_url").eq("status", "approved").eq("leaderboard_opt_out", false).eq("organization_id", activeOrgId)
+        ? supabase.from("profiles").select("id, full_name, xp, avatar_url").eq("status", "approved").eq("leaderboard_opt_out", false).eq("organization_id", activeOrgId).order("xp", { ascending: false }).limit(500)
         : Promise.resolve({ data: [] }),
       session ? supabase.from("friendships").select("*").eq("status", "accepted").or(`requester_id.eq.${session.user.id},addressee_id.eq.${session.user.id}`) : Promise.resolve({ data: [] }),
     ]);
@@ -74,8 +76,8 @@ export default function Leaderboard() {
     // Ist jemand in mehreren Teams, zählt er/sie in jedem davon — Teams sind
     // hier bewusst als eigene, sich ggf. überschneidende Gruppen behandelt.
     const [{ data: teams }, { data: teamMembers }] = await Promise.all([
-      supabase.from("teams").select("id, name"),
-      supabase.from("team_members").select("team_id, user_id"),
+      supabase.from("teams").select("id, name").limit(200),
+      supabase.from("team_members").select("team_id, user_id").limit(2000),
     ]);
     const membersByTeam = {};
     (teamMembers || []).forEach((m) => { membersByTeam[m.team_id] = membersByTeam[m.team_id] || []; membersByTeam[m.team_id].push(m.user_id); });

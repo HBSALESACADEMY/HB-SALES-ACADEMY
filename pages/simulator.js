@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
-import { supabase } from "../lib/supabaseClient";
+import { apiPost } from "../lib/apiClient";
 import { SCENARIOS } from "../lib/scenarios";
 
 export default function Simulator() {
@@ -20,10 +20,9 @@ export default function Simulator() {
     const nextNode = scenario.nodes[option.next];
     setNodeId(option.next);
     if (nextNode.outcome) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        try { await supabase.rpc("increment_xp", { uid: session.user.id, amount: Math.round(nextNode.score / 5) }); } catch (e) {}
-      }
+      // XP wird serverseitig aus dem festen Szenario-Baum abgeleitet, nicht
+      // vom Client übermittelt.
+      try { await apiPost("/api/simulator-progress", { scenarioId: scenario.id, nodeId: option.next }); } catch (e) {}
     }
   }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
@@ -29,7 +30,8 @@ export default function Duel() {
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(null); // duel being played
   const [qIndex, setQIndex] = useState(0);
-  const [score, setScore] = useState(0);
+  const [selections, setSelections] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedContact, setSelectedContact] = useState("");
   const [error, setError] = useState("");
 
@@ -75,23 +77,25 @@ export default function Duel() {
   function playDuel(duel) {
     setPlaying(duel);
     setQIndex(0);
-    setScore(0);
+    setSelections([]);
   }
 
   async function answer(idx) {
-    const qId = playing.question_ids[qIndex];
-    const question = ALL_QUESTIONS[qId];
-    const newScore = score + (idx === question.correct ? 1 : 0);
+    const nextSelections = [...selections, idx];
     if (qIndex + 1 < playing.question_ids.length) {
-      setScore(newScore);
+      setSelections(nextSelections);
       setQIndex(qIndex + 1);
     } else {
-      const isChallenger = playing.challenger_id === selfId;
-      const update = isChallenger
-        ? { challenger_score: newScore, status: playing.opponent_score != null ? "completed" : "challenger_done" }
-        : { opponent_score: newScore, status: playing.challenger_score != null ? "completed" : "challenger_done" };
-      const { error: err } = await supabase.from("duels").update(update).eq("id", playing.id);
-      if (err) setError(err.message);
+      // Ergebnis wird serverseitig aus den Frage-IDs nachgerechnet, nicht
+      // client-seitig vorgegeben — sonst ließe sich per Browser-Konsole
+      // ein Sieg erschwindeln.
+      setSubmitting(true);
+      try {
+        await apiPost("/api/duel-submit", { duelId: playing.id, selections: nextSelections });
+      } catch (e) {
+        setError(e.message);
+      }
+      setSubmitting(false);
       setPlaying(null);
       await load();
     }
@@ -111,7 +115,7 @@ export default function Duel() {
           <p className="text-textMain text-[15px] font-medium mb-4">{question.q}</p>
           <div className="flex flex-col gap-2">
             {question.options.map((opt, i) => (
-              <button key={i} onClick={() => answer(i)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#35406E)] hover:bg-surfaceRaised transition">
+              <button key={i} disabled={submitting} onClick={() => answer(i)} className="text-left px-4 py-3 rounded-lg border border-line text-sm text-textMain hover:border-[var(--org-color-1,#35406E)] hover:bg-surfaceRaised transition disabled:opacity-40">
                 {opt}
               </button>
             ))}
