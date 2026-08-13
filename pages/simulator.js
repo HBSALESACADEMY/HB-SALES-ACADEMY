@@ -32,7 +32,7 @@ export default function Simulator() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Szenario-Simulator</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Echte Gesprächssituationen zum Durchspielen — jede Entscheidung führt zu einer anderen Wendung.</p>
+      <p className="text-textMuted text-sm mb-6">Echte Gesprächssituationen zum Durchspielen — jede Entscheidung führt zu einer anderen Wendung. Guter Einstieg, bevor es ins freie <a href="/roleplay" className="text-amber underline">KI-Rollenspiel</a> geht.</p>
 
       {!scenario ? (
         <div className="flex flex-col gap-3.5">

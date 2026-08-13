@@ -99,7 +99,7 @@ export default function Roleplay() {
       <Layout>
         <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Rollenspiel</h1>
         <div className="brand-stripe w-16 mb-4" />
-        <p className="text-textMuted text-sm mb-6">Szenario, Schwierigkeit und Kundentyp wählen.</p>
+        <p className="text-textMuted text-sm mb-6">Szenario, Schwierigkeit und Kundentyp wählen — freies Gespräch mit einer KI. Neu hier? Der <a href="/simulator" className="text-amber underline">Szenario-Simulator</a> ist ein guter erster Einstieg.</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {SCENARIOS.map((s) => {
             const unlocked = courseUnlockedFor(s.id);
