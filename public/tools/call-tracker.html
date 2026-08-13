@@ -73,6 +73,36 @@
   #teamPanel .sub{ font-size:12px; color:var(--muted); margin-bottom:14px; }
   #teamPanel canvas{ max-height: 220px; margin-bottom: 22px; }
 
+  /* CALL WIZARD — schrittweiser Ablauf, ein Bildschirm nach dem anderen (wie
+     der Szenario-Simulator), statt der früheren frei antippbaren Zähl-Kacheln. */
+  .wizard{
+    background: linear-gradient(180deg, var(--panel) 0%, #10121A 100%);
+    border: 1px solid var(--line); border-radius: 16px;
+    padding: 26px 22px; margin-bottom: 22px; text-align:center;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
+  }
+  .wizard-step{ display:none; }
+  .wizard-step.active{ display:block; animation: stepIn .2s ease; }
+  @keyframes stepIn{ from{ opacity:0; transform: translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+  .wizard-icon{ font-size: 34px; margin-bottom: 6px; }
+  .wizard-step h3{ margin: 4px 0 6px; font-size: 18px; }
+  .wizard-step h4{ margin: 4px 0 3px; font-size: 16px; text-align:left; }
+  .wizard-sub{ color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  .wizard-choices{ display:flex; gap: 10px; }
+  .wizard-btn{
+    flex:1; padding: 15px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--white); font-size: 14.5px; font-weight:700;
+    cursor:pointer; letter-spacing: 0.01em;
+  }
+  .wizard-btn:active{ transform: scale(0.98); }
+  .wizard-btn.primary{ background: linear-gradient(120deg, #4C5DC9 0%, #CE3A5C 55%, #B2314F 100%); border:none; color:#fff; }
+  .wizard-btn.positive{ border-color: rgba(0,229,199,0.4); color: var(--green); }
+  .wizard-btn.negative{ border-color: rgba(255,77,109,0.4); color: var(--red); }
+  .wizard-checklist{ text-align:left; margin: 0 0 20px; padding-left: 20px; color: var(--white); font-size: 13.5px; line-height:1.7; }
+  .wizard-checklist li{ margin-bottom: 4px; }
+  .wizard-back{ display:block; margin: 14px auto 0; background:none; border:none; color: var(--muted); font-size:12.5px; cursor:pointer; }
+  .wizard-back:hover{ color: var(--white); }
+
   /* DATE / TOTAL BAR */
   .statusbar{
     display:flex; justify-content:space-between; align-items:center;
@@ -91,7 +121,8 @@
   }
   .readonly-note.show{ display:block; }
 
-  /* GRID OF COUNTERS */
+  /* GRID OF COUNTERS — jetzt reine Übersicht, nicht mehr antippbar zum Zählen;
+     das übernimmt der Assistent oben. Minus bleibt zur Korrektur von Fehlern. */
   .grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media (max-width: 480px){ .grid{ grid-template-columns: 1fr; } }
 
@@ -100,14 +131,7 @@
     box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
     padding: 18px 18px 16px; display:flex; flex-direction:column; gap: 10px;
     position: relative; overflow:hidden;
-    transition: border-color .15s ease, transform .08s ease, background .15s ease;
-    cursor:pointer; user-select:none;
   }
-  .card.readonly{ cursor: default; }
-  .card.readonly:active{ transform:none; }
-  .card:active{ transform: scale(0.98); }
-  .card:hover{ border-color: #35406E; }
-  .card.readonly:hover{ border-color: var(--line); }
 
   .card .accent{ position:absolute; left:0; top:0; bottom:0; width: 4px; }
   .card[data-kind="neutral"] .accent{ background: var(--gold); }
@@ -129,6 +153,7 @@
   .minusbtn:hover{ color: var(--white); border-color: #35406E; }
   .card.readonly .minusbtn{ display:none; }
   .tapHint{ font-size: 11px; color: #5B5E70; letter-spacing: 0.05em; }
+  .card.readonly .tapHint{ display:none; }
 
   /* SUMMARY */
   .summary{
@@ -192,11 +217,6 @@
   }
   .toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  .pulse{ animation: pulseAnim .28s ease; }
-  @keyframes pulseAnim{
-    0%{ background: var(--panel); } 35%{ background: #1C1E2C; } 100%{ background: var(--panel); }
-  }
-
   .loading-row{
     text-align:center; color: var(--muted); font-size: 13px; padding: 30px 0;
   }
@@ -207,24 +227,8 @@
   }
   @keyframes spin{ to{ transform: rotate(360deg); } }
 
-  /* MODAL */
-  .modal-overlay{
-    position: fixed; inset: 0; background: rgba(0,0,0,0.65);
-    display:none; align-items:flex-end; justify-content:center; z-index: 100;
-    backdrop-filter: blur(2px);
-  }
-  .modal-overlay.show{ display:flex; }
-  @media (min-width: 560px){ .modal-overlay{ align-items:center; } }
-  .modal{
-    background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--red);
-    border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; padding: 22px 20px 26px;
-    animation: slideUp .22s ease;
-  }
-  @media (min-width: 560px){ .modal{ border-radius: 16px; } }
-  @keyframes slideUp{ from{ transform: translateY(24px); opacity: 0; } to{ transform: translateY(0); opacity: 1; } }
-  .modal h4{ margin: 0 0 3px; font-size: 15px; font-weight:700; }
-  .modal .modal-sub{ font-size: 12.5px; color: var(--muted); margin-bottom: 16px; }
-  .reason-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* REASON PICKER (jetzt Assistent-Schritt statt Popup) */
+  .reason-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align:left; }
   .reason-btn{
     background: var(--panel-2); border: 1px solid var(--line); color: var(--white);
     border-radius: 10px; padding: 13px 10px; font-size: 13px; text-align:left;
@@ -237,10 +241,10 @@
     color: var(--muted); font-size: 12.5px; text-align:center; cursor:pointer; padding: 6px;
   }
   .modal-skip:hover{ color: var(--white); }
+  .modal-sub{ font-size: 12.5px; color: var(--muted); margin-bottom: 16px; text-align:left; }
 
-  /* LEAD MODAL */
-  .modal.lead-modal{ max-height: 88vh; overflow-y: auto; }
-  .lead-field{ margin-bottom: 12px; }
+  /* LEAD FORM (jetzt Assistent-Schritt statt Popup) */
+  .lead-field{ margin-bottom: 12px; text-align:left; }
   .lead-field label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .lead-field input[type="text"], .lead-field input[type="tel"], .lead-field input[type="email"],
   .lead-field input[type="datetime-local"], .lead-field textarea{
@@ -249,7 +253,7 @@
   }
   .lead-field textarea{ resize: vertical; min-height: 60px; }
   .lead-field input[type="file"]{ font-size: 12px; color: var(--muted); width:100%; }
-  .lead-checkbox{ display:flex; align-items:center; gap:8px; font-size: 13px; color: var(--white); margin-bottom: 14px; }
+  .lead-checkbox{ display:flex; align-items:center; gap:8px; font-size: 13px; color: var(--white); margin-bottom: 14px; text-align:left; }
   .lead-submit{
     width:100%; padding: 13px; border-radius: 10px; border: none;
     background: linear-gradient(120deg, #4C5DC9 0%, #CE3A5C 55%, #B2314F 100%);
@@ -292,11 +296,87 @@
   </div>
 
   <div id="personalPanels">
+
+  <!-- ASSISTENT: ein Schritt nach dem anderen, wie im Szenario-Simulator.
+       Ablauf: Anwahl -> erreicht/nicht erreicht -> positiv/negativ ->
+       (Grund | Termin-Buchung -> Kundendaten) -> Durchatmen -> von vorn. -->
+  <div class="wizard" id="callWizard">
+
+    <div class="wizard-step active" data-step="lead">
+      <div class="wizard-icon">📇</div>
+      <h3>Bereit für den nächsten Anruf?</h3>
+      <p class="wizard-sub">Ein Klick startet die Anwahl.</p>
+      <button class="wizard-btn primary" id="btnStartCall">Anwahl starten</button>
+    </div>
+
+    <div class="wizard-step" data-step="outcome">
+      <div class="wizard-icon">📞</div>
+      <h3>Wurde die Person erreicht?</h3>
+      <p class="wizard-sub">&nbsp;</p>
+      <div class="wizard-choices">
+        <button class="wizard-btn" data-outcome="nicht">Nicht erreicht</button>
+        <button class="wizard-btn primary" data-outcome="erreicht">Erreicht</button>
+      </div>
+    </div>
+
+    <div class="wizard-step" data-step="callResult">
+      <div class="wizard-icon">💬</div>
+      <h3>Wie ist das Gespräch gelaufen?</h3>
+      <p class="wizard-sub">&nbsp;</p>
+      <div class="wizard-choices">
+        <button class="wizard-btn negative" data-result="negativ">Negativ</button>
+        <button class="wizard-btn positive" data-result="positiv">Positiv</button>
+      </div>
+    </div>
+
+    <div class="wizard-step" data-step="reason">
+      <h4>Was war der Grund?</h4>
+      <div class="modal-sub">Einmal antippen, zählt automatisch mit</div>
+      <div class="reason-grid" id="wizReasonButtons"></div>
+      <button class="modal-skip" id="wizReasonSkip">Ohne Angabe zählen</button>
+    </div>
+
+    <div class="wizard-step" data-step="booking">
+      <div class="wizard-icon">📅</div>
+      <h3>Termin vereinbaren</h3>
+      <ul class="wizard-checklist">
+        <li>Buchungslink bei Close öffnen und 2 Terminoptionen raussuchen</li>
+        <li>Fragen: „Passt es Ihnen/dir besser am Termin X oder Termin Y?"</li>
+        <li>Termin direkt bei Cal eintragen</li>
+      </ul>
+      <button class="wizard-btn primary" id="btnBookingNext">Erledigt, weiter</button>
+    </div>
+
+    <div class="wizard-step" data-step="leadForm">
+      <h4>Termin erfasst 🎉</h4>
+      <div class="modal-sub">Kundendaten erfassen (empfohlen) — landet direkt unter „Termine" in der App</div>
+      <div class="lead-field"><label>Name *</label><input type="text" id="leadName" placeholder="Vor- und Nachname"></div>
+      <div class="lead-field"><label>Telefon *</label><input type="tel" id="leadPhone"></div>
+      <div class="lead-field"><label>E-Mail *</label><input type="email" id="leadEmail"></div>
+      <div class="lead-field"><label>Termin (Datum/Uhrzeit) *</label><input type="datetime-local" id="leadAppointmentAt"></div>
+      <div class="lead-field"><label>Unternehmen</label><input type="text" id="leadCompany"></div>
+      <div class="lead-field"><label>Aktuelle Webseite</label><input type="text" id="leadWebsite"></div>
+      <label class="lead-checkbox"><input type="checkbox" id="leadDecisionMaker"> Ist Entscheider</label>
+      <div class="lead-field"><label>Notiz</label><textarea id="leadNotes" placeholder="Was wurde besprochen?"></textarea></div>
+      <div class="lead-field"><label>Recording hochladen (optional)</label><input type="file" accept="audio/*" id="leadRecording"></div>
+      <button class="lead-submit" id="leadSubmit">Speichern</button>
+      <button class="modal-skip" id="leadSkip">Nur zählen, ohne Daten zu erfassen</button>
+    </div>
+
+    <div class="wizard-step" data-step="breathe">
+      <div class="wizard-icon">🌬️</div>
+      <h3>Kurz durchatmen</h3>
+      <p class="wizard-sub">Kurz Luft holen, dann geht's weiter.</p>
+      <button class="wizard-btn primary" id="btnBreatheNext">Weiter zum nächsten Anruf</button>
+    </div>
+
+  </div>
+
   <div class="statusbar">
     <div id="dateLabel">–</div>
     <div id="totalLabel">Anwahlen: <b id="totalToday">0</b></div>
   </div>
-  <div class="readonly-note" id="readonlyNote">Nur-Ansicht — Zählen geht nur im Tab "Heute"</div>
+  <div class="readonly-note" id="readonlyNote">Nur-Ansicht — Zählen läuft nur über den Assistenten oben (Tab "Heute")</div>
 
   <div class="grid" id="cardGrid"></div>
 
@@ -334,33 +414,6 @@
   </div>
 
 
-</div>
-
-<div class="modal-overlay" id="reasonModal">
-  <div class="modal">
-    <h4>Was war der Grund?</h4>
-    <div class="modal-sub">Einmal antippen, zählt automatisch mit</div>
-    <div class="reason-grid" id="reasonButtons"></div>
-    <button class="modal-skip" id="modalSkip">Ohne Angabe zählen</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="leadModal">
-  <div class="modal lead-modal" style="border-top-color: var(--green);">
-    <h4>Termin erfasst 🎉</h4>
-    <div class="modal-sub">Kundendaten erfassen (empfohlen) — landet direkt unter "Termine" in der App</div>
-    <div class="lead-field"><label>Name *</label><input type="text" id="leadName" placeholder="Vor- und Nachname"></div>
-    <div class="lead-field"><label>Telefon *</label><input type="tel" id="leadPhone"></div>
-    <div class="lead-field"><label>E-Mail *</label><input type="email" id="leadEmail"></div>
-    <div class="lead-field"><label>Termin (Datum/Uhrzeit) *</label><input type="datetime-local" id="leadAppointmentAt"></div>
-    <div class="lead-field"><label>Unternehmen</label><input type="text" id="leadCompany"></div>
-    <div class="lead-field"><label>Aktuelle Webseite</label><input type="text" id="leadWebsite"></div>
-    <label class="lead-checkbox"><input type="checkbox" id="leadDecisionMaker"> Ist Entscheider</label>
-    <div class="lead-field"><label>Notiz</label><textarea id="leadNotes" placeholder="Was wurde besprochen?"></textarea></div>
-    <div class="lead-field"><label>Recording hochladen (optional)</label><input type="file" accept="audio/*" id="leadRecording"></div>
-    <button class="lead-submit" id="leadSubmit">Speichern</button>
-    <button class="modal-skip" id="leadSkip">Nur zählen, ohne Daten zu erfassen</button>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -478,8 +531,6 @@
   const grid = document.getElementById("cardGrid");
   const toastEl = document.getElementById("toast");
   const STORAGE_KEY = todayKey();
-  const modal = document.getElementById("reasonModal");
-  const reasonButtonsEl = document.getElementById("reasonButtons");
   const viewTabs = document.getElementById("viewTabs");
   const readonlyNote = document.getElementById("readonlyNote");
   const resetBtn = document.getElementById("resetBtn");
@@ -492,6 +543,8 @@
     showToast._t = setTimeout(()=> toastEl.classList.remove("show"), 1800);
   }
 
+  // Zähl-Kacheln sind reine Übersicht (nicht mehr antippbar zum Zählen — das
+  // übernimmt der Assistent oben). Minus bleibt zur Korrektur von Fehlern.
   function buildCards(){
     grid.innerHTML = "";
     FIELDS.forEach(f => {
@@ -508,27 +561,8 @@
             <div class="minusbtn" data-action="minus" data-key="${f.key}">–</div>
           </div>
         </div>
-        <div class="tapHint">Tippen zum Zählen</div>
+        <div class="tapHint">Bei Fehlern: − zum Korrigieren</div>
       `;
-      card.addEventListener("click", (e) => {
-        if (e.target.closest(".minusbtn")) return;
-        if (currentView !== "today"){
-          showToast('Zählen geht nur im Tab "Heute"');
-          return;
-        }
-        if (f.key === "negativ"){
-          openReasonModal(card);
-          return;
-        }
-        if (f.key === "termin"){
-          openLeadModal(card);
-          return;
-        }
-        todayCounts[f.key] += 1;
-        renderCount(f.key);
-        persist();
-        pulseCard(card);
-      });
       grid.appendChild(card);
     });
 
@@ -544,14 +578,9 @@
     });
   }
 
-  function pulseCard(card){
-    card.classList.remove("pulse");
-    void card.offsetWidth;
-    card.classList.add("pulse");
-  }
-
   function buildReasonButtons(){
-    reasonButtonsEl.innerHTML = "";
+    const el = document.getElementById("wizReasonButtons");
+    el.innerHTML = "";
     REASONS.forEach(r => {
       const btn = document.createElement("button");
       btn.className = "reason-btn";
@@ -562,60 +591,91 @@
         renderCount("negativ");
         renderReasons();
         persist();
-        closeReasonModal();
         showToast("Erfasst: " + r.label);
+        showWizardStep("lead");
       });
-      reasonButtonsEl.appendChild(btn);
+      el.appendChild(btn);
     });
   }
-
-  let activeNegativeCard = null;
-  function openReasonModal(card){
-    activeNegativeCard = card;
-    modal.classList.add("show");
-  }
-  function closeReasonModal(){
-    modal.classList.remove("show");
-    if (activeNegativeCard){ pulseCard(activeNegativeCard); activeNegativeCard = null; }
-  }
-  document.getElementById("modalSkip").addEventListener("click", () => {
+  document.getElementById("wizReasonSkip").addEventListener("click", () => {
     todayReasons.sonstiges += 1;
     todayCounts.negativ += 1;
     renderCount("negativ");
     renderReasons();
     persist();
-    closeReasonModal();
+    showWizardStep("lead");
   });
-  modal.addEventListener("click", (e) => { if (e.target === modal) closeReasonModal(); });
 
-  // TERMIN-MODAL: öffnet sich beim "Terminiert"-Klick statt sofort zu zählen
-  // (analog zum Einwand-Grund-Modal) — Kundendaten landen direkt in der
-  // "leads"-Tabelle, sichtbar in der App unter "Termine" (pages/termine.js).
-  const leadModal = document.getElementById("leadModal");
+  // ASSISTENT: Anwahl -> erreicht/nicht erreicht -> positiv/negativ ->
+  // (Grund | Buchungs-Hinweis -> Kundendaten) -> Durchatmen -> von vorn.
+  const wizardSteps = document.querySelectorAll(".wizard-step");
+  function showWizardStep(step){
+    wizardSteps.forEach(el => el.classList.toggle("active", el.dataset.step === step));
+  }
+
+  document.getElementById("btnStartCall").addEventListener("click", () => {
+    todayCounts.anwahlen += 1;
+    renderCount("anwahlen");
+    persist();
+    showWizardStep("outcome");
+  });
+
+  document.querySelectorAll("[data-outcome]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.outcome === "nicht"){
+        todayCounts.nicht += 1;
+        renderCount("nicht");
+        persist();
+        showToast("Erfasst: Nicht erreicht");
+        showWizardStep("lead");
+      } else {
+        todayCounts.erreicht += 1;
+        renderCount("erreicht");
+        persist();
+        showWizardStep("callResult");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-result]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.result === "negativ"){
+        showWizardStep("reason");
+      } else {
+        todayCounts.positiv += 1;
+        renderCount("positiv");
+        persist();
+        showWizardStep("booking");
+      }
+    });
+  });
+
+  document.getElementById("btnBookingNext").addEventListener("click", () => {
+    resetLeadForm();
+    showWizardStep("leadForm");
+  });
+
+  document.getElementById("btnBreatheNext").addEventListener("click", () => {
+    showWizardStep("lead");
+  });
+
+  // TERMIN-SCHRITT: Kundendaten landen direkt in der "leads"-Tabelle, sichtbar
+  // in der App unter "Termine" (pages/termine.js).
   const leadFieldIds = ["leadName", "leadPhone", "leadEmail", "leadCompany", "leadWebsite", "leadAppointmentAt", "leadNotes"];
-  let activeTerminCard = null;
-
-  function openLeadModal(card){
-    activeTerminCard = card;
+  function resetLeadForm(){
     leadFieldIds.forEach(id => { document.getElementById(id).value = ""; });
     document.getElementById("leadDecisionMaker").checked = false;
     document.getElementById("leadRecording").value = "";
-    leadModal.classList.add("show");
-  }
-  function closeLeadModal(){
-    leadModal.classList.remove("show");
-    if (activeTerminCard){ pulseCard(activeTerminCard); activeTerminCard = null; }
   }
   function bumpTermin(){
     todayCounts.termin += 1;
     renderCount("termin");
     persist();
   }
-  leadModal.addEventListener("click", (e) => { if (e.target === leadModal) closeLeadModal(); });
   document.getElementById("leadSkip").addEventListener("click", () => {
     bumpTermin();
-    closeLeadModal();
     showToast("Termin gezählt");
+    showWizardStep("breathe");
   });
   document.getElementById("leadSubmit").addEventListener("click", async () => {
     const submitBtn = document.getElementById("leadSubmit");
@@ -670,8 +730,8 @@
       if (!createRes.ok) throw new Error(createBody.error || "Termin konnte nicht gespeichert werden.");
 
       bumpTermin();
-      closeLeadModal();
       showToast("Termin & Kundendaten gespeichert");
+      showWizardStep("breathe");
     } catch (e) {
       console.error("Lead konnte nicht gespeichert werden:", e);
       showToast("Speichern fehlgeschlagen: " + (e.message || "Unbekannter Fehler"));
@@ -823,6 +883,7 @@
     readonlyNote.classList.toggle("show", !isToday);
     resetBtn.disabled = !isToday;
     grid.querySelectorAll(".card").forEach(card => card.classList.toggle("readonly", !isToday));
+    document.getElementById("callWizard").style.display = isToday ? "block" : "none";
   }
 
   async function switchView(view){
@@ -847,6 +908,7 @@
       applyReadonlyState();
       renderAllCounts();
       renderReasons();
+      showWizardStep("lead");
       return;
     }
 
@@ -981,6 +1043,7 @@
     renderAllCounts();
     renderReasons();
     await persist();
+    showWizardStep("lead");
     showToast("Tag zurückgesetzt");
   });
 
@@ -992,6 +1055,7 @@
     applyReadonlyState();
     renderAllCounts();
     renderReasons();
+    showWizardStep("lead");
   }
 
   init();

@@ -60,6 +60,9 @@ export default function Termine() {
   const [expandedLeadId, setExpandedLeadId] = useState(null);
   const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addDraft, setAddDraft] = useState({ name: "", phone: "", email: "", company: "", website: "", appointmentAt: "", isDecisionMaker: false, notes: "" });
+  const [addSaving, setAddSaving] = useState(false);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -211,6 +214,42 @@ export default function Termine() {
     setLeads((prev) => prev.filter((l) => l.id !== lead.id));
     setConfirmDelete(null);
     setDeleting(false);
+  }
+
+  async function submitNewLead() {
+    if (!addDraft.name.trim() || !addDraft.phone.trim() || !addDraft.email.trim() || !addDraft.appointmentAt) {
+      setError("Bitte Name, Telefon, E-Mail und Termin-Zeitpunkt ausfüllen.");
+      return;
+    }
+    setAddSaving(true);
+    setError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const activeOrgId = getActiveOrgId(me);
+      // Läuft über dieselbe Route wie der Call Tracker (pages/api/lead-created.js)
+      // — dadurch auch dieselbe automatische Team-Benachrichtigung.
+      const { leadId } = await apiPost("/api/lead-created", {
+        name: addDraft.name.trim(),
+        phone: addDraft.phone.trim(),
+        email: addDraft.email.trim(),
+        company: addDraft.company.trim() || null,
+        website: addDraft.website.trim() || null,
+        isDecisionMaker: addDraft.isDecisionMaker,
+        notes: addDraft.notes.trim() || null,
+        recordingPath: null,
+        appointmentAt: new Date(addDraft.appointmentAt).toISOString(),
+        activeOrgId,
+      });
+      setAddDraft({ name: "", phone: "", email: "", company: "", website: "", appointmentAt: "", isDecisionMaker: false, notes: "" });
+      setShowAddForm(false);
+      await load(true);
+      setExpandedLeadId(leadId);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAddSaving(false);
+    }
   }
 
   // profileMap wird erst beim nächsten Neuladen (alle 20s) um gerade erst
@@ -493,6 +532,31 @@ export default function Termine() {
         Unter <strong>Aufgaben</strong> lässt sich jemandem aus eurer Organisation eine Aufgabe zu einem Termin zuweisen.
         Termine können bei Bedarf komplett gelöscht werden (inkl. zugehöriger Aufnahme).
       </InfoCard>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <button onClick={() => setShowAddForm((v) => !v)} className="btn text-xs">
+          {showAddForm ? "Abbrechen" : "+ Termin hinzufügen"}
+        </button>
+      </div>
+
+      {showAddForm && (
+        <div className="card mb-5">
+          <div className="font-semibold text-textMain text-sm mb-3">Neuen Termin anlegen</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+            <input className="input !py-1.5 text-xs" placeholder="Name *" value={addDraft.name} onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))} />
+            <input className="input !py-1.5 text-xs" placeholder="Telefon *" value={addDraft.phone} onChange={(e) => setAddDraft((d) => ({ ...d, phone: e.target.value }))} />
+            <input className="input !py-1.5 text-xs" type="email" placeholder="E-Mail *" value={addDraft.email} onChange={(e) => setAddDraft((d) => ({ ...d, email: e.target.value }))} />
+            <input type="datetime-local" className="input !py-1.5 text-xs" value={addDraft.appointmentAt} onChange={(e) => setAddDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
+            <input className="input !py-1.5 text-xs" placeholder="Unternehmen" value={addDraft.company} onChange={(e) => setAddDraft((d) => ({ ...d, company: e.target.value }))} />
+            <input className="input !py-1.5 text-xs" placeholder="Webseite" value={addDraft.website} onChange={(e) => setAddDraft((d) => ({ ...d, website: e.target.value }))} />
+            <label className="flex items-center gap-1.5 text-xs text-textMuted">
+              <input type="checkbox" checked={addDraft.isDecisionMaker} onChange={(e) => setAddDraft((d) => ({ ...d, isDecisionMaker: e.target.checked }))} /> Entscheider:in
+            </label>
+          </div>
+          <textarea className="input !py-1.5 text-xs mb-3" rows={2} placeholder="Notizen" value={addDraft.notes} onChange={(e) => setAddDraft((d) => ({ ...d, notes: e.target.value }))} />
+          <button disabled={addSaving} onClick={submitNewLead} className="btn text-xs disabled:opacity-40">{addSaving ? "Speichert..." : "Termin speichern"}</button>
+        </div>
+      )}
 
       {canSeeTeam && (
         <div className="flex items-center gap-2 mb-5 flex-wrap">
