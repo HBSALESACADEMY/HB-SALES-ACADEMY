@@ -43,6 +43,9 @@ create table if not exists organizations (
   -- Terminierungs-Anleitung im Call Tracker (weißes Label: kein Verweis auf
   -- HBs eigene Tools) — leer = allgemeine Standard-Anleitung ohne Tool-Namen.
   booking_instructions text,
+  -- Eigene Einwand-Kategorien im Call Tracker (Array aus {key, label}) —
+  -- NULL/leer = die 6 HB-Standardkategorien bleiben aktiv.
+  objection_categories jsonb,
   created_at timestamptz not null default now()
 );
 

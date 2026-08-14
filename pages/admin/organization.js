@@ -78,6 +78,25 @@ function slugify(name) {
     .replace(/^-+|-+$/g, "");
 }
 
+// Muss inhaltlich mit DEFAULT_REASONS in public/tools/call-tracker.html
+// übereinstimmen — das ist die Standard-Belegung, wenn eine Organisation
+// keine eigenen Einwand-Kategorien hinterlegt.
+const DEFAULT_OBJECTION_CATEGORIES = [
+  { key: "preis", label: "Preis & Auslastung" },
+  { key: "skepsis", label: "Skepsis & Vertrauen" },
+  { key: "vorhanden", label: "Bereits vorhanden" },
+  { key: "zeit", label: "Zeit & Aufschub" },
+  { key: "entscheidung", label: "Entscheidung" },
+  { key: "sonstiges", label: "Sonstiges" },
+];
+
+function uniqueCategoryKey(label, existingKeys) {
+  const base = slugify(label) || "kategorie";
+  let key = base, n = 2;
+  while (existingKeys.includes(key)) { key = `${base}-${n}`; n++; }
+  return key;
+}
+
 // Wiederverwendbares Formular für Name/Firmencode/Logo/Markenfarben einer
 // Organisation — für die eigene Organisation (mit Reload danach, damit das
 // Branding sofort überall greift) UND, für Plattform-Admins, für JEDE
@@ -94,6 +113,10 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [textColor, setTextColor] = useState(org.text_color || "#EDEDF4");
   const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
   const [bookingInstructions, setBookingInstructions] = useState(org.booking_instructions || "");
+  const [useCustomCategories, setUseCustomCategories] = useState(Array.isArray(org.objection_categories) && org.objection_categories.length > 0);
+  const [categories, setCategories] = useState(
+    Array.isArray(org.objection_categories) && org.objection_categories.length ? org.objection_categories : DEFAULT_OBJECTION_CATEGORIES
+  );
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -132,9 +155,24 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
     img.src = objectUrl;
   }
 
+  function updateCategoryLabel(i, label) {
+    setCategories((prev) => prev.map((c, idx) => (idx === i ? { ...c, label } : c)));
+  }
+  function addCategory() {
+    setCategories((prev) => [...prev, { key: uniqueCategoryKey("Neue Kategorie", prev.map((c) => c.key)), label: "" }]);
+  }
+  function removeCategory(i) {
+    setCategories((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+  function resetCategories() {
+    setCategories(DEFAULT_OBJECTION_CATEGORIES);
+    setUseCustomCategories(false);
+  }
+
   async function save() {
     if (!name.trim() || !slug.trim()) return;
     setSaving(true); setError(""); setSaved(false);
+    const cleanCategories = categories.filter((c) => c.label.trim()).map((c) => ({ key: c.key, label: c.label.trim() }));
     const { error: err } = await supabase.from("organizations").update({
       name: name.trim(),
       slug: slugify(slug.trim()),
@@ -146,6 +184,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       surface_color: useCustomSurface ? surfaceColor : null,
       text_color: useCustomSurface ? textColor : null,
       booking_instructions: bookingInstructions.trim() || null,
+      objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
     }).eq("id", org.id);
     setSaving(false);
     if (err) {
@@ -245,6 +284,26 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         onChange={(e) => setBookingInstructions(e.target.value)}
         placeholder={'Buchungslink im eigenen System öffnen und Terminoptionen raussuchen\nFragen: „Passt es Ihnen/dir besser am Termin X oder Termin Y?"\nTermin im Kalender eintragen und bestätigen'}
       />
+
+      <label className="flex items-center gap-2 text-xs text-textMuted mb-3 cursor-pointer select-none">
+        <input type="checkbox" checked={useCustomCategories} onChange={(e) => setUseCustomCategories(e.target.checked)} />
+        Eigene Einwand-Kategorien im Call Tracker verwenden (sonst gelten die 6 Standard-Kategorien)
+      </label>
+      {useCustomCategories && (
+        <div className="mb-5">
+          {categories.map((c, i) => (
+            <div key={c.key} className="flex items-center gap-2 mb-2">
+              <input className="input flex-1" value={c.label} onChange={(e) => updateCategoryLabel(i, e.target.value)} placeholder="Kategorie-Name" />
+              <button type="button" onClick={() => removeCategory(i)} disabled={categories.length <= 1} className="btn-ghost text-xs text-coral disabled:opacity-30 flex-shrink-0">Entfernen</button>
+            </div>
+          ))}
+          <div className="flex items-center gap-2 mt-1">
+            <button type="button" onClick={addCategory} className="btn-ghost text-xs">+ Kategorie hinzufügen</button>
+            <button type="button" onClick={resetCategories} className="btn-ghost text-xs text-textMuted">Auf Standard zurücksetzen</button>
+          </div>
+          <p className="text-[11px] text-textMuted mt-2">Erscheinen im Call Tracker beim Schritt „Was war der Grund?" und in der Einwand-Verteilung. Die letzte Kategorie dient als Sammelpunkt für „Ohne Angabe zählen".</p>
+        </div>
+      )}
 
       <label className="block text-xs text-textMuted mb-1.5">Vorschau</label>
       <div

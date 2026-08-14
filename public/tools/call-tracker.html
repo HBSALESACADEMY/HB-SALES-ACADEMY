@@ -515,7 +515,12 @@
     { key: "negativ",   label: "Negative Anrufe",      kind: "negative" }
   ];
 
-  const REASONS = [
+  // Weißes Label: Einwand-Kategorien der Organisation übernehmen, falls
+  // hinterlegt (siehe pages/admin/organization.js, Feld "Einwand-Kategorien"
+  // → organizations.objection_categories). Ohne eigene Kategorien bleiben
+  // die 6 HB-Standardkategorien aktiv. Die LETZTE Kategorie dient als
+  // Sammelpunkt für "ohne Angabe zählen" (siehe wizReasonSkip unten).
+  const DEFAULT_REASONS = [
     { key: "preis",       label: "Preis & Auslastung" },
     { key: "skepsis",     label: "Skepsis & Vertrauen" },
     { key: "vorhanden",   label: "Bereits vorhanden" },
@@ -523,6 +528,17 @@
     { key: "entscheidung",label: "Entscheidung" },
     { key: "sonstiges",   label: "Sonstiges" }
   ];
+  let REASONS = DEFAULT_REASONS;
+  (function(){
+    const raw = new URLSearchParams(window.location.search).get("categories");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length && parsed.every(c => c && c.key && c.label)) {
+        REASONS = parsed;
+      }
+    } catch (e) { /* ungültiges JSON, Standard-Kategorien behalten */ }
+  })();
 
   const KEY_PREFIX = "callstats:";
 
@@ -646,7 +662,7 @@
     });
   }
   document.getElementById("wizReasonSkip").addEventListener("click", () => {
-    todayReasons.sonstiges += 1;
+    todayReasons[REASONS[REASONS.length - 1].key] += 1;
     todayCounts.negativ += 1;
     renderCount("negativ");
     renderReasons();
@@ -1006,10 +1022,11 @@
       const { data: logs } = await hbSupabase.from("call_log_days").select("*").in("user_id", allIds).gte("log_date", since);
 
       const anwahlenByUser = {};
-      const reasonsTotal = { preis:0, skepsis:0, vorhanden:0, zeit:0, entscheidung:0, sonstiges:0 };
+      const reasonsTotal = {};
+      REASONS.forEach(r => { reasonsTotal[r.key] = 0; });
       (logs || []).forEach(l => {
         anwahlenByUser[l.user_id] = (anwahlenByUser[l.user_id] || 0) + (l.counts?.anwahlen || 0);
-        Object.keys(reasonsTotal).forEach(k => { reasonsTotal[k] += (l.reasons?.[k] || 0); });
+        REASONS.forEach(r => { reasonsTotal[r.key] += (l.reasons?.[r.key] || 0); });
       });
 
       const memberLabels = allIds.map(id => nameById[id] || "Unbenannt");
@@ -1027,12 +1044,16 @@
           scales: { x:{ ticks:{ color:"#c9c9c9" }, grid:{ color:"#262626" } }, y:{ ticks:{ color:"#c9c9c9" }, grid:{ color:"#262626" } } } }
       }));
 
-      const reasonLabels = ["Preis & Auslastung","Skepsis & Vertrauen","Bereits vorhanden","Zeit & Aufschub","Entscheidung","Sonstiges"];
-      const reasonValues = [reasonsTotal.preis, reasonsTotal.skepsis, reasonsTotal.vorhanden, reasonsTotal.zeit, reasonsTotal.entscheidung, reasonsTotal.sonstiges];
+      // Farbpalette bei Bedarf zyklisch wiederverwenden — die Organisation
+      // kann mehr oder weniger als 6 Kategorien anlegen.
+      const reasonPalette = chartColors.concat(["#8D90A6", "#9C3E6E"]);
+      const reasonLabels = REASONS.map(r => r.label);
+      const reasonValues = REASONS.map(r => reasonsTotal[r.key] || 0);
+      const reasonColors = REASONS.map((_, i) => reasonPalette[i % reasonPalette.length]);
 
       teamChartInstances.push(new Chart(document.getElementById("teamReasonsChart"), {
         type: "doughnut",
-        data: { labels: reasonLabels, datasets: [{ data: reasonValues, backgroundColor: chartColors }] },
+        data: { labels: reasonLabels, datasets: [{ data: reasonValues, backgroundColor: reasonColors }] },
         options: { responsive:true, plugins:{ legend:{ position:"bottom", labels:{ color:"#c9c9c9", font:{size:11} } }, title:{ display:true, text:"Warum negative Anrufe? (Team, 7 Tage)", color:"#f5f5f5" } } }
       }));
     } catch (e) {
