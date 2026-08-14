@@ -93,6 +93,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [surfaceColor, setSurfaceColor] = useState(org.surface_color || "#171A24");
   const [textColor, setTextColor] = useState(org.text_color || "#EDEDF4");
   const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
+  const [bookingInstructions, setBookingInstructions] = useState(org.booking_instructions || "");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -144,6 +145,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       background_color: useCustomSurface ? backgroundColor : null,
       surface_color: useCustomSurface ? surfaceColor : null,
       text_color: useCustomSurface ? textColor : null,
+      booking_instructions: bookingInstructions.trim() || null,
     }).eq("id", org.id);
     setSaving(false);
     if (err) {
@@ -233,6 +235,16 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
           <p className="text-[11px] text-textMuted sm:col-span-3">Textfarbe wird automatisch für ausreichenden Kontrast auf Hintergrund/Fläche geprüft, sofern hier nichts eingetragen wird — die manuelle Auswahl hat aber immer Vorrang.</p>
         </div>
       )}
+
+      <label className="block text-xs text-textMuted mb-1.5">Termin-Anleitung im Call Tracker (optional)</label>
+      <p className="text-[11px] text-textMuted mb-2">Wird im Call Tracker beim Schritt „Termin vereinbaren" angezeigt — eine Zeile pro Punkt. Leer lassen für eine allgemeine Standard-Anleitung ohne Tool-Namen.</p>
+      <textarea
+        className="input mb-5"
+        rows={3}
+        value={bookingInstructions}
+        onChange={(e) => setBookingInstructions(e.target.value)}
+        placeholder={'Buchungslink im eigenen System öffnen und Terminoptionen raussuchen\nFragen: „Passt es Ihnen/dir besser am Termin X oder Termin Y?"\nTermin im Kalender eintragen und bestätigen'}
+      />
 
       <label className="block text-xs text-textMuted mb-1.5">Vorschau</label>
       <div

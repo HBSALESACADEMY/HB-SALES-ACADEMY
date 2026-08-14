@@ -40,6 +40,9 @@ create table if not exists organizations (
   text_color text,
   muted_color text,
   border_color text,
+  -- Terminierungs-Anleitung im Call Tracker (weißes Label: kein Verweis auf
+  -- HBs eigene Tools) — leer = allgemeine Standard-Anleitung ohne Tool-Namen.
+  booking_instructions text,
   created_at timestamptz not null default now()
 );
 

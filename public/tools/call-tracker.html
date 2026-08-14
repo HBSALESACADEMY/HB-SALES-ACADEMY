@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HB Sales Academy – Call Tracker</title>
+<title>Call Tracker</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap');
   :root{
@@ -11,13 +11,20 @@
     --panel: #1C1E29;
     --panel-2: #1C1E2C;
     --line: #2F3242;
-    --gold: #CE3A5C;
-    --gold-dim: #9C3E6E;
+    /* Marken-Verlauf der Organisation (weißes Label — siehe Farb-Injection
+       unten und lib/useIframeOrgBranding.js). Ohne Query-Param bleibt der
+       HB-Standardton stehen. --gold/--gold-dim/--violet leiten sich davon ab,
+       damit die vielen bestehenden var(--gold)-Stellen unverändert bleiben. */
+    --grad-1: #4C5DC9;
+    --grad-2: #CE3A5C;
+    --grad-3: #B2314F;
+    --gold: var(--grad-2);
+    --gold-dim: color-mix(in srgb, var(--gold) 65%, black);
     --white: #EDEDF4;
     --muted: #8D90A6;
     --green: #00E5C7;
     --red: #FF4D6D;
-    --violet: #4C5DC9;
+    --violet: var(--grad-1);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{
@@ -62,7 +69,7 @@
   .view-tab.active{ color: #fff; }
   .view-slider{
     position:absolute; top:5px; left:5px; width:calc(25% - 4px); height:calc(100% - 10px);
-    background: linear-gradient(120deg, #4C5DC9 0%, #CE3A5C 55%, #B2314F 100%); border-radius: 8px;
+    background: linear-gradient(120deg, var(--grad-1) 0%, var(--grad-2) 55%, var(--grad-3) 100%); border-radius: 8px;
     box-shadow: 0 4px 12px -4px rgba(232,54,143,.5);
     transition: transform .25s cubic-bezier(.4,0,.2,1); z-index:1;
   }
@@ -95,7 +102,7 @@
     cursor:pointer; letter-spacing: 0.01em;
   }
   .wizard-btn:active{ transform: scale(0.98); }
-  .wizard-btn.primary{ background: linear-gradient(120deg, #4C5DC9 0%, #CE3A5C 55%, #B2314F 100%); border:none; color:#fff; }
+  .wizard-btn.primary{ background: linear-gradient(120deg, var(--grad-1) 0%, var(--grad-2) 55%, var(--grad-3) 100%); border:none; color:#fff; }
   .wizard-btn.positive{ border-color: rgba(0,229,199,0.4); color: var(--green); }
   .wizard-btn.negative{ border-color: rgba(255,77,109,0.4); color: var(--red); }
   .wizard-checklist{ text-align:left; margin: 0 0 20px; padding-left: 20px; color: var(--white); font-size: 13.5px; line-height:1.7; }
@@ -256,11 +263,36 @@
   .lead-checkbox{ display:flex; align-items:center; gap:8px; font-size: 13px; color: var(--white); margin-bottom: 14px; text-align:left; }
   .lead-submit{
     width:100%; padding: 13px; border-radius: 10px; border: none;
-    background: linear-gradient(120deg, #4C5DC9 0%, #CE3A5C 55%, #B2314F 100%);
+    background: linear-gradient(120deg, var(--grad-1) 0%, var(--grad-2) 55%, var(--grad-3) 100%);
     color: #FFFFFF; font-weight: 700; font-size: 14px; cursor:pointer; margin-top: 4px;
   }
   .lead-submit:disabled{ opacity: 0.5; cursor: default; }
 </style>
+<script>
+  // Weißes Label: Marken-Verlauf der Organisation als CSS-Variablen setzen,
+  // BEVOR der body rendert (kein Farb-Flackern). Ohne Query-Param bleibt der
+  // HB-Standardton aus dem :root-Block oben stehen (siehe
+  // lib/useIframeOrgBranding.js#buildOrgColorParams für die Gegenstelle).
+  // window.ORG_GRAD wird weiter unten von den Team-Charts (Chart.js) wiederverwendet.
+  (function(){
+    var p = new URLSearchParams(window.location.search);
+    var style = document.documentElement.style;
+    var VAR_MAP = {
+      grad1: "--grad-1", grad2: "--grad-2", grad3: "--grad-3",
+      bg: "--bg", panel: "--panel", panel2: "--panel-2",
+      line: "--line", white: "--white", muted: "--muted"
+    };
+    Object.keys(VAR_MAP).forEach(function(key){
+      var v = p.get(key);
+      if (v) style.setProperty(VAR_MAP[key], "#" + v.replace("#", ""));
+    });
+    window.ORG_GRAD = [
+      "#" + (p.get("grad1") || "4C5DC9").replace("#", ""),
+      "#" + (p.get("grad2") || "CE3A5C").replace("#", ""),
+      "#" + (p.get("grad3") || "B2314F").replace("#", "")
+    ];
+  })();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
@@ -268,7 +300,7 @@
 <div class="wrap">
 
   <header>
-    <img class="logo" alt="HB Sales Academy" src="/logo.svg">
+    <img class="logo" alt="Logo" src="/logo.svg">
     <div class="subtitle">Cold Call Tracker</div>
   </header>
   <script>
@@ -281,7 +313,7 @@
       var params = new URLSearchParams(window.location.search);
       var logoUrl = params.get("logo");
       if (logoUrl) document.querySelector(".logo").src = logoUrl;
-      window.HB_ORG_NAME = params.get("org") || "HB Sales Academy";
+      window.HB_ORG_NAME = params.get("org") || "Cold Call Tracker";
     })();
   </script>
 
@@ -339,13 +371,31 @@
     <div class="wizard-step" data-step="booking">
       <div class="wizard-icon">📅</div>
       <h3>Termin vereinbaren</h3>
-      <ul class="wizard-checklist">
-        <li>Buchungslink bei Close öffnen und 2 Terminoptionen raussuchen</li>
+      <ul class="wizard-checklist" id="bookingChecklist">
+        <li>Terminoptionen im eigenen Buchungssystem raussuchen (idealerweise 2 Optionen)</li>
         <li>Fragen: „Passt es Ihnen/dir besser am Termin X oder Termin Y?"</li>
-        <li>Termin direkt bei Cal eintragen</li>
+        <li>Termin im Kalender eintragen und bestätigen</li>
       </ul>
       <button class="wizard-btn primary" id="btnBookingNext">Erledigt, weiter</button>
     </div>
+    <script>
+      // Weißes Label: die Terminierungs-Anleitung darf nicht auf HBs eigene
+      // Tools verweisen. Jede Organisation kann eigenen Text hinterlegen
+      // (siehe pages/admin/organization.js, Feld "booking_instructions") —
+      // ohne eigenen Text bleibt die allgemeine Anleitung oben stehen.
+      (function(){
+        var booking = new URLSearchParams(window.location.search).get("booking");
+        if (!booking) return;
+        var lines = booking.split("\n").map(function(l){ return l.trim(); }).filter(Boolean);
+        if (!lines.length) return;
+        var list = document.getElementById("bookingChecklist");
+        list.innerHTML = lines.map(function(l){
+          var safe = document.createElement("div");
+          safe.textContent = l;
+          return "<li>" + safe.innerHTML + "</li>";
+        }).join("");
+      })();
+    </script>
 
     <div class="wizard-step" data-step="leadForm">
       <h4>Termin erfasst 🎉</h4>
@@ -968,11 +1018,11 @@
       loadingEl.style.display = "none";
       contentEl.style.display = "block";
 
-      const chartColors = ["#4C5DC9","#CE3A5C","#B2314F","#00E5C7","#F0B23E","#5FB8E8"];
+      const chartColors = (window.ORG_GRAD || ["#4C5DC9","#CE3A5C","#B2314F"]).concat(["#00E5C7","#F0B23E","#5FB8E8"]);
 
       teamChartInstances.push(new Chart(document.getElementById("teamMembersChart"), {
         type: "bar",
-        data: { labels: memberLabels, datasets: [{ label: "Anwahlen (7 Tage)", data: memberValues, backgroundColor: "#CE3A5C", borderRadius: 6 }] },
+        data: { labels: memberLabels, datasets: [{ label: "Anwahlen (7 Tage)", data: memberValues, backgroundColor: chartColors[1], borderRadius: 6 }] },
         options: { responsive:true, plugins:{ legend:{ display:false }, title:{ display:true, text:"Anwahlen pro Teammitglied (7 Tage)", color:"#f5f5f5" } },
           scales: { x:{ ticks:{ color:"#c9c9c9" }, grid:{ color:"#262626" } }, y:{ ticks:{ color:"#c9c9c9" }, grid:{ color:"#262626" } } } }
       }));
