@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import AdminTabs from "../components/AdminTabs";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { describeRole } from "../lib/roles";
@@ -109,8 +110,9 @@ export default function Admin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Nutzerverwaltung</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Verwaltung</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Alle registrierten Konten. Vergib oder entziehe Manager- oder Trainer-Rechte, oder entferne Konten. Team-Mitgliedschaft wird unter "Team (Manager)" verwaltet.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

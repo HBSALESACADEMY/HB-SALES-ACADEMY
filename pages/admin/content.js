@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 
@@ -259,6 +260,7 @@ export default function ContentAdmin() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Inhalte verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Hier füllst du einen Ordner mit <strong className="text-textMain">Kursen und Inhalten</strong> (Module, Text, Video, Anhänge). Den Ordner selbst — also den Reiter in der Sidebar — legst du unter „Navigation verwalten" an.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

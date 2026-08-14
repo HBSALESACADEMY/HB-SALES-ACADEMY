@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { textColorForColors, blend } from "../../lib/orgBranding";
@@ -435,6 +436,7 @@ export default function AdminOrganization() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Organisation</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Name, Firmencode, Logo und Markenfarben eurer Organisation — für alle Mitglieder eurer Organisation sichtbar.</p>
 
       {org && (

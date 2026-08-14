@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import IconPicker from "../../components/IconPicker";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 
@@ -115,6 +116,7 @@ export default function NavigationAdmin() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Navigation verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-3">Hier legst du nur die <strong>Struktur der Sidebar</strong> fest: Reiter/Ordner anlegen, umbenennen, Icon ändern, Reihenfolge ändern, ausblenden oder entfernen — auch die fest eingebauten. Entfernen löscht bei eigenen Ordnern auch deren Kurse; bei fest eingebauten Seiten verschwindet nur der Sidebar-Link, die Seite bleibt erreichbar.</p>
       <div className="card border border-violet/30 mb-6 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-textMuted text-xs">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import Avatar from "../../components/Avatar";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { COURSES } from "../../lib/curriculum";
@@ -181,6 +182,7 @@ export default function AdminInsights() {
         </button>
       </div>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Unternehmensweiter Überblick — alle Mitglieder, alle Teams.</p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

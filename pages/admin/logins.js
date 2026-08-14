@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Avatar from "../../components/Avatar";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 
@@ -63,6 +64,7 @@ export default function AdminLogins() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Login-Verlauf</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Wer sich wann angemeldet hat — die letzten 300 Anmeldungen {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
 
       <select className="input !w-auto mb-4" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
@@ -107,6 +108,7 @@ export default function LernpfadeAdmin() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Lernpfade (Team)</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Erkannte Schwächen und bereits generierte persönliche Kurse pro Mitarbeiter:in.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import AIBadge from "../../components/AIBadge";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
@@ -114,6 +115,7 @@ export default function FlashcardsAdmin() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Flashcards verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Lass Lernkarten automatisch aus den Kursinhalten generieren, oder lege sie manuell an. Neue Karten erscheinen sofort für alle Vertriebler:innen deiner Organisation unter "Flashcards".</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import Avatar from "../../components/Avatar";
 import Icon from "../../components/Icon";
+import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 
@@ -114,6 +115,7 @@ export default function AdminActivity() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Aktivitäten</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Logins, Lernfortschritt und Community-Aktivität {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
