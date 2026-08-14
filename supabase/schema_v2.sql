@@ -230,7 +230,7 @@ create table if not exists kb_entries (
   title text not null,
   body text not null,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
-  source text not null default 'manual' check (source in ('manual', 'ai_roleplay')),
+  source text not null default 'manual' check (source in ('manual', 'ai_roleplay', 'ai_course')),
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );

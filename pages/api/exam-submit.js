@@ -4,6 +4,7 @@ import { callAI } from "../../lib/aiClient";
 import { resolveCourse } from "../../lib/resolveCourse";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { allMcQuestionsOfCourse } from "../../lib/curriculum";
+import { generatePersonalCourseFor } from "../../lib/generatePersonalCourse";
 
 // Multiple-Choice-Ergebnis serverseitig aus den tatsächlich eingereichten
 // Antworten nachrechnen — der Client darf mcScore/mcTotal NICHT selbst
@@ -23,8 +24,9 @@ function gradeMc(course, answers) {
   return { mcScore: score, mcTotal: questions.length };
 }
 
-// Etwas mehr Zeit für Gemini-Wiederholungsversuche bei 429/503-Fehlern.
-export const config = { maxDuration: 45 };
+// Bei bestandener Prüfung läuft nach der Antwort noch die automatische
+// Folgekurs-Generierung weiter (siehe unten) — entsprechend mehr Zeit einplanen.
+export const config = { maxDuration: 120 };
 
 // Pass rule: MC score >= 80% AND capstone open-answer score >= 60.
 export default async function handler(req, res) {
@@ -84,7 +86,14 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({ passed, combinedScore, mcPct: Math.round(mcPct), capstoneGrading: grading });
+    // Antwort sofort senden — der Nutzer soll nicht auf die Folgekurs-
+    // Generierung warten müssen (die läuft danach noch weiter, siehe unten).
+    res.status(200).json({ passed, combinedScore, mcPct: Math.round(mcPct), capstoneGrading: grading });
+
+    if (passed) {
+      try { await generatePersonalCourseFor(admin, auth.user.id, auth.user.id); }
+      catch (e) { console.error("automatische Folgekurs-Generierung fehlgeschlagen:", e.message); }
+    }
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e.message || "Unbekannter Fehler." });
