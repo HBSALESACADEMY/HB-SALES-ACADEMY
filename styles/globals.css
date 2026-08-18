@@ -202,3 +202,63 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(290%, 0, 0); }
 }
+
+/* =============================================================================
+   HANDY: Antippflächen und Schriftgrößen
+   -----------------------------------------------------------------------------
+   Am Rechner bleibt alles unverändert — diese Regeln greifen erst unterhalb
+   der Tablet-Breite (768px, entspricht Tailwinds md-Grenze).
+
+   Hintergrund: gemessen bei Handy-Breite waren die kleinen Schaltflächen nur
+   18px hoch (.btn-ghost hat gar keine eigenen Innenabstände, die Höhe kam
+   allein aus der Schriftgröße), Textlinks 16px, flache Eingabefelder 30px.
+   Empfohlen sind 44px, damit man sie mit dem Daumen sicher trifft.
+
+   Bewusst zentral hier statt an über 260 einzelnen Fundstellen: so gilt es
+   lückenlos und bleibt auch für künftige Seiten automatisch richtig.
+   ========================================================================== */
+@media (max-width: 767px) {
+  /* Jede Schaltfläche wird mindestens 44x44 — auch die kleinen Symbol-Knöpfe
+     (z.B. Minus im Call Tracker) und die Filter-Pillen, die keine gemeinsame
+     Klasse haben und sonst einzeln angefasst werden müssten. */
+  button,
+  a.btn,
+  a.btn-ghost {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* .btn-ghost hatte keinerlei Innenabstände. Ohne inline-flex würde der Text
+     bei erzwungener Mindesthöhe oben kleben statt mittig zu sitzen. */
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+  }
+
+  .btn {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* Eingabefelder: auch die flachen Varianten (!py-1.5) sicher treffbar. */
+  .input {
+    min-height: 44px;
+  }
+
+  /* Sehr kleine Schrift lesbar machen (9-11.5px kamen 122x vor). Die
+     Zähler-Abzeichen (.badge-count) setzen ihre Größe selbst und bleiben
+     bewusst klein, sonst sprengen sie ihren runden Rahmen. */
+  .text-\[9px\],
+  .text-\[9\.5px\],
+  .text-\[10px\],
+  .text-\[10\.5px\],
+  .text-\[11px\],
+  .text-\[11\.5px\] {
+    font-size: 12.5px;
+  }
+  .text-xs {
+    font-size: 13px;
+  }
+}
