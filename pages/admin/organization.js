@@ -7,6 +7,7 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import { textColorForColors, blend } from "../../lib/orgBranding";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
 import { DEFAULT_OBJECTION_CATEGORIES } from "../../lib/objectionCategories";
+import { getActiveOrgId } from "../../lib/activeOrg";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -463,7 +464,14 @@ export default function AdminOrganization() {
       if (!session) return;
       const { data: me } = await supabase.from("profiles").select("is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
       if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
-      const { data: orgData } = await supabase.from("organizations").select("*").eq("id", me.organization_id).maybeSingle();
+      // Für Plattform-Admins, die per Firmencode "als" eine andere
+      // Organisation unterwegs sind: me.organization_id ist nur deren eigene
+      // Heimat-Organisation — ohne getActiveOrgId würde man hier immer die
+      // eigene statt der gerade aktiv verwalteten Organisation laden UND
+      // beim Speichern versehentlich überschreiben (gleicher Grund wie bei
+      // nav_items/community_posts, siehe migration_53/65).
+      const activeOrgId = getActiveOrgId(me);
+      const { data: orgData } = await supabase.from("organizations").select("*").eq("id", activeOrgId).maybeSingle();
       if (orgData) setOrg(orgData);
       if (me.is_platform_admin) {
         setIsPlatformAdmin(true);

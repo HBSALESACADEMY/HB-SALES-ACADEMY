@@ -1690,6 +1690,9 @@ create policy "lead_tasks_insert_own" on lead_tasks for insert with check (
         and same_org(l.created_by, auth.uid())
       )
     )
+    -- Verhindert, dass assigned_to auf eine fremde Organisation zeigt — sonst
+    -- bekäme diese Person seit migration_77 vollen Lesezugriff auf den Termin.
+    and same_org(l.created_by, assigned_to)
   )
 );
 drop policy if exists "lead_tasks_update_involved_or_manager" on lead_tasks;
