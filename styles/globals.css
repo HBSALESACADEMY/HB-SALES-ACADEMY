@@ -10,6 +10,12 @@
    border-line-Klasse) automatisch an, ohne dass einzelne Seiten das Theme
    selbst kennen müssen. Dunkel = unverändert das bisherige Standarddesign. */
 :root {
+  /* Sagt dem Browser, in welchem Stil er NATIVE Bedienelemente zeichnen soll:
+     Datum-/Uhrzeit-Auswahl samt Kalender-Popup, Datei-Auswahl, Auswahllisten,
+     Bildlaufleisten. Ohne diese Zeile nimmt der Browser immer "hell" an —
+     im Dunkelmodus wäre z.B. das Kalendersymbol im Termin-Feld dunkel auf
+     dunklem Grund und der Kalender öffnete weiß. */
+  color-scheme: dark;
   --theme-bg-rgb: 20 21 28;
   --theme-surface-rgb: 28 30 41;
   --theme-surface-raised-rgb: 34 36 47;
@@ -19,6 +25,7 @@
   --theme-sidebar-mid: #17181F;
 }
 :root[data-theme="light"] {
+  color-scheme: light;
   --theme-bg-rgb: 244 245 249;
   --theme-surface-rgb: 241 242 247;
   --theme-surface-raised-rgb: 255 255 255;
