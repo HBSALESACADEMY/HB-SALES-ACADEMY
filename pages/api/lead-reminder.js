@@ -30,9 +30,14 @@ export default async function handler(req, res) {
 
     const admin = getAdminSupabase();
     const { data: me } = await client.from("profiles").select("organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
-    // Firmencode-Muster wie in lead-created.js/certificate.js: nur akzeptieren,
-    // wenn wirklich Plattform-Admin oder es ohnehin die eigene Organisation ist.
-    let effectiveOrgId = me?.organization_id || null;
+    // Fallback ist die Organisation des/der Termin-ERSTELLER:in, nicht die
+    // eigene — sonst ginge die Erinnerung bei einer Person, die den Termin
+    // nur per zugewiesener Aufgabe/Erwähnung sieht (migration_77), an die
+    // FALSCHE Organisation. Firmencode-Override wie in lead-created.js/
+    // certificate.js: nur akzeptieren, wenn wirklich Plattform-Admin oder es
+    // ohnehin die eigene Organisation ist.
+    const { data: leadOwner } = await admin.from("profiles").select("organization_id").eq("id", lead.created_by).maybeSingle();
+    let effectiveOrgId = leadOwner?.organization_id || me?.organization_id || null;
     if (activeOrgId && (me?.is_platform_admin || activeOrgId === me?.organization_id)) {
       effectiveOrgId = activeOrgId;
     }

@@ -24,7 +24,19 @@ export default async function handler(req, res) {
       const { data: me } = await client.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", user.id).maybeSingle();
       const { data: owner } = await admin.from("profiles").select("organization_id").eq("id", lead.created_by).maybeSingle();
       const isManagerOfOrg = me && (me.role === "manager" || me.role === "backend" || me.is_admin) && owner && owner.organization_id === me.organization_id;
+      // Deckungsgleich mit der leads_select-RLS (migration_77): wer eine
+      // Aufgabe zugewiesen bekommen hat oder erwähnt wurde, darf den Termin
+      // sehen — sonst wäre "Aufnahme abspielen" für diese Personen ein
+      // toter Button (403), obwohl der Termin selbst sichtbar ist.
+      let hasTaskOrMention = false;
       if (!me?.is_platform_admin && !isManagerOfOrg) {
+        const [{ data: task }, { data: mention }] = await Promise.all([
+          admin.from("lead_tasks").select("id").eq("lead_id", leadId).eq("assigned_to", user.id).limit(1).maybeSingle(),
+          admin.from("lead_mentions").select("id").eq("lead_id", leadId).eq("user_id", user.id).limit(1).maybeSingle(),
+        ]);
+        hasTaskOrMention = !!(task || mention);
+      }
+      if (!me?.is_platform_admin && !isManagerOfOrg && !hasTaskOrMention) {
         return res.status(403).json({ error: "Kein Zugriff auf diese Aufnahme." });
       }
     }
