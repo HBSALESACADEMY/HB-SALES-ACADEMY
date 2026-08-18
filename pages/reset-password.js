@@ -1,24 +1,39 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
+import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 
 export default function ResetPassword() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [org, setOrg] = useState(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
+  // Weißes Label: bisher zeigte diese Seite (im Gegensatz zu login.js)
+  // immer fest das HB-Logo/Markenfarben, egal für welche Organisation der
+  // Link war — der Recovery-Link legt zwar eine Session an, aber ohne
+  // dieses Nachladen bliebe die Seite unbrandet.
+  async function loadOrgBranding() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data: profile } = await supabase.from("profiles").select("organization_id").eq("id", session.user.id).maybeSingle();
+    if (!profile?.organization_id) return;
+    const { data: orgRow } = await supabase.from("organizations").select("*").eq("id", profile.organization_id).maybeSingle();
+    if (orgRow) { setOrg(orgRow); applyOrgBranding(orgRow); }
+  }
+
   useEffect(() => {
     // Der Recovery-Link aus der E-Mail legt beim Laden automatisch eine
     // kurzlebige Session an (detectSessionInUrl, Standard bei supabase-js).
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") { setReady(true); loadOrgBranding(); }
     });
-    supabase.auth.getSession().then(({ data: { session } }) => { if (session) setReady(true); });
-    return () => sub.subscription.unsubscribe();
+    supabase.auth.getSession().then(({ data: { session } }) => { if (session) { setReady(true); loadOrgBranding(); } });
+    return () => { sub.subscription.unsubscribe(); resetOrgBranding(); };
   }, []);
 
   async function handleSubmit(e) {
@@ -45,7 +60,7 @@ export default function ResetPassword() {
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
           <div className="flex flex-col items-center text-center mb-5">
-            <img src="/logo.svg" alt="HB Sales Academy" className="h-20 w-auto mb-4" />
+            <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-20 w-auto mb-4" />
           </div>
           <p className="text-textMuted text-sm mb-6 text-center">Neues Passwort festlegen</p>
 
