@@ -4,8 +4,8 @@ import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 import { RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
 
-// Läuft anstelle des früheren direkten Client-Inserts aus dem Call Tracker
-// (public/tools/call-tracker.html) — nur so gibt es einen Server-Zeitpunkt,
+// Läuft anstelle eines direkten Client-Inserts (Call Tracker und die
+// Termine-Seite nutzen beide diese Route) — nur so gibt es einen Server-Zeitpunkt,
 // an dem nach dem Speichern automatisch eine Benachrichtigung ausgelöst
 // werden kann. Der eigentliche Insert läuft weiterhin über den RLS-
 // gebundenen Client der aufrufenden Person, keine erweiterten Rechte.
