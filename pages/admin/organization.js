@@ -81,6 +81,19 @@ function slugify(name) {
     .replace(/^-+|-+$/g, "");
 }
 
+// Das Formular ist lang — ohne Gliederung sucht man einzelne Einstellungen
+// (das Telegram-Feld war so nicht auffindbar). Deshalb klar getrennte
+// Abschnitte mit Überschrift statt einer durchgehenden Liste.
+function Abschnitt({ titel, hinweis, children }) {
+  return (
+    <div className="pt-5 mt-5 border-t border-line first:pt-0 first:mt-0 first:border-t-0">
+      <div className="font-display font-semibold text-textMain text-sm mb-1">{titel}</div>
+      {hinweis && <p className="text-[11px] text-textMuted mb-3">{hinweis}</p>}
+      {children}
+    </div>
+  );
+}
+
 function uniqueCategoryKey(label, existingKeys) {
   const base = slugify(label) || "kategorie";
   let key = base, n = 2;
@@ -234,12 +247,16 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
 
   return (
     <div>
+      <Abschnitt titel="Grunddaten">
       <label className="block text-xs text-textMuted mb-1.5">Name</label>
       <input className="input mb-4" value={name} onChange={(e) => setName(e.target.value)} placeholder="Firmenname" />
 
       <label className="block text-xs text-textMuted mb-1.5">Firmencode (Login/Registrierung)</label>
       <input className="input mb-4" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="firmencode" />
 
+      </Abschnitt>
+
+      <Abschnitt titel="Erscheinungsbild" hinweis="Logo und Farben — gelten überall in der Academy für diese Organisation.">
       <label className="block text-xs text-textMuted mb-1.5">Logo</label>
       <div className="flex items-center gap-3 mb-4">
         {logoUrl && <img src={logoUrl} alt="Logo-Vorschau" className="h-12 w-auto rounded" onError={(e) => { e.target.style.display = "none"; }} />}
@@ -299,6 +316,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         </div>
       )}
 
+      </Abschnitt>
+
+      <Abschnitt titel="Call Tracker" hinweis="Anleitung beim Terminieren und die Kategorien für Einwände.">
       <label className="block text-xs text-textMuted mb-1.5">Termin-Anleitung im Call Tracker (optional)</label>
       <p className="text-[11px] text-textMuted mb-2">Wird im Call Tracker beim Schritt „Termin vereinbaren" angezeigt — eine Zeile pro Punkt. Leer lassen für eine allgemeine Standard-Anleitung ohne Tool-Namen.</p>
       <textarea
@@ -329,6 +349,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         </div>
       )}
 
+      </Abschnitt>
+
+      <Abschnitt titel="Benachrichtigungen" hinweis="Wohin Meldungen über neue Termine und Erinnerungen gehen.">
       <label className="block text-xs text-textMuted mb-1.5">Telegram für Termin-Benachrichtigungen (optional)</label>
       <input className="input mb-1" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)}
         placeholder="z. B. -1001234567890" />
@@ -338,6 +361,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         einladen und die Chat-ID eintragen (Gruppen-IDs beginnen mit einem Minus). Leer lassen = nur E-Mail.
       </p>
 
+      </Abschnitt>
+
+      <Abschnitt titel="Termin-Formular" hinweis="Welche Felder beim Erfassen eines Termins erscheinen und welche davon Pflicht sind.">
       <label className="block text-xs text-textMuted mb-1.5">Pflichtfelder im Termin-Formular</label>
       <div className="flex items-center gap-4 mb-1 flex-wrap">
         {[["phone", "Telefon"], ["email", "E-Mail"]].map(([key, label]) => (
@@ -385,6 +411,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         </div>
       )}
 
+      </Abschnitt>
+
+      <Abschnitt titel="Vorschau" hinweis="So sieht das Branding für die Mitglieder aus.">
       <label className="block text-xs text-textMuted mb-1.5">Vorschau</label>
       <div
         className="rounded-xl border p-4 mb-5"
@@ -431,6 +460,8 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
           So erscheinen Logo, Marken-Verlauf, Buttons, Hintergrund und Text später in der ganzen Plattform.
         </p>
       </div>
+      </Abschnitt>
+
 
       {error && <p className="text-coral text-xs mb-3">{error}</p>}
       <div className="flex items-center gap-2">
