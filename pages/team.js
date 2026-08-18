@@ -5,21 +5,19 @@ import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { apiGet } from "../lib/apiClient";
 import { goalMetricLabel } from "../lib/goalMetrics";
+import { getActiveOrgId } from "../lib/activeOrg";
 
-function mondayOfWeek(d) {
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
-}
+const RANG_LABEL = (key) => (key === "xp" ? "XP" : goalMetricLabel(key));
 
 export default function Team() {
   const [selfId, setSelfId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [teamStandings, setTeamStandings] = useState([]);
+  const [fehler, setFehler] = useState("");
+  const [rangliste, setRangliste] = useState([]);
+  const [rangMetrik, setRangMetrik] = useState("xp");
   const [myTeams, setMyTeams] = useState([]);
+  const [darfDetails, setDarfDetails] = useState(false);
+  const [offenesTeam, setOffenesTeam] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
@@ -39,63 +37,25 @@ export default function Team() {
     if (!session) return;
     setSelfId(session.user.id);
 
-    const weekStart = mondayOfWeek(new Date()).toISOString();
-
-    const [{ data: allTeams }, { data: allMemberships }, { data: xpRows }, { data: myMemberships }] = await Promise.all([
-      supabase.from("teams").select("id, name, created_by"),
-      supabase.from("team_members").select("team_id, user_id"),
-      supabase.from("xp_log").select("user_id, amount").gt("created_at", weekStart),
-      supabase.from("team_members").select("team_id").eq("user_id", session.user.id),
-    ]);
-
-    const xpByUser = {};
-    (xpRows || []).forEach((r) => { xpByUser[r.user_id] = (xpByUser[r.user_id] || 0) + r.amount; });
-
-    const membersByTeam = {};
-    (allMemberships || []).forEach((m) => { (membersByTeam[m.team_id] = membersByTeam[m.team_id] || []).push(m.user_id); });
-
-    const standings = (allTeams || []).map((t) => {
-      const memberIds = membersByTeam[t.id] || [];
-      const totalXp = memberIds.reduce((sum, id) => sum + (xpByUser[id] || 0), 0);
-      return { teamId: t.id, teamName: t.name, memberCount: memberIds.length, weeklyXp: totalXp };
-    }).sort((a, b) => b.weeklyXp - a.weeklyXp);
-    setTeamStandings(standings);
-
-    const myTeamIds = (myMemberships || []).map((m) => m.team_id);
-    const leadById = {};
-    (allTeams || []).forEach((t) => { leadById[t.id] = t.created_by; });
-    const leadIds = Array.from(new Set(myTeamIds.map((id) => leadById[id]).filter(Boolean)));
-    const { data: leadProfiles } = leadIds.length
-      ? await supabase.from("profiles").select("id, full_name").in("id", leadIds)
-      : { data: [] };
-    const leadNameById = {};
-    (leadProfiles || []).forEach((p) => { leadNameById[p.id] = p.full_name || "Unbenannt"; });
-
-    // Ziele samt Fortschritt kommen gesammelt vom Server (siehe
-    // pages/api/team-goals.js): die Anruf-Zahlen der anderen Teammitglieder
-    // darf der Browser gar nicht lesen, die Summe wäre hier zu niedrig.
-    let zieleProTeam = {};
+    // Sämtliche Zahlen kommen gesammelt vom Server (pages/api/team-goals.js):
+    // die Anruf-Zahlen der anderen darf der Browser gar nicht lesen, jede
+    // Summe käme hier zu niedrig heraus. Nebenbei ersetzt der eine Aufruf die
+    // frühere Abfrage je Team.
     try {
-      const { ziele } = await apiGet("/api/team-goals");
-      (ziele || []).forEach((z) => {
-        if (!zieleProTeam[z.team_id]) zieleProTeam[z.team_id] = [];
-        zieleProTeam[z.team_id].push(z);
-      });
+      const { data: profil } = await supabase.from("profiles")
+        .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const orgId = getActiveOrgId(profil);
+      const daten = await apiGet("/api/team-goals" + (orgId ? `?activeOrgId=${orgId}` : ""));
+      setMyTeams(daten.teams || []);
+      setRangliste(daten.rangliste || []);
+      setRangMetrik(daten.ranglisteMetrik || "xp");
+      setDarfDetails(!!daten.darfDetails);
+      setFehler("");
     } catch (e) {
-      // Ohne Ziele bleibt die Seite nutzbar — der Rest hängt nicht daran.
-      console.error("Team-Ziele konnten nicht geladen werden:", e.message);
+      // Früher blieb die Seite bei einem Fehler einfach leer — dann sieht es
+      // aus, als gäbe es keine Teams.
+      setFehler(e.message || "Die Team-Zahlen konnten nicht geladen werden.");
     }
-
-    const enrichedTeams = myTeamIds.map((tid) => {
-      const t = (allTeams || []).find((x) => x.id === tid);
-      return {
-        id: tid, name: t?.name || "Team",
-        isLead: t?.created_by === session.user.id,
-        leadName: leadNameById[t?.created_by] || null,
-        ziele: zieleProTeam[tid] || [],
-      };
-    });
-    setMyTeams(enrichedTeams);
 
     const [{ data: pair }, { data: myMentees }] = await Promise.all([
       supabase.from("mentor_pairs").select("*, mentor:mentor_id(full_name, avatar_url)").eq("mentee_id", session.user.id).eq("active", true).maybeSingle(),
@@ -119,6 +79,17 @@ export default function Team() {
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-6">Wettbewerb, Ziele und Mentoring für deine Teams.</p>
 
+      {fehler && <div className="card mb-5 border-coral/40 text-sm text-coral">{fehler}</div>}
+
+      {!fehler && myTeams.length === 0 && (
+        <div className="card mb-5">
+          <p className="text-textMuted text-sm">
+            Du bist noch in keinem Team. Deine Teamleitung kann dich hinzufügen — danach siehst du hier
+            die Wochenziele, wer sonst im Team ist und wie ihr im Wettbewerb steht.
+          </p>
+        </div>
+      )}
+
       {myTeams.length > 0 && (
         <div className="flex flex-col gap-3 mb-5">
           {myTeams.map((t) => (
@@ -132,6 +103,9 @@ export default function Team() {
                 )}
               </div>
               {!t.isLead && t.leadName && <div className="text-xs text-textMuted mb-2">Lead: {t.leadName}</div>}
+              {t.ziele.length === 0 && (
+                <div className="text-xs text-textMuted mb-2">Für diese Woche ist noch kein Ziel gesetzt.</div>
+              )}
               {t.ziele.map((z) => (
                 <div key={z.id} className="mb-2 last:mb-0">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -143,25 +117,64 @@ export default function Team() {
                   </div>
                 </div>
               ))}
+
+              <button
+                onClick={() => setOffenesTeam(offenesTeam === t.id ? null : t.id)}
+                className="btn-ghost text-xs mt-3">
+                {offenesTeam === t.id ? "Mitglieder ausblenden" : `Mitglieder ansehen (${t.mitglieder.length})`}
+              </button>
+
+              {offenesTeam === t.id && (
+                <div className="mt-3 pt-3 border-t border-line">
+                  {t.mitglieder.length === 0 && <p className="text-xs text-textMuted">Noch keine Mitglieder eingetragen.</p>}
+                  {t.mitglieder.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 py-1.5">
+                      <div className="cursor-pointer flex-shrink-0" onClick={() => openProfile(m.id)}>
+                        <Avatar name={m.name} src={m.avatar_url} size={28} />
+                      </div>
+                      <span className="text-sm text-textMain flex-1 min-w-0 truncate cursor-pointer" onClick={() => openProfile(m.id)}>
+                        {m.name}
+                        {m.id === selfId && <span className="text-textMuted"> (du)</span>}
+                        {m.istLeitung && <span className="text-amber text-xs"> · Lead</span>}
+                      </span>
+                      {/* Der Beitrag je Person ist bewusst nicht für alle sichtbar —
+                          er zeigt die Leistung einzelner Kolleg:innen. */}
+                      {t.ziele.map((z) => z.beitraege && (
+                        <span key={z.id} className="text-xs text-textMuted font-mono flex-shrink-0" title={z.title}>
+                          {z.beitraege[m.id] || 0} {goalMetricLabel(z.metric)}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                  {!darfDetails && t.ziele.length > 0 && (
+                    <p className="text-[11px] text-textMuted mt-2">
+                      Wie viel einzelne Mitglieder beigetragen haben, sieht nur die Teamleitung.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
       <div className="card mb-5">
-        <div className="font-semibold text-textMain text-sm mb-3">🏆 Team-Wettbewerb dieser Woche</div>
+        <div className="flex items-baseline justify-between gap-2 mb-3">
+          <div className="font-semibold text-textMain text-sm">🏆 Team-Wettbewerb dieser Woche</div>
+          <div className="text-xs text-textMuted flex-shrink-0">gemessen an {RANG_LABEL(rangMetrik)}</div>
+        </div>
         <div className="flex flex-col gap-2">
-          {teamStandings.map((t, i) => {
+          {rangliste.map((t, i) => {
             const isMyTeam = myTeamIdSet.has(t.teamId);
             return (
               <div key={t.teamId} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isMyTeam ? "bg-surfaceRaised border border-amber/30" : ""}`}>
                 <span className="w-6 text-center text-sm text-textMuted font-mono">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
-                <span className="flex-1 text-sm text-textMain">{t.teamName}{isMyTeam && <span className="text-amber"> (dein Team)</span>} <span className="text-textMuted text-xs">· {t.memberCount} Mitglieder</span></span>
-                <span className="font-mono text-sm text-textMain">{t.weeklyXp} XP</span>
+                <span className="flex-1 text-sm text-textMain min-w-0">{t.name}{isMyTeam && <span className="text-amber"> (dein Team)</span>} <span className="text-textMuted text-xs">· {t.mitglieder} Mitglieder</span></span>
+                <span className="font-mono text-sm text-textMain flex-shrink-0">{t.wert}</span>
               </div>
             );
           })}
-          {teamStandings.length === 0 && <p className="text-textMuted text-sm">Noch keine Teams vorhanden.</p>}
+          {rangliste.length === 0 && <p className="text-textMuted text-sm">Noch keine Teams vorhanden.</p>}
         </div>
       </div>
 

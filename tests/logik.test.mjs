@@ -189,3 +189,13 @@ test("die Datenbank erlaubt genau die Kennzahlen, die es im Code gibt", () => {
   const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(erlaubt, [...GOAL_METRIC_KEYS].sort());
 });
+
+test("der Wettbewerbs-Maßstab kennt dieselben Kennzahlen plus XP", () => {
+  // Zweite check-Regel, zweite Gelegenheit zum Auseinanderlaufen: stimmt sie
+  // nicht, lässt sich die Einstellung in der Verwaltung schlicht nicht
+  // speichern.
+  const sql = readFileSync(new URL("../supabase/migration_86_team_ranking_metric.sql", import.meta.url), "utf8");
+  const block = sql.slice(sql.indexOf("team_ranking_metric in ("), sql.indexOf(")", sql.indexOf("'termine'")));
+  const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(erlaubt, ["xp", ...GOAL_METRIC_KEYS].sort());
+});

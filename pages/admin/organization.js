@@ -8,6 +8,7 @@ import { textColorForColors, blend } from "../../lib/orgBranding";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveCoreRequired } from "../../lib/leadFields";
 import { DEFAULT_OBJECTION_CATEGORIES } from "../../lib/objectionCategories";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { goalMetricGroups } from "../../lib/goalMetrics";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -90,6 +91,7 @@ const BEREICHE = [
   ["calltracker", "Call Tracker"],
   ["benachrichtigungen", "Benachrichtigungen"],
   ["formular", "Termin-Formular"],
+  ["team", "Team-Wettbewerb"],
   ["vorschau", "Vorschau"],
 ];
 
@@ -144,6 +146,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
   const [bookingInstructions, setBookingInstructions] = useState(org.booking_instructions || "");
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
+  const [rankingMetric, setRankingMetric] = useState(org.team_ranking_metric || "xp");
   const [bereich, setBereich] = useState("grunddaten");
   const [useCustomCategories, setUseCustomCategories] = useState(Array.isArray(org.objection_categories) && org.objection_categories.length > 0);
   const [categories, setCategories] = useState(
@@ -246,6 +249,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       text_color: useCustomSurface ? textColor : null,
       booking_instructions: bookingInstructions.trim() || null,
       telegram_chat_id: telegramChatId.trim() || null,
+      team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
       lead_core_required: coreRequired,
@@ -439,6 +443,25 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
           <p className="text-[11px] text-textMuted mt-2">Erscheinen im Call Tracker beim Erfassen eines Termins sowie unter „Termine" beim Hinzufügen/Bearbeiten. Name, Telefon, E-Mail und Termin-Zeitpunkt bleiben immer fest.</p>
         </div>
       )}
+
+      </Abschnitt>
+
+      <Abschnitt id="team" aktiv={bereich} titel="Team-Wettbewerb" hinweis="Woran sich die Team-Rangliste auf der Seite „Mein Team“ misst.">
+      <label className="block text-xs text-textMuted mb-1.5">Maßstab der Rangliste</label>
+      <select className="input mb-1" value={rankingMetric} onChange={(e) => setRankingMetric(e.target.value)}>
+        <option value="xp">XP (Lern-Aktivität)</option>
+        {goalMetricGroups().map((gruppe) => (
+          <optgroup key={gruppe.name} label={gruppe.name}>
+            {gruppe.metriken.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <p className="text-[11px] text-textMuted mb-5">
+        Gezählt wird immer die laufende Woche ab Montag, über alle Mitglieder eines Teams zusammen.
+        Mit <strong>XP</strong> gewinnt das Team, das am fleissigsten trainiert — mit <strong>Anwahlen</strong>
+        oder <strong>Terminiert</strong> das Team, das am meisten am Telefon erreicht.
+        Sinnvoll ist meist derselbe Maßstab, auf den auch die Team-Ziele gesetzt sind.
+      </p>
 
       </Abschnitt>
 
