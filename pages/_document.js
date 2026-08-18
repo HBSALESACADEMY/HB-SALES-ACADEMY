@@ -9,18 +9,13 @@ export default function Document() {
         <link rel="icon" href="/logo.svg" />
         {/* Theme (Hell/Dunkel/System) VOR dem ersten Rendern setzen, sonst
             würde die Seite kurz im falschen Theme aufblitzen, bevor React
-            hydratisiert (siehe lib/theme.js). Synchron und ohne Abhängigkeiten,
-            damit es garantiert vor dem body-Paint läuft. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{
-              var pref = localStorage.getItem("hb_theme_pref");
-              var resolved = (pref === "light" || pref === "dark") ? pref
-                : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-              document.documentElement.setAttribute("data-theme", resolved);
-            } catch(e) { document.documentElement.setAttribute("data-theme", "dark"); }})();`,
-          }}
-        />
+            hydratisiert (siehe lib/theme.js).
+            Als eigene Datei statt eingebettet: die Sicherheitsregeln erlauben
+            nur Skripte von der eigenen Adresse (script-src 'self', siehe
+            next.config.js) — eingebettet wurde es in der ausgelieferten
+            Academy blockiert. Ohne async/defer, damit es vor dem Zeichnen
+            läuft. */}
+        <script src="/theme-init.js" />
       </Head>
       <body>
         <Main />
