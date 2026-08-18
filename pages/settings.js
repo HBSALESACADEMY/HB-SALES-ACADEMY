@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Layout, { patchCachedProfile, getCachedOrg } from "../components/Layout";
 import { supabase } from "../lib/supabaseClient";
 import { apiGetBlob } from "../lib/apiClient";
-import { getStoredThemePref, setThemePref } from "../lib/theme";
+import { getStoredThemePref, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { applyOrgBranding } from "../lib/orgBranding";
 
 const THEME_OPTIONS = [
@@ -43,6 +43,7 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [themePref, setThemePrefState] = useState("system");
+  const [themeStatus, setThemeStatus] = useState("");
 
   useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
 
@@ -54,16 +55,34 @@ export default function Settings() {
     setThemePrefState(pref);
     setThemePref(pref);
     setError("");
+
+    // Gegenprobe: hat der Browser die Wahl wirklich behalten? In privaten
+    // Fenstern oder bei blockiertem Speicher schlägt das lautlos fehl — genau
+    // dann wirkt es so, als "merke" sich die App nichts.
+    const merktSichGeraet = hasStoredThemePref();
+
     const org = getCachedOrg();
     if (org) applyOrgBranding(org);
     patchCachedProfile({ theme_pref: pref });
+
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!session) { setThemeStatus(merktSichGeraet ? "Auf diesem Gerät gespeichert." : ""); return; }
     const { error: err } = await supabase.from("profiles").update({ theme_pref: pref }).eq("id", session.user.id);
-    // Auf diesem Gerät gilt die Wahl trotzdem (localStorage, siehe oben) —
-    // nur die Übertragung auf andere Geräte klappt dann nicht. Früher lief
-    // dieser Fehler stumm ins Leere.
-    if (err) setError("Die Darstellung gilt auf diesem Gerät, konnte aber nicht am Konto gespeichert werden: " + err.message);
+
+    if (err) {
+      setThemeStatus("");
+      setError(
+        merktSichGeraet
+          ? "Gilt auf diesem Gerät, konnte aber nicht am Konto gespeichert werden: " + err.message
+          : "Konnte weder auf diesem Gerät noch am Konto gespeichert werden: " + err.message
+      );
+      return;
+    }
+    setThemeStatus(
+      merktSichGeraet
+        ? "Gespeichert — gilt auf diesem Gerät und auf deinen anderen Geräten."
+        : "Am Konto gespeichert. Dieser Browser speichert nichts (privates Fenster?), deshalb kann es beim Laden kurz umspringen."
+    );
   }
 
   useEffect(() => {
@@ -155,6 +174,7 @@ export default function Settings() {
             </button>
           ))}
         </div>
+        {themeStatus && <p className="text-xs text-teal mt-3">{themeStatus}</p>}
       </div>
 
       <div className="card max-w-lg mb-5">
