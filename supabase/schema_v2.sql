@@ -1594,6 +1594,10 @@ create policy "leads_select" on leads for select using (
     exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
     and same_org(created_by, auth.uid())
   )
+  -- Sonst wäre ein per Aufgabe/Erwähnung verlinkter fremder Termin für die
+  -- zugewiesene/erwähnte Person unauffindbar (siehe migration_77).
+  or exists (select 1 from lead_tasks lt where lt.lead_id = leads.id and lt.assigned_to = auth.uid())
+  or exists (select 1 from lead_mentions lm where lm.lead_id = leads.id and lm.user_id = auth.uid())
 );
 drop policy if exists "leads_insert_own" on leads;
 create policy "leads_insert_own" on leads for insert with check (created_by = auth.uid());
@@ -1629,6 +1633,8 @@ create policy "lead_comments_select_all" on lead_comments for select using (
         exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
         and same_org(l.created_by, auth.uid())
       )
+      or exists (select 1 from lead_tasks lt where lt.lead_id = l.id and lt.assigned_to = auth.uid())
+      or exists (select 1 from lead_mentions lm where lm.lead_id = l.id and lm.user_id = auth.uid())
     )
   )
 );

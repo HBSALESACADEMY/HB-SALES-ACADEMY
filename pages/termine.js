@@ -61,6 +61,10 @@ export default function Termine() {
   const [expandedLeadId, setExpandedLeadId] = useState(null);
   const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  // 'upcoming' (Standard) | 'past' | 'all' — vergangene Termine werden
+  // dadurch nicht gelöscht/archiviert, nur standardmäßig ausgeblendet.
+  const [timeFilter, setTimeFilter] = useState("upcoming");
+  const [onlyOpenTasks, setOnlyOpenTasks] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addDraft, setAddDraft] = useState({ name: "", phone: "", email: "", appointmentAt: "", fields: {} });
   const [addSaving, setAddSaving] = useState(false);
@@ -91,9 +95,21 @@ export default function Termine() {
 
     let query = supabase.from("leads").select("*").order("appointment_at", { ascending: true, nullsFirst: false });
     if (!(canManage && viewMode === "team")) query = query.eq("created_by", session.user.id);
-    const { data: leadRows, error: leadErr } = await query;
+    const { data: leadRowsRaw, error: leadErr } = await query;
     if (leadErr) setError(leadErr.message);
-    setLeads(leadRows || []);
+    let leadRows = leadRowsRaw || [];
+
+    // Per Aufgabe/Erwähnung verlinkter fremder Termin (z.B. vom Dashboard),
+    // der in der "Meine"/"Team"-Liste nicht auftaucht, weil man weder
+    // Ersteller:in noch Manager ist — gezielt einzeln nachladen (die
+    // leads-RLS erlaubt das seit migration_77 explizit für zugewiesene/
+    // erwähnte Personen), statt dass der Deep-Link ins Leere läuft.
+    const deepLinkId = router.query.leadId;
+    if (deepLinkId && !leadRows.some((l) => l.id === deepLinkId)) {
+      const { data: extraLead } = await supabase.from("leads").select("*").eq("id", deepLinkId).maybeSingle();
+      if (extraLead) leadRows = [extraLead, ...leadRows];
+    }
+    setLeads(leadRows);
 
     if (canManage && viewMode === "team") {
       const creatorIds = [...new Set((leadRows || []).map((l) => l.created_by))];
@@ -177,6 +193,13 @@ export default function Termine() {
     const leadId = router.query.leadId;
     if (!leadId || !leads.length) return;
     setExpandedLeadId(leadId);
+    // Sonst könnte der verlinkte Termin z.B. durch den Standardfilter
+    // "Anstehend" (vergangene Termine ausgeblendet) unsichtbar bleiben,
+    // obwohl er jetzt geladen ist — der Deep-Link soll immer sichtbar sein.
+    setTimeFilter("all");
+    setLeadSearchQuery("");
+    setDateFilter("");
+    setOnlyOpenTasks(false);
     // Kurz warten, bis die aufgeklappte Karte im DOM steht, bevor gescrollt wird.
     const t1 = setTimeout(() => {
       const el = leadRefs.current[leadId];
@@ -544,12 +567,16 @@ export default function Termine() {
   const checkboxFields = leadFields.filter((f) => f.type === "checkbox");
   const extraTextFields = leadFields.filter((f) => f.type === "text" && f.key !== companyField?.key && f.key !== websiteField?.key && f.key !== notesField?.key);
 
+  const now = Date.now();
   const filteredLeads = leads.filter((lead) => {
     const q = leadSearchQuery.trim().toLowerCase();
     const companyValue = companyField ? getLeadFieldValue(lead, companyField) : "";
     const matchesQuery = !q || [lead.name, companyValue, lead.phone, lead.email].some((f) => (f || "").toLowerCase().includes(q));
     const matchesDate = !dateFilter || (lead.appointment_at && lead.appointment_at.slice(0, 10) === dateFilter);
-    return matchesQuery && matchesDate;
+    const isPast = lead.appointment_at && new Date(lead.appointment_at).getTime() < now;
+    const matchesTime = timeFilter === "all" || (timeFilter === "past" ? isPast : !isPast);
+    const matchesTasks = !onlyOpenTasks || (tasksByLead[lead.id] || []).some((t) => !t.done);
+    return matchesQuery && matchesDate && matchesTime && matchesTasks;
   });
 
   return (
@@ -654,9 +681,20 @@ export default function Termine() {
           />
         </div>
         <input type="date" className="input !w-auto !py-2 text-sm" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-        {(leadSearchQuery || dateFilter) && (
-          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); }} className="btn-ghost text-xs">Filter zurücksetzen</button>
+        {(leadSearchQuery || dateFilter || timeFilter !== "upcoming" || onlyOpenTasks) && (
+          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); setTimeFilter("upcoming"); setOnlyOpenTasks(false); }} className="btn-ghost text-xs">Filter zurücksetzen</button>
         )}
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {[["upcoming", "Anstehend"], ["past", "Vergangen"], ["all", "Alle"]].map(([key, label]) => (
+          <button key={key} onClick={() => setTimeFilter(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${timeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {label}
+          </button>
+        ))}
+        <button onClick={() => setOnlyOpenTasks((v) => !v)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${onlyOpenTasks ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+          Nur mit offenen Aufgaben
+        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
