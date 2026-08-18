@@ -609,6 +609,24 @@ create table if not exists notification_emails (
   unique (organization_id, email)
 );
 
+-- Einwand-Trainer, weißes Label: eigene Einwand-Szenarien pro Organisation,
+-- zusätzlich zu den festen HB-Standard-Einwänden (siehe
+-- pages/admin/objections.js, public/tools/einwand-trainer.html).
+create table if not exists custom_objections (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  -- Verweist auf denselben Kategorie-Schlüssel wie organizations.objection_categories
+  -- (siehe lib/objectionCategories.js).
+  cat text not null default 'sonstiges',
+  q_pro text not null,
+  a_pro text not null,
+  q_ent text,
+  a_ent text,
+  tip text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 -- Frei hochladbare Anruf-Aufnahmen (nicht an einen Lead gebunden) — jedes
 -- Team-Mitglied kann eine eigene Aufnahme hochladen, wählt Sichtbarkeit
 -- (Organisation oder nur für sich selbst), die KI wertet automatisch aus.
@@ -806,6 +824,7 @@ alter table mentor_pairs enable row level security;
 alter table call_log_days enable row level security;
 alter table leads enable row level security;
 alter table notification_emails enable row level security;
+alter table custom_objections enable row level security;
 alter table call_recordings enable row level security;
 alter table login_attempts enable row level security;
 alter table login_events enable row level security;
@@ -1720,6 +1739,39 @@ create policy "notification_emails_delete" on notification_emails for delete usi
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (
     exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'backend') or profiles.is_admin))
+    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  )
+);
+
+-- --- custom_objections ---
+-- Alle Mitglieder der eigenen Organisation dürfen die Einwände SEHEN (zum
+-- Üben), nur Manager/Admins verwalten sie.
+drop policy if exists "custom_objections_select" on custom_objections;
+create policy "custom_objections_select" on custom_objections for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+);
+drop policy if exists "custom_objections_insert" on custom_objections;
+create policy "custom_objections_insert" on custom_objections for insert with check (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  )
+);
+drop policy if exists "custom_objections_update" on custom_objections;
+create policy "custom_objections_update" on custom_objections for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  )
+);
+drop policy if exists "custom_objections_delete" on custom_objections;
+create policy "custom_objections_delete" on custom_objections for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or (
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
     and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
   )
 );

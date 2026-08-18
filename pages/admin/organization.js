@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { textColorForColors, blend } from "../../lib/orgBranding";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
+import { DEFAULT_OBJECTION_CATEGORIES } from "../../lib/objectionCategories";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -78,18 +79,6 @@ function slugify(name) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
-
-// Muss inhaltlich mit DEFAULT_REASONS in public/tools/call-tracker.html
-// übereinstimmen — das ist die Standard-Belegung, wenn eine Organisation
-// keine eigenen Einwand-Kategorien hinterlegt.
-const DEFAULT_OBJECTION_CATEGORIES = [
-  { key: "preis", label: "Preis & Auslastung" },
-  { key: "skepsis", label: "Skepsis & Vertrauen" },
-  { key: "vorhanden", label: "Bereits vorhanden" },
-  { key: "zeit", label: "Zeit & Aufschub" },
-  { key: "entscheidung", label: "Entscheidung" },
-  { key: "sonstiges", label: "Sonstiges" },
-];
 
 function uniqueCategoryKey(label, existingKeys) {
   const base = slugify(label) || "kategorie";

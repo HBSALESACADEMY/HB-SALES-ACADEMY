@@ -8,6 +8,7 @@ import Icon from "./Icon";
 const ADMIN_TABS = [
   { key: "users", label: "Nutzer", route: "/admin", icon: "users" },
   { key: "organization", label: "Organisation", route: "/admin/organization", icon: "dashboard" },
+  { key: "objections", label: "Eigene Einwände", route: "/admin/objections", icon: "flame" },
   { key: "activity", label: "Aktivitäten", route: "/admin/activity", icon: "chat" },
   { key: "insights", label: "Insights", route: "/admin/insights", icon: "award" },
   { key: "logins", label: "Login-Verlauf", route: "/admin/logins", icon: "logout" },

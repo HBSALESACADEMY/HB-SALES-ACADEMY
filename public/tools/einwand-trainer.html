@@ -305,6 +305,7 @@
     </script>
     <div class="subtitle">Einwand-Trainer</div>
   </header>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <div class="rule"></div>
 
@@ -441,10 +442,61 @@
       tip:`'Überlegen' konkretisieren lassen, dann gezielt behandeln.` }
   ];
 
-  const CAT_LABELS = {
-    preis:"Preis & Auslastung", skepsis:"Skepsis & Vertrauen", vorhanden:"Bereits vorhanden",
-    zeit:"Zeit & Aufschub", entscheidung:"Entscheidung"
-  };
+  // Weißes Label: dieselben Einwand-Kategorien wie im Call Tracker (siehe
+  // lib/objectionCategories.js, organizations.objection_categories) — EIN
+  // gemeinsames Kategorie-System statt zwei getrennter.
+  const DEFAULT_CATEGORIES = [
+    { key: "preis", label: "Preis & Auslastung" },
+    { key: "skepsis", label: "Skepsis & Vertrauen" },
+    { key: "vorhanden", label: "Bereits vorhanden" },
+    { key: "zeit", label: "Zeit & Aufschub" },
+    { key: "entscheidung", label: "Entscheidung" },
+    { key: "sonstiges", label: "Sonstiges" }
+  ];
+  let CATEGORIES = DEFAULT_CATEGORIES;
+  (function(){
+    const raw = new URLSearchParams(window.location.search).get("categories");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length && parsed.every(c => c && c.key && c.label)) {
+        CATEGORIES = parsed;
+      }
+    } catch (e) { /* ungültiges JSON, Standard-Kategorien behalten */ }
+  })();
+  const CAT_LABELS = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
+
+  // Verbindung zu Supabase, um zusätzlich zu den festen HB-Einwänden die
+  // eigenen Szenarien der Organisation zu laden (custom_objections, siehe
+  // pages/admin/objections.js) — genau wie im Call Tracker läuft das Tool
+  // als eigenständiges HTML im iframe und bekommt die Zugangsdaten per
+  // Query-Param mitgegeben (su/sk).
+  let hbSupabase = null;
+  (function(){
+    const p = new URLSearchParams(window.location.search);
+    const su = p.get("su"), sk = p.get("sk");
+    if (su && sk && window.supabase) hbSupabase = window.supabase.createClient(su, sk);
+  })();
+
+  async function loadCustomObjections(){
+    if (!hbSupabase) return;
+    try {
+      const { data: { session } } = await hbSupabase.auth.getSession();
+      if (!session) return;
+      const { data: me } = await hbSupabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const activeOrgId = (me?.is_platform_admin && (() => { try { return sessionStorage.getItem("hb_active_org_id"); } catch (e) { return null; } })()) || me?.organization_id;
+      if (!activeOrgId) return;
+      const { data: rows } = await hbSupabase.from("custom_objections").select("*").eq("organization_id", activeOrgId).order("created_at");
+      (rows || []).forEach(r => {
+        OBJECTIONS.push({
+          id: "c_" + r.id, cat: r.cat,
+          q_pro: r.q_pro, a_pro: r.a_pro,
+          q_ent: r.q_ent || r.q_pro, a_ent: r.a_ent || r.a_pro,
+          tip: r.tip || ""
+        });
+      });
+    } catch (e) { console.error("Eigene Einwände konnten nicht geladen werden:", e); }
+  }
 
   const STORAGE_KEY = "objection_trainer_progress";
 
@@ -534,7 +586,7 @@
     cardArea.innerHTML = `
       <div class="prompt-tag">
         <span>Kunde sagt</span>
-        <span class="cat-badge">${CAT_LABELS[currentItem.cat]}</span>
+        <span class="cat-badge">${CAT_LABELS[currentItem.cat] || currentItem.cat}</span>
       </div>
       <div class="bubble-card">
         <div class="bubble-who">Einwand</div>
@@ -624,8 +676,12 @@
     pickNext();
   });
 
-  buildFilters();
-  loadProgress().then(pickNext);
+  // Eigene Einwände der Organisation zuerst laden, damit sie von Anfang an
+  // im Kategorie-Filter und in der Zufallsauswahl mit dabei sind.
+  loadCustomObjections().then(() => {
+    buildFilters();
+    loadProgress().then(pickNext);
+  });
 
 })();
 </script>
