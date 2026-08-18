@@ -638,28 +638,38 @@ export default function AdminOrganization() {
                         <div className="text-xs text-textMuted uppercase tracking-wide mb-2">Organisations-Manager</div>
                         {(() => {
                           const orgMembers = members.filter((m) => m.organization_id === o.id && m.status === "approved");
-                          const currentManager = orgMembers.find((m) => m.role === "manager" && m.is_admin);
-                          const candidates = orgMembers.filter((m) => m.id !== currentManager?.id);
+                          // Eine Organisation kann mehrere Manager haben — früher
+                          // wurde hier nur einer angezeigt und beim Festlegen der
+                          // bisherige still zurückgestuft.
+                          const manager = orgMembers.filter((m) => m.role === "manager" && m.is_admin);
+                          const candidates = orgMembers.filter((m) => !manager.some((x) => x.id === m.id));
                           const selected = managerTargets[o.id] || "";
                           const busy = settingManagerId === o.id;
                           return (
                             <>
-                              <p className="text-sm text-textMain mb-2">
-                                {currentManager ? currentManager.full_name || "Unbenannt" : <span className="text-textMuted">— noch kein Organisations-Manager —</span>}
-                              </p>
+                              {manager.length > 0 ? (
+                                <ul className="text-sm text-textMain mb-2 flex flex-col gap-0.5">
+                                  {manager.map((m) => <li key={m.id}>{m.full_name || "Unbenannt"}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="text-sm text-textMuted mb-2">— noch kein Organisations-Manager —</p>
+                              )}
                               {candidates.length > 0 ? (
                                 <div className="flex items-center gap-2">
                                   <select className="input flex-1" value={selected} onChange={(e) => setManagerTargets((prev) => ({ ...prev, [o.id]: e.target.value }))}>
-                                    <option value="">Anderen Nutzer wählen...</option>
+                                    <option value="">Weitere Person wählen...</option>
                                     {candidates.map((c) => <option key={c.id} value={c.id}>{c.full_name || "Unbenannt"}</option>)}
                                   </select>
                                   <button disabled={!selected || busy} onClick={() => setOrgManager(o.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
-                                    {busy ? "Setzt..." : currentManager ? "Ersetzen" : "Festlegen"}
+                                    {busy ? "Ernennt..." : "Ernennen"}
                                   </button>
                                 </div>
                               ) : (
-                                <p className="text-textMuted text-xs">Keine weiteren freigegebenen Mitglieder in dieser Organisation.</p>
+                                <p className="text-textMuted text-xs">Alle freigegebenen Mitglieder sind bereits Manager.</p>
                               )}
+                              <p className="text-[11px] text-textMuted mt-2">
+                                Ernennen stuft niemanden zurück. Rechte entziehen geht gezielt unter „Verwaltung → Nutzer".
+                              </p>
                               {managerError && <p className="text-coral text-xs mt-2">{managerError}</p>}
                             </>
                           );

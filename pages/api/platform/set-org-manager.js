@@ -1,10 +1,15 @@
 import { requireUser } from "../../../lib/supabaseServer";
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 
-// Ersetzt den Organisations-Manager einer Organisation: der bisherige
-// Organisations-Manager (role=manager + is_admin=true) wird auf ein
-// normales Mitglied zurückgestuft, der ausgewählte Nutzer wird zum neuen
-// Organisations-Manager. Nur für Plattform-Admins.
+// Ernennt eine Person zum Organisations-Manager (role=manager + is_admin).
+// Nur für Plattform-Admins.
+//
+// Bewusst OHNE Zurückstufen anderer: früher wurde der bisherige
+// Organisations-Manager dabei still zum normalen Mitglied degradiert. Das
+// widersprach der Nutzerverwaltung, die schon immer beliebig viele Manager
+// zuliess — wer dort zwei Manager eingerichtet hatte, verlor sie hier
+// unbemerkt wieder. Eine Organisation kann also mehrere Manager haben;
+// Rechte entziehen geht gezielt über Verwaltung -> Nutzer.
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -25,16 +30,6 @@ export default async function handler(req, res) {
     if (!target || target.organization_id !== organizationId) {
       return res.status(400).json({ error: "Der ausgewählte Nutzer gehört nicht zu dieser Organisation." });
     }
-
-    // Bisherige Organisations-Manager dieser Organisation zurückstufen —
-    // is_platform_admin-Konten bleiben davon unberührt (siehe reassign-member.js).
-    const { error: demoteErr } = await admin.from("profiles")
-      .update({ role: "rep", is_admin: false })
-      .eq("organization_id", organizationId)
-      .eq("role", "manager")
-      .eq("is_admin", true)
-      .eq("is_platform_admin", false);
-    if (demoteErr) throw demoteErr;
 
     const { error: promoteErr } = await admin.from("profiles")
       .update({ role: "manager", is_admin: true, status: "approved" })
