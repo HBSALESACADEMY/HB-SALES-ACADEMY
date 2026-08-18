@@ -12,6 +12,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue } from "../lib/leadFields";
 import { ABSTAND } from "../lib/autoRefresh";
+import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -62,10 +63,16 @@ export default function Termine() {
   const [expandedLeadId, setExpandedLeadId] = useState(null);
   const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
-  // 'upcoming' (Standard) | 'past' | 'all' — vergangene Termine werden
-  // dadurch nicht gelöscht/archiviert, nur standardmäßig ausgeblendet.
-  const [timeFilter, setTimeFilter] = useState("upcoming");
+  // Zeitraum: 'tag' | 'woche' | 'monat' | 'alle'. Ersetzt die frühere
+  // Aufteilung Anstehend/Vergangen/Alle — ein Zeitraum ist verständlicher und
+  // deckt beides ab. Vergangene Termine werden nie gelöscht, nur je nach
+  // Zeitraum nicht angezeigt.
+  const [timeFilter, setTimeFilter] = useState("woche");
   const [onlyOpenTasks, setOnlyOpenTasks] = useState(false);
+  // Ansicht: Kachel-Liste oder Monatskalender.
+  const [ansicht, setAnsicht] = useState("liste");
+  const [kalenderMonat, setKalenderMonat] = useState(() => startOfMonth(new Date()));
+  const [kalenderTag, setKalenderTag] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addDraft, setAddDraft] = useState({ name: "", phone: "", email: "", appointmentAt: "", fields: {} });
   const [addSaving, setAddSaving] = useState(false);
@@ -198,10 +205,12 @@ export default function Termine() {
     const leadId = router.query.leadId;
     if (!leadId || !leads.length) return;
     setExpandedLeadId(leadId);
-    // Sonst könnte der verlinkte Termin z.B. durch den Standardfilter
-    // "Anstehend" (vergangene Termine ausgeblendet) unsichtbar bleiben,
-    // obwohl er jetzt geladen ist — der Deep-Link soll immer sichtbar sein.
-    setTimeFilter("all");
+    // Sonst könnte der verlinkte Termin durch den Standard-Zeitraum
+    // ("Diese Woche") unsichtbar bleiben, obwohl er geladen ist — ein
+    // Deep-Link soll immer zum Ziel führen. Auch zurück in die Listen-
+    // Ansicht wechseln, sonst zeigt der Kalender einen anderen Monat.
+    setAnsicht("liste");
+    setTimeFilter("alle");
     setLeadSearchQuery("");
     setDateFilter("");
     setOnlyOpenTasks(false);
@@ -572,16 +581,29 @@ export default function Termine() {
   const checkboxFields = leadFields.filter((f) => f.type === "checkbox");
   const extraTextFields = leadFields.filter((f) => f.type === "text" && f.key !== companyField?.key && f.key !== websiteField?.key && f.key !== notesField?.key);
 
-  const now = Date.now();
+  const [zeitVon, zeitBis] = bereichFuer(timeFilter);
   const filteredLeads = leads.filter((lead) => {
     const q = leadSearchQuery.trim().toLowerCase();
     const companyValue = companyField ? getLeadFieldValue(lead, companyField) : "";
     const matchesQuery = !q || [lead.name, companyValue, lead.phone, lead.email].some((f) => (f || "").toLowerCase().includes(q));
-    const matchesDate = !dateFilter || (lead.appointment_at && lead.appointment_at.slice(0, 10) === dateFilter);
-    const isPast = lead.appointment_at && new Date(lead.appointment_at).getTime() < now;
-    const matchesTime = timeFilter === "all" || (timeFilter === "past" ? isPast : !isPast);
     const matchesTasks = !onlyOpenTasks || (tasksByLead[lead.id] || []).some((t) => !t.done);
-    return matchesQuery && matchesDate && matchesTime && matchesTasks;
+    if (!matchesQuery || !matchesTasks) return false;
+
+    // Im Kalender bestimmt der angetippte Tag bzw. der angezeigte Monat,
+    // was unten steht — die Zeitraum-Knöpfe gelten dort nicht.
+    if (ansicht === "kalender") {
+      if (!lead.appointment_at) return false;
+      if (kalenderTag) return istGleicherTag(lead.appointment_at, kalenderTag);
+      const d = new Date(lead.appointment_at);
+      return d >= startOfMonth(kalenderMonat) && d <= endOfMonth(kalenderMonat);
+    }
+
+    const matchesDate = !dateFilter || (lead.appointment_at && lead.appointment_at.slice(0, 10) === dateFilter);
+    if (!matchesDate) return false;
+    if (!zeitVon) return true; // "Alle"
+    if (!lead.appointment_at) return false;
+    const d = new Date(lead.appointment_at);
+    return d >= zeitVon && d <= zeitBis;
   });
 
   return (
@@ -707,13 +729,23 @@ export default function Termine() {
           />
         </div>
         <input type="date" className="input !w-auto !py-2 text-sm" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-        {(leadSearchQuery || dateFilter || timeFilter !== "upcoming" || onlyOpenTasks) && (
-          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); setTimeFilter("upcoming"); setOnlyOpenTasks(false); }} className="btn-ghost text-xs">Filter zurücksetzen</button>
+        {(leadSearchQuery || dateFilter || timeFilter !== "woche" || onlyOpenTasks) && (
+          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); setTimeFilter("woche"); setOnlyOpenTasks(false); }} className="btn-ghost text-xs">Filter zurücksetzen</button>
         )}
       </div>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {[["upcoming", "Anstehend"], ["past", "Vergangen"], ["all", "Alle"]].map(([key, label]) => (
+        {/* Ansicht umschalten: gewohnte Kachel-Liste oder Monatskalender. */}
+        {[["liste", "Liste", "dashboard"], ["kalender", "Kalender", "calendar"]].map(([key, label, icon]) => (
+          <button key={key} onClick={() => setAnsicht(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            <Icon name={icon} size={12} /> {label}
+          </button>
+        ))}
+        <span className="w-px h-5 bg-line mx-1" />
+        {/* Zeitraum gilt nur in der Liste — im Kalender bestimmt der
+            angezeigte Monat bzw. der angetippte Tag, was zu sehen ist. */}
+        {ansicht === "liste" && [["tag", "Heute"], ["woche", "Diese Woche"], ["monat", "Dieser Monat"], ["alle", "Alle"]].map(([key, label]) => (
           <button key={key} onClick={() => setTimeFilter(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${timeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
             {label}
           </button>
@@ -722,6 +754,19 @@ export default function Termine() {
           Nur mit offenen Aufgaben
         </button>
       </div>
+
+      {ansicht === "kalender" && (
+        <Monatskalender
+          monat={kalenderMonat}
+          gewaehlterTag={kalenderTag}
+          leads={leads}
+          onMonatWechseln={(richtung) => {
+            setKalenderTag(null);
+            setKalenderMonat((m) => new Date(m.getFullYear(), m.getMonth() + richtung, 1));
+          }}
+          onTagWaehlen={(tag) => setKalenderTag((vorher) => (vorher && istGleicherTag(vorher, tag) ? null : tag))}
+        />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredLeads.map((lead) => {
@@ -1027,5 +1072,77 @@ export default function Termine() {
         {leads.length === 0 && <p className="text-textMuted text-sm">Noch keine Termine erfasst — beim "Terminiert"-Klick im Call Tracker landen sie hier.</p>}
       </div>
     </Layout>
+  );
+}
+
+// Monatskalender: zeigt auf einen Blick, an welchen Tagen Termine anstehen.
+// Ein Tipp auf einen Tag filtert die Liste darunter auf diesen Tag, ein
+// erneuter Tipp hebt die Auswahl wieder auf.
+function Monatskalender({ monat, gewaehlterTag, leads, onMonatWechseln, onTagWaehlen }) {
+  const tage = monatsRaster(monat);
+  const heute = new Date();
+
+  // Termine je Tag vorzählen, statt für jede Zelle erneut die ganze Liste
+  // zu durchsuchen.
+  const proTag = {};
+  leads.forEach((l) => {
+    if (!l.appointment_at) return;
+    const d = new Date(l.appointment_at);
+    const schluessel = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    proTag[schluessel] = (proTag[schluessel] || 0) + 1;
+  });
+  const anzahlFuer = (d) => proTag[`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`] || 0;
+
+  return (
+    <div className="card mb-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <button onClick={() => onMonatWechseln(-1)} className="btn-ghost text-xs" aria-label="Vorheriger Monat">←</button>
+        <span className="font-display font-semibold text-textMain text-sm">
+          {monat.toLocaleDateString("de-DE", { month: "long", year: "numeric" })}
+        </span>
+        <button onClick={() => onMonatWechseln(1)} className="btn-ghost text-xs" aria-label="Nächster Monat">→</button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((t) => (
+          <div key={t} className="text-[10.5px] uppercase tracking-wide text-textMuted text-center py-1">{t}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {tage.map((tag) => {
+          const imMonat = tag.getMonth() === monat.getMonth();
+          const anzahl = anzahlFuer(tag);
+          const istHeute = istGleicherTag(tag, heute);
+          const istGewaehlt = gewaehlterTag && istGleicherTag(tag, gewaehlterTag);
+          return (
+            <button
+              key={tag.toISOString()}
+              onClick={() => onTagWaehlen(tag)}
+              className={`rounded-lg p-1 flex flex-col items-center justify-center gap-0.5 border transition ${
+                istGewaehlt ? "bg-amber text-[var(--org-button-text,#fff)] border-amber"
+                : istHeute ? "border-amber/60 text-textMain"
+                : "border-transparent hover:border-line " + (imMonat ? "text-textMain" : "text-textMuted opacity-40")
+              }`}
+            >
+              <span className="text-xs font-semibold leading-none">{tag.getDate()}</span>
+              {/* Punkt statt Zahl bei einem Termin — ruhigeres Bild, die
+                  genaue Zahl steht ohnehin in der Liste darunter. */}
+              {anzahl > 0 && (
+                <span className={`text-[10px] leading-none ${istGewaehlt ? "" : "text-amber"}`}>
+                  {anzahl === 1 ? "•" : anzahl}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-[11px] text-textMuted mt-3">
+        {gewaehlterTag
+          ? `Ausgewählt: ${gewaehlterTag.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" })} — nochmal tippen zeigt wieder den ganzen Monat.`
+          : "Tippe einen Tag an, um nur dessen Termine zu sehen."}
+      </p>
+    </div>
   );
 }
