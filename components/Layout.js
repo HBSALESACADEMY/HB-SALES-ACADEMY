@@ -70,6 +70,7 @@ export default function Layout({ children, fullBleed }) {
   const [loadingAuth, setLoadingAuth] = useState(!cachedProfile);
   const [navItems, setNavItems] = useState(cachedNavItems || FALLBACK_NAV);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [showNewTabForm, setShowNewTabForm] = useState(false);
   const [newTabName, setNewTabName] = useState("");
   const [newTabIcon, setNewTabIcon] = useState("book");
@@ -139,6 +140,7 @@ export default function Layout({ children, fullBleed }) {
 
   useEffect(() => {
     setMobileNavOpen(false);
+    setMobileAccountOpen(false);
     // Leichtgewichtiges Nutzungs-Tracking für die Admin-Insights ("was wird am
     // meisten genutzt") — nicht kritisch, daher bewusst ohne await/Fehlerbehandlung.
     (async () => {
@@ -528,140 +530,214 @@ export default function Layout({ children, fullBleed }) {
   const level = Math.floor((profile?.xp || 0) / 150) + 1;
   const into = (profile?.xp || 0) % 150;
 
+  // Menüpunkte, nach Bereichen gruppiert. Wird von der Seitenleiste (Rechner)
+  // UND dem Aufklapp-Menü (Handy) genutzt, damit beide immer dasselbe zeigen.
+  // Am Handy ohne Ziehen-und-Ablegen: das kollidiert auf Touch-Geräten mit
+  // dem Scrollen, und das Sortieren erledigt man ohnehin am Rechner.
+  function renderNavGroups({ mobile = false } = {}) {
+    // Trainer sehen zusätzlich die Content-Verwaltungsseiten (siehe
+    // pages/admin/{content,suggestions,navigation}.js), aber bewusst
+    // NICHT Nutzerverwaltung/Team — die bleiben Managern vorbehalten.
+    const TRAINER_NAV_IDS = ["admin-content", "admin-suggestions", "admin-navigation", "admin-flashcards"];
+    // Teamleads und Org-/Plattform-Admins dürfen dieselben Inhalte
+    // verwalten wie Manager/Trainer — siehe is_team_lead() in der
+    // RLS-Policy (migration_52). "admin-navigation" bewusst NICHT
+    // enthalten, das bleibt bei Manager/Trainer/Admin.
+    const ELEVATED_NAV_IDS = ["admin-content", "admin-suggestions", "admin-flashcards", "scripts"];
+    const isElevated = profile?.is_admin || profile?.is_platform_admin || profile?.is_team_lead;
+    const visibleItems = sortedNav(navItems.filter((n) =>
+      !n.requires_manager || profile?.role === "manager" ||
+      (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key)) ||
+      (isElevated && ELEVATED_NAV_IDS.includes(n.key))
+    ));
+    const byCategory = {};
+    visibleItems.forEach((item) => {
+      const g = groupFor(item);
+      byCategory[g] = byCategory[g] || [];
+      byCategory[g].push(item);
+    });
+    const categories = sortedCategories(Object.keys(byCategory));
+
+    return categories.map((category) => {
+      const items = byCategory[category];
+      const isCollapsed = collapsedCategories.has(category);
+      const dragProps = mobile ? {} : {
+        draggable: true,
+        onDragStart: () => setDraggedCategory(category),
+        onDragOver: (e) => e.preventDefault(),
+        onDrop: () => handleCategoryDrop(category, categories),
+      };
+      return (
+        <div key={category} className="mb-1">
+          <div
+            {...dragProps}
+            onClick={() => {
+              toggleCollapse(category);
+              setShineId(`cat:${category}`);
+              setTimeout(() => setShineId((cur) => (cur === `cat:${category}` ? null : cur)), 700);
+            }}
+            className={`relative overflow-hidden group flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg select-none transition-colors ${mobile ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} ${draggedCategory === category ? "opacity-40 bg-surfaceRaised" : "hover:bg-surfaceRaised/70"}`}
+          >
+            {shineId === `cat:${category}` && <span className="hb-shine" />}
+            <span className="text-[10.5px] font-bold uppercase tracking-widest text-textMuted flex-1">{category}</span>
+            {mobile ? (
+              <span className={`text-textMuted text-[10px] leading-none transition-transform ${isCollapsed ? "" : "rotate-90"}`}>▶</span>
+            ) : (
+              <span className="text-textMuted opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none tracking-tighter">⠿</span>
+            )}
+          </div>
+
+          <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: isCollapsed ? "0fr" : "1fr" }}>
+            <div className="overflow-hidden">
+              <div className="flex flex-col gap-0.5 mt-0.5 pl-1">
+              {items.map((item) => {
+                const route = item.is_builtin ? item.route : `/folder/${item.id}`;
+                const badgeCount = item.key === "community" ? unreadCommunity
+                  : item.key === "messages" ? unreadMessages
+                  : item.key === "members" ? pendingFriendRequests
+                  : item.key === "admin" ? pendingApprovals
+                  : item.key === "admin-suggestions" ? pendingSuggestions
+                  : item.key === "manager" ? pendingTeamRequests
+                  : 0;
+                const itemDragProps = mobile ? {} : {
+                  draggable: true,
+                  onDragStart: () => setDraggedNavId(item.id),
+                  onDragOver: (e) => e.preventDefault(),
+                  onDrop: () => handleNavDrop(item.id, items, visibleItems),
+                };
+                return (
+                  <button
+                    key={item.id}
+                    {...itemDragProps}
+                    onClick={() => {
+                      router.push(route);
+                      if (mobile) setMobileNavOpen(false);
+                      setShineId(item.id);
+                      setTimeout(() => setShineId((cur) => (cur === item.id ? null : cur)), 700);
+                    }}
+                    className={`relative overflow-hidden flex items-center gap-2.5 px-3 rounded-lg text-[13.5px] font-medium text-left w-full ${mobile ? "py-3" : "py-2.5 cursor-grab active:cursor-grabbing"} ${
+                      draggedNavId === item.id ? "opacity-40" : ""
+                    } ${
+                      router.asPath === route ? "" : "text-textMuted hover:bg-surfaceRaised hover:text-textMain"
+                    }`}
+                    style={router.asPath === route ? {
+                      background: "linear-gradient(90deg, rgb(var(--org-color-1-rgb, 76 93 201) / .15), rgb(var(--org-accent-rgb, 206 58 92) / .15), transparent)",
+                      boxShadow: "inset 2px 0 0 var(--org-accent, #CE3A5C)",
+                      // Gegen den Sidebar-Hintergrund kontrastgeprüft (siehe
+                      // lib/orgBranding.js setNavActiveTextVar) — nicht die
+                      // rohe Akzentfarbe, damit ein sehr helles Branding hier
+                      // nie unlesbar wird. Icon erbt automatisch (currentColor).
+                      color: "var(--org-nav-active-text, #CE3A5C)",
+                    } : undefined}
+                  >
+                    {shineId === item.id && <span className="hb-shine" />}
+                    <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="badge-count">
+                        {badgeCount > 9 ? "9+" : badgeCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  }
+
   return (
     <div className="flex flex-col md:flex-row h-screen border border-line rounded-none md:rounded-2xl overflow-hidden bg-bg">
-      {/* Mobile top bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-line bg-[var(--org-bg,rgb(var(--theme-bg-rgb,20_21_28)))] flex-shrink-0">
-        <img src={org?.logo_url || defaultLogo} alt={org?.name || "HB Sales Academy"} className="h-10 w-auto" />
-        <button onClick={() => setMobileNavOpen(true)} className="text-textMain p-1.5 -mr-1.5" aria-label="Menü öffnen">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-        </button>
+      {/* Handy: obere Leiste. Dahinter zwei kurze Aufklapp-Menüs (Navigation
+          bzw. Konto) statt der früheren Leiste, die von links über die halbe
+          Seite hereinfuhr. */}
+      <div className="md:hidden relative z-50 flex-shrink-0">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-line bg-[var(--org-bg,rgb(var(--theme-bg-rgb,20_21_28)))]">
+          <img src={org?.logo_url || defaultLogo} alt={org?.name || "HB Sales Academy"} className="h-9 w-auto flex-1 min-w-0 object-contain object-left" />
+          <span className="text-[11px] text-textMuted flex items-center gap-1 flex-shrink-0">
+            <Icon name="flame" size={12} />{profile?.xp || 0}
+          </span>
+          <button
+            onClick={() => { setMobileAccountOpen((v) => !v); setMobileNavOpen(false); }}
+            className="flex-shrink-0 rounded-full"
+            aria-label="Konto"
+          >
+            <Avatar name={profile?.full_name || "?"} src={profile?.avatar_url} size={30} />
+          </button>
+          <button
+            onClick={() => { setMobileNavOpen((v) => !v); setMobileAccountOpen(false); }}
+            className="text-textMain p-1.5 -mr-1.5 flex-shrink-0"
+            aria-label={mobileNavOpen ? "Menü schließen" : "Menü öffnen"}
+          >
+            {mobileNavOpen ? (
+              <Icon name="x" size={20} />
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+            )}
+          </button>
+        </div>
+
+        {/* Navigations-Menü, klappt direkt unter der Leiste auf */}
+        {mobileNavOpen && (
+          <div className="absolute left-0 right-0 top-full max-h-[70vh] overflow-y-auto bg-surface border-b border-line shadow-xl px-3 py-3">
+            {renderNavGroups({ mobile: true })}
+            {(profile?.role === "manager" || profile?.is_admin || profile?.is_platform_admin) && (
+              <button onClick={() => { setMobileNavOpen(false); router.push("/admin/navigation"); }}
+                className="flex items-center gap-2.5 px-3 py-3 mt-1 rounded-lg text-[13.5px] font-medium text-left w-full text-textMuted hover:text-textMain border border-dashed border-line">
+                + Reiter verwalten
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Konto-Menü hinter dem Profilbild */}
+        {mobileAccountOpen && (
+          <div className="absolute left-0 right-0 top-full bg-surface border-b border-line shadow-xl px-4 py-4 flex flex-col gap-3">
+            <button onClick={() => { setMobileAccountOpen(false); router.push("/profile"); }} className="flex items-center gap-2.5 text-left">
+              <Avatar name={profile?.full_name || "?"} src={profile?.avatar_url} size={34} />
+              <span className="text-sm font-medium text-textMain truncate flex-1">{profile?.full_name || "Mein Profil"}</span>
+            </button>
+            <div className="flex flex-col gap-1.5 p-2.5 bg-bg border border-line rounded-lg text-xs">
+              <div className="flex justify-between">
+                <span>Level {level}</span>
+                <span className="flex items-center gap-1"><Icon name="flame" size={13} />{profile?.xp || 0} XP</span>
+              </div>
+              <div className="w-full h-1.5 bg-line rounded-full overflow-hidden">
+                <div className="h-full bg-amber" style={{ width: `${(into / 150) * 100}%` }} />
+              </div>
+              <span className="font-mono text-textMuted">{into}/150 bis Level {level + 1}</span>
+            </div>
+            <button onClick={() => { setMobileAccountOpen(false); router.push("/settings"); }} className="flex items-center gap-2.5 px-1 py-2 rounded-lg text-[13px] text-textMuted hover:text-textMain text-left">
+              <Icon name="lock" size={15} /> Einstellungen
+            </button>
+            <button onClick={handleLogout} className="flex items-center gap-2.5 px-1 py-2 rounded-lg text-[13px] text-textMuted hover:text-textMain text-left">
+              <Icon name="logout" size={15} /> Abmelden
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Backdrop for mobile drawer */}
-      {mobileNavOpen && (
-        <div className="md:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileNavOpen(false)} />
+      {/* Halbtransparente Fläche hinter den Aufklapp-Menüs: Tippen schliesst */}
+      {(mobileNavOpen || mobileAccountOpen) && (
+        <div className="md:hidden fixed inset-0 bg-black/40 z-40"
+          onClick={() => { setMobileNavOpen(false); setMobileAccountOpen(false); }} />
       )}
 
-      <aside className={`
-        fixed md:static inset-y-0 left-0 z-50 w-[230px] flex-shrink-0
-        bg-gradient-to-b from-[var(--org-sidebar-tint,#1A1D33)] via-[var(--org-sidebar-mid,var(--theme-sidebar-mid,#17181F))] to-[var(--org-bg,rgb(var(--theme-bg-rgb,20_21_28)))] border-r border-line px-3.5 py-6 flex flex-col gap-1
-        transition-transform duration-200 md:translate-x-0
-        ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
-      `}>
+      <aside className="
+        hidden md:flex w-[230px] flex-shrink-0
+        bg-gradient-to-b from-[var(--org-sidebar-tint,#1A1D33)] via-[var(--org-sidebar-mid,var(--theme-sidebar-mid,#17181F))] to-[var(--org-bg,rgb(var(--theme-bg-rgb,20_21_28)))] border-r border-line px-3.5 py-6 flex-col gap-1
+      ">
         <div className="flex items-center justify-between px-2 pb-4 pt-1">
           <img src={org?.logo_url || defaultLogo} alt={org?.name || "HB Sales Academy"} className="h-[68px] w-auto" />
-          <button onClick={() => setMobileNavOpen(false)} className="md:hidden text-textMuted p-1" aria-label="Menü schließen">
-            <Icon name="x" size={16} />
-          </button>
         </div>
         <div className="px-2.5 pb-4">
           <p className="text-[11.5px] italic text-textMuted leading-snug">„{quoteOfTheDay().text}"</p>
           {quoteOfTheDay().author && <p className="text-[10px] text-textMuted mt-0.5">— {quoteOfTheDay().author}</p>}
         </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-0.5">
-          {(() => {
-            // Trainer sehen zusätzlich die Content-Verwaltungsseiten (siehe
-            // pages/admin/{content,suggestions,navigation}.js), aber bewusst
-            // NICHT Nutzerverwaltung/Team — die bleiben Managern vorbehalten.
-            const TRAINER_NAV_IDS = ["admin-content", "admin-suggestions", "admin-navigation", "admin-flashcards"];
-            // Teamleads und Org-/Plattform-Admins dürfen dieselben Inhalte
-            // verwalten wie Manager/Trainer — siehe is_team_lead() in der
-            // RLS-Policy (migration_52). "admin-navigation" bewusst NICHT
-            // enthalten, das bleibt bei Manager/Trainer/Admin.
-            const ELEVATED_NAV_IDS = ["admin-content", "admin-suggestions", "admin-flashcards", "scripts"];
-            const isElevated = profile?.is_admin || profile?.is_platform_admin || profile?.is_team_lead;
-            const visibleItems = sortedNav(navItems.filter((n) =>
-              !n.requires_manager || profile?.role === "manager" ||
-              (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key)) ||
-              (isElevated && ELEVATED_NAV_IDS.includes(n.key))
-            ));
-            const byCategory = {};
-            visibleItems.forEach((item) => {
-              const g = groupFor(item);
-              byCategory[g] = byCategory[g] || [];
-              byCategory[g].push(item);
-            });
-            const categories = sortedCategories(Object.keys(byCategory));
-
-            return categories.map((category) => {
-              const items = byCategory[category];
-              const isCollapsed = collapsedCategories.has(category);
-              return (
-                <div key={category} className="mb-1">
-                  <div
-                    draggable
-                    onDragStart={() => setDraggedCategory(category)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => handleCategoryDrop(category, categories)}
-                    onClick={() => {
-                      toggleCollapse(category);
-                      setShineId(`cat:${category}`);
-                      setTimeout(() => setShineId((cur) => (cur === `cat:${category}` ? null : cur)), 700);
-                    }}
-                    className={`relative overflow-hidden group flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors ${draggedCategory === category ? "opacity-40 bg-surfaceRaised" : "hover:bg-surfaceRaised/70"}`}
-                  >
-                    {shineId === `cat:${category}` && <span className="hb-shine" />}
-                    <span className="text-[10.5px] font-bold uppercase tracking-widest text-textMuted flex-1">{category}</span>
-                    <span className="text-textMuted opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none tracking-tighter">⠿</span>
-                  </div>
-
-                  <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: isCollapsed ? "0fr" : "1fr" }}>
-                    <div className="overflow-hidden">
-                      <div className="flex flex-col gap-0.5 mt-0.5 pl-1">
-                      {items.map((item) => {
-                        const route = item.is_builtin ? item.route : `/folder/${item.id}`;
-                        const badgeCount = item.key === "community" ? unreadCommunity
-                          : item.key === "messages" ? unreadMessages
-                          : item.key === "members" ? pendingFriendRequests
-                          : item.key === "admin" ? pendingApprovals
-                          : item.key === "admin-suggestions" ? pendingSuggestions
-                          : item.key === "manager" ? pendingTeamRequests
-                          : 0;
-                        return (
-                          <button
-                            key={item.id}
-                            draggable
-                            onDragStart={() => setDraggedNavId(item.id)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={() => handleNavDrop(item.id, items, visibleItems)}
-                            onClick={() => {
-                              router.push(route);
-                              setShineId(item.id);
-                              setTimeout(() => setShineId((cur) => (cur === item.id ? null : cur)), 700);
-                            }}
-                            className={`relative overflow-hidden flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-left w-full cursor-grab active:cursor-grabbing ${
-                              draggedNavId === item.id ? "opacity-40" : ""
-                            } ${
-                              router.asPath === route ? "" : "text-textMuted hover:bg-surfaceRaised hover:text-textMain"
-                            }`}
-                            style={router.asPath === route ? {
-                              background: "linear-gradient(90deg, rgb(var(--org-color-1-rgb, 76 93 201) / .15), rgb(var(--org-accent-rgb, 206 58 92) / .15), transparent)",
-                              boxShadow: "inset 2px 0 0 var(--org-accent, #CE3A5C)",
-                              // Gegen den Sidebar-Hintergrund kontrastgeprüft (siehe
-                              // lib/orgBranding.js setNavActiveTextVar) — nicht die
-                              // rohe Akzentfarbe, damit ein sehr helles Branding hier
-                              // nie unlesbar wird. Icon erbt automatisch (currentColor).
-                              color: "var(--org-nav-active-text, #CE3A5C)",
-                            } : undefined}
-                          >
-                            {shineId === item.id && <span className="hb-shine" />}
-                            <Icon name={item.icon} /> <span className="flex-1">{item.label}</span>
-                            {badgeCount > 0 && (
-                              <span className="badge-count">
-                                {badgeCount > 9 ? "9+" : badgeCount}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            });
-          })()}
+          {renderNavGroups()}
 
           {(profile?.role === "manager" || profile?.is_admin || profile?.is_platform_admin) && (
             <div className="px-1 pt-1">
