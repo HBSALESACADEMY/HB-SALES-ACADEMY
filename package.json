@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "pruefe": "node scripts/pruefe-produktion.mjs"
+    "pruefe": "node scripts/pruefe-produktion.mjs",
+    "test": "node --test --test-reporter=spec tests/*.test.mjs",
+    "pruefe-alles": "npm test && npm run pruefe"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
