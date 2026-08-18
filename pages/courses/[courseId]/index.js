@@ -7,6 +7,7 @@ import { apiGetBlob } from "../../../lib/apiClient";
 import { triggerConfetti } from "../../../lib/confetti";
 import { useCourse } from "../../../lib/useCourse";
 import { getActiveOrgId } from "../../../lib/activeOrg";
+import { getResolvedTheme, defaultLogoSrc } from "../../../lib/theme";
 
 // Fallback für Zeilen, die vor der fehlendeKriterien-Ergänzung entstanden
 // sind: aus der Rubrik einfach das herausrechnen, was die KI als erfüllt
@@ -54,6 +55,10 @@ export default function CourseDetail() {
   const [downloading, setDownloading] = useState(false);
   const [expandedModuleId, setExpandedModuleId] = useState(null);
   const [examExpanded, setExamExpanded] = useState(false);
+  // Das HB-Standard-Logo (ohne eigenes Organisations-Logo) ist hell
+  // eingefärbt — im hellen Theme sonst fast unsichtbar (siehe lib/theme.js).
+  const [defaultLogo, setDefaultLogo] = useState("/logo.svg");
+  useEffect(() => { setDefaultLogo(defaultLogoSrc(getResolvedTheme())); }, []);
 
   useEffect(() => {
     if (!courseId) return;
@@ -154,7 +159,7 @@ export default function CourseDetail() {
             {passed ? (
               <div className="border-2 border-amber rounded-xl p-5 text-center mb-3" style={{ background: "rgba(240,178,62,.06)" }}>
                 <div className="text-xs text-textMuted mb-1.5">Zertifikat erhalten</div>
-                <img src={getCachedOrg()?.logo_url || "/logo.svg"} alt={getCachedOrg()?.name || "HB Sales Academy"} className="h-6 w-auto mx-auto mb-2" />
+                <img src={getCachedOrg()?.logo_url || defaultLogo} alt={getCachedOrg()?.name || "HB Sales Academy"} className="h-6 w-auto mx-auto mb-2" />
                 <div className="font-display text-[17px] text-textMain mb-2.5">{course.title}</div>
                 <button className="btn" onClick={downloadCertificate} disabled={downloading}>
                   <Icon name="download" size={14} /> {downloading ? "Wird erstellt..." : "PDF-Zertifikat herunterladen"}

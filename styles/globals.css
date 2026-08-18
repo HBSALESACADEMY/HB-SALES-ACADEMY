@@ -2,9 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hell/Dunkel/Systemeinstellung (siehe lib/theme.js, pages/_document.js
+   setzt data-theme VOR dem ersten Rendern). Diese Tokens sind die zweite
+   Fallback-Ebene in tailwind.config.js — nach den organisationseigenen
+   --org-*-rgb-Werten (lib/orgBranding.js), vor den hart codierten
+   Werten dort. Dadurch passt sich die gesamte App (jede bg-bg/text-textMain/
+   border-line-Klasse) automatisch an, ohne dass einzelne Seiten das Theme
+   selbst kennen müssen. Dunkel = unverändert das bisherige Standarddesign. */
+:root {
+  --theme-bg-rgb: 20 21 28;
+  --theme-surface-rgb: 28 30 41;
+  --theme-surface-raised-rgb: 34 36 47;
+  --theme-line-rgb: 47 50 66;
+  --theme-text-rgb: 236 237 245;
+  --theme-text-muted-rgb: 141 144 166;
+  --theme-sidebar-mid: #17181F;
+}
+:root[data-theme="light"] {
+  --theme-bg-rgb: 244 245 249;
+  --theme-surface-rgb: 241 242 247;
+  --theme-surface-raised-rgb: 255 255 255;
+  --theme-line-rgb: 223 225 234;
+  --theme-text-rgb: 27 29 39;
+  /* Bewusst so dunkel, dass gedämpfter Text auch auf der HELLSTEN Fläche
+     (Kartenhintergrund) noch WCAG AA (4.5:1) erreicht — mit dem naheliegenden
+     helleren Grauton lag er bei 4.43 und damit knapp darunter. */
+  --theme-text-muted-rgb: 97 101 122;
+  --theme-sidebar-mid: #EDEEF3;
+}
+
 html, body {
-  background: var(--org-bg, #14151C);
-  color: var(--org-text, #ECEDF5);
+  background: var(--org-bg, rgb(var(--theme-bg-rgb)));
+  color: var(--org-text, rgb(var(--theme-text-rgb)));
   margin: 0;
   padding: 0;
 }
@@ -17,7 +46,9 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   accent-color: var(--org-accent, #CE3A5C);
 }
 
-::selection { background: rgb(var(--org-accent-rgb, 206 58 92) / .32); color: #fff; }
+/* color: fest #fff wäre im hellen Theme unlesbar (helle Markierung + weißer
+   Text) — folgt stattdessen derselben Textfarbe wie der Rest der Seite. */
+::selection { background: rgb(var(--org-accent-rgb, 206 58 92) / .32); color: var(--org-text, rgb(var(--theme-text-rgb))); }
 
 /* Signatur-Verlauf: Indigo → Karmesin. Alle drei Farben sind pro Organisation
    anpassbar (siehe lib/orgBranding.js, setzt --org-color-1/--org-accent/
@@ -41,13 +72,13 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   background: none;
   -webkit-background-clip: initial;
   background-clip: initial;
-  -webkit-text-fill-color: var(--org-heading-text, #ECEDF5);
-  color: var(--org-heading-text, #ECEDF5);
+  -webkit-text-fill-color: var(--org-heading-text, rgb(var(--theme-text-rgb)));
+  color: var(--org-heading-text, rgb(var(--theme-text-rgb)));
 }
 
 .card {
-  background: linear-gradient(180deg, var(--org-surface-raised, #22242F) 0%, var(--org-surface, #1C1E29) 100%);
-  border: 1px solid var(--org-line, #2F3242);
+  background: linear-gradient(180deg, var(--org-surface-raised, rgb(var(--theme-surface-raised-rgb))) 0%, var(--org-surface, rgb(var(--theme-surface-rgb))) 100%);
+  border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
   border-radius: 14px;
   padding: 18px 20px;
   box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
@@ -86,25 +117,25 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
 .btn-ghost {
   background: rgba(255,255,255,.02);
   color: var(--org-text-muted, #8D90A6);
-  border: 1px solid var(--org-line, #2F3242);
+  border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
   border-radius: 9px;
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.btn-ghost:hover { color: var(--org-text, #fff); border-color: var(--org-color-1, #35406E); background: rgb(var(--org-accent-rgb, 206 58 92) / .08); }
+.btn-ghost:hover { color: var(--org-text, rgb(var(--theme-text-rgb))); border-color: var(--org-color-1, #35406E); background: rgb(var(--org-accent-rgb, 206 58 92) / .08); }
 
 .input {
   padding: 10px 14px;
   border-radius: 9px;
-  border: 1px solid var(--org-line, #2F3242);
-  background: var(--org-bg, #14151C);
-  color: var(--org-text, #ECEDF5);
+  border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
+  background: var(--org-bg, rgb(var(--theme-bg-rgb)));
+  color: var(--org-text, rgb(var(--theme-text-rgb)));
   font-size: 14px;
   font-family: var(--font-work-sans), sans-serif;
   width: 100%;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .input:focus { outline: none; border-color: var(--org-accent, #CE3A5C); box-shadow: 0 0 0 3px rgb(var(--org-accent-rgb, 206 58 92) / .15); }
-.input::placeholder { color: var(--org-text-muted, #5B5E70); }
+.input::placeholder { color: var(--org-text-muted, rgb(var(--theme-text-muted-rgb))); }
 
 textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-serif; }
 
@@ -137,7 +168,7 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--org-line, #2F3242); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--org-line, rgb(var(--theme-line-rgb))); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--org-color-1, #35406E); }
 
 /* Glanz-Effekt beim Anklicken eines Sidebar-Eintrags: der Markenverlauf läuft

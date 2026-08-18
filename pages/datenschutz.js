@@ -148,7 +148,7 @@ export default function Datenschutz() {
             </p>
           </section>
 
-          <p className="text-[11px] text-[#5B5E70] mt-2">Stand: [Platzhalter: Datum der Veröffentlichung]</p>
+          <p className="text-[11px] text-textMuted mt-2">Stand: [Platzhalter: Datum der Veröffentlichung]</p>
         </div>
       </div>
     </div>

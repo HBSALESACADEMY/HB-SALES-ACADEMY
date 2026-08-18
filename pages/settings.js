@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import Layout, { patchCachedProfile } from "../components/Layout";
+import Layout, { patchCachedProfile, getCachedOrg } from "../components/Layout";
 import { supabase } from "../lib/supabaseClient";
 import { apiGetBlob } from "../lib/apiClient";
+import { getStoredThemePref, setThemePref } from "../lib/theme";
+import { applyOrgBranding } from "../lib/orgBranding";
+
+const THEME_OPTIONS = [
+  ["light", "Hell"],
+  ["dark", "Dunkel"],
+  ["system", "Systemeinstellung"],
+];
 
 const CONTACT_FIELDS = [
   { key: "bio", label: "Über mich" },
@@ -34,6 +42,19 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [themePref, setThemePrefState] = useState("system");
+
+  useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
+
+  // Wirkt sofort (localStorage, siehe lib/theme.js) — anders als die
+  // restlichen Einstellungen hier braucht das keinen Klick auf "Speichern",
+  // die Vorschau soll direkt sichtbar sein.
+  function chooseTheme(pref) {
+    setThemePrefState(pref);
+    setThemePref(pref);
+    const org = getCachedOrg();
+    if (org) applyOrgBranding(org);
+  }
 
   useEffect(() => {
     async function load() {
@@ -109,6 +130,19 @@ export default function Settings() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Einstellungen</h1>
       <div className="brand-stripe w-16 mb-4" />
+
+      <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">Darstellung</div>
+        <p className="text-xs text-textMuted mb-4">Hell, dunkel oder automatisch nach Systemeinstellung deines Geräts.</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {THEME_OPTIONS.map(([key, label]) => (
+            <button key={key} onClick={() => chooseTheme(key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${themePref === key ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted hover:text-textMain"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="card max-w-lg mb-5">
         <div className="font-semibold text-textMain text-sm mb-1">Sichtbarkeit der Kontaktdaten</div>

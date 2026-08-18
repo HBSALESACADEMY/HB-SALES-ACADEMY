@@ -644,7 +644,7 @@ export default function Community() {
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
           {trendingHashtags.map((tag) => (
             <button key={tag} onClick={() => setActiveHashtag((cur) => (cur === tag ? null : tag))}
-              className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${activeHashtag === tag ? "bg-violet text-white border-violet" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${activeHashtag === tag ? "bg-violet text-white border-violet" : "border-line text-textMuted hover:text-textMain hover:border-line"}`}>
               #{tag}
             </button>
           ))}
@@ -656,11 +656,11 @@ export default function Community() {
 
       <div className="flex items-center gap-2 mb-4">
         <button onClick={() => setScope("org")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "org" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "org" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-line"}`}>
           Meine Organisation
         </button>
         <button onClick={() => setScope("global")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "global" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${scope === "global" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-line"}`}>
           Global
         </button>
       </div>
@@ -701,13 +701,13 @@ export default function Community() {
           👥 Alle Mitglieder
         </button>
         <button onClick={() => setActiveGroup("all")}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === "all" ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-line"}`}>
           Alle
         </button>
         {groups.map((g) => (
           <div key={g.id} className="relative group">
             <button onClick={() => setActiveGroup(g.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === g.id ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${activeGroup === g.id ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain hover:border-line"}`}>
               {g.name}
             </button>
             {isManager && (
@@ -716,7 +716,7 @@ export default function Community() {
           </div>
         ))}
         {isManager && !showGroupForm && (
-          <button onClick={() => setShowGroupForm(true)} className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-line text-textMuted hover:text-textMain hover:border-[#3A3F55]">
+          <button onClick={() => setShowGroupForm(true)} className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-line text-textMuted hover:text-textMain hover:border-line">
             + Neue Gruppe
           </button>
         )}

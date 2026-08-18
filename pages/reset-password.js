@@ -2,11 +2,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
+import { getResolvedTheme, defaultLogoSrc } from "../lib/theme";
 
 export default function ResetPassword() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [org, setOrg] = useState(null);
+  // Das HB-Standard-Logo (ohne eigenes Organisations-Logo) ist hell
+  // eingefärbt — im hellen Theme sonst fast unsichtbar (siehe lib/theme.js).
+  const [defaultLogo, setDefaultLogo] = useState("/logo.svg");
+  useEffect(() => { setDefaultLogo(defaultLogoSrc(getResolvedTheme())); }, []);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -60,7 +65,7 @@ export default function ResetPassword() {
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
           <div className="flex flex-col items-center text-center mb-5">
-            <img src={org?.logo_url || "/logo.svg"} alt={org?.name || "HB Sales Academy"} className="h-20 w-auto mb-4" />
+            <img src={org?.logo_url || defaultLogo} alt={org?.name || "HB Sales Academy"} className="h-20 w-auto mb-4" />
           </div>
           <p className="text-textMuted text-sm mb-6 text-center">Neues Passwort festlegen</p>
 

@@ -5,16 +5,19 @@ module.exports = {
     extend: {
       colors: {
         // Basis-Oberflächenfarben — pro Organisation über --org-*-rgb
-        // ersetzbar (siehe lib/orgBranding.js). Fallback-Werte = heutiges
-        // Standarddesign, macht jede bestehende Nutzung (bg-bg, bg-surface,
-        // bg-surfaceRaised, border-line, text-textMain, text-textMuted) im
-        // gesamten Projekt automatisch organisationsspezifisch.
-        bg: "rgb(var(--org-bg-rgb, 20 21 28) / <alpha-value>)",
-        surface: "rgb(var(--org-surface-rgb, 28 30 41) / <alpha-value>)",
-        surfaceRaised: "rgb(var(--org-surface-raised-rgb, 34 36 47) / <alpha-value>)",
-        line: "rgb(var(--org-line-rgb, 47 50 66) / <alpha-value>)",
-        textMain: "rgb(var(--org-text-rgb, 236 237 245) / <alpha-value>)",
-        textMuted: "rgb(var(--org-text-muted-rgb, 141 144 166) / <alpha-value>)",
+        // ersetzbar (siehe lib/orgBranding.js). Zweite Fallback-Ebene ist
+        // das Hell/Dunkel-Theme (--theme-*-rgb, siehe styles/globals.css +
+        // lib/theme.js), dritte (innerste) Ebene ist das bisherige feste
+        // Dunkeldesign als letzte Sicherheit. Macht jede bestehende Nutzung
+        // (bg-bg, bg-surface, bg-surfaceRaised, border-line, text-textMain,
+        // text-textMuted) im gesamten Projekt automatisch sowohl
+        // organisations- als auch themespezifisch.
+        bg: "rgb(var(--org-bg-rgb, var(--theme-bg-rgb, 20 21 28)) / <alpha-value>)",
+        surface: "rgb(var(--org-surface-rgb, var(--theme-surface-rgb, 28 30 41)) / <alpha-value>)",
+        surfaceRaised: "rgb(var(--org-surface-raised-rgb, var(--theme-surface-raised-rgb, 34 36 47)) / <alpha-value>)",
+        line: "rgb(var(--org-line-rgb, var(--theme-line-rgb, 47 50 66)) / <alpha-value>)",
+        textMain: "rgb(var(--org-text-rgb, var(--theme-text-rgb, 236 237 245)) / <alpha-value>)",
+        textMuted: "rgb(var(--org-text-muted-rgb, var(--theme-text-muted-rgb, 141 144 166)) / <alpha-value>)",
         // amber/violet sind die Marken-Akzentfarben — pro Organisation über
         // --org-accent-rgb/--org-color-1-rgb ersetzbar (siehe lib/orgBranding.js).
         // Jede bestehende Klasse (text-amber, bg-amber/40, border-violet/40, ...)
