@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { meldeTerminAenderung } from "../lib/leadNotify";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import { ABSTAND } from "../lib/autoRefresh";
@@ -253,6 +254,10 @@ export default function Termine() {
 
   async function deleteTermin(lead) {
     setDeleting(true);
+    // Vor dem Löschen melden — und hier ausnahmsweise abwarten: liefe das
+    // Löschen parallel, fände die Route den Termin womöglich schon nicht mehr
+    // und die Meldung ginge ersatzlos verloren.
+    await meldeTerminAenderung(lead.id, "geloescht", "Der Termin wurde gelöscht.");
     const { error: err } = await supabase.from("leads").delete().eq("id", lead.id);
     if (err) { setError(err.message); setDeleting(false); return; }
     // Sonst bliebe die Aufnahme im Speicher liegen, nur der Datenbank-Eintrag
@@ -373,6 +378,12 @@ export default function Termine() {
     const { error: err } = await supabase.from("leads").update(patch).eq("id", id);
     if (err) { setError(err.message); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    // Nur den Zeitpunkt eigens benennen — eine Verschiebung ist die Änderung,
+    // auf die das Team wirklich reagieren muss.
+    const verschoben = original && original.appointment_at !== patch.appointment_at;
+    meldeTerminAenderung(id, "bearbeitet", verschoben
+      ? `Der Termin wurde verschoben auf ${patch.appointment_at ? new Date(patch.appointment_at).toLocaleString("de-DE") : "keinen Zeitpunkt"}.`
+      : "Die Termindaten wurden bearbeitet.");
     setEditingLeadId(null);
     setEditDraft(null);
   }
@@ -499,8 +510,10 @@ export default function Termine() {
   }
 
   async function updateStatus(id, status) {
-    await supabase.from("leads").update({ status }).eq("id", id);
+    const { error: err } = await supabase.from("leads").update({ status }).eq("id", id);
+    if (err) { setError(err.message); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
+    meldeTerminAenderung(id, "status", `Neuer Status: ${STATUS_LABELS[status] || status}`);
   }
 
   async function markOutcome(id, outcome) {
@@ -510,8 +523,10 @@ export default function Termine() {
       setFollowUpDate("");
       return;
     }
-    await supabase.from("leads").update({ outcome }).eq("id", id);
+    const { error: err } = await supabase.from("leads").update({ outcome }).eq("id", id);
+    if (err) { setError(err.message); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome } : l)));
+    meldeTerminAenderung(id, "ergebnis", `Ergebnis: ${OUTCOME_LABELS[outcome] || outcome}`);
   }
 
   // Legt einen EIGENEN Folgetermin an, der auf den ursprünglichen verweist.
@@ -545,6 +560,9 @@ export default function Termine() {
 
     if (err) { setError(err.message); return; }
     setLeads((prev) => [neuerTermin, ...prev.map((l) => (l.id === id ? { ...l, outcome: "follow_up" } : l))]);
+    // Gemeldet wird der NEUE Termin — er trägt den künftigen Zeitpunkt, auf
+    // den sich das Team einstellen muss.
+    meldeTerminAenderung(neuerTermin.id, "folgetermin", `Folgetermin zum Gespräch mit ${original.name}.`);
     setFollowUpId(null);
     setFollowUpDate("");
     setExpandedLeadId(neuerTermin.id);

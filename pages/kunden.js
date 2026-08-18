@@ -4,6 +4,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
+import { meldeTerminAenderung } from "../lib/leadNotify";
 
 const emptyForm = { name: "", phone: "", email: "", company: "", website: "", notes: "" };
 
@@ -120,6 +121,7 @@ export default function Kunden() {
       notes: editForm.notes.trim() || null,
     }).eq("id", id);
     if (err) { setError(err.message); setSaving(false); return; }
+    meldeTerminAenderung(id, "bearbeitet", "Die Kontaktdaten wurden bearbeitet.");
     setEditingId(null);
     setSaving(false);
     await load();
@@ -128,6 +130,9 @@ export default function Kunden() {
   async function deleteCustomer(id) {
     setSaving(true);
     const lead = customers.find((c) => c.id === id);
+    // Vor dem Löschen melden und abwarten — danach wäre der Eintrag für die
+    // Melde-Route nicht mehr lesbar (siehe lib/leadNotify.js).
+    await meldeTerminAenderung(id, "geloescht", "Der Eintrag wurde gelöscht.");
     const { error: err } = await supabase.from("leads").delete().eq("id", id);
     if (err) { setError(err.message); setSaving(false); return; }
     // Ohne das hier würde die eigentliche Audiodatei im Speicher liegen
