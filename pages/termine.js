@@ -833,10 +833,15 @@ export default function Termine() {
                     <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
                   </div>
                 )}
-                {(openTaskCount > 0 || leadComments.length > 0) && (
+                {(openTaskCount > 0 || leadComments.length > 0 || lead.call_notes_status) && (
                   <div className="flex items-center gap-2 text-[10px] text-textMuted mt-1 pt-1.5 border-t border-line">
                     {openTaskCount > 0 && <span>✅ {openTaskCount} offen</span>}
                     {leadComments.length > 0 && <span>💬 {leadComments.length}</span>}
+                    {/* Ohne diesen Hinweis waren die Gesprächsnotizen nur zu
+                        finden, wenn man den Termin zufällig aufklappte. */}
+                    {lead.call_notes_status === "done" && <span className="text-violet">📝 Notizen</span>}
+                    {lead.call_notes_status === "pending" && <span>📝 Notizen laufen…</span>}
+                    {lead.call_notes_status === "failed" && <span className="text-coral">📝 fehlgeschlagen</span>}
                   </div>
                 )}
               </button>
