@@ -19,8 +19,14 @@ export default async function handler(req, res) {
 
   try {
     const { name, phone, email, fields, recordingPath, appointmentAt, activeOrgId } = req.body || {};
-    if (!name || !phone || !email || !appointmentAt) {
-      return res.status(400).json({ error: "Name, Telefon, E-Mail und Termin sind erforderlich." });
+    // Serverseitig wird nur das strukturell Nötige verlangt: ohne Namen hat
+    // der Eintrag keine Bezeichnung in der Liste, ohne Zeitpunkt taucht er im
+    // Kalender und in den Zeitraum-Filtern nirgends auf. Ob Telefon/E-Mail
+    // Pflicht sind, entscheidet die Organisation selbst (migration_81) — das
+    // ist eine Erfassungs-Regel, keine Sicherheitsgrenze, und wird dort
+    // geprüft, wo sie hingehört: im Formular (siehe lib/leadFields.js).
+    if (!name || !appointmentAt) {
+      return res.status(400).json({ error: "Name und Termin-Zeitpunkt sind erforderlich." });
     }
 
     // "fields" kommt vom jeweiligen Formular bereits aufgelöst (Organisation
@@ -86,9 +92,11 @@ export default async function handler(req, res) {
         const html =
           `<p><strong>${me.full_name || "Ein/e Vertriebler:in"}</strong> hat einen neuen Termin erfasst${orgName ? ` bei ${orgName}` : ""}:</p>` +
           `<p><strong>${name}</strong>${companyValue ? ` (${companyValue})` : ""}<br/>` +
-          `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}<br/>` +
-          `Telefon: ${phone}<br/>` +
-          `E-Mail: ${email}` +
+          `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}` +
+          // Telefon/E-Mail sind seit migration_81 pro Organisation optional —
+          // leere Zeilen ("Telefon: ") wären sonst in jeder Mail zu sehen.
+          (phone ? `<br/>Telefon: ${phone}` : "") +
+          (email ? `<br/>E-Mail: ${email}` : "") +
           (extraLines.length ? `<br/>${extraLines.join("<br/>")}` : "") +
           `</p>` +
           (notesValue ? `<p>${notesValue}</p>` : "") +

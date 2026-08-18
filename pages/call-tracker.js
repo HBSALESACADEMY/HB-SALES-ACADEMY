@@ -7,7 +7,7 @@ import { apiPost } from "../lib/apiClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
-import { resolveLeadFields } from "../lib/leadFields";
+import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
   FIELDS, storagePrefix, dayKey, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   zeroCounts, zeroReasons, todayFullLabel, weekLabel, monthLabel,
@@ -55,6 +55,7 @@ export default function CallTracker() {
 
   const reasons = useMemo(() => resolveObjectionCategories(org), [org]);
   const leadFields = useMemo(() => resolveLeadFields(org), [org]);
+  const coreRequired = useMemo(() => resolveCoreRequired(org), [org]);
   const bookingSteps = useMemo(() => {
     const raw = (org?.booking_instructions || "").split("\n").map((l) => l.trim()).filter(Boolean);
     return raw.length ? raw : DEFAULT_BOOKING_STEPS;
@@ -209,16 +210,11 @@ export default function CallTracker() {
   }
 
   async function submitLead() {
-    // Nur die tatsächlich fehlenden Felder benennen — eine pauschale
-    // Aufzählung aller vier ist irreführend, wenn nur eines leer ist.
-    const missing = [
-      !leadDraft.name.trim() && "Name",
-      !leadDraft.phone.trim() && "Telefon",
-      !leadDraft.email.trim() && "E-Mail",
-      !leadDraft.appointmentAt && "Termin (Datum/Uhrzeit)",
-    ].filter(Boolean);
+    // Welche Felder Pflicht sind, entscheidet die Organisation
+    // (siehe lib/leadFields.js). Benannt wird nur, was tatsächlich fehlt.
+    const missing = fehlendePflichtfelder({ ...leadDraft, org });
     if (missing.length) {
-      showToast(missing.length === 1 ? `Bitte noch ausfüllen: ${missing[0]}` : `Bitte noch ausfüllen: ${missing.join(", ")}`);
+      showToast(`Bitte noch ausfüllen: ${missing.join(", ")}`);
       return;
     }
     setLeadSaving(true);
@@ -395,11 +391,11 @@ export default function CallTracker() {
                       <input className="input !py-2 text-sm" placeholder="Vor- und Nachname" value={leadDraft.name} onChange={(e) => setLeadDraft((d) => ({ ...d, name: e.target.value }))} />
                     </div>
                     <div>
-                      <label className="block text-xs text-textMuted mb-1">Telefon *</label>
+                      <label className="block text-xs text-textMuted mb-1">Telefon{coreRequired.phone ? " *" : ""}</label>
                       <input className="input !py-2 text-sm" type="tel" value={leadDraft.phone} onChange={(e) => setLeadDraft((d) => ({ ...d, phone: e.target.value }))} />
                     </div>
                     <div>
-                      <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
+                      <label className="block text-xs text-textMuted mb-1">E-Mail{coreRequired.email ? " *" : ""}</label>
                       <input className="input !py-2 text-sm" type="email" value={leadDraft.email} onChange={(e) => setLeadDraft((d) => ({ ...d, email: e.target.value }))} />
                     </div>
                     <div>
@@ -408,7 +404,7 @@ export default function CallTracker() {
                     </div>
                     {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
                       <div key={f.key}>
-                        <label className="block text-xs text-textMuted mb-1">{f.label}</label>
+                        <label className="block text-xs text-textMuted mb-1">{f.label}{f.required ? " *" : ""}</label>
                         <input className="input !py-2 text-sm"
                           value={leadDraft.fields[f.key] || ""}
                           onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />

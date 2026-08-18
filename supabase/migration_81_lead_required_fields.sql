@@ -1,0 +1,12 @@
+-- Organisationen entscheiden selbst, welche Felder im Termin-Formular
+-- Pflicht sind.
+--
+-- Telefon und E-Mail waren bisher fest als Pflicht verdrahtet. Name und
+-- Termin-Zeitpunkt bleiben es bewusst weiterhin: ohne Namen hat der Eintrag
+-- keine Bezeichnung in der Liste, ohne Zeitpunkt taucht er im Kalender und
+-- in den Zeitraum-Filtern nirgends auf.
+--
+-- NULL = wie bisher, beide Pflicht. Sonst z.B. {"phone": true, "email": false}.
+-- Ob ein selbst angelegtes Zusatzfeld Pflicht ist, steht direkt beim Feld in
+-- organizations.lead_field_config ("required": true) — siehe lib/leadFields.js.
+alter table organizations add column if not exists lead_core_required jsonb;

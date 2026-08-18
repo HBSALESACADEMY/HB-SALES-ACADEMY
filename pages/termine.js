@@ -10,7 +10,7 @@ import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
-import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue } from "../lib/leadFields";
+import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import { ABSTAND } from "../lib/autoRefresh";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 
@@ -79,6 +79,8 @@ export default function Termine() {
   // Pro Organisation anpassbare Zusatzfelder im Termin-/Lead-Formular (siehe
   // pages/admin/organization.js) — bis zum Laden gelten die HB-Standardfelder.
   const [leadFields, setLeadFields] = useState(DEFAULT_LEAD_FIELDS);
+  // Für die Pflichtfeld-Einstellungen der Organisation (siehe lib/leadFields.js).
+  const [orgConfig, setOrgConfig] = useState(null);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -135,8 +137,9 @@ export default function Termine() {
       setNotificationEmails(emails || []);
     }
     if (activeOrgId) {
-      const { data: org } = await supabase.from("organizations").select("lead_field_config").eq("id", activeOrgId).maybeSingle();
+      const { data: org } = await supabase.from("organizations").select("lead_field_config, lead_core_required").eq("id", activeOrgId).maybeSingle();
       setLeadFields(resolveLeadFields(org));
+      setOrgConfig(org || null);
     }
     // Für @Erwähnungen in Kommentaren und die Aufgaben-Zuweisung — alle
     // Mitglieder der aktiven Organisation, unabhängig von der Rolle. Zusätzlich
@@ -262,8 +265,11 @@ export default function Termine() {
   }
 
   async function submitNewLead() {
-    if (!addDraft.name.trim() || !addDraft.phone.trim() || !addDraft.email.trim() || !addDraft.appointmentAt) {
-      setError("Bitte Name, Telefon, E-Mail und Termin-Zeitpunkt ausfüllen.");
+    // Welche Felder Pflicht sind, entscheidet die Organisation
+    // (siehe lib/leadFields.js). Benannt wird nur, was tatsächlich fehlt.
+    const fehlt = fehlendePflichtfelder({ ...addDraft, org: orgConfig });
+    if (fehlt.length) {
+      setError(`Bitte noch ausfüllen: ${fehlt.join(", ")}`);
       return;
     }
     setAddSaving(true);
@@ -575,6 +581,7 @@ export default function Termine() {
   // welche sind Ja/Nein-Badges, welche sind sonstige Text-Zusatzfelder. Fehlt
   // ein reserviertes Feld (von der Organisation entfernt), verschwindet die
   // jeweilige Anzeige einfach.
+  const coreRequired = resolveCoreRequired(orgConfig);
   const companyField = leadFields.find((f) => f.key === "company");
   const websiteField = leadFields.find((f) => f.key === "website");
   const notesField = leadFields.find((f) => f.multiline) || leadFields.find((f) => f.key === "notes");
@@ -638,11 +645,11 @@ export default function Termine() {
               <input className="input !py-1.5 text-xs" placeholder="Vor- und Nachname" value={addDraft.name} onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs text-textMuted mb-1">Telefon *</label>
+              <label className="block text-xs text-textMuted mb-1">Telefon{coreRequired.phone ? " *" : ""}</label>
               <input className="input !py-1.5 text-xs" type="tel" value={addDraft.phone} onChange={(e) => setAddDraft((d) => ({ ...d, phone: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
+              <label className="block text-xs text-textMuted mb-1">E-Mail{coreRequired.email ? " *" : ""}</label>
               <input className="input !py-1.5 text-xs" type="email" value={addDraft.email} onChange={(e) => setAddDraft((d) => ({ ...d, email: e.target.value }))} />
             </div>
             <div>

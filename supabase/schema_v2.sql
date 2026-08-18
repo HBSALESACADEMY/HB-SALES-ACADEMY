@@ -50,6 +50,9 @@ create table if not exists organizations (
   -- {key, label, type, multiline?}) — NULL/leer = die 4 HB-Standardfelder
   -- (Unternehmen, Webseite, Ist Entscheider, Notiz) bleiben aktiv.
   lead_field_config jsonb,
+  -- Ob Telefon/E-Mail im Termin-Formular Pflicht sind (migration_81).
+  -- NULL = beide Pflicht. Name und Termin-Zeitpunkt sind immer Pflicht.
+  lead_core_required jsonb,
   created_at timestamptz not null default now()
 );
 

@@ -5,7 +5,7 @@ import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { textColorForColors, blend } from "../../lib/orgBranding";
-import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
+import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveCoreRequired } from "../../lib/leadFields";
 import { DEFAULT_OBJECTION_CATEGORIES } from "../../lib/objectionCategories";
 import { getActiveOrgId } from "../../lib/activeOrg";
 
@@ -108,6 +108,8 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [categories, setCategories] = useState(
     Array.isArray(org.objection_categories) && org.objection_categories.length ? org.objection_categories : DEFAULT_OBJECTION_CATEGORIES
   );
+  // Welche der Grundfelder Pflicht sind (Name/Termin sind immer Pflicht).
+  const [coreRequired, setCoreRequired] = useState(() => resolveCoreRequired(org));
   const [useCustomLeadFields, setUseCustomLeadFields] = useState(Array.isArray(org.lead_field_config) && org.lead_field_config.length > 0);
   const [leadFields, setLeadFields] = useState(
     Array.isArray(org.lead_field_config) && org.lead_field_config.length ? org.lead_field_config : DEFAULT_LEAD_FIELDS
@@ -187,7 +189,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
     setSaving(true); setError(""); setSaved(false);
     const cleanCategories = categories.filter((c) => c.label.trim()).map((c) => ({ key: c.key, label: c.label.trim() }));
     const cleanLeadFields = leadFields.filter((f) => f.label.trim()).map((f) => ({
-      key: f.key, label: f.label.trim(), type: f.type, ...(f.type === "text" && f.multiline ? { multiline: true } : {}),
+      key: f.key, label: f.label.trim(), type: f.type,
+      ...(f.type === "text" && f.multiline ? { multiline: true } : {}),
+      ...(f.required ? { required: true } : {}),
     }));
     const { error: err } = await supabase.from("organizations").update({
       name: name.trim(),
@@ -202,6 +206,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       booking_instructions: bookingInstructions.trim() || null,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
+      lead_core_required: coreRequired,
     }).eq("id", org.id);
     setSaving(false);
     if (err) {
@@ -322,6 +327,21 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
         </div>
       )}
 
+      <label className="block text-xs text-textMuted mb-1.5">Pflichtfelder im Termin-Formular</label>
+      <div className="flex items-center gap-4 mb-1 flex-wrap">
+        {[["phone", "Telefon"], ["email", "E-Mail"]].map(([key, label]) => (
+          <label key={key} className="flex items-center gap-1.5 text-xs text-textMuted">
+            <input type="checkbox" checked={coreRequired[key]}
+              onChange={(e) => setCoreRequired((prev) => ({ ...prev, [key]: e.target.checked }))} />
+            {label} ist Pflicht
+          </label>
+        ))}
+      </div>
+      <p className="text-[11px] text-textMuted mb-5">
+        Name und Termin-Zeitpunkt bleiben immer Pflicht — ohne Namen hat der Eintrag keine Bezeichnung in der Liste,
+        ohne Zeitpunkt taucht er im Kalender und in den Zeitraum-Filtern nirgends auf.
+      </p>
+
       <label className="flex items-center gap-2 text-xs text-textMuted mb-3 cursor-pointer select-none">
         <input type="checkbox" checked={useCustomLeadFields} onChange={(e) => setUseCustomLeadFields(e.target.checked)} />
         Eigene Zusatzfelder im Termin-Formular verwenden (sonst gelten Unternehmen, Webseite, Ist Entscheider, Notiz)
@@ -340,6 +360,9 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
                   <input type="checkbox" checked={!!f.multiline} onChange={(e) => updateLeadField(i, { multiline: e.target.checked })} /> Mehrzeilig
                 </label>
               )}
+              <label className="flex items-center gap-1.5 text-xs text-textMuted flex-shrink-0">
+                <input type="checkbox" checked={!!f.required} onChange={(e) => updateLeadField(i, { required: e.target.checked })} /> Pflichtfeld
+              </label>
               <button type="button" onClick={() => removeLeadField(i)} disabled={leadFields.length <= 1} className="btn-ghost text-xs text-coral disabled:opacity-30 flex-shrink-0">Entfernen</button>
             </div>
           ))}
