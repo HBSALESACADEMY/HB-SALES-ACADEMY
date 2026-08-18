@@ -104,6 +104,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [textColor, setTextColor] = useState(org.text_color || "#EDEDF4");
   const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
   const [bookingInstructions, setBookingInstructions] = useState(org.booking_instructions || "");
+  const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [useCustomCategories, setUseCustomCategories] = useState(Array.isArray(org.objection_categories) && org.objection_categories.length > 0);
   const [categories, setCategories] = useState(
     Array.isArray(org.objection_categories) && org.objection_categories.length ? org.objection_categories : DEFAULT_OBJECTION_CATEGORIES
@@ -204,6 +205,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       surface_color: useCustomSurface ? surfaceColor : null,
       text_color: useCustomSurface ? textColor : null,
       booking_instructions: bookingInstructions.trim() || null,
+      telegram_chat_id: telegramChatId.trim() || null,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
       lead_core_required: coreRequired,
@@ -326,6 +328,15 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
           <p className="text-[11px] text-textMuted mt-2">Erscheinen im Call Tracker beim Schritt „Was war der Grund?" und in der Einwand-Verteilung. Die letzte Kategorie dient als Sammelpunkt für „Ohne Angabe zählen".</p>
         </div>
       )}
+
+      <label className="block text-xs text-textMuted mb-1.5">Telegram für Termin-Benachrichtigungen (optional)</label>
+      <input className="input mb-1" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)}
+        placeholder="z. B. -1001234567890" />
+      <p className="text-[11px] text-textMuted mb-5">
+        Ist hier eine Chat-ID hinterlegt, gehen „Neuer Termin" und „Team erinnern" zusätzlich zur E-Mail auch dorthin —
+        am besten in eine Telegram-Gruppe des Vertriebsteams. Dazu <strong>@HBSalesAcademy_bot</strong> in die Gruppe
+        einladen und die Chat-ID eintragen (Gruppen-IDs beginnen mit einem Minus). Leer lassen = nur E-Mail.
+      </p>
 
       <label className="block text-xs text-textMuted mb-1.5">Pflichtfelder im Termin-Formular</label>
       <div className="flex items-center gap-4 mb-1 flex-wrap">

@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
+import { sendeAlarm } from "../../lib/alarm";
 import { RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
 
 // Läuft anstelle eines direkten Client-Inserts (Call Tracker und die
@@ -68,7 +69,7 @@ export default async function handler(req, res) {
         effectiveOrgId = activeOrgId;
       }
       if (effectiveOrgId) {
-        const { data: org } = await admin.from("organizations").select("name").eq("id", effectiveOrgId).maybeSingle();
+        const { data: org } = await admin.from("organizations").select("name, telegram_chat_id").eq("id", effectiveOrgId).maybeSingle();
         const orgName = org?.name || null;
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
         const link = appUrl ? `${appUrl}/termine?leadId=${lead.id}` : null;
@@ -119,6 +120,25 @@ export default async function handler(req, res) {
         const extraEmails = (extra || []).map((e) => e.email);
         // Einzeln statt als Sammel-Anfrage, siehe Kommentar in notifyManagers.js.
         await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html, fromName })));
+
+        // Zusätzlich in den Telegram-Chat der Organisation, falls hinterlegt
+        // (migration_84) — meist eine Gruppe des Vertriebsteams. Ergänzt die
+        // E-Mail, ersetzt sie nicht: so kommt die Meldung auch dann an, wenn
+        // der E-Mail-Versand (noch) nicht eingerichtet ist.
+        if (org?.telegram_chat_id) {
+          const text = [
+            `📅 Neuer Termin: ${name}` + (companyValue ? ` (${companyValue})` : ""),
+            `Erfasst von ${me.full_name || "einem Teammitglied"}`,
+            ``,
+            `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}`,
+            phone ? `Telefon: ${phone}` : null,
+            email ? `E-Mail: ${email}` : null,
+            ...extraLines,
+            notesValue ? `\n${notesValue}` : null,
+            link ? `\n${link}` : null,
+          ].filter((z) => z !== null).join("\n");
+          await sendeAlarm(text, org.telegram_chat_id);
+        }
       }
     } catch (notifyErr) {
       console.error("Termin-Benachrichtigung fehlgeschlagen:", notifyErr.message);

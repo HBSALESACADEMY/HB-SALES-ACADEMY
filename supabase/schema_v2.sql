@@ -53,6 +53,9 @@ create table if not exists organizations (
   -- Ob Telefon/E-Mail im Termin-Formular Pflicht sind (migration_81).
   -- NULL = beide Pflicht. Name und Termin-Zeitpunkt sind immer Pflicht.
   lead_core_required jsonb,
+  -- Telegram-Chat der Organisation für Termin-Benachrichtigungen
+  -- (migration_84). Leer = nur E-Mail.
+  telegram_chat_id text,
   created_at timestamptz not null default now()
 );
 
