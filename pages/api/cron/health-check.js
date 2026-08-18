@@ -2,8 +2,15 @@ import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { pruefeSystem } from "../../../lib/systemPruefung";
 import { sendeAlarm } from "../../../lib/alarm";
 
-// Prüft regelmässig die Kernfunktionen und meldet Störungen per Telegram.
-// Läuft per Vercel Cron (siehe vercel.json), abgesichert über CRON_SECRET.
+// Prüft die Kernfunktionen und meldet Störungen per Telegram.
+//
+// Läuft NICHT mehr als eigener Cron-Auftrag: Vercel erlaubt im Hobby-Tarif
+// nur zwei davon, je einmal täglich — drei Aufträge liessen den Bau
+// scheitern. Die tägliche Prüfung erledigt jetzt der Tagesbericht mit.
+// Diese Adresse bleibt für einen Prüflauf auf Zuruf; für echte
+// Erreichbarkeitsüberwachung ist ohnehin ein Dienst von aussen auf
+// /api/health der richtige Weg (ein Totalausfall stoppt auch den Cron).
+// Abgesichert über CRON_SECRET.
 //
 // Gemeldet wird nur der WECHSEL des Zustands — bei einer längeren Störung
 // kommt sonst stündlich dieselbe Nachricht und man schaut irgendwann nicht

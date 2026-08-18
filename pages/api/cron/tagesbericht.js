@@ -5,11 +5,14 @@ import { sendeAlarm } from "../../../lib/alarm";
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
 //
-// Zur Uhrzeit: Vercel führt Cron-Aufträge in UTC aus, Deutschland wechselt
-// aber zwischen Sommer- und Winterzeit. Der Auftrag läuft deshalb zu ZWEI
-// Zeiten (7 und 8 Uhr UTC) und der Bericht wird nur gesendet, wenn es in
-// Deutschland tatsächlich 9 Uhr ist — sonst käme er im Winter um 8 und im
-// Sommer um 10.
+// Erledigt zugleich die Systemprüfung und meldet Störungen — im
+// Vercel-Hobby-Tarif sind nur zwei Cron-Aufträge erlaubt, die je einmal
+// täglich laufen. Deshalb beides in einem Lauf statt getrennt.
+//
+// Zur Uhrzeit: Vercel arbeitet in UTC, Deutschland wechselt zwischen Sommer-
+// und Winterzeit. Der Lauf um 7 Uhr UTC trifft im Sommer 9 Uhr, im Winter
+// 8 Uhr deutscher Zeit — beides wird akzeptiert. Ein Lauf zu einer ganz
+// anderen Stunde (versehentlicher Aufruf) sendet dagegen nicht.
 export const config = { maxDuration: 60 };
 
 function berlinStunde() {
@@ -25,8 +28,9 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Nicht autorisiert." });
   }
   // "force" erlaubt einen Testlauf ausserhalb der 9 Uhr.
-  if (berlinStunde() !== 9 && req.query.force !== "1") {
-    return res.status(200).json({ uebersprungen: true, grund: "nicht 9 Uhr in Deutschland" });
+  const stunde = berlinStunde();
+  if (stunde !== 8 && stunde !== 9 && req.query.force !== "1") {
+    return res.status(200).json({ uebersprungen: true, grund: `Lauf um ${stunde} Uhr — Bericht geht nur morgens raus` });
   }
 
   const admin = getAdminSupabase();
@@ -98,6 +102,13 @@ export default async function handler(req, res) {
     zeilen.push(system.gesund
       ? "✅ System läuft."
       : "🔴 System: " + system.pruefungen.filter((p) => !p.ok).map((p) => p.name).join(", "));
+
+    // Zustand festhalten, damit die Status-Anzeige in der Verwaltung ihn
+    // zeigen kann (früher tat das ein eigener, stündlicher Lauf — im
+    // Hobby-Tarif nicht möglich).
+    await admin.from("system_health").upsert({
+      id: true, gesund: system.gesund, pruefungen: system.pruefungen, geprueft_at: system.zeitpunkt,
+    });
 
     await sendeAlarm(zeilen.join("\n"));
     return res.status(200).json({ ok: true, gesendet: zeilen.length });
