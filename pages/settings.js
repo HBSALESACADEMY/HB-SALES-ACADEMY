@@ -53,11 +53,17 @@ export default function Settings() {
   async function chooseTheme(pref) {
     setThemePrefState(pref);
     setThemePref(pref);
+    setError("");
     const org = getCachedOrg();
     if (org) applyOrgBranding(org);
     patchCachedProfile({ theme_pref: pref });
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await supabase.from("profiles").update({ theme_pref: pref }).eq("id", session.user.id);
+    if (!session) return;
+    const { error: err } = await supabase.from("profiles").update({ theme_pref: pref }).eq("id", session.user.id);
+    // Auf diesem Gerät gilt die Wahl trotzdem (localStorage, siehe oben) —
+    // nur die Übertragung auf andere Geräte klappt dann nicht. Früher lief
+    // dieser Fehler stumm ins Leere.
+    if (err) setError("Die Darstellung gilt auf diesem Gerät, konnte aber nicht am Konto gespeichert werden: " + err.message);
   }
 
   useEffect(() => {

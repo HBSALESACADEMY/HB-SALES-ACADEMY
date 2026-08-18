@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
-import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, getStoredThemePref, setThemePref } from "../lib/theme";
+import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
 import { getActiveOrgId } from "../lib/activeOrg";
 import Icon from "./Icon";
@@ -224,12 +224,14 @@ export default function Layout({ children, fullBleed }) {
       if (mounted) {
         setProfile(data);
         cachedProfile = data;
-        // Am Konto gespeicherte Hell/Dunkel-Wahl anwenden, falls dieses Gerät
-        // sie noch nicht kennt (neues Gerät, anderer Browser, Browserdaten
-        // geleert) — siehe migration_80. localStorage wird dabei mitgezogen,
-        // damit der Vorab-Setzer in _document.js beim nächsten Laden sofort
-        // das richtige Theme trifft (kein kurzes Aufblitzen).
-        if (data?.theme_pref && data.theme_pref !== getStoredThemePref()) {
+        // Am Konto gespeicherte Hell/Dunkel-Wahl NUR anwenden, wenn dieses
+        // Gerät noch gar keine eigene Wahl kennt (neues Gerät, anderer
+        // Browser, Browserdaten geleert) — siehe migration_80. Sonst würde
+        // ein veralteter Kontowert (z.B. weil das Speichern am Konto einmal
+        // fehlgeschlagen ist) die gerade hier getroffene Wahl beim nächsten
+        // Laden wieder überschreiben. Die Wahl am Gerät gewinnt also immer;
+        // das Konto dient nur zum Übertragen auf neue Geräte.
+        if (data?.theme_pref && !hasStoredThemePref()) {
           setThemePref(data.theme_pref);
           setDefaultLogo(defaultLogoSrc(getResolvedTheme()));
         }
