@@ -3,9 +3,8 @@ import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
-
-const METRIC_LABELS = { roleplay: "Rollenspiele", quiz: "Quiz", daily_challenge: "Tages-Challenges" };
-const METRIC_TABLES = { roleplay: "roleplay_sessions", quiz: "quiz_results", daily_challenge: "daily_challenge_completions" };
+import { apiGet } from "../lib/apiClient";
+import { goalMetricLabel } from "../lib/goalMetrics";
 
 function mondayOfWeek(d) {
   const day = d.getDay();
@@ -41,7 +40,6 @@ export default function Team() {
     setSelfId(session.user.id);
 
     const weekStart = mondayOfWeek(new Date()).toISOString();
-    const weekStartDateStr = mondayOfWeek(new Date()).toISOString().slice(0, 10);
 
     const [{ data: allTeams }, { data: allMemberships }, { data: xpRows }, { data: myMemberships }] = await Promise.all([
       supabase.from("teams").select("id, name, created_by"),
@@ -73,18 +71,30 @@ export default function Team() {
     const leadNameById = {};
     (leadProfiles || []).forEach((p) => { leadNameById[p.id] = p.full_name || "Unbenannt"; });
 
-    const enrichedTeams = await Promise.all(myTeamIds.map(async (tid) => {
+    // Ziele samt Fortschritt kommen gesammelt vom Server (siehe
+    // pages/api/team-goals.js): die Anruf-Zahlen der anderen Teammitglieder
+    // darf der Browser gar nicht lesen, die Summe wäre hier zu niedrig.
+    let zieleProTeam = {};
+    try {
+      const { ziele } = await apiGet("/api/team-goals");
+      (ziele || []).forEach((z) => {
+        if (!zieleProTeam[z.team_id]) zieleProTeam[z.team_id] = [];
+        zieleProTeam[z.team_id].push(z);
+      });
+    } catch (e) {
+      // Ohne Ziele bleibt die Seite nutzbar — der Rest hängt nicht daran.
+      console.error("Team-Ziele konnten nicht geladen werden:", e.message);
+    }
+
+    const enrichedTeams = myTeamIds.map((tid) => {
       const t = (allTeams || []).find((x) => x.id === tid);
-      const { data: goal } = await supabase.from("team_goals").select("*").eq("team_id", tid).eq("week_start", weekStartDateStr).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      let goalProgress = 0;
-      if (goal) {
-        const memberIds = membersByTeam[tid] || [];
-        const table = METRIC_TABLES[goal.metric];
-        const { count } = await supabase.from(table).select("id", { count: "exact", head: true }).in("user_id", memberIds).gte("created_at", weekStart);
-        goalProgress = count || 0;
-      }
-      return { id: tid, name: t?.name || "Team", isLead: t?.created_by === session.user.id, leadName: leadNameById[t?.created_by] || null, goal, goalProgress };
-    }));
+      return {
+        id: tid, name: t?.name || "Team",
+        isLead: t?.created_by === session.user.id,
+        leadName: leadNameById[t?.created_by] || null,
+        ziele: zieleProTeam[tid] || [],
+      };
+    });
     setMyTeams(enrichedTeams);
 
     const [{ data: pair }, { data: myMentees }] = await Promise.all([
@@ -122,17 +132,17 @@ export default function Team() {
                 )}
               </div>
               {!t.isLead && t.leadName && <div className="text-xs text-textMuted mb-2">Lead: {t.leadName}</div>}
-              {t.goal && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-textMuted">🎯 {t.goal.title}</span>
-                    <span className="text-xs text-textMuted">{t.goalProgress}/{t.goal.target_count} {METRIC_LABELS[t.goal.metric]}</span>
+              {t.ziele.map((z) => (
+                <div key={z.id} className="mb-2 last:mb-0">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-xs text-textMuted min-w-0 truncate">🎯 {z.title}</span>
+                    <span className="text-xs text-textMuted flex-shrink-0">{z.fortschritt}/{z.target_count} {goalMetricLabel(z.metric)}</span>
                   </div>
                   <div className="h-2 bg-line rounded-full overflow-hidden">
-                    <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (t.goalProgress / t.goal.target_count) * 100)}%` }} />
+                    <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (z.fortschritt / z.target_count) * 100)}%` }} />
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           ))}
         </div>

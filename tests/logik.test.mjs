@@ -5,12 +5,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, loadDay, saveDay, aggregateRange, buildReport } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, loadDay, saveDay, aggregateRange, buildReport, FIELDS } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
+import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -158,4 +160,32 @@ test("ohne eigene Kategorien gelten die Standardkategorien", () => {
   assert.equal(resolveObjectionCategories(null).length, 6);
   assert.equal(resolveObjectionCategories({ objection_categories: [] }).length, 6);
   assert.equal(resolveObjectionCategories({ objection_categories: [{ key: "a", label: "A" }] }).length, 1);
+});
+
+// --- Team-Ziele ------------------------------------------------------------
+
+test("jede Ziel-Kennzahl weiss, woher ihr Fortschritt kommt", () => {
+  for (const m of GOAL_METRICS) {
+    assert.ok(["zeilen", "calltracker", "leads"].includes(m.quelle), `${m.key}: unbekannte Quelle ${m.quelle}`);
+    if (m.quelle === "zeilen") assert.ok(m.tabelle, `${m.key}: Tabelle fehlt`);
+    if (m.quelle === "calltracker") assert.ok(m.feld, `${m.key}: Zähler-Feld fehlt`);
+  }
+});
+
+test("Ziel-Kennzahlen des Call Trackers entsprechen echten Zählern", () => {
+  const zaehler = FIELDS.map((f) => f.key);
+  GOAL_METRICS.filter((m) => m.quelle === "calltracker").forEach((m) => {
+    assert.ok(zaehler.includes(m.feld), `${m.feld} ist kein Zähler des Call Trackers`);
+  });
+});
+
+test("die Datenbank erlaubt genau die Kennzahlen, die es im Code gibt", () => {
+  // Diese Liste steht zwangsläufig zweimal: einmal als Auswahl im Code, einmal
+  // als check-Regel in der Datenbank. Läuft sie auseinander, lehnt die
+  // Datenbank neue Ziele mit einem Constraint-Fehler ab — im Manager sieht man
+  // dann nur eine kryptische Meldung.
+  const sql = readFileSync(new URL("../supabase/migration_85_team_goal_metrics.sql", import.meta.url), "utf8");
+  const block = sql.slice(sql.indexOf("metric in ("), sql.indexOf("));", sql.indexOf("metric in (")));
+  const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(erlaubt, [...GOAL_METRIC_KEYS].sort());
 });

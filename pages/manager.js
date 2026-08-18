@@ -7,6 +7,7 @@ import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { COURSES } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -29,6 +30,7 @@ export default function Manager() {
   const [goalMetric, setGoalMetric] = useState("roleplay");
   const [goalTarget, setGoalTarget] = useState(20);
   const [savingGoal, setSavingGoal] = useState(false);
+  const [goals, setGoals] = useState([]);
   const [pairs, setPairs] = useState([]);
   const [pairMentorId, setPairMentorId] = useState("");
   const [pairMenteeId, setPairMenteeId] = useState("");
@@ -60,6 +62,12 @@ export default function Manager() {
     // sie erst gar nicht als Option zeigen).
     const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
     const activeOrgId = getActiveOrgId(me);
+
+    // Bereits gesetzte Ziele dieser Woche — ein Team kann mehrere haben.
+    const { data: gesetzteZiele } = await supabase.from("team_goals")
+      .select("*").eq("team_id", teamId).eq("week_start", mondayOfWeek(new Date()).toISOString().slice(0, 10))
+      .order("created_at", { ascending: true });
+    setGoals(gesetzteZiele || []);
 
     const [{ data: memberRows }, { data: allApproved }] = await Promise.all([
       supabase.from("team_members").select("user_id, profiles:user_id(*)").eq("team_id", teamId),
@@ -233,13 +241,21 @@ export default function Manager() {
     setSavingGoal(true);
     const { data: { session } } = await supabase.auth.getSession();
     const week_start = mondayOfWeek(new Date()).toISOString().slice(0, 10);
-    const { error } = await supabase.from("team_goals").insert({
+    const { data: neu, error } = await supabase.from("team_goals").insert({
       manager_id: session.user.id, team_id: selectedTeamId, title: goalTitle.trim(), metric: goalMetric, target_count: Number(goalTarget), week_start,
-    });
+    }).select().single();
     setSavingGoal(false);
     if (error) { alert(error.message); return; }
+    // Statt einer Erfolgsmeldung: das Ziel erscheint direkt in der Liste
+    // darunter — man sieht selbst, dass es steht.
+    setGoals((prev) => [...prev, neu]);
     setGoalTitle("");
-    alert("Team-Ziel für diese Woche gesetzt!");
+  }
+
+  async function deleteGoal(id) {
+    const { error } = await supabase.from("team_goals").delete().eq("id", id);
+    if (error) { alert(error.message); return; }
+    setGoals((prev) => prev.filter((g) => g.id !== id));
   }
 
   async function toggleCallStatsAccess(memberId, allow) {
@@ -393,17 +409,36 @@ export default function Manager() {
           )}
 
           <div className="card mb-5">
-            <div className="font-semibold text-textMain text-sm mb-3">🎯 Team-Ziel für diese Woche setzen</div>
+            <div className="font-semibold text-textMain text-sm mb-3">🎯 Ziele für diese Woche</div>
+
+            {goals.length > 0 && (
+              <div className="mb-3">
+                {goals.map((g) => (
+                  <div key={g.id} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
+                    <span className="text-sm text-textMain flex-1 min-w-0 truncate">{g.title}</span>
+                    <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
+                    <button onClick={() => deleteGoal(g.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 flex-wrap">
-              <input className="input flex-1 min-w-[160px]" placeholder="z.B. 50 Rollenspiele im Team" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} />
+              <input className="input flex-1 min-w-[160px]" placeholder="z.B. 200 Anwahlen im Team" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} />
               <select className="input !w-auto" value={goalMetric} onChange={(e) => setGoalMetric(e.target.value)}>
-                <option value="roleplay">Rollenspiele</option>
-                <option value="quiz">Quiz</option>
-                <option value="daily_challenge">Tages-Challenges</option>
+                {goalMetricGroups().map((gruppe) => (
+                  <optgroup key={gruppe.name} label={gruppe.name}>
+                    {gruppe.metriken.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                  </optgroup>
+                ))}
               </select>
               <input className="input !w-20" type="number" min="1" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} />
-              <button disabled={savingGoal} onClick={saveGoal} className="btn text-xs disabled:opacity-40">Setzen</button>
+              <button disabled={savingGoal} onClick={saveGoal} className="btn text-xs disabled:opacity-40">Hinzufügen</button>
             </div>
+            <p className="text-[11px] text-textMuted mt-2">
+              Mehrere Ziele gleichzeitig sind möglich — etwa 200 Anwahlen <em>und</em> 10 Termine.
+              Der Fortschritt zählt alle Teammitglieder zusammen und startet jeden Montag neu.
+            </p>
           </div>
 
           <div className="card mb-5">
