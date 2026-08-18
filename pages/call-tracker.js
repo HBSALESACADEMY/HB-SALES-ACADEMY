@@ -238,7 +238,7 @@ export default function CallTracker() {
       });
       // Über die Server-Route statt direktem Insert, damit die automatische
       // Termin-Benachrichtigung ausgelöst wird (siehe pages/api/lead-created.js).
-      await apiPost("/api/lead-created", {
+      const { leadId } = await apiPost("/api/lead-created", {
         name: leadDraft.name.trim(),
         phone: leadDraft.phone.trim(),
         email: leadDraft.email.trim(),
@@ -250,8 +250,15 @@ export default function CallTracker() {
 
       bump("termin");
       resetLeadDraft();
-      showToast("Termin & Kundendaten gespeichert");
+      showToast(recordingPath ? "Gespeichert — Notizen aus der Aufnahme werden erstellt" : "Termin & Kundendaten gespeichert");
       setStep("breathe");
+
+      // Gesprächsnotizen laufen im Hintergrund weiter — die Auswertung einer
+      // Aufnahme dauert, darauf soll niemand vor dem nächsten Anruf warten.
+      if (recordingPath && leadId) {
+        apiPost("/api/lead-call-notes", { leadId }).catch((e) =>
+          meldeFehler("Die Gesprächsnotizen zur Aufnahme konnten nicht erstellt werden.", e));
+      }
     } catch (e) {
       showToast("Speichern fehlgeschlagen: " + (e.message || "Unbekannter Fehler"));
     } finally {

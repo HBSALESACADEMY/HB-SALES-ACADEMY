@@ -498,13 +498,40 @@ export default function Termine() {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome } : l)));
   }
 
+  // Legt einen EIGENEN Folgetermin an, der auf den ursprünglichen verweist.
+  // Früher wurde stattdessen das Datum des bestehenden Termins überschrieben —
+  // der erste Termin und sein Verlauf gingen dabei verloren.
   async function saveFollowUp(id) {
     if (!followUpDate) return;
-    const patch = { outcome: "follow_up", appointment_at: new Date(followUpDate).toISOString(), status: "geplant" };
-    await supabase.from("leads").update(patch).eq("id", id);
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    const original = leads.find((l) => l.id === id);
+    if (!original) return;
+    setError("");
+
+    // Der ursprüngliche Termin behält sein Datum, bekommt nur das Ergebnis.
+    await supabase.from("leads").update({ outcome: "follow_up" }).eq("id", id);
+
+    const { data: neuerTermin, error: err } = await supabase.from("leads").insert({
+      created_by: original.created_by,
+      name: original.name,
+      phone: original.phone,
+      email: original.email,
+      company: original.company,
+      website: original.website,
+      is_decision_maker: original.is_decision_maker,
+      custom_fields: original.custom_fields || {},
+      appointment_at: new Date(followUpDate).toISOString(),
+      status: "geplant",
+      // Kette auf den URSPRÜNGLICHEN Termin: bei einem Folgetermin eines
+      // Folgetermins zeigen so alle auf denselben Ausgangspunkt, statt eine
+      // immer längere Kette zu bilden.
+      follow_up_of: original.follow_up_of || original.id,
+    }).select().single();
+
+    if (err) { setError(err.message); return; }
+    setLeads((prev) => [neuerTermin, ...prev.map((l) => (l.id === id ? { ...l, outcome: "follow_up" } : l))]);
     setFollowUpId(null);
     setFollowUpDate("");
+    setExpandedLeadId(neuerTermin.id);
   }
 
   async function togglePlay(lead) {
@@ -827,6 +854,11 @@ export default function Termine() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     {lead.name}
+                    {lead.follow_up_of && (
+                      <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">
+                        Folgetermin
+                      </span>
+                    )}
                     {checkboxFields.map((f) => getLeadFieldValue(lead, f) ? (
                       <span key={f.key} className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">{f.label}</span>
                     ) : null)}
@@ -893,6 +925,31 @@ export default function Termine() {
 
               {notesField && getLeadFieldValue(lead, notesField) && <p className="text-sm text-textMain mb-2">{getLeadFieldValue(lead, notesField)}</p>}
 
+              {(lead.call_notes_status || lead.call_notes) && (
+                <div className="card !py-3 !px-3.5 mb-2 border border-violet/30">
+                  <div className="text-[10.5px] uppercase tracking-wide text-violet mb-1.5">Notizen aus der Aufnahme</div>
+                  {lead.call_notes_status === "pending" && <p className="text-xs text-textMuted">Wird erstellt — das dauert einen Moment.</p>}
+                  {lead.call_notes_status === "failed" && <p className="text-xs text-coral">Konnte nicht erstellt werden.</p>}
+                  {lead.call_notes && (
+                    <>
+                      {lead.call_notes.zusammenfassung && <p className="text-sm text-textMain mb-2">{lead.call_notes.zusammenfassung}</p>}
+                      {[["bedarf", "Bedarf"], ["einwaende", "Einwände"], ["vereinbarungen", "Vereinbarungen"], ["naechsteSchritte", "Nächste Schritte"], ["sonstiges", "Sonstiges"]].map(([k, titel]) => {
+                        const eintraege = lead.call_notes[k];
+                        if (!Array.isArray(eintraege) || !eintraege.length) return null;
+                        return (
+                          <div key={k} className="mb-1.5">
+                            <div className="text-[11px] font-semibold text-textMain">{titel}</div>
+                            <ul className="list-disc pl-4 text-xs text-textMuted">
+                              {eintraege.map((e, i) => <li key={i}>{e}</li>)}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line">
                 {Object.keys(STATUS_LABELS).map((s) => (
                   <button key={s} disabled={lead.status === s} onClick={() => updateStatus(lead.id, s)} className="btn-ghost text-xs disabled:opacity-30">
@@ -929,9 +986,12 @@ export default function Termine() {
               {followUpId === lead.id && (
                 <div className="flex items-center gap-2 mt-2">
                   <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
-                  <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Speichern</button>
+                  <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Folgetermin anlegen</button>
                   <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
                 </div>
+              )}
+              {followUpId === lead.id && (
+                <p className="text-[11px] text-textMuted mt-1">Dieser Termin bleibt erhalten; der Folgetermin wird als eigener Eintrag angelegt.</p>
               )}
 
               {(() => {

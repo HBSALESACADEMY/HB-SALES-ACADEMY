@@ -568,6 +568,11 @@ create table if not exists leads (
   -- Werte für organisationseigene Zusatzfelder ohne feste Spalte (siehe
   -- lib/leadFields.js RESERVED_FIELD_COLUMNS).
   custom_fields jsonb not null default '{}'::jsonb,
+  -- Folgetermin: verweist auf den ursprünglichen Termin (migration_82).
+  follow_up_of uuid references leads(id) on delete set null,
+  -- Gesprächsnotizen aus der Aufnahme (Notetaker, keine Bewertung).
+  call_notes jsonb,
+  call_notes_status text check (call_notes_status in ('pending', 'done', 'failed')),
   created_at timestamptz not null default now()
 );
 
