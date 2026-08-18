@@ -20,15 +20,6 @@ const BASE_CSP = [
   "form-action 'self'",
 ].join("; ");
 
-// Call Tracker und Einwand-Trainer (public/tools/*.html) sind eigenständige,
-// selbst geschriebene HTML-Dateien mit einem kleinen Inline-<script>, das das
-// Organisations-Branding per Query-Param übernimmt — dafür ist hier
-// (nur für diese beiden Dateien) 'unsafe-inline' für script-src nötig. Der
-// Call Tracker lädt außerdem die Supabase- und Chart.js-Bibliothek von
-// jsdelivr — ohne diese Domain in script-src bricht die komplette
-// Termin-/Team-Synchronisierung stumm ab (window.supabase bleibt undefined).
-const TOOLS_CSP = BASE_CSP.replace("script-src 'self'", "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net");
-
 const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -38,18 +29,13 @@ const SECURITY_HEADERS = [
 const nextConfig = {
   reactStrictMode: true,
   async headers() {
-    // Call Tracker und Einwand-Trainer laden ihr Organisations-Branding
-    // (Logo, Name) dynamisch per Query-Param — jegliches Zwischenspeichern
-    // dieser statischen HTML-Dateien durch Browser/CDN muss ausgeschlossen
-    // sein, sonst könnte ein alter Stand (mit falschem/fehlendem Branding)
-    // ausgeliefert werden.
+    // Call Tracker und Einwand-Trainer waren früher eigenständige HTML-Dateien
+    // unter /tools/ mit gelockerter CSP (Inline-Script + Bibliotheken von
+    // jsdelivr). Seit dem Umbau zu normalen App-Seiten ist beides nicht mehr
+    // nötig — die strikte script-src 'self' gilt jetzt lückenlos überall.
     const headers = [
       {
-        source: "/tools/:path*.html",
-        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }, ...SECURITY_HEADERS, { key: "Content-Security-Policy", value: TOOLS_CSP }],
-      },
-      {
-        source: "/((?!tools/).*)",
+        source: "/(.*)",
         headers: [...SECURITY_HEADERS, { key: "Content-Security-Policy", value: BASE_CSP }],
       },
     ];
