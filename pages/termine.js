@@ -11,6 +11,7 @@ import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue } from "../lib/leadFields";
+import { ABSTAND } from "../lib/autoRefresh";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -183,8 +184,12 @@ export default function Termine() {
     load();
     // silent=true: kein voller Seiten-Unmount bei jedem Poll, sonst würde
     // eine gerade abgespielte Aufnahme abrupt abbrechen.
-    const interval = setInterval(() => load(true), 20000);
-    return () => clearInterval(interval);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: keine Echtzeit, aber Kolleg:innen legen laufend Termine an.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.LAUFEND);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, [viewMode, router.isReady, router.query.leadId]);
 
   // Deep-Link aus der Termin-Benachrichtigungsmail (?leadId=...): Kachel

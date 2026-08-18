@@ -7,11 +7,17 @@ import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { COURSES } from "../../lib/curriculum";
 import { downloadCsv } from "../../lib/csv";
+import { ABSTAND } from "../../lib/autoRefresh";
 
 export default function AdminInsights() {
   const [isAdmin, setIsAdmin] = useState(true);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  // Zeitraum für alle zeitbezogenen Auswertungen. Vorher fest verdrahtet und
+  // uneinheitlich: Anmeldungen/Anrufe über eine Woche, Seitenaufrufe über 30
+  // Tage — und die Seitenaufrufe ohne Obergrenze, was mit wachsender Nutzung
+  // immer langsamer geworden wäre.
+  const [zeitraum, setZeitraum] = useState("woche");
 
   useEffect(() => {
     async function load() {
@@ -24,7 +30,8 @@ export default function AdminInsights() {
       // Insights für die AKTIVE Organisation, nicht die eigene Heimat-Org.
       const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
 
-      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const tage = zeitraum === "tag" ? 1 : zeitraum === "monat" ? 30 : 7;
+      const seit = new Date(Date.now() - tage * 86400000).toISOString();
 
       const [
         { data: profiles }, { data: quizzes }, { data: exams }, { data: roleplays },
@@ -41,13 +48,14 @@ export default function AdminInsights() {
         supabase.from("community_posts").select("id, user_id"),
         supabase.from("community_comments").select("id"),
         supabase.from("community_kudos").select("post_id"),
-        supabase.from("login_events").select("user_id, created_at").gt("created_at", weekAgo),
-        supabase.from("call_log_days").select("counts").gte("log_date", weekAgo.slice(0, 10)),
+        supabase.from("login_events").select("user_id, created_at").gt("created_at", seit).limit(5000),
+        supabase.from("call_log_days").select("counts").gte("log_date", seit.slice(0, 10)).limit(5000),
       ]);
 
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
       const [{ data: pageViews }, { data: navItems }] = await Promise.all([
-        supabase.from("page_views").select("path").gt("created_at", thirtyDaysAgo),
+        // Obergrenze als Sicherheitsleine: diese Tabelle wächst mit jedem
+        // Klick jedes Nutzers und wurde vorher komplett geladen.
+        supabase.from("page_views").select("path").gt("created_at", seit).limit(20000),
         supabase.from("nav_items").select("route, label"),
       ]);
       const labelByRoute = {};
@@ -139,9 +147,13 @@ export default function AdminInsights() {
     load();
     // Automatisch aktuell halten, ohne dass die Seite manuell neu geladen
     // werden muss (z.B. wenn nebenbei jemand eine Prüfung besteht).
-    const interval = setInterval(load, 20000);
-    return () => clearInterval(interval);
-  }, []);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: Auswertung.
+    const interval = setInterval(() => { if (!document.hidden) (load)(); }, ABSTAND.GELEGENTLICH);
+    const beiSichtbar = () => { if (!document.hidden) (load)(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
+  }, [zeitraum]);
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
@@ -173,6 +185,8 @@ export default function AdminInsights() {
     );
   }
 
+  const zeitraumText = zeitraum === "tag" ? "Letzte 24 Stunden" : zeitraum === "monat" ? "Letzte 30 Tage" : "Letzte 7 Tage";
+
   return (
     <Layout>
       <div className="flex items-start justify-between gap-3 mb-1">
@@ -183,7 +197,17 @@ export default function AdminInsights() {
       </div>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
-      <p className="text-textMuted text-sm mb-6">Unternehmensweiter Überblick — alle Mitglieder, alle Teams.</p>
+      <p className="text-textMuted text-sm mb-4">Unternehmensweiter Überblick — alle Mitglieder, alle Teams.</p>
+
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <span className="text-xs text-textMuted">Zeitraum:</span>
+        {[["tag", "Tag"], ["woche", "Woche"], ["monat", "Monat"]].map(([key, label]) => (
+          <button key={key} onClick={() => setZeitraum(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {tiles.map((t) => (
@@ -200,7 +224,7 @@ export default function AdminInsights() {
 
       <div className="card mb-6">
         <div className="font-semibold text-textMain text-sm mb-1">Meistgenutzte Bereiche</div>
-        <p className="text-xs text-textMuted mb-3">Letzte 30 Tage, über alle Mitglieder hinweg.</p>
+        <p className="text-xs text-textMuted mb-3">{zeitraumText}, über alle Mitglieder hinweg.</p>
         <div className="flex flex-col gap-2">
           {stats.usageRanking.map((r, i) => {
             const max = stats.usageRanking[0]?.count || 1;

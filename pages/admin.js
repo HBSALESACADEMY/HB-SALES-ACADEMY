@@ -5,6 +5,7 @@ import AdminTabs from "../components/AdminTabs";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { describeRole } from "../lib/roles";
+import { ABSTAND } from "../lib/autoRefresh";
 
 export default function Admin() {
   const [isManager, setIsManager] = useState(true);
@@ -54,8 +55,12 @@ export default function Admin() {
       .channel("admin-users-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => load(true))
       .subscribe();
-    const interval = setInterval(() => load(true), 20000);
-    return () => { supabase.removeChannel(channel); clearInterval(interval); };
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: Nutzerverwaltung hat eine Echtzeit-Verbindung.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.MIT_ECHTZEIT);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { supabase.removeChannel(channel); clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
   async function runAction(targetId, action) {

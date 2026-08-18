@@ -4,6 +4,7 @@ import Avatar from "../../components/Avatar";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
+import { ABSTAND } from "../../lib/autoRefresh";
 
 export default function AdminLogins() {
   const [isManager, setIsManager] = useState(true);
@@ -42,8 +43,12 @@ export default function AdminLogins() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(() => load(true), 20000);
-    return () => clearInterval(interval);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: Auswertung.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;

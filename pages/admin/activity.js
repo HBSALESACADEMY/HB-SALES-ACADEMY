@@ -5,6 +5,7 @@ import Icon from "../../components/Icon";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
+import { ABSTAND } from "../../lib/autoRefresh";
 
 const TYPE_META = {
   registered: { label: "Registriert", icon: "flame", color: "#F0B23E" },
@@ -93,8 +94,12 @@ export default function AdminActivity() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(() => load(true), 20000);
-    return () => clearInterval(interval);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: Auswertung.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;

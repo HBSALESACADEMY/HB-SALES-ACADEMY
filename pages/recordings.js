@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost, apiGet } from "../lib/apiClient";
 import { validateRecordingUpload } from "../lib/uploadValidation";
 import { openProfile } from "../lib/profileModalBus";
+import { ABSTAND } from "../lib/autoRefresh";
 
 const STATUS_LABELS = { pending: "Wird ausgewertet...", evaluated: "Ausgewertet", failed: "Auswertung fehlgeschlagen" };
 
@@ -69,8 +70,12 @@ export default function Recordings() {
     // Läuft im Hintergrund "silent" (ohne den globalen Ladezustand zu setzen) —
     // sonst würde der volle Seiten-Unmount alle 20s ein gerade abspielendes
     // <audio>-Element zerstören und die Wiedergabe abrupt abbrechen.
-    const interval = setInterval(() => load(true), 20000);
-    return () => clearInterval(interval);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: keine Echtzeit, ändert sich selten.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
   async function upload() {

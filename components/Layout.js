@@ -7,6 +7,7 @@ import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { ABSTAND } from "../lib/autoRefresh";
 import Icon from "./Icon";
 import IconPicker from "./IconPicker";
 import AIBadge from "./AIBadge";
@@ -355,7 +356,11 @@ export default function Layout({ children, fullBleed }) {
       };
     }
     loadUnread();
-    const interval = setInterval(loadUnread, 20000);
+    // Sichtbarkeitsabhängiges Sicherheitsnetz statt starrer 20 Sekunden —
+    // die Echtzeit-Verbindung unten meldet Änderungen ohnehin sofort.
+    const interval = setInterval(() => { if (!document.hidden) loadUnread(); }, ABSTAND.MIT_ECHTZEIT);
+    const beiSichtbar = () => { if (!document.hidden) loadUnread(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
 
     // Echtzeit: sobald sich etwas Relevantes ändert (neue Nachricht, Freundschaftsanfrage,
     // neue Registrierung), sofort neu prüfen statt bis zu 20 Sekunden zu warten.
@@ -369,7 +374,7 @@ export default function Layout({ children, fullBleed }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, loadUnread)
       .subscribe();
 
-    return () => { mounted = false; clearInterval(interval); supabase.removeChannel(channel); };
+    return () => { mounted = false; clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); supabase.removeChannel(channel); };
   }, []);
 
   useEffect(() => {

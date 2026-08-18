@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { ABSTAND } from "../../lib/autoRefresh";
 
 function weakestModule(quizResults) {
   if (!quizResults.length) return null;
@@ -77,8 +78,12 @@ export default function LernpfadeAdmin() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(() => load(true), 20000);
-    return () => clearInterval(interval);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: Verwaltung.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
   async function generateFor(userId) {

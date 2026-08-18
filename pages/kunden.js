@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
+import { ABSTAND } from "../lib/autoRefresh";
 
 const emptyForm = { name: "", phone: "", email: "", company: "", website: "", notes: "" };
 
@@ -64,8 +65,12 @@ export default function Kunden() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(() => load(true), 20000);
-    return () => clearInterval(interval);
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: keine Echtzeit, ändert sich selten.
+    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
+    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, [viewMode, outcomeTab]);
 
   async function addCustomer() {

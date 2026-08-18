@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabaseClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
+import { ABSTAND } from "../lib/autoRefresh";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -261,8 +262,12 @@ export default function Dashboard() {
     // Polling-Fallback (wie im Sidebar-Badge/in der Nutzerverwaltung): falls die
     // Realtime-Verbindung mal stumm abbricht, ist das Dashboard trotzdem
     // spätestens nach 20 Sekunden wieder aktuell.
-    const interval = setInterval(load, 20000);
-    return () => { supabase.removeChannel(channel); clearInterval(interval); };
+    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
+    // Abstand: Dashboard hat eine Echtzeit-Verbindung über 10 Tabellen.
+    const interval = setInterval(() => { if (!document.hidden) (load)(); }, ABSTAND.MIT_ECHTZEIT);
+    const beiSichtbar = () => { if (!document.hidden) (load)(); };
+    document.addEventListener("visibilitychange", beiSichtbar);
+    return () => { supabase.removeChannel(channel); clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
   const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);

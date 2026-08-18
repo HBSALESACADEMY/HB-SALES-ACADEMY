@@ -6,11 +6,20 @@ import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 // einer angemessenen Frist gelöscht. Läuft täglich per Vercel Cron
 // (siehe vercel.json), abgesichert über CRON_SECRET (von Vercel automatisch
 // als "Authorization: Bearer <CRON_SECRET>" mitgeschickt).
+// Ein Monat (vorher 180 Tage). Diese Tabellen wachsen mit JEDEM Klick jedes
+// Nutzers — page_views am schnellsten. Kürzere Aufbewahrung heisst weniger
+// Daten, schnellere Auswertungen und weniger gespeicherte Personendaten.
+// Geprüft, dass nichts davon abhängt: login_attempts wird nur geschrieben
+// (Anmelde-Verlauf), nirgends für Sperren o.ä. ausgewertet. Die Auswertungen
+// zeigen ohnehin höchstens einen Monat (siehe pages/admin/insights.js).
 const RETENTION_DAYS = {
-  login_events: 180,
-  login_attempts: 180,
-  page_views: 180,
-  ai_request_log: 90,
+  login_events: 30,
+  login_attempts: 30,
+  page_views: 30,
+  // Dient nur der Drosselung von KI-Anfragen im 60-Sekunden-Fenster und
+  // räumt sich bei jedem Aufruf selbst auf (siehe lib/aiClient.js) — die
+  // Frist hier ist reine Sicherheitsleine.
+  ai_request_log: 7,
 };
 
 export const config = { maxDuration: 30 };
