@@ -602,22 +602,43 @@ export default function Termine() {
       {showAddForm && (
         <div className="card mb-5">
           <div className="font-semibold text-textMain text-sm mb-3">Neuen Termin anlegen</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-            <input className="input !py-1.5 text-xs" placeholder="Name *" value={addDraft.name} onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))} />
-            <input className="input !py-1.5 text-xs" placeholder="Telefon *" value={addDraft.phone} onChange={(e) => setAddDraft((d) => ({ ...d, phone: e.target.value }))} />
-            <input className="input !py-1.5 text-xs" type="email" placeholder="E-Mail *" value={addDraft.email} onChange={(e) => setAddDraft((d) => ({ ...d, email: e.target.value }))} />
-            <input type="datetime-local" className="input !py-1.5 text-xs" value={addDraft.appointmentAt} onChange={(e) => setAddDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
+          {/* Beschriftung über jedem Feld: ein Datum-/Uhrzeit-Feld kann keinen
+              Platzhaltertext anzeigen, ohne Label wäre nicht erkennbar, dass
+              es ein Pflichtfeld ist (gleiche Behebung wie im Call Tracker). */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs text-textMuted mb-1">Name *</label>
+              <input className="input !py-1.5 text-xs" placeholder="Vor- und Nachname" value={addDraft.name} onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-textMuted mb-1">Telefon *</label>
+              <input className="input !py-1.5 text-xs" type="tel" value={addDraft.phone} onChange={(e) => setAddDraft((d) => ({ ...d, phone: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
+              <input className="input !py-1.5 text-xs" type="email" value={addDraft.email} onChange={(e) => setAddDraft((d) => ({ ...d, email: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-textMuted mb-1">Termin (Datum/Uhrzeit) *</label>
+              <input type="datetime-local" className="input !py-1.5 text-xs" value={addDraft.appointmentAt} onChange={(e) => setAddDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
+            </div>
             {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
-              <input key={f.key} className="input !py-1.5 text-xs" placeholder={f.label} value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+              <div key={f.key}>
+                <label className="block text-xs text-textMuted mb-1">{f.label}</label>
+                <input className="input !py-1.5 text-xs" value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+              </div>
             ))}
             {leadFields.filter((f) => f.type === "checkbox").map((f) => (
-              <label key={f.key} className="flex items-center gap-1.5 text-xs text-textMuted">
+              <label key={f.key} className="flex items-center gap-1.5 text-xs text-textMuted sm:self-end sm:pb-1.5">
                 <input type="checkbox" checked={!!addDraft.fields[f.key]} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} /> {f.label}
               </label>
             ))}
           </div>
           {leadFields.filter((f) => f.multiline).map((f) => (
-            <textarea key={f.key} className="input !py-1.5 text-xs mb-3" rows={2} placeholder={f.label} value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+            <div key={f.key} className="mb-3">
+              <label className="block text-xs text-textMuted mb-1">{f.label}</label>
+              <textarea className="input !py-1.5 text-xs" rows={2} value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+            </div>
           ))}
           <button disabled={addSaving} onClick={submitNewLead} className="btn text-xs disabled:opacity-40">{addSaving ? "Speichert..." : "Termin speichern"}</button>
         </div>

@@ -48,12 +48,16 @@ export default function Settings() {
 
   // Wirkt sofort (localStorage, siehe lib/theme.js) — anders als die
   // restlichen Einstellungen hier braucht das keinen Klick auf "Speichern",
-  // die Vorschau soll direkt sichtbar sein.
-  function chooseTheme(pref) {
+  // die Vorschau soll direkt sichtbar sein. Zusätzlich am Konto gespeichert,
+  // damit die Wahl auch auf anderen Geräten gilt (migration_80).
+  async function chooseTheme(pref) {
     setThemePrefState(pref);
     setThemePref(pref);
     const org = getCachedOrg();
     if (org) applyOrgBranding(org);
+    patchCachedProfile({ theme_pref: pref });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await supabase.from("profiles").update({ theme_pref: pref }).eq("id", session.user.id);
   }
 
   useEffect(() => {
@@ -62,6 +66,9 @@ export default function Settings() {
       if (!session) return;
       const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
       setProfile(data);
+      // Am Konto gespeicherte Wahl hat Vorrang — sonst stünde hier auf einem
+      // neuen Gerät "Systemeinstellung", obwohl bewusst etwas gewählt wurde.
+      if (data?.theme_pref) setThemePrefState(data.theme_pref);
       setVisibility(data?.contact_visibility || {});
       setLeaderboardOptOut(data?.leaderboard_opt_out || false);
       const prefs = data?.dashboard_prefs || {};

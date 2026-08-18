@@ -204,8 +204,16 @@ export default function CallTracker() {
   }
 
   async function submitLead() {
-    if (!leadDraft.name.trim() || !leadDraft.phone.trim() || !leadDraft.email.trim() || !leadDraft.appointmentAt) {
-      showToast("Bitte Name, Telefon, E-Mail und Termin ausfüllen");
+    // Nur die tatsächlich fehlenden Felder benennen — eine pauschale
+    // Aufzählung aller vier ist irreführend, wenn nur eines leer ist.
+    const missing = [
+      !leadDraft.name.trim() && "Name",
+      !leadDraft.phone.trim() && "Telefon",
+      !leadDraft.email.trim() && "E-Mail",
+      !leadDraft.appointmentAt && "Termin (Datum/Uhrzeit)",
+    ].filter(Boolean);
+    if (missing.length) {
+      showToast(missing.length === 1 ? `Bitte noch ausfüllen: ${missing[0]}` : `Bitte noch ausfüllen: ${missing.join(", ")}`);
       return;
     }
     setLeadSaving(true);
@@ -372,27 +380,49 @@ export default function CallTracker() {
                 <div className="text-left">
                   <div className="font-display font-semibold text-textMain text-lg mb-1 text-center">Termin erfasst 🎉</div>
                   <p className="text-textMuted text-xs mb-4 text-center">Kundendaten erfassen (empfohlen) — landet direkt unter „Termine" in der App</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-                    <input className="input !py-2 text-sm" placeholder="Name *" value={leadDraft.name} onChange={(e) => setLeadDraft((d) => ({ ...d, name: e.target.value }))} />
-                    <input className="input !py-2 text-sm" placeholder="Telefon *" value={leadDraft.phone} onChange={(e) => setLeadDraft((d) => ({ ...d, phone: e.target.value }))} />
-                    <input className="input !py-2 text-sm" type="email" placeholder="E-Mail *" value={leadDraft.email} onChange={(e) => setLeadDraft((d) => ({ ...d, email: e.target.value }))} />
-                    <input className="input !py-2 text-sm" type="datetime-local" value={leadDraft.appointmentAt} onChange={(e) => setLeadDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
+                  {/* Jedes Feld bekommt eine eigene Beschriftung. Ein
+                      Datum-/Uhrzeit-Feld kann keinen Platzhaltertext anzeigen
+                      (dort steht immer "tt.mm.jjjj, --:--") — ohne Label war
+                      nicht erkennbar, dass es ein Pflichtfeld ist. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Name *</label>
+                      <input className="input !py-2 text-sm" placeholder="Vor- und Nachname" value={leadDraft.name} onChange={(e) => setLeadDraft((d) => ({ ...d, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Telefon *</label>
+                      <input className="input !py-2 text-sm" type="tel" value={leadDraft.phone} onChange={(e) => setLeadDraft((d) => ({ ...d, phone: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
+                      <input className="input !py-2 text-sm" type="email" value={leadDraft.email} onChange={(e) => setLeadDraft((d) => ({ ...d, email: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Termin (Datum/Uhrzeit) *</label>
+                      <input className="input !py-2 text-sm" type="datetime-local" value={leadDraft.appointmentAt} onChange={(e) => setLeadDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
+                    </div>
                     {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
-                      <input key={f.key} className="input !py-2 text-sm" placeholder={f.label}
-                        value={leadDraft.fields[f.key] || ""}
-                        onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                      <div key={f.key}>
+                        <label className="block text-xs text-textMuted mb-1">{f.label}</label>
+                        <input className="input !py-2 text-sm"
+                          value={leadDraft.fields[f.key] || ""}
+                          onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                      </div>
                     ))}
                     {leadFields.filter((f) => f.type === "checkbox").map((f) => (
-                      <label key={f.key} className="flex items-center gap-2 text-sm text-textMuted">
+                      <label key={f.key} className="flex items-center gap-2 text-sm text-textMuted sm:self-end sm:pb-2">
                         <input type="checkbox" checked={!!leadDraft.fields[f.key]}
                           onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} /> {f.label}
                       </label>
                     ))}
                   </div>
                   {leadFields.filter((f) => f.multiline).map((f) => (
-                    <textarea key={f.key} className="input !py-2 text-sm mb-2" rows={2} placeholder={f.label}
-                      value={leadDraft.fields[f.key] || ""}
-                      onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                    <div key={f.key} className="mb-3">
+                      <label className="block text-xs text-textMuted mb-1">{f.label}</label>
+                      <textarea className="input !py-2 text-sm" rows={2}
+                        value={leadDraft.fields[f.key] || ""}
+                        onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                    </div>
                   ))}
                   <label className="block text-xs text-textMuted mb-1.5">Aufnahme hochladen (optional)</label>
                   <input ref={leadFileRef} type="file" accept="audio/*" onChange={(e) => setLeadFile(e.target.files[0] || null)}

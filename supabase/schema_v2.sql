@@ -85,6 +85,9 @@ create table if not exists profiles (
   team_name text,
   welcome_seen boolean not null default false,
   leaderboard_opt_out boolean not null default false,
+  -- Hell/Dunkel/System — am Konto statt nur im Browser, damit die Wahl auf
+  -- jedem Gerät gilt (siehe lib/theme.js). NULL = nie gewählt.
+  theme_pref text check (theme_pref in ('light', 'dark', 'system')),
   is_platform_admin boolean not null default false,
   agb_accepted_at timestamptz
 );

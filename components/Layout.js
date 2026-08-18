@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
-import { watchSystemTheme, getResolvedTheme, defaultLogoSrc } from "../lib/theme";
+import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, getStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
 import { getActiveOrgId } from "../lib/activeOrg";
 import Icon from "./Icon";
@@ -224,6 +224,15 @@ export default function Layout({ children, fullBleed }) {
       if (mounted) {
         setProfile(data);
         cachedProfile = data;
+        // Am Konto gespeicherte Hell/Dunkel-Wahl anwenden, falls dieses Gerät
+        // sie noch nicht kennt (neues Gerät, anderer Browser, Browserdaten
+        // geleert) — siehe migration_80. localStorage wird dabei mitgezogen,
+        // damit der Vorab-Setzer in _document.js beim nächsten Laden sofort
+        // das richtige Theme trifft (kein kurzes Aufblitzen).
+        if (data?.theme_pref && data.theme_pref !== getStoredThemePref()) {
+          setThemePref(data.theme_pref);
+          setDefaultLogo(defaultLogoSrc(getResolvedTheme()));
+        }
         setActiveOrgId(activeOrgId);
         if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
         if (effectiveNav.length) { setNavItems(effectiveNav); cachedNavItems = effectiveNav; }
