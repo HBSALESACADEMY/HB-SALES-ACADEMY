@@ -10,6 +10,7 @@ import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
+import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue } from "../lib/leadFields";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -61,8 +62,11 @@ export default function Termine() {
   const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addDraft, setAddDraft] = useState({ name: "", phone: "", email: "", company: "", website: "", appointmentAt: "", isDecisionMaker: false, notes: "" });
+  const [addDraft, setAddDraft] = useState({ name: "", phone: "", email: "", appointmentAt: "", fields: {} });
   const [addSaving, setAddSaving] = useState(false);
+  // Pro Organisation anpassbare Zusatzfelder im Termin-/Lead-Formular (siehe
+  // pages/admin/organization.js) — bis zum Laden gelten die HB-Standardfelder.
+  const [leadFields, setLeadFields] = useState(DEFAULT_LEAD_FIELDS);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -105,6 +109,10 @@ export default function Termine() {
     if (canManage && activeOrgId) {
       const { data: emails } = await supabase.from("notification_emails").select("*").eq("organization_id", activeOrgId).order("created_at");
       setNotificationEmails(emails || []);
+    }
+    if (activeOrgId) {
+      const { data: org } = await supabase.from("organizations").select("lead_field_config").eq("id", activeOrgId).maybeSingle();
+      setLeadFields(resolveLeadFields(org));
     }
     // Für @Erwähnungen in Kommentaren und die Aufgaben-Zuweisung — alle
     // Mitglieder der aktiven Organisation, unabhängig von der Rolle. Zusätzlich
@@ -227,21 +235,22 @@ export default function Termine() {
       const { data: { session } } = await supabase.auth.getSession();
       const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
       const activeOrgId = getActiveOrgId(me);
+      const fields = leadFields.map((f) => {
+        const raw = addDraft.fields[f.key];
+        return { key: f.key, label: f.label, type: f.type, value: f.type === "checkbox" ? !!raw : (typeof raw === "string" ? raw.trim() : raw || "") };
+      });
       // Läuft über dieselbe Route wie der Call Tracker (pages/api/lead-created.js)
       // — dadurch auch dieselbe automatische Team-Benachrichtigung.
       const { leadId } = await apiPost("/api/lead-created", {
         name: addDraft.name.trim(),
         phone: addDraft.phone.trim(),
         email: addDraft.email.trim(),
-        company: addDraft.company.trim() || null,
-        website: addDraft.website.trim() || null,
-        isDecisionMaker: addDraft.isDecisionMaker,
-        notes: addDraft.notes.trim() || null,
+        fields,
         recordingPath: null,
         appointmentAt: new Date(addDraft.appointmentAt).toISOString(),
         activeOrgId,
       });
-      setAddDraft({ name: "", phone: "", email: "", company: "", website: "", appointmentAt: "", isDecisionMaker: false, notes: "" });
+      setAddDraft({ name: "", phone: "", email: "", appointmentAt: "", fields: {} });
       setShowAddForm(false);
       await load(true);
       setExpandedLeadId(leadId);
@@ -267,28 +276,40 @@ export default function Termine() {
 
   function startEditLead(lead) {
     setEditingLeadId(lead.id);
+    const fields = {};
+    leadFields.forEach((f) => { fields[f.key] = getLeadFieldValue(lead, f) ?? (f.type === "checkbox" ? false : ""); });
     setEditDraft({
       name: lead.name || "",
       phone: lead.phone || "",
-      company: lead.company || "",
-      website: lead.website || "",
-      notes: lead.notes || "",
-      is_decision_maker: !!lead.is_decision_maker,
       appointment_at: toLocalDatetimeValue(lead.appointment_at),
+      fields,
     });
     setError("");
   }
 
   async function saveEditLead(id) {
     if (!editDraft.name.trim()) { setError("Name darf nicht leer sein."); return; }
+    // custom_fields NICHT einfach aus der aktuellen Feld-Konfiguration
+    // neu aufbauen, sondern auf den vorhandenen Werten aufsetzen — sonst
+    // gingen Werte für inzwischen entfernte/umbenannte Zusatzfelder beim
+    // nächsten Speichern verloren.
+    const original = leads.find((l) => l.id === id);
+    const columnUpdates = {};
+    const customFields = { ...(original?.custom_fields || {}) };
+    leadFields.forEach((f) => {
+      const column = RESERVED_FIELD_COLUMNS[f.key];
+      const raw = editDraft.fields[f.key];
+      const value = f.type === "checkbox" ? !!raw : (typeof raw === "string" ? raw.trim() || null : raw ?? null);
+      if (column) { columnUpdates[column] = value; }
+      else if (value === null || value === "") { delete customFields[f.key]; }
+      else { customFields[f.key] = value; }
+    });
     const patch = {
       name: editDraft.name.trim(),
       phone: editDraft.phone.trim() || null,
-      company: editDraft.company.trim() || null,
-      website: editDraft.website.trim() || null,
-      notes: editDraft.notes.trim() || null,
-      is_decision_maker: editDraft.is_decision_maker,
       appointment_at: editDraft.appointment_at ? new Date(editDraft.appointment_at).toISOString() : null,
+      ...columnUpdates,
+      custom_fields: customFields,
     };
     const { error: err } = await supabase.from("leads").update(patch).eq("id", id);
     if (err) { setError(err.message); return; }
@@ -512,9 +533,21 @@ export default function Termine() {
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
+  // Abgeleitet aus der pro Organisation anpassbaren Feld-Konfiguration:
+  // welches Feld dient als Unternehmens-Untertitel/Webseiten-Link/Notiz-Absatz,
+  // welche sind Ja/Nein-Badges, welche sind sonstige Text-Zusatzfelder. Fehlt
+  // ein reserviertes Feld (von der Organisation entfernt), verschwindet die
+  // jeweilige Anzeige einfach.
+  const companyField = leadFields.find((f) => f.key === "company");
+  const websiteField = leadFields.find((f) => f.key === "website");
+  const notesField = leadFields.find((f) => f.multiline) || leadFields.find((f) => f.key === "notes");
+  const checkboxFields = leadFields.filter((f) => f.type === "checkbox");
+  const extraTextFields = leadFields.filter((f) => f.type === "text" && f.key !== companyField?.key && f.key !== websiteField?.key && f.key !== notesField?.key);
+
   const filteredLeads = leads.filter((lead) => {
     const q = leadSearchQuery.trim().toLowerCase();
-    const matchesQuery = !q || [lead.name, lead.company, lead.phone, lead.email].some((f) => (f || "").toLowerCase().includes(q));
+    const companyValue = companyField ? getLeadFieldValue(lead, companyField) : "";
+    const matchesQuery = !q || [lead.name, companyValue, lead.phone, lead.email].some((f) => (f || "").toLowerCase().includes(q));
     const matchesDate = !dateFilter || (lead.appointment_at && lead.appointment_at.slice(0, 10) === dateFilter);
     return matchesQuery && matchesDate;
   });
@@ -547,13 +580,18 @@ export default function Termine() {
             <input className="input !py-1.5 text-xs" placeholder="Telefon *" value={addDraft.phone} onChange={(e) => setAddDraft((d) => ({ ...d, phone: e.target.value }))} />
             <input className="input !py-1.5 text-xs" type="email" placeholder="E-Mail *" value={addDraft.email} onChange={(e) => setAddDraft((d) => ({ ...d, email: e.target.value }))} />
             <input type="datetime-local" className="input !py-1.5 text-xs" value={addDraft.appointmentAt} onChange={(e) => setAddDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
-            <input className="input !py-1.5 text-xs" placeholder="Unternehmen" value={addDraft.company} onChange={(e) => setAddDraft((d) => ({ ...d, company: e.target.value }))} />
-            <input className="input !py-1.5 text-xs" placeholder="Webseite" value={addDraft.website} onChange={(e) => setAddDraft((d) => ({ ...d, website: e.target.value }))} />
-            <label className="flex items-center gap-1.5 text-xs text-textMuted">
-              <input type="checkbox" checked={addDraft.isDecisionMaker} onChange={(e) => setAddDraft((d) => ({ ...d, isDecisionMaker: e.target.checked }))} /> Entscheider:in
-            </label>
+            {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
+              <input key={f.key} className="input !py-1.5 text-xs" placeholder={f.label} value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+            ))}
+            {leadFields.filter((f) => f.type === "checkbox").map((f) => (
+              <label key={f.key} className="flex items-center gap-1.5 text-xs text-textMuted">
+                <input type="checkbox" checked={!!addDraft.fields[f.key]} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} /> {f.label}
+              </label>
+            ))}
           </div>
-          <textarea className="input !py-1.5 text-xs mb-3" rows={2} placeholder="Notizen" value={addDraft.notes} onChange={(e) => setAddDraft((d) => ({ ...d, notes: e.target.value }))} />
+          {leadFields.filter((f) => f.multiline).map((f) => (
+            <textarea key={f.key} className="input !py-1.5 text-xs mb-3" rows={2} placeholder={f.label} value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+          ))}
           <button disabled={addSaving} onClick={submitNewLead} className="btn text-xs disabled:opacity-40">{addSaving ? "Speichert..." : "Termin speichern"}</button>
         </div>
       )}
@@ -643,7 +681,9 @@ export default function Termine() {
                   <span className="font-display font-semibold text-textMain text-sm truncate">{lead.name}</span>
                   <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
                 </div>
-                <div className="text-xs text-textMuted truncate">{lead.company || "Kein Unternehmen angegeben"}</div>
+                {companyField && getLeadFieldValue(lead, companyField) && (
+                  <div className="text-xs text-textMuted truncate">{getLeadFieldValue(lead, companyField)}</div>
+                )}
                 <div className="text-xs font-mono text-textMain">{formatAppointment(lead.appointment_at)}</div>
                 {viewMode === "team" && owner && (
                   <div className="flex items-center gap-1.5 text-xs text-textMuted mt-0.5">
@@ -671,7 +711,9 @@ export default function Termine() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     {lead.name}
-                    {lead.is_decision_maker && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Entscheider</span>}
+                    {checkboxFields.map((f) => getLeadFieldValue(lead, f) ? (
+                      <span key={f.key} className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">{f.label}</span>
+                    ) : null)}
                     <span className={`text-[10px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>{STATUS_LABELS[lead.status]}</span>
                     {lead.outcome && (
                       <span className={`text-[10px] uppercase tracking-wide text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
@@ -679,7 +721,9 @@ export default function Termine() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-textMuted mt-0.5">{lead.company || "Kein Unternehmen angegeben"}</div>
+                  {companyField && getLeadFieldValue(lead, companyField) && (
+                    <div className="text-xs text-textMuted mt-0.5">{getLeadFieldValue(lead, companyField)}</div>
+                  )}
                 </div>
                 <div className="text-xs font-mono text-textMain flex-shrink-0">{formatAppointment(lead.appointment_at)}</div>
               </div>
@@ -710,16 +754,20 @@ export default function Termine() {
                     ✉️ {lead.email || <span className="italic">Keine E-Mail — hinzufügen</span>}
                   </button>
                 )}
-                {lead.website && (
+                {websiteField && getLeadFieldValue(lead, websiteField) && (
                   <a
-                    href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`}
+                    href={/^https?:\/\//i.test(getLeadFieldValue(lead, websiteField)) ? getLeadFieldValue(lead, websiteField) : `https://${getLeadFieldValue(lead, websiteField)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-textMain hover:underline"
                   >
-                    🌐 {lead.website}
+                    🌐 {getLeadFieldValue(lead, websiteField)}
                   </a>
                 )}
+                {extraTextFields.map((f) => {
+                  const v = getLeadFieldValue(lead, f);
+                  return v ? <span key={f.key}>🔹 {f.label}: {v}</span> : null;
+                })}
                 {viewMode === "team" && owner && (
                   <button onClick={() => openProfile(owner.id)} className="flex items-center gap-1.5 hover:text-textMain">
                     <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
@@ -727,7 +775,7 @@ export default function Termine() {
                 )}
               </div>
 
-              {lead.notes && <p className="text-sm text-textMain mb-2">{lead.notes}</p>}
+              {notesField && getLeadFieldValue(lead, notesField) && <p className="text-sm text-textMain mb-2">{getLeadFieldValue(lead, notesField)}</p>}
 
               <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line">
                 {Object.keys(STATUS_LABELS).map((s) => (
@@ -871,14 +919,19 @@ export default function Termine() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input className="input !py-1.5 text-xs" placeholder="Name" value={editDraft.name} onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))} />
                     <input className="input !py-1.5 text-xs" placeholder="Telefon" value={editDraft.phone} onChange={(e) => setEditDraft((d) => ({ ...d, phone: e.target.value }))} />
-                    <input className="input !py-1.5 text-xs" placeholder="Unternehmen" value={editDraft.company} onChange={(e) => setEditDraft((d) => ({ ...d, company: e.target.value }))} />
-                    <input className="input !py-1.5 text-xs" placeholder="Webseite" value={editDraft.website} onChange={(e) => setEditDraft((d) => ({ ...d, website: e.target.value }))} />
                     <input type="datetime-local" className="input !py-1.5 text-xs" value={editDraft.appointment_at} onChange={(e) => setEditDraft((d) => ({ ...d, appointment_at: e.target.value }))} />
-                    <label className="flex items-center gap-1.5 text-xs text-textMuted">
-                      <input type="checkbox" checked={editDraft.is_decision_maker} onChange={(e) => setEditDraft((d) => ({ ...d, is_decision_maker: e.target.checked }))} /> Entscheider:in
-                    </label>
+                    {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
+                      <input key={f.key} className="input !py-1.5 text-xs" placeholder={f.label} value={editDraft.fields[f.key] || ""} onChange={(e) => setEditDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                    ))}
+                    {leadFields.filter((f) => f.type === "checkbox").map((f) => (
+                      <label key={f.key} className="flex items-center gap-1.5 text-xs text-textMuted">
+                        <input type="checkbox" checked={!!editDraft.fields[f.key]} onChange={(e) => setEditDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} /> {f.label}
+                      </label>
+                    ))}
                   </div>
-                  <textarea className="input !py-1.5 text-xs" rows={2} placeholder="Notizen" value={editDraft.notes} onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))} />
+                  {leadFields.filter((f) => f.multiline).map((f) => (
+                    <textarea key={f.key} className="input !py-1.5 text-xs" rows={2} placeholder={f.label} value={editDraft.fields[f.key] || ""} onChange={(e) => setEditDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                  ))}
                   <div className="flex items-center gap-2">
                     <button onClick={() => saveEditLead(lead.id)} className="btn-ghost text-xs">Speichern</button>
                     <button onClick={() => { setEditingLeadId(null); setEditDraft(null); }} className="btn-ghost text-xs">Abbrechen</button>

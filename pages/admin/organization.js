@@ -5,6 +5,7 @@ import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { textColorForColors, blend } from "../../lib/orgBranding";
+import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -117,6 +118,10 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
   const [categories, setCategories] = useState(
     Array.isArray(org.objection_categories) && org.objection_categories.length ? org.objection_categories : DEFAULT_OBJECTION_CATEGORIES
   );
+  const [useCustomLeadFields, setUseCustomLeadFields] = useState(Array.isArray(org.lead_field_config) && org.lead_field_config.length > 0);
+  const [leadFields, setLeadFields] = useState(
+    Array.isArray(org.lead_field_config) && org.lead_field_config.length ? org.lead_field_config : DEFAULT_LEAD_FIELDS
+  );
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -169,10 +174,31 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
     setUseCustomCategories(false);
   }
 
+  function updateLeadField(i, patch) {
+    setLeadFields((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+  }
+  function addLeadField() {
+    // Reservierte Schlüssel (siehe lib/leadFields.js) dürfen nie für ein
+    // neues Zusatzfeld vergeben werden — sonst würde es fälschlich in eine
+    // feste Spalte statt in custom_fields schreiben.
+    const existing = [...leadFields.map((f) => f.key), ...Object.keys(RESERVED_FIELD_COLUMNS)];
+    setLeadFields((prev) => [...prev, { key: uniqueCategoryKey("Neues Feld", existing), label: "", type: "text" }]);
+  }
+  function removeLeadField(i) {
+    setLeadFields((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+  function resetLeadFields() {
+    setLeadFields(DEFAULT_LEAD_FIELDS);
+    setUseCustomLeadFields(false);
+  }
+
   async function save() {
     if (!name.trim() || !slug.trim()) return;
     setSaving(true); setError(""); setSaved(false);
     const cleanCategories = categories.filter((c) => c.label.trim()).map((c) => ({ key: c.key, label: c.label.trim() }));
+    const cleanLeadFields = leadFields.filter((f) => f.label.trim()).map((f) => ({
+      key: f.key, label: f.label.trim(), type: f.type, ...(f.type === "text" && f.multiline ? { multiline: true } : {}),
+    }));
     const { error: err } = await supabase.from("organizations").update({
       name: name.trim(),
       slug: slugify(slug.trim()),
@@ -185,6 +211,7 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
       text_color: useCustomSurface ? textColor : null,
       booking_instructions: bookingInstructions.trim() || null,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
+      lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
     }).eq("id", org.id);
     setSaving(false);
     if (err) {
@@ -302,6 +329,35 @@ function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete }) {
             <button type="button" onClick={resetCategories} className="btn-ghost text-xs text-textMuted">Auf Standard zurücksetzen</button>
           </div>
           <p className="text-[11px] text-textMuted mt-2">Erscheinen im Call Tracker beim Schritt „Was war der Grund?" und in der Einwand-Verteilung. Die letzte Kategorie dient als Sammelpunkt für „Ohne Angabe zählen".</p>
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 text-xs text-textMuted mb-3 cursor-pointer select-none">
+        <input type="checkbox" checked={useCustomLeadFields} onChange={(e) => setUseCustomLeadFields(e.target.checked)} />
+        Eigene Zusatzfelder im Termin-Formular verwenden (sonst gelten Unternehmen, Webseite, Ist Entscheider, Notiz)
+      </label>
+      {useCustomLeadFields && (
+        <div className="mb-5">
+          {leadFields.map((f, i) => (
+            <div key={f.key} className="flex items-center gap-2 mb-2 flex-wrap">
+              <input className="input flex-1 min-w-[140px]" value={f.label} onChange={(e) => updateLeadField(i, { label: e.target.value })} placeholder="Feld-Name" />
+              <select className="input !w-auto text-xs" value={f.type} onChange={(e) => updateLeadField(i, { type: e.target.value })}>
+                <option value="text">Text</option>
+                <option value="checkbox">Ja/Nein</option>
+              </select>
+              {f.type === "text" && (
+                <label className="flex items-center gap-1.5 text-xs text-textMuted flex-shrink-0">
+                  <input type="checkbox" checked={!!f.multiline} onChange={(e) => updateLeadField(i, { multiline: e.target.checked })} /> Mehrzeilig
+                </label>
+              )}
+              <button type="button" onClick={() => removeLeadField(i)} disabled={leadFields.length <= 1} className="btn-ghost text-xs text-coral disabled:opacity-30 flex-shrink-0">Entfernen</button>
+            </div>
+          ))}
+          <div className="flex items-center gap-2 mt-1">
+            <button type="button" onClick={addLeadField} className="btn-ghost text-xs">+ Feld hinzufügen</button>
+            <button type="button" onClick={resetLeadFields} className="btn-ghost text-xs text-textMuted">Auf Standard zurücksetzen</button>
+          </div>
+          <p className="text-[11px] text-textMuted mt-2">Erscheinen im Call Tracker beim Erfassen eines Termins sowie unter „Termine" beim Hinzufügen/Bearbeiten. Name, Telefon, E-Mail und Termin-Zeitpunkt bleiben immer fest.</p>
         </div>
       )}
 

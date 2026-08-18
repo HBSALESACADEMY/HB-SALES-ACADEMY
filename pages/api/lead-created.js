@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
+import { RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
 
 // Läuft anstelle des früheren direkten Client-Inserts aus dem Call Tracker
 // (public/tools/call-tracker.html) — nur so gibt es einen Server-Zeitpunkt,
@@ -17,18 +18,30 @@ export default async function handler(req, res) {
   const { client, user } = auth;
 
   try {
-    const { name, phone, email, company, website, isDecisionMaker, notes, recordingPath, appointmentAt, activeOrgId } = req.body || {};
+    const { name, phone, email, fields, recordingPath, appointmentAt, activeOrgId } = req.body || {};
     if (!name || !phone || !email || !appointmentAt) {
       return res.status(400).json({ error: "Name, Telefon, E-Mail und Termin sind erforderlich." });
     }
 
+    // "fields" kommt vom jeweiligen Formular bereits aufgelöst (Organisation
+    // kann eigene Felder definieren, siehe lib/leadFields.js): reservierte
+    // Schlüssel (company/website/is_decision_maker/notes) landen weiterhin in
+    // der gleichnamigen Spalte, alles andere in custom_fields.
+    const columnUpdates = {};
+    const customFields = {};
+    (Array.isArray(fields) ? fields : []).forEach((f) => {
+      if (!f || !f.key) return;
+      const column = RESERVED_FIELD_COLUMNS[f.key];
+      const value = f.type === "checkbox" ? !!f.value : (typeof f.value === "string" ? f.value.trim() || null : f.value ?? null);
+      if (column) columnUpdates[column] = value;
+      else if (value !== null && value !== "") customFields[f.key] = value;
+    });
+
     const { data: lead, error: insertErr } = await client.from("leads").insert({
       created_by: user.id,
       name, phone, email,
-      company: company || null,
-      website: website || null,
-      is_decision_maker: !!isDecisionMaker,
-      notes: notes || null,
+      ...columnUpdates,
+      custom_fields: customFields,
       recording_path: recordingPath || null,
       appointment_at: appointmentAt,
     }).select().single();
@@ -54,16 +67,31 @@ export default async function handler(req, res) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
         const link = appUrl ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
+        // Zusatzfelder sind pro Organisation frei konfigurierbar (siehe
+        // lib/leadFields.js) — die E-Mail baut sich generisch aus den
+        // tatsächlich übermittelten Feldern samt ihrer (ggf. individuellen)
+        // Labels auf, statt fest "Unternehmen"/"Webseite"/... anzunehmen.
+        const fieldList = Array.isArray(fields) ? fields : [];
+        const companyValue = (() => { const f = fieldList.find((x) => x?.key === "company"); return typeof f?.value === "string" ? f.value.trim() : ""; })();
+        const notesValue = (() => { const f = fieldList.find((x) => x?.key === "notes"); return typeof f?.value === "string" ? f.value.trim() : ""; })();
+        const extraLines = fieldList
+          .filter((f) => f && f.key !== "company" && f.key !== "notes")
+          .map((f) => {
+            if (f.type === "checkbox") return f.value ? `${f.label}: Ja` : null;
+            const v = typeof f.value === "string" ? f.value.trim() : f.value;
+            return v ? `${f.label}: ${v}` : null;
+          })
+          .filter(Boolean);
+
         const html =
           `<p><strong>${me.full_name || "Ein/e Vertriebler:in"}</strong> hat einen neuen Termin erfasst${orgName ? ` bei ${orgName}` : ""}:</p>` +
-          `<p><strong>${name}</strong>${company ? ` (${company})` : ""}<br/>` +
+          `<p><strong>${name}</strong>${companyValue ? ` (${companyValue})` : ""}<br/>` +
           `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}<br/>` +
           `Telefon: ${phone}<br/>` +
           `E-Mail: ${email}` +
-          (website ? `<br/>Webseite: ${website}` : "") +
-          (isDecisionMaker ? `<br/>Entscheider:in: Ja` : "") +
+          (extraLines.length ? `<br/>${extraLines.join("<br/>")}` : "") +
           `</p>` +
-          (notes ? `<p>${notes}</p>` : "") +
+          (notesValue ? `<p>${notesValue}</p>` : "") +
           (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
         const subject = `Neuer Termin: ${name}`;

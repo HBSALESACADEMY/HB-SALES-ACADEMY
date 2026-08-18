@@ -404,10 +404,7 @@
       <div class="lead-field"><label>Telefon *</label><input type="tel" id="leadPhone"></div>
       <div class="lead-field"><label>E-Mail *</label><input type="email" id="leadEmail"></div>
       <div class="lead-field"><label>Termin (Datum/Uhrzeit) *</label><input type="datetime-local" id="leadAppointmentAt"></div>
-      <div class="lead-field"><label>Unternehmen</label><input type="text" id="leadCompany"></div>
-      <div class="lead-field"><label>Aktuelle Webseite</label><input type="text" id="leadWebsite"></div>
-      <label class="lead-checkbox"><input type="checkbox" id="leadDecisionMaker"> Ist Entscheider</label>
-      <div class="lead-field"><label>Notiz</label><textarea id="leadNotes" placeholder="Was wurde besprochen?"></textarea></div>
+      <div id="leadDynamicFields"></div>
       <div class="lead-field"><label>Recording hochladen (optional)</label><input type="file" accept="audio/*" id="leadRecording"></div>
       <button class="lead-submit" id="leadSubmit">Speichern</button>
       <button class="modal-skip" id="leadSkip">Nur zählen, ohne Daten zu erfassen</button>
@@ -539,6 +536,58 @@
       }
     } catch (e) { /* ungültiges JSON, Standard-Kategorien behalten */ }
   })();
+
+  // Weißes Label, Termin-/Lead-Formular: Name/Telefon/E-Mail/Termin-Datum
+  // bleiben fest (siehe HTML oben) — alles Weitere kommt aus
+  // organizations.lead_field_config (siehe pages/admin/organization.js).
+  // Muss inhaltlich mit lib/leadFields.js übereinstimmen.
+  const DEFAULT_LEAD_FIELDS = [
+    { key: "company", label: "Unternehmen", type: "text" },
+    { key: "website", label: "Aktuelle Webseite", type: "text" },
+    { key: "is_decision_maker", label: "Ist Entscheider", type: "checkbox" },
+    { key: "notes", label: "Notiz", type: "text", multiline: true },
+  ];
+  let LEAD_FIELDS = DEFAULT_LEAD_FIELDS;
+  (function(){
+    const raw = new URLSearchParams(window.location.search).get("leadFields");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length && parsed.every(f => f && f.key && f.label && f.type)) {
+        LEAD_FIELDS = parsed;
+      }
+    } catch (e) { /* ungültiges JSON, Standard-Felder behalten */ }
+  })();
+
+  function renderLeadDynamicFields(){
+    const container = document.getElementById("leadDynamicFields");
+    container.innerHTML = LEAD_FIELDS.map(f => {
+      const safeLabel = String(f.label).replace(/</g, "&lt;");
+      if (f.type === "checkbox") {
+        return `<label class="lead-checkbox"><input type="checkbox" data-field-key="${f.key}"> ${safeLabel}</label>`;
+      }
+      const control = f.multiline
+        ? `<textarea data-field-key="${f.key}"></textarea>`
+        : `<input type="text" data-field-key="${f.key}">`;
+      return `<div class="lead-field"><label>${safeLabel}</label>${control}</div>`;
+    }).join("");
+  }
+  renderLeadDynamicFields();
+
+  function collectLeadDynamicFields(){
+    return LEAD_FIELDS.map(f => {
+      const el = document.querySelector(`#leadDynamicFields [data-field-key="${f.key}"]`);
+      const value = f.type === "checkbox" ? !!(el && el.checked) : (el ? el.value.trim() : "");
+      return { key: f.key, label: f.label, type: f.type, value };
+    });
+  }
+  function resetLeadDynamicFields(){
+    LEAD_FIELDS.forEach(f => {
+      const el = document.querySelector(`#leadDynamicFields [data-field-key="${f.key}"]`);
+      if (!el) return;
+      if (f.type === "checkbox") el.checked = false; else el.value = "";
+    });
+  }
 
   const KEY_PREFIX = "callstats:";
 
@@ -724,10 +773,10 @@
 
   // TERMIN-SCHRITT: Kundendaten landen direkt in der "leads"-Tabelle, sichtbar
   // in der App unter "Termine" (pages/termine.js).
-  const leadFieldIds = ["leadName", "leadPhone", "leadEmail", "leadCompany", "leadWebsite", "leadAppointmentAt", "leadNotes"];
+  const leadFieldIds = ["leadName", "leadPhone", "leadEmail", "leadAppointmentAt"];
   function resetLeadForm(){
     leadFieldIds.forEach(id => { document.getElementById(id).value = ""; });
-    document.getElementById("leadDecisionMaker").checked = false;
+    resetLeadDynamicFields();
     document.getElementById("leadRecording").value = "";
   }
   function bumpTermin(){
@@ -780,10 +829,7 @@
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
         body: JSON.stringify({
           name, phone, email,
-          company: document.getElementById("leadCompany").value.trim() || null,
-          website: document.getElementById("leadWebsite").value.trim() || null,
-          isDecisionMaker: document.getElementById("leadDecisionMaker").checked,
-          notes: document.getElementById("leadNotes").value.trim() || null,
+          fields: collectLeadDynamicFields(),
           recordingPath,
           appointmentAt: new Date(appointmentAt).toISOString(),
           activeOrgId,

@@ -46,6 +46,10 @@ create table if not exists organizations (
   -- Eigene Einwand-Kategorien im Call Tracker (Array aus {key, label}) —
   -- NULL/leer = die 6 HB-Standardkategorien bleiben aktiv.
   objection_categories jsonb,
+  -- Eigene Zusatzfelder im Termin-/Lead-Formular (Array aus
+  -- {key, label, type, multiline?}) — NULL/leer = die 4 HB-Standardfelder
+  -- (Unternehmen, Webseite, Ist Entscheider, Notiz) bleiben aktiv.
+  lead_field_config jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -555,6 +559,9 @@ create table if not exists leads (
   appointment_at timestamptz,
   status text not null default 'geplant' check (status in ('geplant', 'wahrgenommen', 'abgesagt')),
   outcome text check (outcome in ('kunde', 'follow_up', 'absage')),
+  -- Werte für organisationseigene Zusatzfelder ohne feste Spalte (siehe
+  -- lib/leadFields.js RESERVED_FIELD_COLUMNS).
+  custom_fields jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 

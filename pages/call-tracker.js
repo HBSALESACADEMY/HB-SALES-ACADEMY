@@ -2,7 +2,7 @@ import Layout from "../components/Layout";
 import { useIframeOrgBranding, buildOrgColorParams } from "../lib/useIframeOrgBranding";
 
 export default function CallTracker() {
-  const { logoUrl, orgName, colors, bookingInstructions, objectionCategories, loaded } = useIframeOrgBranding();
+  const { logoUrl, orgName, colors, bookingInstructions, objectionCategories, leadFieldConfig, loaded } = useIframeOrgBranding();
 
   if (!loaded) return <Layout fullBleed><p className="text-textMuted text-sm p-4">Lädt...</p></Layout>;
 
@@ -13,6 +13,7 @@ export default function CallTracker() {
   if (orgName) params.set("org", orgName);
   if (bookingInstructions) params.set("booking", bookingInstructions);
   if (objectionCategories) params.set("categories", JSON.stringify(objectionCategories));
+  if (leadFieldConfig) params.set("leadFields", JSON.stringify(leadFieldConfig));
 
   return (
     <Layout fullBleed>
