@@ -1872,6 +1872,19 @@ create policy "page_views_select_admin" on page_views for select using (
   )
 );
 
+-- --- system_health ---
+create table if not exists system_health (
+  id boolean primary key default true check (id),
+  gesund boolean not null,
+  pruefungen jsonb not null,
+  geprueft_at timestamptz not null default now()
+);
+alter table system_health enable row level security;
+drop policy if exists "system_health_select_platform_admin" on system_health;
+create policy "system_health_select_platform_admin" on system_health for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+);
+
 -- --- ai_request_log ---
 -- bewusst keine Policies: RLS ohne Policies sperrt anon/authenticated komplett aus,
 -- nur der Service-Role-Key (Server) kommt durch.

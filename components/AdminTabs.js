@@ -17,6 +17,7 @@ const ADMIN_TABS = [
   { key: "lernpfade", label: "Lernpfade", route: "/admin/lernpfade", icon: "target" },
   { key: "suggestions", label: "Vorschläge", route: "/admin/suggestions", icon: "chat" },
   { key: "navigation", label: "Navigation", route: "/admin/navigation", icon: "dashboard" },
+  { key: "status", label: "Systemstatus", route: "/admin/status", icon: "lock" },
 ];
 
 export default function AdminTabs() {
