@@ -81,6 +81,7 @@ export default function Termine() {
   const [leadFields, setLeadFields] = useState(DEFAULT_LEAD_FIELDS);
   // Für die Pflichtfeld-Einstellungen der Organisation (siehe lib/leadFields.js).
   const [orgConfig, setOrgConfig] = useState(null);
+  const [notizenLaeuftId, setNotizenLaeuftId] = useState(null);
   const leadRefs = useRef({});
 
   async function load(silent) {
@@ -301,6 +302,21 @@ export default function Termine() {
       setError(e.message);
     } finally {
       setAddSaving(false);
+    }
+  }
+
+  // Notizen nachträglich erstellen — für Termine, deren Aufnahme vor dieser
+  // Funktion hochgeladen wurde, und als Wiederholung bei Fehlschlag.
+  async function notizenErstellen(leadId) {
+    setNotizenLaeuftId(leadId);
+    setError("");
+    try {
+      const { notizen } = await apiPost("/api/lead-call-notes", { leadId });
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, call_notes: notizen, call_notes_status: "done" } : l)));
+    } catch (e) {
+      setError("Notizen konnten nicht erstellt werden: " + e.message);
+    } finally {
+      setNotizenLaeuftId(null);
     }
   }
 
@@ -975,6 +991,11 @@ export default function Termine() {
                 {lead.recording_path && (
                   <button onClick={() => togglePlay(lead)} className={`btn-ghost text-xs ${lead.status === "geplant" ? "" : "ml-auto"}`}>
                     <Icon name="chat" size={12} /> {playingId === lead.id ? "Aufnahme ausblenden" : "Aufnahme abspielen"}
+                  </button>
+                )}
+                {lead.recording_path && lead.call_notes_status !== "done" && (
+                  <button disabled={notizenLaeuftId === lead.id} onClick={() => notizenErstellen(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
+                    📝 {notizenLaeuftId === lead.id ? "Erstellt…" : "Notizen erstellen"}
                   </button>
                 )}
               </div>

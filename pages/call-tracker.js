@@ -227,8 +227,12 @@ export default function CallTracker() {
         const ext = leadFile.name.split(".").pop() || "webm";
         const path = `${session.user.id}/${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("lead-recordings").upload(path, leadFile);
-        if (upErr) console.error("Recording-Upload fehlgeschlagen:", upErr.message);
-        else recordingPath = path;
+        if (upErr) {
+          // Früher nur in der Konsole: der Termin wurde ohne Aufnahme
+          // gespeichert, es entstanden keine Notizen — und niemand erfuhr
+          // warum. Genau das sah dann aus wie "die Notizen funktionieren nicht".
+          meldeFehler("Die Aufnahme konnte nicht hochgeladen werden — der Termin wurde ohne sie gespeichert: " + upErr.message, upErr);
+        } else recordingPath = path;
       }
 
       const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
