@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { DEFAULT_OBJECTIONS } from "../lib/objections";
+import { meldeFehler } from "../lib/errorBus";
 
 // Lernfortschritt pro Gerät. Schlüssel bewusst unverändert aus der früheren
 // HTML-Fassung übernommen, damit bereits Geübtes erhalten bleibt.
@@ -109,7 +110,13 @@ export default function EinwandTrainer() {
   function rate(status) {
     const next = { ...progress, [current.id]: status };
     setProgress(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (e) { /* Fortschritt gilt dann nur für diese Sitzung */ }
+    // Früher stumm: der Lernfortschritt war beim nächsten Laden weg, ohne
+    // dass irgendwo stand warum (z.B. privates Fenster, voller Speicher).
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (e) {
+      meldeFehler("Dein Lernfortschritt kann auf diesem Gerät nicht gespeichert werden — beim Neuladen beginnt er wieder von vorn.", e);
+    }
     pickNext(pool, next, current);
   }
 

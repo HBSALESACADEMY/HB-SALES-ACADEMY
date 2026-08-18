@@ -5,6 +5,7 @@ import InfoCard from "../components/InfoCard";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { resolveLeadFields } from "../lib/leadFields";
 import {
@@ -121,7 +122,11 @@ export default function CallTracker() {
           reasons: reasonCounts,
           updated_at: new Date().toISOString(),
         });
-      } catch (e) { /* nicht kritisch */ }
+      } catch (e) {
+        // Früher stumm verworfen: die Zahlen blieben lokal richtig, tauchten
+        // aber nie in der Team-Auswertung auf — ohne jeden Hinweis.
+        meldeFehler("Deine Anrufzahlen konnten gerade nicht mit dem Team geteilt werden. Lokal sind sie gespeichert.", e);
+      }
     }, 900);
   }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { apiPost } from "../lib/apiClient";
+import { meldeFehler } from "../lib/errorBus";
 import { SCENARIOS } from "../lib/scenarios";
 
 export default function Simulator() {
@@ -22,7 +23,14 @@ export default function Simulator() {
     if (nextNode.outcome) {
       // XP wird serverseitig aus dem festen Szenario-Baum abgeleitet, nicht
       // vom Client übermittelt.
-      try { await apiPost("/api/simulator-progress", { scenarioId: scenario.id, nodeId: option.next }); } catch (e) {}
+      // Früher ein komplett leeres catch: schlug die Punktevergabe fehl,
+      // verschwand das spurlos — man beendete das Szenario und bekam ohne
+      // jeden Hinweis keine XP.
+      try {
+        await apiPost("/api/simulator-progress", { scenarioId: scenario.id, nodeId: option.next });
+      } catch (e) {
+        meldeFehler("Die Punkte für dieses Szenario konnten nicht gutgeschrieben werden.", e);
+      }
     }
   }
 

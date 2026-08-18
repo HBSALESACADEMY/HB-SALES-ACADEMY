@@ -82,6 +82,8 @@ export default function Layout({ children, fullBleed }) {
   const [pendingTeamRequests, setPendingTeamRequests] = useState(cachedBadges?.pendingTeamRequests ?? 0);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(cachedBadges?.pendingFriendRequests ?? 0);
   const [friendToast, setFriendToast] = useState(null);
+  // Hintergrund-Fehler aus der ganzen App (siehe lib/errorBus.js)
+  const [fehlerHinweis, setFehlerHinweis] = useState(null);
   const prevFriendReqCount = useRef(null);
   const [approvalToast, setApprovalToast] = useState(null);
   const prevApprovalCount = useRef(null);
@@ -136,6 +138,12 @@ export default function Layout({ children, fullBleed }) {
     function handler(e) { setOpenProfileId(e.detail); }
     window.addEventListener("hb:open-profile", handler);
     return () => window.removeEventListener("hb:open-profile", handler);
+  }, []);
+
+  useEffect(() => {
+    function onFehler(e) { setFehlerHinweis(e.detail); }
+    window.addEventListener("hb:fehler", onFehler);
+    return () => window.removeEventListener("hb:fehler", onFehler);
   }, []);
 
   useEffect(() => {
@@ -841,6 +849,21 @@ export default function Layout({ children, fullBleed }) {
             <div className="text-xs text-textMuted">{friendToast.name} möchte sich vernetzen</div>
           </div>
         </button>
+      )}
+      {/* Hintergrund-Fehler aus der ganzen App (siehe lib/errorBus.js).
+          Bleibt stehen, bis er weggetippt wird — solche Meldungen sollen
+          nicht übersehen werden, anders als die Hinweise oben. */}
+      {fehlerHinweis && (
+        <div className="fixed bottom-5 left-5 right-5 md:left-auto md:right-5 z-[220] card !py-3 !px-4 border border-coral/50 flex items-start gap-3 shadow-lg animate-fadein" style={{ maxWidth: 380 }}>
+          <span className="text-coral flex-shrink-0 mt-0.5">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-textMain mb-0.5">Etwas hat nicht geklappt</div>
+            <div className="text-xs text-textMuted">{fehlerHinweis}</div>
+          </div>
+          <button onClick={() => setFehlerHinweis(null)} className="text-textMuted hover:text-textMain flex-shrink-0" aria-label="Hinweis schließen">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
       )}
     </div>
   );
