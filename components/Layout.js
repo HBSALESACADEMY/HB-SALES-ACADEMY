@@ -214,14 +214,27 @@ export default function Layout({ children, fullBleed }) {
       // mindestens ein Team gegründet zu haben — bestimmt u.a., ob die
       // Inhalte-Verwaltungsseiten (Skripte, eigene Kurse, Flashcards,
       // Wissensdatenbank) in der Sidebar sichtbar sind (siehe unten).
-      if (data) {
-        const { data: ownTeams } = await supabase.from("teams").select("id").eq("created_by", data.id).limit(1);
-        data = { ...data, is_team_lead: (ownTeams || []).length > 0 };
-      }
-
       const activeOrgId = getActiveOrgId(data);
 
-      const { data: nav } = await supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
+      // Diese drei Abfragen hängen nur vom bereits geladenen Profil ab, nicht
+      // voneinander — sie liefen bisher aber NACHEINANDER, jede ein eigener
+      // Weg zum Server. Zusammen mit dem Profil waren das vier Wartezeiten
+      // hintereinander, bevor überhaupt etwas auf dem Bildschirm erschien.
+      // Jetzt starten alle gleichzeitig.
+      const teamsAbfrage = data
+        ? supabase.from("teams").select("id").eq("created_by", data.id).limit(1)
+        : Promise.resolve({ data: [] });
+      const navAbfrage = supabase.from("nav_items").select("*").eq("visible", true).order("order_index");
+      // Das Branding wird bewusst NICHT abgewartet: die Seite erscheint
+      // schon, sobald Profil und Navigation da sind, die Farben kommen
+      // unmittelbar danach (siehe unten).
+      const orgAbfrage = activeOrgId
+        ? supabase.from("organizations").select("*").eq("id", activeOrgId).maybeSingle()
+        : Promise.resolve({ data: null });
+
+      const [{ data: ownTeams }, { data: nav }] = await Promise.all([teamsAbfrage, navAbfrage]);
+      if (data) data = { ...data, is_team_lead: (ownTeams || []).length > 0 };
+
       let effectiveNav = nav || [];
       // Eigene Ordner tragen jetzt ein explizites organization_id (siehe
       // migration_53) — direkt darauf eingrenzen, statt es (fehleranfällig)
@@ -252,7 +265,9 @@ export default function Layout({ children, fullBleed }) {
         setLoadingAuth(false);
       }
       if (activeOrgId) {
-        const { data: orgData } = await supabase.from("organizations").select("*").eq("id", activeOrgId).maybeSingle();
+        // Läuft seit oben schon parallel mit — hier wird nur noch das
+        // Ergebnis abgeholt, nicht neu angefragt.
+        const { data: orgData } = await orgAbfrage;
         if (mounted && orgData) {
           setOrg(orgData);
           cachedOrg = orgData;
