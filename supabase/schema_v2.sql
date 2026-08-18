@@ -707,6 +707,17 @@ language sql stable security definer as $$
   );
 $$;
 
+-- Bricht die gegenseitige Abfrage zwischen leads und lead_tasks auf (siehe
+-- migration_79): security definer, löst deshalb keine Regelprüfung auf
+-- lead_tasks/lead_mentions aus. Nimmt bewusst keine Nutzer-ID entgegen,
+-- sonst könnte man damit fremde Zuweisungen ausspähen.
+create or replace function public.has_lead_task_or_mention(p_lead_id uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (select 1 from lead_tasks where lead_id = p_lead_id and assigned_to = auth.uid())
+      or exists (select 1 from lead_mentions where lead_id = p_lead_id and user_id = auth.uid());
+$$;
+
 -- Ein Team hat genau einen Lead (teams.created_by). Prüft, ob viewer_id
 -- ein Team leitet, in dem target_id Mitglied ist — für Trainingsdaten
 -- (quiz/exam/roleplay/call_log_days/login_events/login_attempts).
@@ -1595,9 +1606,9 @@ create policy "leads_select" on leads for select using (
     and same_org(created_by, auth.uid())
   )
   -- Sonst wäre ein per Aufgabe/Erwähnung verlinkter fremder Termin für die
-  -- zugewiesene/erwähnte Person unauffindbar (siehe migration_77).
-  or exists (select 1 from lead_tasks lt where lt.lead_id = leads.id and lt.assigned_to = auth.uid())
-  or exists (select 1 from lead_mentions lm where lm.lead_id = leads.id and lm.user_id = auth.uid())
+  -- zugewiesene/erwähnte Person unauffindbar (migration_77). Über die
+  -- Hilfsfunktion statt direkt, sonst Endlosschleife (migration_79).
+  or has_lead_task_or_mention(leads.id)
 );
 drop policy if exists "leads_insert_own" on leads;
 create policy "leads_insert_own" on leads for insert with check (created_by = auth.uid());
@@ -1633,8 +1644,7 @@ create policy "lead_comments_select_all" on lead_comments for select using (
         exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
         and same_org(l.created_by, auth.uid())
       )
-      or exists (select 1 from lead_tasks lt where lt.lead_id = l.id and lt.assigned_to = auth.uid())
-      or exists (select 1 from lead_mentions lm where lm.lead_id = l.id and lm.user_id = auth.uid())
+      or has_lead_task_or_mention(l.id)
     )
   )
 );
