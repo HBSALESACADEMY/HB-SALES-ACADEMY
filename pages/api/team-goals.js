@@ -54,11 +54,25 @@ export default async function handler(req, res) {
       ...(gefuehrte || []).map((t) => t.id),
     ]));
 
-    // --- Alle Teams der Organisation (für die Rangliste) --------------------
-    // Über den RLS-Client: teams_select_all beschränkt bereits auf die eigene
-    // Organisation, hier wird nichts zusätzlich geöffnet.
-    const { data: alleTeams } = await client.from("teams").select("id, name, created_by");
-    const teamIds = (alleTeams || []).map((t) => t.id);
+    // --- Teams -------------------------------------------------------------
+    // Für die Rangliste über den RLS-Client (auf die eigene Organisation
+    // begrenzt). Die EIGENEN Teams kommen zusätzlich über den Admin-Client
+    // dazu: die Leseregel auf teams verlangt, dass die Person, die das Team
+    // ANGELEGT hat, in derselben Organisation ist — wurde ein Team von einem
+    // Plattform-Admin mit anderer Heimat-Organisation erstellt, durfte ein
+    // Mitglied sein eigenes Team nicht sehen und bekam "Du bist in keinem
+    // Team" zu lesen. Die Mitgliedschaft ist oben über den RLS-Client
+    // geprüft, hier wird also nur der Name eines Teams nachgeladen, in dem
+    // die Person nachweislich ist.
+    const { data: sichtbareTeams } = await client.from("teams").select("id, name, created_by");
+    const { data: meineTeamZeilen } = meineTeamIds.length
+      ? await admin.from("teams").select("id, name, created_by").in("id", meineTeamIds)
+      : { data: [] };
+
+    const teamVon = new Map();
+    [...(sichtbareTeams || []), ...(meineTeamZeilen || [])].forEach((t) => teamVon.set(t.id, t));
+    const alleTeams = Array.from(teamVon.values());
+    const teamIds = alleTeams.map((t) => t.id);
     if (!teamIds.length) {
       return res.status(200).json({ teams: [], rangliste: [], ranglisteMetrik: "xp", darfDetails: false, wochenStart: startTag });
     }
@@ -78,7 +92,7 @@ export default async function handler(req, res) {
     const alleIds = Array.from(new Set((mitgliedschaften || []).map((m) => m.user_id)));
 
     // Namen: Leitungen sind nicht zwingend als Mitglied eingetragen.
-    const namensIds = Array.from(new Set([...alleIds, ...(alleTeams || []).map((t) => t.created_by)]));
+    const namensIds = Array.from(new Set([...alleIds, ...alleTeams.map((t) => t.created_by)]));
     const { data: personen } = await admin.from("profiles").select("id, full_name, avatar_url").in("id", namensIds);
     const personVon = new Map((personen || []).map((p) => [p.id, p]));
 
@@ -119,7 +133,7 @@ export default async function handler(req, res) {
     }));
 
     // Wer darf sehen, wie viel eine EINZELNE Person beigetragen hat?
-    const istLeitung = (alleTeams || []).some((t) => t.created_by === user.id);
+    const istLeitung = alleTeams.some((t) => t.created_by === user.id);
     const darfDetails = !!(istLeitung || ich?.is_platform_admin || ich?.is_admin || ich?.can_view_call_stats);
 
     // Leistung im Team: nach dem Maßstab der Organisation. Steht der auf
@@ -130,7 +144,7 @@ export default async function handler(req, res) {
 
     // --- Antwort ------------------------------------------------------------
     const teams = meineTeamIds.map((tid) => {
-      const t = (alleTeams || []).find((x) => x.id === tid);
+      const t = teamVon.get(tid);
       const ids = idsVonTeam.get(tid) || [];
       const lead = t ? personVon.get(t.created_by) : null;
       return {
@@ -167,7 +181,7 @@ export default async function handler(req, res) {
     });
 
     const rangWerte = werte.get(rangMetrik.key);
-    const rangliste = (alleTeams || []).map((t) => {
+    const rangliste = (sichtbareTeams || []).map((t) => {
       const ids = idsVonTeam.get(t.id) || [];
       return { teamId: t.id, name: t.name, mitglieder: ids.length, wert: rangWerte ? summeFuer(rangWerte, ids) : 0 };
     }).sort((a, b) => b.wert - a.wert);

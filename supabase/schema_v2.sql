@@ -753,6 +753,26 @@ language sql stable security definer as $$
   select exists (select 1 from teams where id = tid and created_by = uid);
 $$;
 
+-- Verwalten (Mitglieder, Ziele) darf zusätzlich, wer Admin derselben
+-- Organisation oder Plattform-Admin ist (migration_88). Vorher kam niemand
+-- an ein Team heran, das jemand anderes angelegt hatte.
+create or replace function public.kann_team_verwalten(tid uuid, uid uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (
+    select 1
+    from teams t
+    join profiles lead on lead.id = t.created_by
+    join profiles viewer on viewer.id = uid
+    where t.id = tid
+      and (
+        t.created_by = uid
+        or viewer.is_platform_admin
+        or (viewer.is_admin and viewer.organization_id is not distinct from lead.organization_id)
+      )
+  );
+$$;
+
 -- Prüft, ob uid IRGENDEIN Team leitet (unabhängig davon, welches) — genutzt,
 -- um Teamleads dieselben Inhalte-Verwaltungsrechte zu geben wie Manager/
 -- Trainer (Skripte, eigene Kurse/Module, Flashcards, Wissensdatenbank).
@@ -1522,6 +1542,10 @@ create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = 
 drop policy if exists "teams_select_all" on teams;
 create policy "teams_select_all" on teams for select using (
   same_org(created_by, auth.uid())
+  -- Auch das eigene Team lesen dürfen, unabhängig davon, in welcher
+  -- Organisation die anlegende Person sitzt (migration_89): sonst stand für
+  -- Mitglieder "Du bist noch in keinem Team".
+  or exists (select 1 from team_members tm where tm.team_id = teams.id and tm.user_id = auth.uid())
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "teams_insert_managers" on teams;
@@ -1541,7 +1565,7 @@ create policy "team_members_select_all" on team_members for select using (
 );
 drop policy if exists "team_members_insert_lead" on team_members;
 create policy "team_members_insert_lead" on team_members for insert with check (
-  is_lead_of_team(team_id, auth.uid())
+  kann_team_verwalten(team_id, auth.uid())
   and (
     same_org(user_id, auth.uid())
     or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
@@ -1549,7 +1573,7 @@ create policy "team_members_insert_lead" on team_members for insert with check (
 );
 drop policy if exists "team_members_delete_lead_or_self" on team_members;
 create policy "team_members_delete_lead_or_self" on team_members for delete using (
-  is_lead_of_team(team_id, auth.uid()) or auth.uid() = user_id
+  kann_team_verwalten(team_id, auth.uid()) or auth.uid() = user_id
 );
 
 -- --- team_goals ---
@@ -1559,9 +1583,11 @@ create policy "team_goals_select_all" on team_goals for select using (
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "team_goals_insert_manager" on team_goals;
-create policy "team_goals_insert_manager" on team_goals for insert with check (is_lead_of_team(team_id, auth.uid()));
+create policy "team_goals_insert_manager" on team_goals for insert with check (kann_team_verwalten(team_id, auth.uid()));
 drop policy if exists "team_goals_update_manager" on team_goals;
-create policy "team_goals_update_manager" on team_goals for update using (is_lead_of_team(team_id, auth.uid()));
+create policy "team_goals_update_manager" on team_goals for update using (kann_team_verwalten(team_id, auth.uid()));
+drop policy if exists "team_goals_delete_manager" on team_goals;
+create policy "team_goals_delete_manager" on team_goals for delete using (kann_team_verwalten(team_id, auth.uid()));
 
 -- --- team_requests ---
 drop policy if exists "team_requests_select_participant" on team_requests;
