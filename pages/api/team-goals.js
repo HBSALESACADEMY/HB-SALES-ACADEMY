@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     const { data: alleTeams } = await client.from("teams").select("id, name, created_by");
     const teamIds = (alleTeams || []).map((t) => t.id);
     if (!teamIds.length) {
-      return res.status(200).json({ teams: [], rangliste: [], ranglisteMetrik: "xp", darfDetails: false });
+      return res.status(200).json({ teams: [], rangliste: [], ranglisteMetrik: "xp", darfDetails: false, wochenStart: startTag });
     }
 
     const [{ data: mitgliedschaften }, { data: ziele }, { data: org }] = await Promise.all([
@@ -131,7 +131,10 @@ export default async function handler(req, res) {
       return { teamId: t.id, name: t.name, mitglieder: ids.length, wert: rangWerte ? summeFuer(rangWerte, ids) : 0 };
     }).sort((a, b) => b.wert - a.wert);
 
-    return res.status(200).json({ teams, rangliste, ranglisteMetrik: rangMetrik.key, darfDetails });
+    // startTag wird mitgeliefert, damit die Seite benennen kann, welche
+    // Woche sie zeigt — ein leerer Ziel-Block war sonst nicht von einem
+    // Datums-Versatz zu unterscheiden.
+    return res.status(200).json({ teams, rangliste, ranglisteMetrik: rangMetrik.key, darfDetails, wochenStart: startTag });
   } catch (e) {
     console.error("Team-Daten konnten nicht geladen werden:", e.message);
     return res.status(500).json({ error: e.message || "Team-Daten konnten nicht geladen werden." });

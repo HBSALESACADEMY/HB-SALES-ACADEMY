@@ -17,6 +17,7 @@ export default function Team() {
   const [rangMetrik, setRangMetrik] = useState("xp");
   const [myTeams, setMyTeams] = useState([]);
   const [darfDetails, setDarfDetails] = useState(false);
+  const [wochenStart, setWochenStart] = useState("");
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
@@ -50,6 +51,7 @@ export default function Team() {
       setRangliste(daten.rangliste || []);
       setRangMetrik(daten.ranglisteMetrik || "xp");
       setDarfDetails(!!daten.darfDetails);
+      setWochenStart(daten.wochenStart || "");
       setFehler("");
     } catch (e) {
       // Früher blieb die Seite bei einem Fehler einfach leer — dann sieht es
@@ -108,7 +110,9 @@ export default function Team() {
               </div>
               {!t.isLead && t.leadName && <div className="text-xs text-textMuted mb-2">Lead: {t.leadName}</div>}
               {t.ziele.length === 0 && (
-                <div className="text-xs text-textMuted mb-2">Für diese Woche ist noch kein Ziel gesetzt.</div>
+                <div className="text-xs text-textMuted mb-2">
+                  Für diese Woche{wochenStart ? ` (ab ${new Date(`${wochenStart}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })})` : ""} ist noch kein Ziel gesetzt.
+                </div>
               )}
               {t.ziele.map((z) => (
                 <div key={z.id} className="mb-2 last:mb-0">
