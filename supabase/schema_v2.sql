@@ -524,6 +524,11 @@ create table if not exists team_members (
   primary key (team_id, user_id)
 );
 
+-- Ein Team gehört einer Organisation (migration_93) — nicht der der Person,
+-- die es angelegt hat: ein Plattform-Admin arbeitet per Firmencode für eine
+-- andere Organisation als seine eigene.
+alter table teams add column if not exists organization_id uuid references organizations(id) on delete cascade;
+
 create table if not exists team_goals (
   id uuid primary key default gen_random_uuid(),
   manager_id uuid not null references profiles(id) on delete cascade,
@@ -773,13 +778,12 @@ language sql stable security definer as $$
   select exists (
     select 1
     from teams t
-    join profiles lead on lead.id = t.created_by
     join profiles viewer on viewer.id = uid
     where t.id = tid
       and (
         t.created_by = uid
-        or viewer.is_platform_admin
-        or (viewer.is_admin and viewer.organization_id is not distinct from lead.organization_id)
+        or ((viewer.is_admin or viewer.is_platform_admin)
+            and t.organization_id is not distinct from aktive_org(uid))
       )
   );
 $$;
@@ -1608,7 +1612,7 @@ create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = 
 -- custom_courses, migration_53).
 drop policy if exists "teams_select_all" on teams;
 create policy "teams_select_all" on teams for select using (
-  sieht_person(created_by)
+  organization_id is not distinct from aktive_org(auth.uid())
   -- Auch das eigene Team lesen dürfen, unabhängig davon, in welcher
   -- Organisation die anlegende Person sitzt (migration_89): sonst stand für
   -- Mitglieder "Du bist noch in keinem Team".
@@ -1616,7 +1620,9 @@ create policy "teams_select_all" on teams for select using (
 );
 drop policy if exists "teams_insert_managers" on teams;
 create policy "teams_insert_managers" on teams for insert with check (
-  exists (select 1 from profiles where id = auth.uid() and role = 'manager')
+  created_by = auth.uid()
+  and organization_id is not distinct from aktive_org(auth.uid())
+  and exists (select 1 from profiles where id = auth.uid() and (role = 'manager' or is_admin or is_platform_admin))
 );
 drop policy if exists "teams_update_own" on teams;
 create policy "teams_update_own" on teams for update using (created_by = auth.uid());

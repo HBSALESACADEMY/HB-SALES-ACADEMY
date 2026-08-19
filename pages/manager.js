@@ -194,7 +194,14 @@ export default function Manager() {
     if (!newTeamName.trim()) return;
     setCreatingTeam(true);
     const { data: { session } } = await supabase.auth.getSession();
-    const { data: newTeam, error } = await supabase.from("teams").insert({ name: newTeamName.trim(), created_by: session.user.id }).select().single();
+    // Die Organisation gehört ans Team, nicht an die anlegende Person
+    // (migration_93): ein Plattform-Admin, der per Firmencode für eine
+    // Kundenorganisation arbeitet, gehört selbst zu einer anderen.
+    const { data: profil } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const { data: newTeam, error } = await supabase.from("teams")
+      .insert({ name: newTeamName.trim(), created_by: session.user.id, organization_id: getActiveOrgId(profil) })
+      .select().single();
+    if (error) alert(error.message);
     if (!error && newTeam) {
       const { error: memErr } = await supabase.from("team_members").insert({ team_id: newTeam.id, user_id: session.user.id });
       if (memErr) alert(memErr.message);

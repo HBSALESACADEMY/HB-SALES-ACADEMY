@@ -46,8 +46,11 @@ export default async function handler(req, res) {
 
     // Teams der Organisation: erkennbar daran, dass die leitende Person dazu
     // gehört. Teams fremder Organisationen bleiben so aussen vor.
-    const { data: alleTeams } = await admin.from("teams").select("id, name, created_by");
-    const teams = (alleTeams || []).filter((t) => idsDerOrg.has(t.created_by));
+    // Über teams.organization_id statt über die anlegende Person
+    // (migration_93): ein per Firmencode angelegtes Team gehört der
+    // Kundenorganisation, nicht der Heimat-Organisation des Plattform-Admins.
+    const { data: alleTeams } = await admin.from("teams").select("id, name, created_by, organization_id").eq("organization_id", orgId);
+    const teams = alleTeams || [];
     const teamIds = teams.map((t) => t.id);
 
     const { data: mitgliedschaften } = teamIds.length
