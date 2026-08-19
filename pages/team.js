@@ -6,6 +6,8 @@ import { openProfile } from "../lib/profileModalBus";
 import { apiGet } from "../lib/apiClient";
 import { goalMetricLabel } from "../lib/goalMetrics";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { apiPost } from "../lib/apiClient";
+import Organigramm from "../components/Organigramm";
 
 const RANG_LABEL = (key) => (key === "xp" ? "XP" : goalMetricLabel(key));
 
@@ -19,6 +21,8 @@ export default function Team() {
   const [darfDetails, setDarfDetails] = useState(false);
   const [wochenStart, setWochenStart] = useState("");
   const [leistungMetrik, setLeistungMetrik] = useState("xp");
+  const [organigramm, setOrganigramm] = useState(null);
+  const [organigrammOffen, setOrganigrammOffen] = useState(false);
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
@@ -69,6 +73,18 @@ export default function Team() {
       setFehler(e.message || "Die Team-Zahlen konnten nicht geladen werden.");
     }
 
+    // Organigramm nur für Führungsrollen — die Route antwortet sonst mit 403.
+    // Fehlschlag bleibt still: für alle anderen ist das der Normalfall, kein
+    // Fehler, und der Rest der Seite hängt nicht daran.
+    try {
+      const { data: profil2 } = await supabase.from("profiles")
+        .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      const oid = getActiveOrgId(profil2);
+      setOrganigramm(await apiGet("/api/org-chart" + (oid ? `?activeOrgId=${oid}` : "")));
+    } catch (e) {
+      setOrganigramm(null);
+    }
+
     const [{ data: pair }, { data: myMentees }] = await Promise.all([
       supabase.from("mentor_pairs").select("*, mentor:mentor_id(full_name, avatar_url)").eq("mentee_id", session.user.id).eq("active", true).maybeSingle(),
       supabase.from("mentor_pairs").select("*, mentee:mentee_id(full_name, avatar_url)").eq("mentor_id", session.user.id).eq("active", true),
@@ -81,6 +97,24 @@ export default function Team() {
     await supabase.from("profiles").update({ last_seen_team_goals_at: new Date().toISOString() }).eq("id", session.user.id);
 
     setLoading(false);
+  }
+
+  async function setzeRolle(personId, rolle) {
+    try {
+      await apiPost("/api/org-role-title", { personId, rolle });
+      // Nur den geänderten Eintrag anpassen statt alles neu zu laden — der
+      // aufgeklappte Baum soll nicht zusammenklappen.
+      setOrganigramm((o) => o && {
+        teams: o.teams.map((t) => ({
+          ...t,
+          leitung: t.leitung && t.leitung.id === personId ? { ...t.leitung, rolle } : t.leitung,
+          mitglieder: t.mitglieder.map((m) => (m.id === personId ? { ...m, rolle } : m)),
+        })),
+        ohneTeam: o.ohneTeam.map((p) => (p.id === personId ? { ...p, rolle } : p)),
+      });
+    } catch (e) {
+      alert(e.message || "Die Rollenbezeichnung konnte nicht gespeichert werden.");
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -227,6 +261,24 @@ export default function Team() {
           {rangliste.length === 0 && <p className="text-textMuted text-sm">Noch keine Teams vorhanden.</p>}
         </div>
       </div>
+
+      {organigramm && (
+        <div className="card mb-5">
+          <button onClick={() => setOrganigrammOffen((v) => !v)} className="flex items-center justify-between gap-2 w-full text-left">
+            <span className="font-semibold text-textMain text-sm">🗂️ Organigramm</span>
+            <span className="text-xs text-textMuted flex-shrink-0">{organigrammOffen ? "ausblenden" : "anzeigen"}</span>
+          </button>
+          {organigrammOffen && (
+            <div className="mt-3">
+              <p className="text-[11px] text-textMuted mb-3">
+                Die Struktur entsteht von selbst: gründet jemand aus einem Team ein eigenes Team,
+                erscheint es automatisch eine Ebene tiefer. Rollenbezeichnungen lassen sich hier direkt ändern.
+              </p>
+              <Organigramm daten={organigramm} onRolle={setzeRolle} />
+            </div>
+          )}
+        </div>
+      )}
 
       {(mentor || mentees.length > 0) && (
         <div className="card">
