@@ -4,6 +4,7 @@ import Icon from "../components/Icon";
 import { apiPost } from "../lib/apiClient";
 import { meldeFehler } from "../lib/errorBus";
 import { SCENARIOS } from "../lib/scenarios";
+import BereichsTabs, { TRAINING } from "../components/BereichsTabs";
 
 export default function Simulator() {
   const [scenario, setScenario] = useState(null);
@@ -40,6 +41,7 @@ export default function Simulator() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Szenario-Simulator</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={TRAINING} />
       <p className="text-textMuted text-sm mb-6">Echte Gesprächssituationen zum Durchspielen — jede Entscheidung führt zu einer anderen Wendung. Guter Einstieg, bevor es ins freie <a href="/roleplay" className="text-amber underline">KI-Rollenspiel</a> geht.</p>
 
       {!scenario ? (

@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { COURSES } from "../lib/curriculum";
 import { PERSONAS, SCENARIOS, DIFFICULTY } from "../lib/personas";
+import BereichsTabs, { TRAINING } from "../components/BereichsTabs";
 
 export default function Roleplay() {
   const [examResults, setExamResults] = useState([]);
@@ -99,6 +100,7 @@ export default function Roleplay() {
       <Layout>
         <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Rollenspiel</h1>
         <div className="brand-stripe w-16 mb-4" />
+        <BereichsTabs tabs={TRAINING} />
         <p className="text-textMuted text-sm mb-6">Szenario, Schwierigkeit und Kundentyp wählen — freies Gespräch mit einer KI. Neu hier? Der <a href="/simulator" className="text-amber underline">Szenario-Simulator</a> ist ein guter erster Einstieg.</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {SCENARIOS.map((s) => {

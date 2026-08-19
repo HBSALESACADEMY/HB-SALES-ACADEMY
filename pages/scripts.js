@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 import { loescheGeprueft } from "../lib/loeschen";
+import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState([]);
@@ -152,6 +153,7 @@ export default function Scripts() {
         {isManager && <button onClick={() => { setFormError(""); setShowForm(true); }} className="btn text-xs flex-shrink-0">+ Neues Skript</button>}
       </div>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={WISSEN} />
       <p className="text-textMuted text-sm mb-6">Bewährte Gesprächsbausteine — suchen, ansehen, mit einem Klick kopieren.</p>
 
       <div className="card flex items-center gap-2 mb-5">

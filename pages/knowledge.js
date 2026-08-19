@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
+import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 
 const KNOWLEDGE_BASE = [
   { tag: "Cialdini", title: "Reziprozität", body: "Wer zuerst gibt, erzeugt beim Gegenüber unbewusst das Bedürfnis, etwas zurückzugeben." },
@@ -42,6 +43,7 @@ export default function Knowledge() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Wissensdatenbank</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={WISSEN} />
       <p className="text-textMuted text-sm mb-6">Psychologische Prinzipien zum Nachschlagen.</p>
       <div className="flex items-center gap-2 border border-line rounded-lg px-3 py-2.5 mb-5 bg-surface">
         <Icon name="search" size={15} />

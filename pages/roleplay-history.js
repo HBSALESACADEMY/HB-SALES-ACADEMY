@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 import { PERSONAS } from "../lib/personas";
+import BereichsTabs, { TRAINING } from "../components/BereichsTabs";
 
 export default function RoleplayHistory() {
   const [sessions, setSessions] = useState([]);
@@ -26,6 +27,7 @@ export default function RoleplayHistory() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Rollenspiel-Verlauf</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={TRAINING} />
       <p className="text-textMuted text-sm mb-6">Deine vergangenen Rollenspiele nochmal durchlesen.</p>
 
       <div className="flex flex-col gap-3">

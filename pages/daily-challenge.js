@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
 import { effectiveStreak } from "../lib/streak";
+import BereichsTabs, { UEBEN } from "../components/BereichsTabs";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -62,6 +63,7 @@ export default function DailyChallenge() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Tages-Challenge</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={UEBEN} />
       <p className="text-textMuted text-sm mb-6">Eine Frage pro Tag, für alle im Team gleich. Baue deine Serie auf!</p>
 
       <div className="card mb-5 flex items-center gap-3">

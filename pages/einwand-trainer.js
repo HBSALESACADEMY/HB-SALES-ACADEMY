@@ -6,6 +6,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { DEFAULT_OBJECTIONS } from "../lib/objections";
 import { meldeFehler } from "../lib/errorBus";
+import BereichsTabs, { TRAINING } from "../components/BereichsTabs";
 
 // Lernfortschritt pro Gerät. Schlüssel bewusst unverändert aus der früheren
 // HTML-Fassung übernommen, damit bereits Geübtes erhalten bleibt.
@@ -145,6 +146,7 @@ export default function EinwandTrainer() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Einwand-Trainer</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={TRAINING} />
 
       <InfoCard>
         Es erscheint ein Einwand, wie ihn Kund:innen im Gespräch bringen. Überlege dir erst deine eigene Antwort, decke dann die

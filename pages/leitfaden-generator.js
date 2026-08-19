@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { loescheGeprueft } from "../lib/loeschen";
+import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 
 const TYPES = [
   { id: "cold_call", label: "Cold Call" },
@@ -97,6 +98,7 @@ export default function GuideGenerator() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Leitfaden-Generator</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={WISSEN} />
       <p className="text-textMuted text-sm mb-6">
         Individueller Gesprächsleitfaden für Cold Calls und Closing Calls — kein starres Skript zum Ablesen,
         sondern Ziele und Stichpunkte pro Phase, die du in eigenen Worten nutzt.

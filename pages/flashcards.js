@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
+import BereichsTabs, { UEBEN } from "../components/BereichsTabs";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function addDays(days) { return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10); }
@@ -74,6 +75,7 @@ export default function Flashcards() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Flashcards</h1>
       <div className="brand-stripe w-16 mb-4" />
+      <BereichsTabs tabs={UEBEN} />
       <p className="text-textMuted text-sm mb-6">Kurze Wiederholungen zu Fakten und Prinzipien — kommt automatisch dann wieder, wenn's am meisten hilft. Manche Karten wurden mit KI-Unterstützung erstellt.</p>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

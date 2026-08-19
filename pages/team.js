@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
@@ -12,6 +13,7 @@ import Organigramm from "../components/Organigramm";
 const RANG_LABEL = (key) => (key === "xp" ? "XP" : goalMetricLabel(key));
 
 export default function Team() {
+  const router = useRouter();
   const [selfId, setSelfId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState("");
@@ -281,6 +283,18 @@ export default function Team() {
           )}
         </div>
       )}
+
+      {/* Die Rangliste war ein eigener Navigationspunkt. Sie gehört hierhin:
+          direkt neben den Team-Wettbewerb, mit dem sie sich sonst nur
+          gegenseitig Konkurrenz macht. */}
+      <div className="card mb-5 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/leaderboard")}>
+        <span className="text-xl">🏅</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-textMain text-sm">Rangliste der Organisation</div>
+          <div className="text-xs text-textMuted">Alle Mitglieder nach XP, nicht nur dein Team.</div>
+        </div>
+        <span className="text-xs text-textMuted flex-shrink-0">öffnen →</span>
+      </div>
 
       {(mentor || mentees.length > 0) && (
         <div className="card">

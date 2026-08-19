@@ -6,6 +6,7 @@ import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
+import BereichsTabs, { UEBEN } from "../components/BereichsTabs";
 
 const ALL_QUESTIONS = (() => {
   const out = [];
@@ -110,6 +111,7 @@ export default function Duel() {
       <Layout>
         <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Quiz-Duell</h1>
         <div className="brand-stripe w-16 mb-4" />
+        <BereichsTabs tabs={UEBEN} />
         <div className="card">
           <div className="text-xs text-textMuted mb-3">Frage {qIndex + 1}/{playing.question_ids.length}</div>
           <p className="text-textMain text-[15px] font-medium mb-4">{question.q}</p>
