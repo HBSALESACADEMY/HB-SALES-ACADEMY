@@ -134,6 +134,11 @@ export default function AdminBetreiber() {
     setSettingManagerId(null);
   }
 
+  // Nachschlagewerk für die Mitgliederliste unten: welcher Name gehört zu
+  // welcher Organisations-ID.
+  const orgNameById = {};
+  memberOrgs.forEach((o) => { orgNameById[o.id] = o.name; });
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
   if (!istBetreiber) {
     return (
