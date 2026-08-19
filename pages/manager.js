@@ -72,8 +72,11 @@ export default function Manager() {
 
     const [{ data: memberRows }, { data: allApproved }] = await Promise.all([
       supabase.from("team_members").select("user_id, profiles:user_id(*)").eq("team_id", teamId),
+      // Bewusst OHNE Filter auf status: wer noch auf Freigabe wartet, soll in
+      // der Liste auftauchen (nur nicht hinzufügbar sein). Sonst fehlt die
+      // Person kommentarlos und man sucht den Fehler an der falschen Stelle.
       activeOrgId
-        ? supabase.from("profiles").select("id, full_name, avatar_url").eq("status", "approved").eq("organization_id", activeOrgId)
+        ? supabase.from("profiles").select("id, full_name, avatar_url, status").eq("organization_id", activeOrgId).order("full_name")
         : Promise.resolve({ data: [] }),
     ]);
     setAllProfiles(allApproved || []);
@@ -365,19 +368,33 @@ export default function Manager() {
         <>
           <div className="card mb-5">
             <div className="font-semibold text-textMain text-sm mb-3">Mitglieder hinzufügen</div>
-            <input className="input mb-2.5" placeholder="Nach Namen suchen..." value={addQuery} onChange={(e) => setAddQuery(e.target.value)} />
-            {addQuery.trim() && (
-              <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                {addableProfiles.slice(0, 20).map((p) => (
-                  <div key={p.id} className="flex items-center gap-2.5">
-                    <Avatar name={p.full_name || "?"} src={p.avatar_url} size={26} />
-                    <span className="text-sm text-textMain flex-1">{p.full_name || "Unbenannt"}</span>
-                    <button disabled={addBusyId === p.id} onClick={() => addMember(p.id)} className="btn-ghost text-xs disabled:opacity-40">Hinzufügen</button>
-                  </div>
-                ))}
-                {addableProfiles.length === 0 && <p className="text-textMuted text-xs">Keine Treffer.</p>}
-              </div>
-            )}
+            {/* Die Liste erschien früher erst nach einer Eingabe — ohne
+                Tippen sah man ein leeres Feld und konnte nicht erkennen, ob
+                es überhaupt jemanden zum Hinzufügen gibt. */}
+            <input className="input mb-2.5" placeholder="Nach Namen suchen (leer = alle zeigen)" value={addQuery} onChange={(e) => setAddQuery(e.target.value)} />
+            <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+              {addableProfiles.slice(0, 30).map((p) => (
+                <div key={p.id} className="flex items-center gap-2.5">
+                  <Avatar name={p.full_name || "?"} src={p.avatar_url} size={26} />
+                  <span className="text-sm text-textMain flex-1 min-w-0 truncate">{p.full_name || "Unbenannt"}</span>
+                  {p.status === "approved" ? (
+                    <button disabled={addBusyId === p.id} onClick={() => addMember(p.id)} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">Hinzufügen</button>
+                  ) : (
+                    // Nicht freigeschaltete Konten lassen sich nicht ins Team
+                    // holen. Der Grund gehört hierhin, sonst fehlt die Person
+                    // einfach und niemand weiss, warum.
+                    <span className="text-xs text-amber flex-shrink-0">wartet auf Freigabe</span>
+                  )}
+                </div>
+              ))}
+              {addableProfiles.length === 0 && (
+                <p className="text-textMuted text-xs">
+                  {addQuery.trim()
+                    ? "Keine Treffer."
+                    : "Niemand mehr zum Hinzufügen — alle Personen dieser Organisation sind bereits im Team."}
+                </p>
+              )}
+            </div>
           </div>
 
           {teamRequests.length > 0 && (
