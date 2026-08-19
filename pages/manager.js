@@ -8,6 +8,7 @@ import { openProfile } from "../lib/profileModalBus";
 import { COURSES } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
+import { wochenStartTag } from "../lib/woche";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -65,7 +66,7 @@ export default function Manager() {
 
     // Bereits gesetzte Ziele dieser Woche — ein Team kann mehrere haben.
     const { data: gesetzteZiele } = await supabase.from("team_goals")
-      .select("*").eq("team_id", teamId).eq("week_start", mondayOfWeek(new Date()).toISOString().slice(0, 10))
+      .select("*").eq("team_id", teamId).eq("week_start", wochenStartTag())
       .order("created_at", { ascending: true });
     setGoals(gesetzteZiele || []);
 
@@ -227,20 +228,13 @@ export default function Manager() {
     setBusyReqId(null);
   }
 
-  function mondayOfWeek(d) {
-    const day = d.getDay();
-    const diff = (day === 0 ? -6 : 1) - day;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diff);
-    monday.setHours(0, 0, 0, 0);
-    return monday;
-  }
-
   async function saveGoal() {
     if (!goalTitle.trim() || !goalTarget || !selectedTeamId) return;
     setSavingGoal(true);
     const { data: { session } } = await supabase.auth.getSession();
-    const week_start = mondayOfWeek(new Date()).toISOString().slice(0, 10);
+    // Zeitzonen-fest, siehe lib/woche.js — der Server fragt mit derselben
+    // Funktion ab, sonst findet er das Ziel nie.
+    const week_start = wochenStartTag();
     const { data: neu, error } = await supabase.from("team_goals").insert({
       manager_id: session.user.id, team_id: selectedTeamId, title: goalTitle.trim(), metric: goalMetric, target_count: Number(goalTarget), week_start,
     }).select().single();

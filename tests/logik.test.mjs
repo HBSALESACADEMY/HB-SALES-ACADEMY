@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
@@ -198,4 +199,23 @@ test("der Wettbewerbs-Maßstab kennt dieselben Kennzahlen plus XP", () => {
   const block = sql.slice(sql.indexOf("team_ranking_metric in ("), sql.indexOf(")", sql.indexOf("'termine'")));
   const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(erlaubt, ["xp", ...GOAL_METRIC_KEYS].sort());
+});
+
+// --- Wochenstart -----------------------------------------------------------
+
+test("der Wochenstart ist überall derselbe Tag — und ein Montag", () => {
+  // Der Kern des Fehlers: week_start wird im Browser geschrieben und auf dem
+  // Server abgefragt. Rechnet jede Seite in ihrer eigenen Zeitzone, schreibt
+  // der Browser (Berlin) den Sonntag und der Server (UTC) sucht den Montag —
+  // es wird nie ein Ziel gefunden. Deshalb hier wirklich in mehreren
+  // Zeitzonen ausführen statt nur die Logik nachzurechnen.
+  const skript = 'import("./lib/woche.js").then(w => console.log(w.wochenStartTag() + " " + w.wochenStartZeitpunkt()))';
+  const ergebnisse = ["Europe/Berlin", "UTC", "America/Los_Angeles", "Pacific/Auckland"].map((zone) =>
+    execFileSync(process.execPath, ["-e", skript], { env: { ...process.env, TZ: zone }, encoding: "utf8" }).trim());
+
+  assert.equal(new Set(ergebnisse).size, 1, `Wochenstart unterscheidet sich je Zeitzone: ${ergebnisse.join(" / ")}`);
+
+  const [tag] = ergebnisse[0].split(" ");
+  assert.match(tag, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(new Date(`${tag}T12:00:00Z`).getUTCDay(), 1, `${tag} ist kein Montag`);
 });

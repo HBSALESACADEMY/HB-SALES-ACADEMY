@@ -1,7 +1,8 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { goalMetric } from "../../lib/goalMetrics";
-import { ranglisteMetrik, werteProPerson, summeFuer, montagDieserWoche } from "../../lib/goalProgress";
+import { ranglisteMetrik, werteProPerson, summeFuer } from "../../lib/goalProgress";
+import { wochenStartTag, wochenStartZeitpunkt } from "../../lib/woche";
 
 // Alles, was die Seite „Mein Team" an Zahlen braucht: die Wochenziele der
 // eigenen Teams samt Fortschritt, die Mitglieder jedes Teams mit ihrem
@@ -35,9 +36,12 @@ export default async function handler(req, res) {
     let orgId = ich?.organization_id || null;
     if (activeOrgId && (ich?.is_platform_admin || activeOrgId === ich?.organization_id)) orgId = activeOrgId;
 
-    const start = montagDieserWoche();
-    const startISO = start.toISOString();
-    const startTag = startISO.slice(0, 10);
+    // Beides aus lib/woche.js: der Browser schreibt week_start mit genau
+    // derselben Funktion. Rechnete jede Seite in ihrer eigenen Zeitzone,
+    // suchte der Server (Vercel läuft in UTC) einen anderen Tag als der
+    // Browser geschrieben hat und fände nie ein Ziel.
+    const startTag = wochenStartTag();
+    const startISO = wochenStartZeitpunkt();
 
     // --- Eigene Teams (Mitgliedschaft ODER Leitung) -------------------------
     const [{ data: eigene }, { data: gefuehrte }] = await Promise.all([
