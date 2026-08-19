@@ -864,7 +864,18 @@ export default function Community() {
                   </div>
                 </div>
               ) : (
+                <>
                 <p className="text-sm text-textMain whitespace-pre-wrap mb-3">{renderContent(p.content)}</p>
+                {/* Beiträge, die aus einem Skript-Kommentar entstanden sind
+                    (migration_91), führen zurück zum Skript — sonst wüsste
+                    niemand, worüber hier eigentlich geredet wird. */}
+                {p.script_id && (
+                  <button onClick={() => router.push("/scripts")}
+                    className="btn-ghost text-xs mb-3 inline-flex items-center gap-1.5">
+                    📄 Zum Skript in der Bibliothek
+                  </button>
+                )}
+                </>
               )}
 
               {pollOptions.length > 0 && (() => {

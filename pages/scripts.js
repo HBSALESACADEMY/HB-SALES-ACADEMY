@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 import { loescheGeprueft } from "../lib/loeschen";
 import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
+import { apiPost } from "../lib/apiClient";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState([]);
+  const router = useRouter();
   const [isManager, setIsManager] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [kommentarZu, setKommentarZu] = useState(null);
+  const [kommentarText, setKommentarText] = useState("");
+  const [kommentarBusy, setKommentarBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
@@ -84,6 +90,23 @@ export default function Scripts() {
     }
   }
 
+  async function sendeKommentar(skript) {
+    if (!kommentarText.trim()) return;
+    setKommentarBusy(true);
+    try {
+      const { postId } = await apiPost("/api/script-comment", { scriptId: skript.id, text: kommentarText });
+      // Der Verweis auf den Beitrag entsteht beim ERSTEN Kommentar — ohne
+      // dieses Nachtragen bliebe "Diskussion ansehen" bis zum Neuladen weg.
+      setScripts((prev) => prev.map((x) => (x.id === skript.id ? { ...x, community_post_id: postId } : x)));
+      setKommentarZu(null);
+      setKommentarText("");
+      router.push(`/community?postId=${postId}`);
+    } catch (e) {
+      setFormError(e.message || "Der Kommentar konnte nicht gespeichert werden.");
+    }
+    setKommentarBusy(false);
+  }
+
   async function deleteScript(id) {
     if (!confirm("Skript wirklich löschen?")) return;
     const loeschFehler = await loescheGeprueft(supabase.from("scripts").delete().eq("id", id));
@@ -152,7 +175,11 @@ export default function Scripts() {
     <Layout>
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-display font-medium brand-text-gradient">Skript-Bibliothek</h1>
-        {isManager && <button onClick={() => { setFormError(""); setShowForm(true); }} className="btn text-xs flex-shrink-0">+ Neues Skript</button>}
+        {/* Hochladen darf jede Person — die Bibliothek lebt davon, dass alle
+            ihre bewährten Bausteine einbringen. Aufgeräumt wird hinten:
+            Manager, Admins und Teamleads dürfen fremde Skripte bearbeiten und
+            löschen (migration_91). */}
+        <button onClick={() => { setFormError(""); setShowForm(true); }} className="btn text-xs flex-shrink-0">+ Neues Skript</button>
       </div>
       <div className="brand-stripe w-16 mb-4" />
       <BereichsTabs tabs={WISSEN} />
@@ -181,11 +208,6 @@ export default function Scripts() {
               </button>
             ))}
           </div>
-          {!isManager && (
-            <p className="text-[11px] text-textMuted mb-3">
-              Dein Skript ist nur für dich sichtbar. Für die ganze Organisation veröffentlichen kann die Teamleitung.
-            </p>
-          )}
           <div className="flex items-center gap-2">
             <button disabled={saving} onClick={() => setShowForm(false)} className="btn-ghost text-xs flex-1 disabled:opacity-40">Abbrechen</button>
             <button disabled={saving} onClick={saveScript} className="btn text-xs flex-1 justify-center disabled:opacity-40">{saving ? "Speichert..." : "Speichern"}</button>
@@ -238,11 +260,34 @@ export default function Scripts() {
                       {/* Eigene private Skripte darf man selbst bearbeiten und
                           löschen — sonst könnte man etwas anlegen und danach
                           nie wieder anfassen. */}
-                      {(isManager || (s.created_by === userId && s.visibility === "private")) && <button onClick={() => startEdit(s)} className="btn-ghost text-xs">Bearbeiten</button>}
-                      {(isManager || (s.created_by === userId && s.visibility === "private")) && <button onClick={() => deleteScript(s.id)} className="btn-ghost text-xs text-coral">Löschen</button>}
+                      {(isManager || s.created_by === userId) && <button onClick={() => startEdit(s)} className="btn-ghost text-xs">Bearbeiten</button>}
+                      {(isManager || s.created_by === userId) && <button onClick={() => deleteScript(s.id)} className="btn-ghost text-xs text-coral">Löschen</button>}
+                      {s.visibility !== "private" && (
+                        <button onClick={() => { setKommentarZu(kommentarZu === s.id ? null : s.id); setKommentarText(""); }} className="btn-ghost text-xs">💬 Kommentieren</button>
+                      )}
+                      {s.community_post_id && (
+                        <button onClick={() => router.push(`/community?postId=${s.community_post_id}`)} className="btn-ghost text-xs">Diskussion ansehen →</button>
+                      )}
                     </div>
                   </div>
                   <p className="text-sm text-textMuted whitespace-pre-wrap">{s.body}</p>
+                  {kommentarZu === s.id && (
+                    <div className="mt-2 pt-2 border-t border-line">
+                      <textarea className="input mb-2" rows={2} value={kommentarText} maxLength={2000}
+                        placeholder="Was möchtest du dazu sagen?"
+                        onChange={(e) => setKommentarText(e.target.value)} />
+                      <div className="flex items-center gap-2">
+                        <button disabled={kommentarBusy || !kommentarText.trim()} onClick={() => sendeKommentar(s)} className="btn text-xs disabled:opacity-40">
+                          {kommentarBusy ? "Sendet..." : "In der Community posten"}
+                        </button>
+                        <button onClick={() => setKommentarZu(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                      </div>
+                      <p className="text-[11px] text-textMuted mt-1.5">
+                        Der Kommentar erscheint als Beitrag in der Community, verlinkt auf dieses Skript.
+                        Jedes Skript hat dort genau einen Beitrag — weitere Kommentare hängen darunter.
+                      </p>
+                    </div>
+                  )}
                   {s.file_url && (
                     <a href={s.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
                       <Icon name="download" size={12} /> {s.file_name || "Anhang"}

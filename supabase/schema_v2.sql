@@ -373,6 +373,10 @@ create table if not exists community_posts (
   poll_expires_at timestamptz
 );
 
+-- Verweise zwischen Skript und seinem Diskussions-Beitrag (migration_91).
+alter table scripts add column if not exists community_post_id uuid references community_posts(id) on delete set null;
+alter table community_posts add column if not exists script_id uuid references scripts(id) on delete cascade;
+
 create table if not exists community_comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references community_posts(id) on delete cascade,
@@ -1130,27 +1134,26 @@ $$;
 -- privates Skript nachträglich auf "für alle" umstellen.
 drop policy if exists "scripts_insert_managers" on scripts;
 drop policy if exists "scripts_insert" on scripts;
-create policy "scripts_insert" on scripts for insert with check (
-  created_by = auth.uid()
-  and (visibility = 'private' or darf_skripte_veroeffentlichen(auth.uid()))
-);
+-- Hochladen darf jede Person; aufgeräumt wird hinten (migration_91):
+-- Manager, Admins und Teamleads dürfen fremde Skripte bearbeiten und löschen.
+create policy "scripts_insert" on scripts for insert with check (created_by = auth.uid());
 drop policy if exists "scripts_update_managers" on scripts;
 drop policy if exists "scripts_update" on scripts;
 create policy "scripts_update" on scripts for update
 using (
-  (created_by = auth.uid() and visibility = 'private')
+  created_by = auth.uid()
   or (darf_skripte_veroeffentlichen(auth.uid())
       and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
 )
 with check (
-  (created_by = auth.uid() and visibility = 'private')
+  created_by = auth.uid()
   or (darf_skripte_veroeffentlichen(auth.uid())
       and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
 );
 drop policy if exists "scripts_delete_managers" on scripts;
 drop policy if exists "scripts_delete" on scripts;
 create policy "scripts_delete" on scripts for delete using (
-  (created_by = auth.uid() and visibility = 'private')
+  created_by = auth.uid()
   or (darf_skripte_veroeffentlichen(auth.uid())
       and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
 );
