@@ -1,5 +1,6 @@
 import { requireUser } from "../../../lib/supabaseServer";
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
+import { aktiveOrgId } from "../../../lib/aktiveOrgServer";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -18,10 +19,15 @@ export default async function handler(req, res) {
 
     // Service-Role umgeht RLS komplett — organization_id muss hier deshalb
     // explizit gefiltert werden, sonst sähe jeder Manager jede Organisation.
-    // Ausnahme: Plattform-Admins sehen bewusst organisationsübergreifend alle Nutzer.
-    let query = admin.from("profiles").select("*").order("created_at", { ascending: true });
-    if (!me.is_platform_admin) query = query.eq("organization_id", me.organization_id);
-    const { data: profiles, error: profilesError } = await query;
+    //
+    // Auch Plattform-Admins: früher entfiel der Filter für sie ganz, und sie
+    // sahen die Nutzer ALLER Organisationen auf einmal. Jetzt gilt auch für
+    // sie die aktive Organisation — die per Firmencode gewählte, sonst die
+    // eigene (migration_92).
+    const orgId = await aktiveOrgId(admin, me, user.id);
+    if (!orgId) return res.status(400).json({ error: "Keine aktive Organisation." });
+    const { data: profiles, error: profilesError } = await admin.from("profiles")
+      .select("*").eq("organization_id", orgId).order("created_at", { ascending: true });
     if (profilesError) throw profilesError;
 
     // auth.users holds email addresses; profiles table doesn't store them.

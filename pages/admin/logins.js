@@ -5,6 +5,7 @@ import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { ABSTAND } from "../../lib/autoRefresh";
+import { getActiveOrgId } from "../../lib/activeOrg";
 
 export default function AdminLogins() {
   const [isManager, setIsManager] = useState(true);
@@ -23,16 +24,17 @@ export default function AdminLogins() {
     if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) { setIsManager(false); if (!silent) setLoading(false); return; }
     setIsPlatformAdmin(!!me.is_platform_admin);
 
-    // Organisationsleiter/-Admins sehen nur die eigene Organisation — nur
-    // Plattform-Admins sehen organisationsübergreifend alles.
-    let profilesQuery = supabase.from("profiles").select("id, full_name, avatar_url");
-    if (!me.is_platform_admin) profilesQuery = profilesQuery.eq("organization_id", me.organization_id);
-    const { data: profiles } = await profilesQuery;
+    // Immer auf die AKTIVE Organisation begrenzt — auch für Plattform-Admins.
+    // Früher entfiel der Filter für sie ganz und sie sahen die Anmeldungen
+    // aller Organisationen zugleich, ohne Firmencode.
+    const activeOrgId = getActiveOrgId(me);
+    const { data: profiles } = await supabase.from("profiles")
+      .select("id, full_name, avatar_url").eq("organization_id", activeOrgId);
     const orgUserIds = (profiles || []).map((p) => p.id);
 
-    let eventsQuery = supabase.from("login_events").select("*").order("created_at", { ascending: false }).limit(300);
-    if (!me.is_platform_admin) eventsQuery = eventsQuery.in("user_id", orgUserIds);
-    const { data: ev } = await eventsQuery;
+    const { data: ev } = await supabase.from("login_events").select("*")
+      .in("user_id", orgUserIds.length ? orgUserIds : ["00000000-0000-0000-0000-000000000000"])
+      .order("created_at", { ascending: false }).limit(300);
 
     const map = {};
     (profiles || []).forEach((p) => { map[p.id] = p; });

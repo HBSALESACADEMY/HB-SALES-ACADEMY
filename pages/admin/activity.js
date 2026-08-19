@@ -6,6 +6,7 @@ import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { ABSTAND } from "../../lib/autoRefresh";
+import { getActiveOrgId } from "../../lib/activeOrg";
 
 const TYPE_META = {
   registered: { label: "Registriert", icon: "flame", color: "#F0B23E" },
@@ -37,13 +38,14 @@ export default function AdminActivity() {
     if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) { setIsAdmin(false); if (!silent) setLoading(false); return; }
     setIsPlatformAdmin(!!me.is_platform_admin);
 
-    // Organisationsleiter/-Admins sehen nur die eigene Organisation — nur
-    // Plattform-Admins sehen organisationsübergreifend alles.
-    let profilesQuery = supabase.from("profiles").select("id, full_name, avatar_url, created_at");
-    if (!me.is_platform_admin) profilesQuery = profilesQuery.eq("organization_id", me.organization_id);
-    const { data: profiles } = await profilesQuery;
+    // Immer auf die AKTIVE Organisation begrenzt — auch für Plattform-Admins.
+    // Früher entfiel der Filter für sie ganz und die Aktivitäten aller
+    // Organisationen liefen in einer Liste zusammen.
+    const activeOrgId = getActiveOrgId(me);
+    const { data: profiles } = await supabase.from("profiles")
+      .select("id, full_name, avatar_url, created_at").eq("organization_id", activeOrgId);
     const orgUserIds = (profiles || []).map((p) => p.id);
-    const scoped = (q, col = "user_id") => (me.is_platform_admin ? q : q.in(col, orgUserIds));
+    const scoped = (q, col = "user_id") => q.in(col, orgUserIds.length ? orgUserIds : ["00000000-0000-0000-0000-000000000000"]);
 
     const [
       { data: logins }, { data: quizzes }, { data: exams },
