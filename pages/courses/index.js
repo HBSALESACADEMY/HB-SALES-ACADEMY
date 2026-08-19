@@ -76,7 +76,7 @@ export default function CoursesIndex() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Kurse</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Deine gesamte Ausbildung an einem Ort: die Grundausbildung, die Kurse deiner Organisation und dein persönlicher Lernpfad.</p>
+      <p className="text-textMuted text-sm mb-6">Deine gesamte Ausbildung an einem Ort: die Grundausbildung, dein persönlicher Lernpfad und die Kurse deiner Organisation.</p>
       {loading ? (
         <p className="text-textMuted text-sm">Lädt...</p>
       ) : (
@@ -89,7 +89,7 @@ export default function CoursesIndex() {
               </div>
               <div className="flex-1">
                 <div className="font-display font-semibold text-textMain">Grundausbildung abgeschlossen! 🎓</div>
-                <div className="text-xs text-textMuted">Ab jetzt übernimmt dein persönlicher Lernpfad — weiter unten auf dieser Seite.</div>
+                <div className="text-xs text-textMuted">Ab jetzt übernimmt dein persönlicher Lernpfad — direkt darunter.</div>
               </div>
             </div>
           )}
@@ -121,30 +121,11 @@ export default function CoursesIndex() {
           })}
         </div>
 
-        {eigene.length > 0 && (
-          <>
-            <div className="text-[11px] uppercase tracking-wide text-textMuted mt-8 mb-2">Kurse deiner Organisation</div>
-            <div className="flex flex-col gap-3.5">
-              {eigene.map((c) => (
-                <div key={c.id} className="card flex items-center gap-4 cursor-pointer hover:-translate-y-0.5 hover:shadow-xl transition"
-                  onClick={() => router.push(`/custom-courses/${c.id}`)}>
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,.06)", color: EIGENE_FARBEN[c.color] }}>
-                    <Icon name="book" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
-                    <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
-                  </div>
-                  <span className="font-mono text-xs text-textMuted flex-shrink-0">{modulZahl[c.id] || 0} Module</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Der persönliche Lernpfad war ein eigener Reiter. Er bleibt an die
-            abgeschlossene Grundausbildung geknüpft — nur eben hier. */}
-        <div className="text-[11px] uppercase tracking-wide text-textMuted mt-8 mb-2 flex items-center gap-2">
+        {/* Steht direkt unter der Grundausbildung, nicht am Seitenende: die
+            automatisch erzeugten Kurse sind deren Fortsetzung und sollen wie
+            eine gehören, nicht wie ein Anhang wirken. Die Kurse der
+            Organisation stehen deshalb darunter. */}
+        <div className="text-[11px] uppercase tracking-wide text-textMuted mt-6 mb-2 flex items-center gap-2">
           Dein persönlicher Lernpfad <AIBadge title="Diese Kurse werden automatisch von einer KI erstellt." />
         </div>
         {!(allPassed || isAdmin) ? (
@@ -185,6 +166,27 @@ export default function CoursesIndex() {
                 })}
               </div>
             )}
+          </>
+        )}
+
+        {eigene.length > 0 && (
+          <>
+            <div className="text-[11px] uppercase tracking-wide text-textMuted mt-8 mb-2">Kurse deiner Organisation</div>
+            <div className="flex flex-col gap-3.5">
+              {eigene.map((c) => (
+                <div key={c.id} className="card flex items-center gap-4 cursor-pointer hover:-translate-y-0.5 hover:shadow-xl transition"
+                  onClick={() => router.push(`/custom-courses/${c.id}`)}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,.06)", color: EIGENE_FARBEN[c.color] }}>
+                    <Icon name="book" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
+                    <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
+                  </div>
+                  <span className="font-mono text-xs text-textMuted flex-shrink-0">{modulZahl[c.id] || 0} Module</span>
+                </div>
+              ))}
+            </div>
           </>
         )}
         </>
