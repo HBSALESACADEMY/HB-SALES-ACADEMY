@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
@@ -218,4 +218,56 @@ test("der Wochenstart ist überall derselbe Tag — und ein Montag", () => {
   const [tag] = ergebnisse[0].split(" ");
   assert.match(tag, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(new Date(`${tag}T12:00:00Z`).getUTCDay(), 1, `${tag} ist kein Montag`);
+});
+
+// --- Verwendete Komponenten sind auch importiert ---------------------------
+
+test("jede verwendete Komponente ist im selben Modul bekannt", () => {
+  // Der Build meldet das NICHT: eine unbekannte Variable in JSX ist erst zur
+  // Laufzeit ein Fehler ("Can't find variable: Icon") — und dann ist die ganze
+  // Seite weiss. Genau so ist es beim Herausziehen des Betreiber-Bereichs
+  // passiert: der Import blieb in der alten Datei zurück.
+  const dateien = [];
+  const sammle = (verzeichnis) => {
+    for (const eintrag of readdirSync(verzeichnis, { withFileTypes: true })) {
+      const pfad = `${verzeichnis}/${eintrag.name}`;
+      // pages/api enthält keine Oberfläche, aber KI-Anweisungen mit
+      // Platzhaltern wie <Zahl> — die sind kein JSX.
+      if (eintrag.isDirectory() && eintrag.name !== "api") sammle(pfad);
+      else if (eintrag.name.endsWith(".js")) dateien.push(pfad);
+    }
+  };
+  sammle(new URL("../pages", import.meta.url).pathname);
+  sammle(new URL("../components", import.meta.url).pathname);
+
+  const fehler = [];
+  for (const pfad of dateien) {
+    const quelle = readFileSync(pfad, "utf8");
+    const benutzt = new Set([...quelle.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((m) => m[1]));
+    if (benutzt.size === 0) continue;
+
+    const bekannt = new Set();
+    for (const m of quelle.matchAll(/import\s+([A-Za-z0-9_]+)\s*(?:,\s*\{([^}]*)\})?\s*from/g)) {
+      bekannt.add(m[1]);
+      if (m[2]) m[2].split(",").forEach((t) => t.trim() && bekannt.add(t.trim().split(/\s+as\s+/).pop()));
+    }
+    for (const m of quelle.matchAll(/import\s*\{([^}]*)\}\s*from/g)) {
+      m[1].split(",").forEach((t) => t.trim() && bekannt.add(t.trim().split(/\s+as\s+/).pop()));
+    }
+    // Im selben Modul definierte Komponenten zählen ebenfalls.
+    for (const m of quelle.matchAll(/(?:function|const)\s+([A-Z][A-Za-z0-9_]*)/g)) bekannt.add(m[1]);
+    // Komponenten, die als Eigenschaft hereingereicht werden (z.B. das
+    // <Component /> in _app.js) stehen in der Parameter-Zerlegung.
+    for (const m of quelle.matchAll(/\(\s*\{([^}]*)\}\s*\)/g)) {
+      m[1].split(",").forEach((t) => {
+        const name = t.trim().split(/[:=]/)[0].trim();
+        if (/^[A-Z]/.test(name)) bekannt.add(name);
+      });
+    }
+
+    for (const name of benutzt) {
+      if (!bekannt.has(name)) fehler.push(`${pfad.split("/").slice(-2).join("/")}: <${name}>`);
+    }
+  }
+  assert.deepEqual(fehler, [], `Nicht importierte Komponenten:\n${fehler.join("\n")}`);
 });

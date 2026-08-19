@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import AdminTabs from "../../components/AdminTabs";
+import Icon from "../../components/Icon";
 import OrgEditor from "../../components/OrgEditor";
 import { supabase } from "../../lib/supabaseClient";
 import { apiGet, apiPost } from "../../lib/apiClient";
