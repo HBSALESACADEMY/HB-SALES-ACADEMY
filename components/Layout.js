@@ -22,11 +22,9 @@ import TutorialModal from "./TutorialModal";
 const FALLBACK_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard", route: "/", is_builtin: true, requires_manager: false },
   { id: "courses", label: "Kurse", icon: "book", route: "/courses", is_builtin: true, requires_manager: false },
-  { id: "simulator", label: "Szenario-Simulator", icon: "chat", route: "/simulator", is_builtin: true, requires_manager: false },
-  { id: "roleplay", label: "Rollenspiel", icon: "chat", route: "/roleplay", is_builtin: true, requires_manager: false },
+  { id: "roleplay", label: "Training", icon: "chat", route: "/roleplay", is_builtin: true, requires_manager: false },
   { id: "call-tracker", label: "Call Tracker", icon: "phone", route: "/call-tracker", is_builtin: true, requires_manager: false },
-  { id: "einwand-trainer", label: "Einwand-Trainer", icon: "flame", route: "/einwand-trainer", is_builtin: true, requires_manager: false },
-  { id: "knowledge", label: "Wissensdatenbank", icon: "library", route: "/knowledge", is_builtin: true, requires_manager: false },
+  { id: "knowledge", label: "Wissen", icon: "library", route: "/knowledge", is_builtin: true, requires_manager: false },
   { id: "manager", label: "Team (Manager)", icon: "users", route: "/manager", is_builtin: true, requires_manager: true },
   { id: "admin", label: "Verwaltung", icon: "lock", route: "/admin", is_builtin: true, requires_manager: true },
 ];
@@ -49,6 +47,36 @@ const NAV_GROUPS = {
 };
 function groupFor(item) {
   return NAV_GROUPS[item.key] || (item.is_builtin ? "Weiteres" : "Eigene Inhalte");
+}
+
+// Seiten, die inzwischen als Reiter INNERHALB eines Bereichs erreichbar sind
+// (siehe components/BereichsTabs.js) sowie die auf /courses zusammengeführten
+// Kurs-Seiten. Sie gehören nicht mehr als eigener Punkt in die Seitenleiste.
+//
+// Die Einträge liegen in der Datenbank, nicht im Code — deshalb wird hier
+// beim Anzeigen gefiltert statt gelöscht. Wer einen Punkt wieder einzeln
+// haben will, kann ihn in der Verwaltung unter Navigation weiterhin sichtbar
+// schalten; er erscheint dann trotzdem nicht, was der bewussten Entscheidung
+// entspricht, diese Bereiche zusammenzuhalten.
+const IN_BEREICH_AUFGEGANGEN = new Set([
+  "/simulator", "/einwand-trainer", "/roleplay-history",
+  "/scripts", "/leitfaden-generator",
+  "/daily-challenge", "/duel", "/leaderboard",
+  "/lernpfad", "/custom-courses",
+]);
+
+// Die verbliebenen Punkte führen jetzt einen ganzen Bereich an und heissen
+// entsprechend allgemeiner.
+const NEUE_NAMEN = {
+  "/roleplay": "Training",
+  "/knowledge": "Wissen",
+  "/flashcards": "Üben",
+};
+
+function fasseZusammen(items) {
+  return (items || [])
+    .filter((n) => !(n.is_builtin && IN_BEREICH_AUFGEGANGEN.has(n.route)))
+    .map((n) => (NEUE_NAMEN[n.route] ? { ...n, label: NEUE_NAMEN[n.route] } : n));
 }
 
 let cachedProfile = null;
@@ -246,6 +274,7 @@ export default function Layout({ children, fullBleed }) {
       if (activeOrgId) {
         effectiveNav = effectiveNav.filter((n) => n.is_builtin || n.organization_id === activeOrgId);
       }
+      effectiveNav = fasseZusammen(effectiveNav);
 
       if (mounted) {
         setProfile(data);
