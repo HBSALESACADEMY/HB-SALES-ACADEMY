@@ -94,6 +94,8 @@ export default function Team() {
 
     // Ab hier gelten die Ziele als gesehen — der Zähler in der Navigation
     // verschwindet damit (gleiches Muster wie bei der Community).
+    // Fehlt die Spalte (migration_87), schlägt nur dieses Update fehl — der
+    // Rest der Seite darf davon nichts merken.
     await supabase.from("profiles").update({ last_seen_team_goals_at: new Date().toISOString() }).eq("id", session.user.id);
 
     setLoading(false);

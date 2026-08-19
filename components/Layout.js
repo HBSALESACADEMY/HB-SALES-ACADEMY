@@ -307,7 +307,7 @@ export default function Layout({ children, fullBleed }) {
       // von last_seen_community_at beim Besuch der Community-Seite. Mit dem
       // (evtl. noch nicht gepatchten) cachedProfile lief das in ein Rennen,
       // bei dem der Badge direkt nach dem "Gesehen"-Markieren wieder auftauchte.
-      const { data: me } = await supabase.from("profiles").select("role, organization_id, is_platform_admin, last_seen_community_at, last_seen_team_goals_at").eq("id", uid).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("role, organization_id, is_platform_admin, last_seen_community_at").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
       const [{ count: postCount }, { count: commentCount }] = await Promise.all([
         supabase.from("community_posts").select("id", { count: "exact", head: true }).gt("created_at", since).neq("user_id", session.user.id),
@@ -322,7 +322,13 @@ export default function Layout({ children, fullBleed }) {
       const { data: meineTeams } = await supabase.from("team_members").select("team_id").eq("user_id", uid);
       const meineTeamIds = (meineTeams || []).map((t) => t.team_id);
       if (meineTeamIds.length) {
-        const gesehenSeit = me?.last_seen_team_goals_at || new Date(0).toISOString();
+        // Eigene Abfrage statt mit oben gebündelt: fehlt die Spalte (weil
+        // migration_87 noch nicht eingespielt ist), scheiterte sonst die
+        // GESAMTE Profil-Abfrage. Folge war nicht etwa nur ein fehlender
+        // Zähler — die Community galt als komplett ungelesen und die
+        // Manager-Badges für Freigaben verschwanden ganz.
+        const { data: gesehen } = await supabase.from("profiles").select("last_seen_team_goals_at").eq("id", uid).maybeSingle();
+        const gesehenSeit = gesehen?.last_seen_team_goals_at || new Date(0).toISOString();
         const { count } = await supabase.from("team_goals").select("id", { count: "exact", head: true })
           .in("team_id", meineTeamIds).eq("week_start", wochenStartTag())
           .gt("created_at", gesehenSeit).neq("manager_id", uid);
