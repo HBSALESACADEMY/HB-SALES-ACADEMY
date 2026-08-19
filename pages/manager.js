@@ -41,6 +41,7 @@ export default function Manager() {
   const [allProfiles, setAllProfiles] = useState([]);
   const [addQuery, setAddQuery] = useState("");
   const [addBusyId, setAddBusyId] = useState(null);
+  const [orgName, setOrgName] = useState("");
 
   async function loadTeams() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -63,6 +64,12 @@ export default function Manager() {
     // sie erst gar nicht als Option zeigen).
     const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
     const activeOrgId = getActiveOrgId(me);
+    // Name der aktiven Organisation, damit unten benannt werden kann, wessen
+    // Personen die Liste überhaupt zeigt.
+    if (activeOrgId) {
+      const { data: o } = await supabase.from("organizations").select("name").eq("id", activeOrgId).maybeSingle();
+      setOrgName(o?.name || "");
+    }
 
     // Bereits gesetzte Ziele dieser Woche — ein Team kann mehrere haben.
     const { data: gesetzteZiele } = await supabase.from("team_goals")
@@ -371,7 +378,14 @@ export default function Manager() {
             {/* Die Liste erschien früher erst nach einer Eingabe — ohne
                 Tippen sah man ein leeres Feld und konnte nicht erkennen, ob
                 es überhaupt jemanden zum Hinzufügen gibt. */}
-            <input className="input mb-2.5" placeholder="Nach Namen suchen (leer = alle zeigen)" value={addQuery} onChange={(e) => setAddQuery(e.target.value)} />
+            <input className="input mb-2" placeholder="Nach Namen suchen (leer = alle zeigen)" value={addQuery} onChange={(e) => setAddQuery(e.target.value)} />
+            {/* Die Mandanten-Grenze sichtbar machen: fehlt jemand in der Liste,
+                ist die häufigste Ursache eine andere Organisation — das war
+                vorher an keiner Stelle zu erkennen. */}
+            <p className="text-[11px] text-textMuted mb-2.5">
+              Zeigt nur Personen aus <strong>{orgName || "dieser Organisation"}</strong> ({allProfiles.length} insgesamt).
+              Wer sich mit einem anderen Firmencode registriert hat, erscheint hier nicht.
+            </p>
             <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
               {addableProfiles.slice(0, 30).map((p) => (
                 <div key={p.id} className="flex items-center gap-2.5">
