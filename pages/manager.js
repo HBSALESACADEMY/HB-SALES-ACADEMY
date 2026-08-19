@@ -212,8 +212,15 @@ export default function Manager() {
     if (!selectedTeamId) return;
     const teamName = myTeams.find((t) => t.id === selectedTeamId)?.name;
     if (!confirm(`Team "${teamName}" wirklich löschen? Alle Zuordnungen, Ziele und Anfragen für dieses Team gehen dabei verloren.`)) return;
-    const { error } = await supabase.from("teams").delete().eq("id", selectedTeamId);
+    // Wie bei removeMember: abgelehnte Löschungen melden keinen Fehler. Seit
+    // die Seite auch fremde Teams der Organisation zeigt (migration_88), ist
+    // das hier besonders leicht auszulösen.
+    const { data: geloescht, error } = await supabase.from("teams").delete().eq("id", selectedTeamId).select();
     if (error) { alert(error.message); return; }
+    if (!geloescht || geloescht.length === 0) {
+      alert("Das Löschen wurde abgelehnt. Ein Team darf nur löschen, wer es angelegt hat.");
+      return;
+    }
     setSelectedTeamId(null);
     await load();
   }
@@ -231,8 +238,17 @@ export default function Manager() {
   async function removeMember(profileId) {
     if (!selectedTeamId) return;
     if (!confirm("Aus diesem Team entfernen?")) return;
-    const { error } = await supabase.from("team_members").delete().eq("team_id", selectedTeamId).eq("user_id", profileId);
+    // .select() ist hier kein Beiwerk: eine von den Zugriffsregeln verbotene
+    // Löschung meldet KEINEN Fehler — sie trifft null Zeilen und gilt als
+    // erfolgreich. Ohne die zurückgelieferten Zeilen sah es so aus, als hätte
+    // es geklappt, und die Person stand nach dem Neuladen wieder da.
+    const { data: entfernt, error } = await supabase.from("team_members").delete()
+      .eq("team_id", selectedTeamId).eq("user_id", profileId).select();
     if (error) { alert(error.message); return; }
+    if (!entfernt || entfernt.length === 0) {
+      alert("Das Entfernen wurde abgelehnt. Mitglieder darf nur verwalten, wer das Team angelegt hat, oder ein Admin der Organisation.");
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     await loadTeamData(selectedTeamId, session);
   }
@@ -268,8 +284,14 @@ export default function Manager() {
   }
 
   async function deleteGoal(id) {
-    const { error } = await supabase.from("team_goals").delete().eq("id", id);
+    // Siehe removeMember: ohne .select() bliebe eine abgelehnte Löschung
+    // unbemerkt und das Ziel käme beim nächsten Laden zurück.
+    const { data: geloescht, error } = await supabase.from("team_goals").delete().eq("id", id).select();
     if (error) { alert(error.message); return; }
+    if (!geloescht || geloescht.length === 0) {
+      alert("Das Löschen wurde abgelehnt. Ziele darf nur verwalten, wer das Team angelegt hat, oder ein Admin der Organisation.");
+      return;
+    }
     setGoals((prev) => prev.filter((g) => g.id !== id));
   }
 

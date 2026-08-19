@@ -26,9 +26,17 @@ export default function Team() {
   async function leaveTeam(teamId) {
     if (!confirm("Team wirklich verlassen? Du kannst später jederzeit eine neue Team-Anfrage stellen.")) return;
     setLeavingId(teamId);
-    const { error } = await supabase.from("team_members").delete().eq("team_id", teamId).eq("user_id", selfId);
+    // Siehe pages/manager.js: eine abgelehnte Löschung meldet keinen Fehler,
+    // sondern trifft null Zeilen — ohne .select() bliebe man stillschweigend
+    // im Team.
+    const { data: ausgetreten, error } = await supabase.from("team_members").delete()
+      .eq("team_id", teamId).eq("user_id", selfId).select();
     setLeavingId(null);
     if (error) { alert(error.message); return; }
+    if (!ausgetreten || ausgetreten.length === 0) {
+      alert("Das Austreten wurde abgelehnt. Bitte wende dich an deine Teamleitung.");
+      return;
+    }
     await load();
   }
 
