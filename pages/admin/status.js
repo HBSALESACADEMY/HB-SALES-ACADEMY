@@ -30,7 +30,19 @@ export default function SystemStatus() {
   }
 
   useEffect(() => {
-    laden();
+    // Beim Öffnen IMMER frisch messen, nicht den gespeicherten Stand zeigen.
+    //
+    // Grund: Der automatische Lauf ist im Hobby-Tarif nur einmal täglich
+    // möglich. Wer eine Störung behoben hatte, sah hier trotzdem weiter die
+    // alte Meldung und hielt sie für den aktuellen Zustand — mit dem
+    // "Jetzt prüfen"-Knopf daneben, den man kennen musste. Eine Statusseite,
+    // die Behobenes als kaputt anzeigt, ist schlimmer als keine.
+    (async () => {
+      await laden();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      try { await apiPost("/api/admin/system-check", {}); await laden(); } catch { /* Anzeige bleibt beim gespeicherten Stand */ }
+    })();
     const timer = setInterval(() => { if (!document.hidden) laden(); }, ABSTAND.GELEGENTLICH);
     const beiSichtbar = () => { if (!document.hidden) laden(); };
     document.addEventListener("visibilitychange", beiSichtbar);
@@ -114,7 +126,11 @@ export default function SystemStatus() {
                     : `Störung erkannt: ${gestoert.map((p) => p.name).join(", ")}`}
                 </div>
                 <div className="text-xs text-textMuted">
-                  Zuletzt geprüft: {new Date(stand.geprueft_at).toLocaleString("de-DE")}
+                  Gemessen: {new Date(stand.geprueft_at).toLocaleString("de-DE")}
+                  {(() => {
+                    const min = Math.round((Date.now() - new Date(stand.geprueft_at).getTime()) / 60000);
+                    return min < 2 ? " · gerade eben" : ` · vor ${min < 90 ? `${min} Minuten` : `${Math.round(min / 60)} Stunden`}`;
+                  })()}
                 </div>
               </div>
             </div>
