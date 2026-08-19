@@ -1611,12 +1611,12 @@ create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = 
 -- aktiv verwalteten Organisation (gleicher Grund wie bei nav_items/
 -- custom_courses, migration_53).
 drop policy if exists "teams_select_all" on teams;
+-- Ausschliesslich die Organisation des Teams (migration_94). Der frühere
+-- Mitglieds-Zweig aus migration_89 ist entfallen: seit das Team seine
+-- Organisation selbst trägt, löst er kein Problem mehr, machte aber ein Team
+-- in JEDER aktiven Organisation sichtbar, sobald man selbst Mitglied war.
 create policy "teams_select_all" on teams for select using (
   organization_id is not distinct from aktive_org(auth.uid())
-  -- Auch das eigene Team lesen dürfen, unabhängig davon, in welcher
-  -- Organisation die anlegende Person sitzt (migration_89): sonst stand für
-  -- Mitglieder "Du bist noch in keinem Team".
-  or exists (select 1 from team_members tm where tm.team_id = teams.id and tm.user_id = auth.uid())
 );
 drop policy if exists "teams_insert_managers" on teams;
 create policy "teams_insert_managers" on teams for insert with check (
@@ -1631,7 +1631,13 @@ create policy "teams_delete_own" on teams for delete using (created_by = auth.ui
 
 -- --- team_members ---
 drop policy if exists "team_members_select_all" on team_members;
-create policy "team_members_select_all" on team_members for select using (sieht_person(user_id));
+create policy "team_members_select_all" on team_members for select using (
+  exists (
+    select 1 from teams t
+    where t.id = team_members.team_id
+      and t.organization_id is not distinct from aktive_org(auth.uid())
+  )
+);
 drop policy if exists "team_members_insert_lead" on team_members;
 create policy "team_members_insert_lead" on team_members for insert with check (
   kann_team_verwalten(team_id, auth.uid())
