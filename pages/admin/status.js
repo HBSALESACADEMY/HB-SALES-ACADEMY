@@ -113,6 +113,10 @@ export default function SystemStatus() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-textMain font-medium">{p.name}</div>
                   <div className={`text-xs ${p.ok ? "text-textMuted" : "text-coral"}`}>{p.hinweis}</div>
+                  {/* Bei einer Störung reicht der Name des fehlenden Schlüssels
+                      nicht — was ausfällt und was zu tun ist, gehört daneben. */}
+                  {!p.ok && p.folge && <div className="text-xs text-textMuted mt-1.5"><strong>Folge:</strong> {p.folge}</div>}
+                  {!p.ok && p.loesung && <div className="text-xs text-textMuted mt-1"><strong>Behebung:</strong> {p.loesung}</div>}
                 </div>
               </div>
             ))}
