@@ -8,6 +8,8 @@ import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { ABSTAND } from "../lib/autoRefresh";
+import { apiGet } from "../lib/apiClient";
+import { goalMetricLabel } from "../lib/goalMetrics";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -26,6 +28,7 @@ export default function Dashboard() {
   const [teamUpcomingLeads, setTeamUpcomingLeads] = useState([]);
   const [myMentions, setMyMentions] = useState([]);
   const [myOpenTasks, setMyOpenTasks] = useState([]);
+  const [teamZiele, setTeamZiele] = useState([]);
   const [showCourseList, setShowCourseList] = useState(false);
 
   async function loadPendingFriendRequests(uid) {
@@ -198,6 +201,17 @@ export default function Dashboard() {
         setTeamUpcomingLeads([]);
       }
 
+      // Team-Ziele über dieselbe Route wie die Seite "Mein Team", damit hier
+      // und dort dieselben Zahlen stehen. Scheitert der Aufruf, bleibt das
+      // Dashboard vollständig nutzbar — der Block fehlt dann einfach.
+      try {
+        const { teams } = await apiGet("/api/team-goals");
+        setTeamZiele((teams || []).flatMap((t) => (t.ziele || []).map((z) => ({ ...z, teamName: t.name }))));
+      } catch (e) {
+        console.error("Team-Ziele fürs Dashboard:", e.message);
+        setTeamZiele([]);
+      }
+
       // Erwähnungen (Community + Termin-Kommentare) und offene, mir
       // zugewiesene Aufgaben — beides ungelesen bzw. noch nicht erledigt.
       const [{ data: communityMentions }, { data: leadMentions }, { data: openTasks }] = await Promise.all([
@@ -310,7 +324,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0 || teamUpcomingLeads.length > 0) && (
+          {(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0 || teamUpcomingLeads.length > 0 || teamZiele.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
               {pendingFriendReqs.length > 0 && (
                 <div>
@@ -404,6 +418,26 @@ export default function Dashboard() {
                       </div>
                     ))}
                     {teamUpcomingLeads.length > 3 && <span className="text-xs text-textMuted">+{teamUpcomingLeads.length - 3} weitere</span>}
+                  </div>
+                </div>
+              )}
+
+              {teamZiele.length > 0 && (
+                <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0 || teamUpcomingLeads.length > 0) ? "pt-4 border-t border-line" : ""}>
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/team")}>🎯 Team-Ziele diese Woche</div>
+                  <div className="flex flex-col gap-2.5">
+                    {teamZiele.slice(0, 3).map((z) => (
+                      <div key={z.id} onClick={() => router.push("/team")} className="cursor-pointer">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-xs text-textMuted min-w-0 truncate">{z.title}</span>
+                          <span className="text-xs text-textMuted flex-shrink-0 font-mono">{z.fortschritt}/{z.target_count} {goalMetricLabel(z.metric)}</span>
+                        </div>
+                        <div className="h-2 bg-line rounded-full overflow-hidden">
+                          <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (z.fortschritt / z.target_count) * 100)}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                    {teamZiele.length > 3 && <span className="text-xs text-textMuted">+{teamZiele.length - 3} weitere</span>}
                   </div>
                 </div>
               )}

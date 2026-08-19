@@ -64,6 +64,10 @@ export default function Team() {
     setMentor(pair);
     setMentees(myMentees || []);
 
+    // Ab hier gelten die Ziele als gesehen — der Zähler in der Navigation
+    // verschwindet damit (gleiches Muster wie bei der Community).
+    await supabase.from("profiles").update({ last_seen_team_goals_at: new Date().toISOString() }).eq("id", session.user.id);
+
     setLoading(false);
   }
 
