@@ -14,12 +14,16 @@ export default function SystemStatus() {
   const [stand, setStand] = useState(null);
   const [busy, setBusy] = useState("");
   const [meldung, setMeldung] = useState("");
+  const [version, setVersion] = useState(null);
 
   async function laden() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const { data: me } = await supabase.from("profiles").select("is_platform_admin").eq("id", session.user.id).maybeSingle();
     if (!me?.is_platform_admin) { setErlaubt(false); setLaedt(false); return; }
+    // Welcher Stand ausgeliefert ist — beantwortet "ich sehe keine Änderung"
+    // ohne Umweg über die Vercel-Oberfläche.
+    try { setVersion(await (await fetch("/api/version")).json()); } catch { setVersion(null); }
     const { data } = await supabase.from("system_health").select("*").eq("id", true).maybeSingle();
     setStand(data || null);
     setLaedt(false);
@@ -81,6 +85,12 @@ export default function SystemStatus() {
           {busy === "senden" ? "Sendet..." : "📤 Bericht an Telegram senden"}
         </button>
         {meldung && <span className="text-xs text-textMuted">{meldung}</span>}
+        {version && (
+          <span className="text-[11px] text-textMuted ml-auto font-mono">
+            Stand: {version.commit}
+            {version.nachricht ? ` — ${version.nachricht.split("\n")[0].slice(0, 60)}` : ""}
+          </span>
+        )}
       </div>
 
       {!stand ? (
