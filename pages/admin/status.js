@@ -3,6 +3,7 @@ import Layout from "../../components/Layout";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { ABSTAND } from "../../lib/autoRefresh";
+import { apiPost } from "../../lib/apiClient";
 
 // Zeigt den zuletzt geprüften Systemzustand. Die Prüfung selbst läuft
 // serverseitig (pages/api/cron/health-check.js) und meldet Störungen per
@@ -11,6 +12,8 @@ export default function SystemStatus() {
   const [erlaubt, setErlaubt] = useState(true);
   const [laedt, setLaedt] = useState(true);
   const [stand, setStand] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [meldung, setMeldung] = useState("");
 
   async function laden() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -30,6 +33,23 @@ export default function SystemStatus() {
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
 
+  // Prüfung auf Knopfdruck: der automatische Lauf ist im Hobby-Tarif nur
+  // einmal täglich möglich, bis dahin stünde hier sonst nichts.
+  async function pruefen(senden) {
+    setBusy(senden ? "senden" : "pruefen");
+    setMeldung("");
+    try {
+      const r = await apiPost("/api/admin/system-check", { senden });
+      if (r.schreibFehler) setMeldung(`Geprüft, aber der Zustand liess sich nicht speichern: ${r.schreibFehler} — fehlt migration_83?`);
+      else if (senden) setMeldung(r.gesendet ? "Bericht an Telegram gesendet." : (r.hinweis || "Nicht gesendet."));
+      else setMeldung("Prüfung abgeschlossen.");
+      await laden();
+    } catch (e) {
+      setMeldung(e.message || "Die Prüfung ist fehlgeschlagen.");
+    }
+    setBusy("");
+  }
+
   if (laedt) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
   if (!erlaubt) {
     return (
@@ -48,10 +68,21 @@ export default function SystemStatus() {
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
 
+      <div className="card mb-4 flex items-center gap-2 flex-wrap">
+        <button onClick={() => pruefen(false)} disabled={!!busy} className="btn text-xs disabled:opacity-40">
+          {busy === "pruefen" ? "Prüft..." : "Jetzt prüfen"}
+        </button>
+        <button onClick={() => pruefen(true)} disabled={!!busy} className="btn-ghost text-xs disabled:opacity-40">
+          {busy === "senden" ? "Sendet..." : "📤 Bericht an Telegram senden"}
+        </button>
+        {meldung && <span className="text-xs text-textMuted">{meldung}</span>}
+      </div>
+
       {!stand ? (
         <div className="card">
           <p className="text-textMuted text-sm">
-            Noch keine Prüfung gelaufen. Sie startet stündlich automatisch — beim ersten Mal kann es also etwas dauern.
+            Noch keine Prüfung gelaufen. Der automatische Lauf ist einmal täglich (Vercel-Hobby erlaubt nicht mehr) —
+            mit „Jetzt prüfen" oben bekommst du den Zustand sofort.
           </p>
         </div>
       ) : (
