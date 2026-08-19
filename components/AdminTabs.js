@@ -1,5 +1,12 @@
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "./Icon";
+import { supabase } from "../lib/supabaseClient";
+
+// Einmal je Seitenaufruf geladen und gemerkt: der Reiter "Betreiber" darf
+// nur dem Plattform-Betreiber erscheinen, und diese Leiste steckt auf jeder
+// Verwaltungsseite.
+let betreiberGemerkt = null;
 
 // Gemeinsame Unterseiten-Navigation für den Admin-Bereich — fasst die früher
 // als einzelne Menüpunkte verstreuten Verwaltungsseiten unter einem Dach
@@ -20,11 +27,28 @@ const ADMIN_TABS = [
   { key: "status", label: "Systemstatus", route: "/admin/status", icon: "lock" },
 ];
 
+// Getrennt gehalten: organisationsübergreifend, deshalb nur für den Betreiber.
+const BETREIBER_TAB = { key: "betreiber", label: "Betreiber", route: "/admin/betreiber", icon: "users" };
+
 export default function AdminTabs() {
   const router = useRouter();
+  const [istBetreiber, setIstBetreiber] = useState(betreiberGemerkt ?? false);
+
+  useEffect(() => {
+    if (betreiberGemerkt !== null) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data } = await supabase.from("profiles").select("is_platform_admin").eq("id", session.user.id).maybeSingle();
+      betreiberGemerkt = !!data?.is_platform_admin;
+      setIstBetreiber(betreiberGemerkt);
+    })();
+  }, []);
+
+  const tabs = istBetreiber ? [...ADMIN_TABS, BETREIBER_TAB] : ADMIN_TABS;
   return (
     <div className="flex items-center gap-1.5 mb-5 flex-wrap overflow-x-auto pb-1">
-      {ADMIN_TABS.map((t) => {
+      {tabs.map((t) => {
         const active = router.pathname === t.route;
         return (
           <button
