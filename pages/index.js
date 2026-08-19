@@ -324,47 +324,11 @@ export default function Dashboard() {
             </div>
           )}
 
-          {(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0 || teamUpcomingLeads.length > 0 || teamZiele.length > 0) && (
+          {(myOpenTasks.length > 0 || upcomingLeads.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
-              {pendingFriendReqs.length > 0 && (
-                <div>
-                  <div className="font-semibold text-textMain text-sm mb-2.5">🤝 Freundschaftsanfragen</div>
-                  <div className="flex flex-col gap-2.5">
-                    {pendingFriendReqs.slice(0, 3).map((r) => {
-                      const busy = friendReqBusyId === r.id;
-                      return (
-                        <div key={r.id} className="flex items-center gap-3">
-                          <Avatar name={r.profile?.full_name || "?"} src={r.profile?.avatar_url} size={32} />
-                          <span className="text-sm text-textMain flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <button disabled={busy} onClick={() => respondFriendRequest(r.id, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
-                            <button disabled={busy} onClick={() => respondFriendRequest(r.id, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {pendingFriendReqs.length > 3 && <span className="text-xs text-textMuted">+{pendingFriendReqs.length - 3} weitere</span>}
-                  </div>
-                </div>
-              )}
-
-              {myMentions.length > 0 && (
-                <div className={pendingFriendReqs.length > 0 ? "pt-4 border-t border-line" : ""}>
-                  <div className="font-semibold text-textMain text-sm mb-2.5">🔔 Erwähnungen</div>
-                  <div className="flex flex-col gap-2">
-                    {myMentions.slice(0, 3).map((m) => (
-                      <button key={m.id} onClick={() => router.push(m.route)} className="text-left text-sm hover:opacity-80">
-                        <span className="text-amber font-semibold">{m.actorName}</span>{" "}
-                        <span className="text-textMuted">hat dich erwähnt — {m.label}</span>
-                      </button>
-                    ))}
-                    {myMentions.length > 3 && <span className="text-xs text-textMuted">+{myMentions.length - 3} weitere</span>}
-                  </div>
-                </div>
-              )}
-
+              <div className="text-[11px] uppercase tracking-wide text-textMuted">Heute</div>
               {myOpenTasks.length > 0 && (
-                <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0) ? "pt-4 border-t border-line" : ""}>
+                <div className="">
                   <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>✅ Offene Aufgaben</div>
                   <div className="flex flex-col gap-2">
                     {myOpenTasks.slice(0, 3).map((t) => {
@@ -388,7 +352,7 @@ export default function Dashboard() {
               )}
 
               {upcomingLeads.length > 0 && (
-                <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0) ? "pt-4 border-t border-line" : ""}>
+                <div className="">
                   <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>📅 Anstehende Termine</div>
                   <div className="flex flex-col gap-2.5">
                     {upcomingLeads.slice(0, 3).map((l) => (
@@ -404,26 +368,14 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {teamUpcomingLeads.length > 0 && (
-                <div className={`${(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0) ? "pt-4 border-t border-line" : ""}`}>
-                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>📅 Anstehende Termine im Team</div>
-                  <div className="flex flex-col gap-2.5">
-                    {teamUpcomingLeads.slice(0, 3).map((l) => (
-                      <div key={l.id} onClick={() => router.push("/termine")} className="flex items-center gap-3 cursor-pointer">
-                        <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
-                        <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
-                        <span className="text-xs font-mono text-textMuted flex-shrink-0">
-                          {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    ))}
-                    {teamUpcomingLeads.length > 3 && <span className="text-xs text-textMuted">+{teamUpcomingLeads.length - 3} weitere</span>}
-                  </div>
-                </div>
-              )}
+            </div>
+          )}
 
+          {(teamZiele.length > 0 || teamUpcomingLeads.length > 0) && (
+            <div className="card mb-5 flex flex-col gap-4">
+              <div className="text-[11px] uppercase tracking-wide text-textMuted">Mein Team</div>
               {teamZiele.length > 0 && (
-                <div className={(pendingFriendReqs.length > 0 || myMentions.length > 0 || myOpenTasks.length > 0 || upcomingLeads.length > 0 || teamUpcomingLeads.length > 0) ? "pt-4 border-t border-line" : ""}>
+                <div className="">
                   <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/team")}>🎯 Team-Ziele diese Woche</div>
                   <div className="flex flex-col gap-2.5">
                     {teamZiele.slice(0, 3).map((z) => (
@@ -441,8 +393,27 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+              {teamUpcomingLeads.length > 0 && (
+                <div className="">
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>📅 Anstehende Termine im Team</div>
+                  <div className="flex flex-col gap-2.5">
+                    {teamUpcomingLeads.slice(0, 3).map((l) => (
+                      <div key={l.id} onClick={() => router.push("/termine")} className="flex items-center gap-3 cursor-pointer">
+                        <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
+                        <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
+                        <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                          {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    ))}
+                    {teamUpcomingLeads.length > 3 && <span className="text-xs text-textMuted">+{teamUpcomingLeads.length - 3} weitere</span>}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
+
 
           {adminSnapshot && (
             <div className="card mb-5 cursor-pointer" onClick={() => router.push("/admin/insights")}>
@@ -471,51 +442,8 @@ export default function Dashboard() {
             <p className="text-textMuted text-sm">Lädt...</p>
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-5">
-                {(() => {
-                  const allTiles = [
-                    { key: "messages", label: "Nachrichten", icon: "chat", route: "/messages", badge: hub.unreadMessages },
-                    { key: "members", label: "Mitglieder", icon: "users", route: "/members", badge: hub.pendingFriendRequests },
-                    { key: "community", label: "Community", icon: "users", route: "/community", badge: hub.unreadCommunity },
-                    { key: "daily-challenge", label: "Tages-Challenge", icon: "flame", route: "/daily-challenge", sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
-                    { key: "duel", label: "Quiz-Duell", icon: "target", route: "/duel", badge: hub.openDuels },
-                    { key: "flashcards", label: "Flashcards", icon: "library", route: "/flashcards", sub: hub.dueFlashcards > 0 ? `${hub.dueFlashcards} fällig` : "Alles erledigt" },
-                    { key: "simulator", label: "Simulator", icon: "chat", route: "/simulator" },
-                    { key: "leaderboard", label: "Rangliste", icon: "award", route: "/leaderboard" },
-                    ...(hub.isManager ? [
-                      { key: "admin", label: "Freigaben", icon: "lock", route: "/admin", badge: hub.pendingApprovals },
-                      { key: "admin-suggestions", label: "Wissens-Vorschläge", icon: "lock", route: "/admin/suggestions", badge: hub.pendingSuggestions },
-                    ] : []),
-                  ];
-                  const prefs = dashboardPrefs || {};
-                  const order = prefs.order || [];
-                  const hidden = new Set(prefs.hidden || []);
-                  const visibleTiles = allTiles.filter((t) => !hidden.has(t.key));
-                  visibleTiles.sort((a, b) => {
-                    const ia = order.indexOf(a.key), ib = order.indexOf(b.key);
-                    if (ia === -1 && ib === -1) return 0;
-                    if (ia === -1) return 1;
-                    if (ib === -1) return -1;
-                    return ia - ib;
-                  });
-                  return visibleTiles.map((t) => (
-                    <button key={t.key} draggable
-                      onDragStart={() => setDraggedTileKey(t.key)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => handleTileDrop(t.key, visibleTiles)}
-                      onClick={() => router.push(t.route)}
-                      className={`card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-grab active:cursor-grabbing ${draggedTileKey === t.key ? "opacity-40" : ""}`}>
-                      <div className="flex items-center justify-between w-full">
-                        <Icon name={t.icon} color="var(--org-accent, #CE3A5C)" size={18} />
-                        {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
-                      </div>
-                      <div className="text-[13px] font-semibold text-textMain">{t.label}</div>
-                      {t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
-                    </button>
-                  ));
-                })()}
-              </div>
 
+              <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Mein Fortschritt</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
                 <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-textMain font-mono">{doneModuleIds.size}/{totalModules}</div></div>
                 <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-textMain font-mono">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
@@ -560,8 +488,100 @@ export default function Dashboard() {
                   </>
                 )}
               </div>
+
+              {/* Schnellzugriff und Austausch stehen bewusst unten: sie sind
+                  Absprünge, keine Aufgaben. Oben gehört hin, was heute zu tun ist. */}
+              <div className="text-[11px] uppercase tracking-wide text-textMuted mt-5 mb-2">Schnellzugriff</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-5">
+                {(() => {
+                  const allTiles = [
+                    { key: "messages", label: "Nachrichten", icon: "chat", route: "/messages", badge: hub.unreadMessages },
+                    { key: "members", label: "Mitglieder", icon: "users", route: "/members", badge: hub.pendingFriendRequests },
+                    { key: "community", label: "Community", icon: "users", route: "/community", badge: hub.unreadCommunity },
+                    { key: "daily-challenge", label: "Tages-Challenge", icon: "flame", route: "/daily-challenge", sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
+                    { key: "duel", label: "Quiz-Duell", icon: "target", route: "/duel", badge: hub.openDuels },
+                    { key: "flashcards", label: "Flashcards", icon: "library", route: "/flashcards", sub: hub.dueFlashcards > 0 ? `${hub.dueFlashcards} fällig` : "Alles erledigt" },
+                    { key: "simulator", label: "Simulator", icon: "chat", route: "/simulator" },
+                    { key: "leaderboard", label: "Rangliste", icon: "award", route: "/leaderboard" },
+                    ...(hub.isManager ? [
+                      { key: "admin", label: "Freigaben", icon: "lock", route: "/admin", badge: hub.pendingApprovals },
+                      { key: "admin-suggestions", label: "Wissens-Vorschläge", icon: "lock", route: "/admin/suggestions", badge: hub.pendingSuggestions },
+                    ] : []),
+                  ];
+                  const prefs = dashboardPrefs || {};
+                  const order = prefs.order || [];
+                  const hidden = new Set(prefs.hidden || []);
+                  const visibleTiles = allTiles.filter((t) => !hidden.has(t.key));
+                  visibleTiles.sort((a, b) => {
+                    const ia = order.indexOf(a.key), ib = order.indexOf(b.key);
+                    if (ia === -1 && ib === -1) return 0;
+                    if (ia === -1) return 1;
+                    if (ib === -1) return -1;
+                    return ia - ib;
+                  });
+                  return visibleTiles.map((t) => (
+                    <button key={t.key} draggable
+                      onDragStart={() => setDraggedTileKey(t.key)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleTileDrop(t.key, visibleTiles)}
+                      onClick={() => router.push(t.route)}
+                      className={`card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-grab active:cursor-grabbing ${draggedTileKey === t.key ? "opacity-40" : ""}`}>
+                      <div className="flex items-center justify-between w-full">
+                        <Icon name={t.icon} color="var(--org-accent, #CE3A5C)" size={18} />
+                        {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
+                      </div>
+                      <div className="text-[13px] font-semibold text-textMain">{t.label}</div>
+                      {t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
+                    </button>
+                  ));
+                })()}
+              </div>
             </>
           )}
+
+          {(pendingFriendReqs.length > 0 || myMentions.length > 0) && (
+            <div className="card mb-5 flex flex-col gap-4">
+              <div className="text-[11px] uppercase tracking-wide text-textMuted">Austausch</div>
+              {pendingFriendReqs.length > 0 && (
+                <div>
+                  <div className="font-semibold text-textMain text-sm mb-2.5">🤝 Freundschaftsanfragen</div>
+                  <div className="flex flex-col gap-2.5">
+                    {pendingFriendReqs.slice(0, 3).map((r) => {
+                      const busy = friendReqBusyId === r.id;
+                      return (
+                        <div key={r.id} className="flex items-center gap-3">
+                          <Avatar name={r.profile?.full_name || "?"} src={r.profile?.avatar_url} size={32} />
+                          <span className="text-sm text-textMain flex-1 truncate">{r.profile?.full_name || "Unbenannt"}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button disabled={busy} onClick={() => respondFriendRequest(r.id, "accepted")} className="btn-ghost text-xs text-teal border-teal/40 disabled:opacity-40">Annehmen</button>
+                            <button disabled={busy} onClick={() => respondFriendRequest(r.id, "declined")} className="btn-ghost text-xs text-coral border-coral/40 disabled:opacity-40">Ablehnen</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {pendingFriendReqs.length > 3 && <span className="text-xs text-textMuted">+{pendingFriendReqs.length - 3} weitere</span>}
+                  </div>
+                </div>
+              )}
+
+              {myMentions.length > 0 && (
+                <div className="">
+                  <div className="font-semibold text-textMain text-sm mb-2.5">🔔 Erwähnungen</div>
+                  <div className="flex flex-col gap-2">
+                    {myMentions.slice(0, 3).map((m) => (
+                      <button key={m.id} onClick={() => router.push(m.route)} className="text-left text-sm hover:opacity-80">
+                        <span className="text-amber font-semibold">{m.actorName}</span>{" "}
+                        <span className="text-textMuted">hat dich erwähnt — {m.label}</span>
+                      </button>
+                    ))}
+                    {myMentions.length > 3 && <span className="text-xs text-textMuted">+{myMentions.length - 3} weitere</span>}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+
         </>
       )}
     </Layout>
