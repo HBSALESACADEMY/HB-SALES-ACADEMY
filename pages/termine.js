@@ -47,6 +47,8 @@ export default function Termine() {
   const [editingEmailId, setEditingEmailId] = useState(null);
   const [emailDraft, setEmailDraft] = useState("");
   const [editingLeadId, setEditingLeadId] = useState(null);
+  const [verschiebeId, setVerschiebeId] = useState(null);
+  const [verschiebeDatum, setVerschiebeDatum] = useState("");
   const [editDraft, setEditDraft] = useState(null);
   const [orgMembers, setOrgMembers] = useState([]);
   const [commentsByLead, setCommentsByLead] = useState({});
@@ -352,6 +354,20 @@ export default function Termine() {
       fields,
     });
     setError("");
+  }
+
+  // Verschieben ohne den Umweg über "Bearbeiten": das Datum zu ändern ist
+  // der mit Abstand häufigste Eingriff an einem Termin und steckte bisher
+  // im vollständigen Bearbeiten-Formular.
+  async function verschiebeTermin(id) {
+    if (!verschiebeDatum) return;
+    const neu = new Date(verschiebeDatum).toISOString();
+    const { error: err } = await supabase.from("leads").update({ appointment_at: neu, status: "geplant" }).eq("id", id);
+    if (err) { setError(err.message); return; }
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, appointment_at: neu, status: "geplant" } : l)));
+    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${new Date(neu).toLocaleString("de-DE")}.`);
+    setVerschiebeId(null);
+    setVerschiebeDatum("");
   }
 
   async function saveEditLead(id) {
@@ -993,12 +1009,34 @@ export default function Termine() {
                 </div>
               )}
 
+              {verschiebeId === lead.id && (
+                <div className="pt-2 border-t border-line">
+                  <label className="block text-xs text-textMuted mb-1.5">Neuer Termin-Zeitpunkt</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input type="datetime-local" className="input !w-auto" value={verschiebeDatum} onChange={(e) => setVerschiebeDatum(e.target.value)} />
+                    <button disabled={!verschiebeDatum} onClick={() => verschiebeTermin(lead.id)} className="btn text-xs disabled:opacity-40">Verschieben</button>
+                    <button onClick={() => setVerschiebeId(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                  </div>
+                  <p className="text-[11px] text-textMuted mt-1.5">
+                    Der Status springt zurück auf „Geplant“, und das Team wird über die Verschiebung benachrichtigt.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line">
                 {Object.keys(STATUS_LABELS).map((s) => (
                   <button key={s} disabled={lead.status === s} onClick={() => updateStatus(lead.id, s)} className="btn-ghost text-xs disabled:opacity-30">
                     Als „{STATUS_LABELS[s]}" markieren
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    setVerschiebeId(verschiebeId === lead.id ? null : lead.id);
+                    setVerschiebeDatum(toLocalDatetimeValue(lead.appointment_at));
+                  }}
+                  className="btn-ghost text-xs">
+                  🕒 Verschieben
+                </button>
                 {lead.status === "geplant" && (
                   <button
                     disabled={reminderSendingId === lead.id}
