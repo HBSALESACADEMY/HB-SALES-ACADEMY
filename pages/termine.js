@@ -14,6 +14,7 @@ import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import { ABSTAND } from "../lib/autoRefresh";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
+import { loescheGeprueft } from "../lib/loeschen";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -247,7 +248,8 @@ export default function Termine() {
   }
 
   async function removeNotificationEmail(id) {
-    const { error: err } = await supabase.from("notification_emails").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("notification_emails").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     setNotificationEmails((prev) => prev.filter((e) => e.id !== id));
   }
@@ -258,7 +260,8 @@ export default function Termine() {
     // Löschen parallel, fände die Route den Termin womöglich schon nicht mehr
     // und die Meldung ginge ersatzlos verloren.
     await meldeTerminAenderung(lead.id, "geloescht", "Der Termin wurde gelöscht.");
-    const { error: err } = await supabase.from("leads").delete().eq("id", lead.id);
+    const loeschFehler = await loescheGeprueft(supabase.from("leads").delete().eq("id", lead.id), "Diesen Termin darf nur löschen, wer ihn angelegt hat, oder ein Manager.");
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); setDeleting(false); return; }
     // Sonst bliebe die Aufnahme im Speicher liegen, nur der Datenbank-Eintrag
     // würde verschwinden (DSGVO: Löschung muss auch die Datei selbst treffen).
@@ -501,7 +504,8 @@ export default function Termine() {
   }
 
   async function deleteTask(task) {
-    const { error: err } = await supabase.from("lead_tasks").delete().eq("id", task.id);
+    const loeschFehler = await loescheGeprueft(supabase.from("lead_tasks").delete().eq("id", task.id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     setTasksByLead((prev) => ({
       ...prev,

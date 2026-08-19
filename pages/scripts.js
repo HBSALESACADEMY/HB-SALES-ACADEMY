@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
+import { loescheGeprueft } from "../lib/loeschen";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState([]);
@@ -82,7 +83,8 @@ export default function Scripts() {
 
   async function deleteScript(id) {
     if (!confirm("Skript wirklich löschen?")) return;
-    const { error } = await supabase.from("scripts").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("scripts").delete().eq("id", id));
+    const error = loeschFehler ? { message: loeschFehler } : null;
     if (error) { alert(error.message); return; }
     await load();
   }

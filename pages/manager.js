@@ -42,6 +42,7 @@ export default function Manager() {
   const [addQuery, setAddQuery] = useState("");
   const [addBusyId, setAddBusyId] = useState(null);
   const [orgName, setOrgName] = useState("");
+  const [migrationFehlt, setMigrationFehlt] = useState(false);
 
   async function loadTeams() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -52,6 +53,13 @@ export default function Manager() {
     // role='manager' — sie verwalten die Teams ihrer Organisation (siehe
     // migration_88). Vorher sperrte diese Prüfung genau die Personen aus, die
     // dafür zuständig sind.
+    // Prüft, ob migration_88 eingespielt ist. Fehlt die Funktion, lehnt die
+    // Datenbank jedes Hinzufügen/Entfernen ab — und zwar lautlos, weil eine
+    // abgelehnte Löschung keinen Fehler meldet. Das gehört sichtbar gemacht,
+    // statt dass man den Fehler in der Oberfläche sucht.
+    const { error: rpcFehler } = await supabase.rpc("kann_team_verwalten", { tid: "00000000-0000-0000-0000-000000000000", uid: session.user.id });
+    setMigrationFehlt(!!(rpcFehler && /(does not exist|not find|schema cache|404)/i.test(rpcFehler.message || "")));
+
     const darfVerwalten = !!(me && (me.role === "manager" || me.is_admin || me.is_platform_admin));
     if (!darfVerwalten) { setIsManager(false); setLoading(false); return null; }
 
@@ -363,6 +371,16 @@ export default function Manager() {
           <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Team-Übersicht</h1>
           <div className="brand-stripe w-16 mb-2" />
           <p className="text-textMuted text-sm">Deine Teams verwalten, Mitglieder zuordnen, Fortschritt einsehen.</p>
+      {migrationFehlt && (
+        <div className="card mt-4 border-coral/40">
+          <div className="text-sm text-coral font-semibold mb-1">Datenbank-Erweiterung fehlt</div>
+          <p className="text-xs text-textMuted">
+            Die Funktion <code>kann_team_verwalten</code> ist in der Datenbank nicht vorhanden (migration_88).
+            Solange sie fehlt, lehnt die Datenbank das Hinzufügen und Entfernen von Mitgliedern ab —
+            auch für Admins. Bitte den SQL-Block einmal im Supabase-Editor ausführen.
+          </p>
+        </div>
+      )}
         </div>
         {team.length > 0 && (
           <button onClick={exportTeamCsv} className="btn-ghost text-xs flex-shrink-0">

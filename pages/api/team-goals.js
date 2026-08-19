@@ -2,7 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { goalMetric } from "../../lib/goalMetrics";
 import { COURSES } from "../../lib/curriculum";
-import { ranglisteMetrik, werteProPerson, summeFuer } from "../../lib/goalProgress";
+import { ranglisteMetrik, werteProPerson, summeFuer, XP_METRIK } from "../../lib/goalProgress";
 import { wochenStartTag, wochenStartZeitpunkt } from "../../lib/woche";
 
 // Alles, was die Seite „Mein Team" an Zahlen braucht: die Wochenziele der
@@ -108,6 +108,10 @@ export default async function handler(req, res) {
     (ziele || []).forEach((z) => { const m = goalMetric(z.metric); if (m) gebraucht.set(m.key, m); });
     const rangMetrik = ranglisteMetrik(org?.team_ranking_metric);
     if (rangMetrik) gebraucht.set(rangMetrik.key, rangMetrik);
+    // XP immer mitrechnen: sie dient als Rückfallebene für die Leistung
+    // innerhalb des Teams, wenn der Wettbewerbs-Maßstab auf Anruf-Zahlen
+    // steht und die anfragende Person die nicht einzeln sehen darf.
+    gebraucht.set(XP_METRIK.key, XP_METRIK);
 
     const werte = new Map();
     await Promise.all(Array.from(gebraucht.values()).map(async (m) => {
@@ -117,6 +121,12 @@ export default async function handler(req, res) {
     // Wer darf sehen, wie viel eine EINZELNE Person beigetragen hat?
     const istLeitung = (alleTeams || []).some((t) => t.created_by === user.id);
     const darfDetails = !!(istLeitung || ich?.is_platform_admin || ich?.is_admin || ich?.can_view_call_stats);
+
+    // Leistung im Team: nach dem Maßstab der Organisation. Steht der auf
+    // Anruf-Zahlen und fehlt die Berechtigung für Einzelwerte, wird auf XP
+    // ausgewichen statt die Liste ganz wegzulassen.
+    const leistungMetrik = (rangMetrik.quelle === "calltracker" && !darfDetails) ? XP_METRIK : rangMetrik;
+    const leistungWerte = werte.get(leistungMetrik.key);
 
     // --- Antwort ------------------------------------------------------------
     const teams = meineTeamIds.map((tid) => {
@@ -137,6 +147,12 @@ export default async function handler(req, res) {
           // Nur bestandene Prüfungen — das ist der Abschluss eines Kurses.
           kurse: Array.from(kursePro.get(id) || []).map((kid) => kursTitel.get(kid) || kid).sort((a, b) => a.localeCompare(b, "de")),
         })).sort((a, b) => a.name.localeCompare(b.name, "de")),
+        leistung: ids.map((id) => ({
+          id,
+          name: personVon.get(id)?.full_name || "Unbenannt",
+          avatar_url: personVon.get(id)?.avatar_url || null,
+          wert: leistungWerte?.get(id) || 0,
+        })).sort((a, b) => b.wert - a.wert),
         ziele: (ziele || []).filter((z) => z.team_id === tid).map((z) => {
           const w = werte.get(z.metric);
           return {
@@ -159,7 +175,7 @@ export default async function handler(req, res) {
     // startTag wird mitgeliefert, damit die Seite benennen kann, welche
     // Woche sie zeigt — ein leerer Ziel-Block war sonst nicht von einem
     // Datums-Versatz zu unterscheiden.
-    return res.status(200).json({ teams, rangliste, ranglisteMetrik: rangMetrik.key, darfDetails, wochenStart: startTag });
+    return res.status(200).json({ teams, rangliste, ranglisteMetrik: rangMetrik.key, leistungMetrik: leistungMetrik.key, darfDetails, wochenStart: startTag });
   } catch (e) {
     console.error("Team-Daten konnten nicht geladen werden:", e.message);
     return res.status(500).json({ error: e.message || "Team-Daten konnten nicht geladen werden." });

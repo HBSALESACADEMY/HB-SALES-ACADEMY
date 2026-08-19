@@ -6,6 +6,7 @@ import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
+import { loescheGeprueft } from "../../lib/loeschen";
 
 export default function FlashcardsAdmin() {
   const [isManager, setIsManager] = useState(true);
@@ -92,7 +93,8 @@ export default function FlashcardsAdmin() {
 
   async function deleteCard(id) {
     setError("");
-    const { error: err } = await supabase.from("flashcards").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("flashcards").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) setError(err.message);
     else await load();
   }

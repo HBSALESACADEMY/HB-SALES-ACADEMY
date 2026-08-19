@@ -6,6 +6,7 @@ import AIBadge from "../components/AIBadge";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
+import { loescheGeprueft } from "../lib/loeschen";
 
 const TYPES = [
   { id: "cold_call", label: "Cold Call" },
@@ -82,7 +83,8 @@ export default function GuideGenerator() {
 
   async function deleteGuide(id) {
     if (!confirm("Leitfaden wirklich löschen?")) return;
-    const { error: err } = await supabase.from("guides").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("guides").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     setGuides((prev) => prev.filter((g) => g.id !== id));
     if (currentGuide?.id === id) setCurrentGuide(null);

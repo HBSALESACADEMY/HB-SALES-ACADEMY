@@ -6,6 +6,7 @@ import IconPicker from "../../components/IconPicker";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { loescheGeprueft } from "../../lib/loeschen";
 
 export default function NavigationAdmin() {
   const router = useRouter();
@@ -66,7 +67,8 @@ export default function NavigationAdmin() {
 
   async function deleteItem(item) {
     setError("");
-    const { error: err } = await supabase.from("nav_items").delete().eq("id", item.id);
+    const loeschFehler = await loescheGeprueft(supabase.from("nav_items").delete().eq("id", item.id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) setError(err.message);
     else await load();
   }

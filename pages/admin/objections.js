@@ -4,6 +4,7 @@ import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 import { resolveObjectionCategories } from "../../lib/objectionCategories";
+import { loescheGeprueft } from "../../lib/loeschen";
 
 const EMPTY_DRAFT = { cat: "", q_pro: "", a_pro: "", q_ent: "", a_ent: "", tip: "" };
 
@@ -93,7 +94,8 @@ export default function ObjectionsAdmin() {
 
   async function deleteObjection(id) {
     if (!confirm("Diesen Einwand wirklich löschen?")) return;
-    const { error: err } = await supabase.from("custom_objections").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("custom_objections").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     setRows((prev) => prev.filter((r) => r.id !== id));
   }

@@ -18,6 +18,7 @@ export default function Team() {
   const [myTeams, setMyTeams] = useState([]);
   const [darfDetails, setDarfDetails] = useState(false);
   const [wochenStart, setWochenStart] = useState("");
+  const [leistungMetrik, setLeistungMetrik] = useState("xp");
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
@@ -60,6 +61,7 @@ export default function Team() {
       setRangMetrik(daten.ranglisteMetrik || "xp");
       setDarfDetails(!!daten.darfDetails);
       setWochenStart(daten.wochenStart || "");
+      setLeistungMetrik(daten.leistungMetrik || "xp");
       setFehler("");
     } catch (e) {
       // Früher blieb die Seite bei einem Fehler einfach leer — dann sieht es
@@ -133,6 +135,28 @@ export default function Team() {
                   </div>
                 </div>
               ))}
+
+              {/* Wer diese Woche vorn liegt — der ausdrücklich gewünschte
+                  Blick auf die Leistung INNERHALB des Teams, nicht nur im
+                  Vergleich der Teams untereinander. */}
+              {t.leistung.some((l) => l.wert > 0) && (
+                <div className="mt-3 pt-3 border-t border-line">
+                  <div className="flex items-baseline justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-textMain">Leistung diese Woche</span>
+                    <span className="text-[11px] text-textMuted flex-shrink-0">nach {RANG_LABEL(leistungMetrik)}</span>
+                  </div>
+                  {t.leistung.slice(0, 5).map((l, i) => (
+                    <div key={l.id} className="flex items-center gap-2.5 py-1 cursor-pointer" onClick={() => openProfile(l.id)}>
+                      <span className="w-5 text-center text-xs text-textMuted font-mono flex-shrink-0">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
+                      <Avatar name={l.name} src={l.avatar_url} size={22} />
+                      <span className="text-xs text-textMain flex-1 min-w-0 truncate">
+                        {l.name}{l.id === selfId && <span className="text-textMuted"> (du)</span>}
+                      </span>
+                      <span className="text-xs font-mono text-textMain flex-shrink-0">{l.wert}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <button
                 onClick={() => setOffenesTeam(offenesTeam === t.id ? null : t.id)}

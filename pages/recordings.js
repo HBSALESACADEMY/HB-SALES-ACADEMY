@@ -9,6 +9,7 @@ import { apiPost, apiGet } from "../lib/apiClient";
 import { validateRecordingUpload } from "../lib/uploadValidation";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
+import { loescheGeprueft } from "../lib/loeschen";
 
 const STATUS_LABELS = { pending: "Wird ausgewertet...", evaluated: "Ausgewertet", failed: "Auswertung fehlgeschlagen" };
 
@@ -127,7 +128,8 @@ export default function Recordings() {
   async function deleteRecording(id) {
     if (!confirm("Aufnahme wirklich löschen?")) return;
     const rec = recordings.find((r) => r.id === id);
-    const { error: err } = await supabase.from("call_recordings").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("call_recordings").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     // Ohne das hier würde die eigentliche Audiodatei im Speicher liegen
     // bleiben — nur der Datenbank-Eintrag verschwindet sonst (DSGVO: Löschung

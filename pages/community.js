@@ -9,6 +9,7 @@ import { openProfile } from "../lib/profileModalBus";
 import { validatePostAttachment } from "../lib/uploadValidation";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { effectiveStreak } from "../lib/streak";
+import { loescheGeprueft } from "../lib/loeschen";
 
 const REACTION_TYPES = [
   { key: "flame", emoji: "🔥" },
@@ -459,7 +460,8 @@ export default function Community() {
 
   async function deleteGroup(id) {
     setError("");
-    const { error: err } = await supabase.from("community_groups").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("community_groups").delete().eq("id", id), "Diese Gruppe darf nur löschen, wer sie angelegt hat.");
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     if (activeGroup === id) setActiveGroup("all");
     await load();
@@ -525,7 +527,8 @@ export default function Community() {
 
   async function deletePost(postId) {
     setError("");
-    const { error: err } = await supabase.from("community_posts").delete().eq("id", postId);
+    const loeschFehler = await loescheGeprueft(supabase.from("community_posts").delete().eq("id", postId), "Diesen Beitrag darf nur löschen, wer ihn verfasst hat, oder ein Admin.");
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); return; }
     await load();
   }

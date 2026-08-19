@@ -5,6 +5,7 @@ import Icon from "../../components/Icon";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { loescheGeprueft } from "../../lib/loeschen";
 
 const COLORS = ["amber", "teal", "coral", "violet"];
 const COLOR_HEX = { amber: "var(--org-accent, #CE3A5C)", teal: "#00E5C7", coral: "#FF4D6D", violet: "var(--org-color-1, #4C5DC9)" };
@@ -100,7 +101,8 @@ export default function ContentAdmin() {
 
   async function deleteCourse(id) {
     setError("");
-    const { error: err } = await supabase.from("custom_courses").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("custom_courses").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) setError(err.message);
     else await load();
   }
@@ -164,7 +166,8 @@ export default function ContentAdmin() {
 
   async function deleteModule(id) {
     setError("");
-    const { error: err } = await supabase.from("custom_modules").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("custom_modules").delete().eq("id", id));
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) setError(err.message);
     else await load();
   }

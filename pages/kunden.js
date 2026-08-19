@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
 import { meldeTerminAenderung } from "../lib/leadNotify";
+import { loescheGeprueft } from "../lib/loeschen";
 
 const emptyForm = { name: "", phone: "", email: "", company: "", website: "", notes: "" };
 
@@ -133,7 +134,8 @@ export default function Kunden() {
     // Vor dem Löschen melden und abwarten — danach wäre der Eintrag für die
     // Melde-Route nicht mehr lesbar (siehe lib/leadNotify.js).
     await meldeTerminAenderung(id, "geloescht", "Der Eintrag wurde gelöscht.");
-    const { error: err } = await supabase.from("leads").delete().eq("id", id);
+    const loeschFehler = await loescheGeprueft(supabase.from("leads").delete().eq("id", id), "Diesen Eintrag darf nur löschen, wer ihn angelegt hat, oder ein Manager.");
+    const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); setSaving(false); return; }
     // Ohne das hier würde die eigentliche Audiodatei im Speicher liegen
     // bleiben — nur der Datenbank-Eintrag verschwindet sonst (DSGVO: Löschung
