@@ -7,6 +7,7 @@ import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { playLoginChime } from "../lib/sounds";
 import { quoteOfTheDay } from "../lib/quotes";
 import { getResolvedTheme, defaultLogoSrc } from "../lib/theme";
+import { merkeAktiveOrg } from "../lib/activeOrg";
 
 export default function Login() {
   // Das HB-Standard-Logo (vor Eingabe des Firmencodes bzw. ohne eigenes
@@ -98,6 +99,11 @@ export default function Login() {
             await supabase.auth.signOut();
             throw new Error("Dieser Account gehört nicht zu dieser Firma. Bitte den richtigen Firmencode verwenden.");
           }
+          // Die gewählte Organisation auch serverseitig hinterlegen — nur so
+          // können die Zugriffsregeln einen Plattform-Admin darauf begrenzen
+          // (migration_92). Für alle anderen ist es ohnehin die eigene.
+          await merkeAktiveOrg(supabase, data.user.id, resolvedOrg.id);
+
           const { error: leErr } = await supabase.from("login_events").insert({ user_id: data.user.id });
           if (leErr) console.error("login_events insert failed:", leErr.message);
           const { error: laErr } = await supabase.from("login_attempts").insert({ email, user_id: data.user.id, success: true });

@@ -377,6 +377,13 @@ create table if not exists community_posts (
 alter table scripts add column if not exists community_post_id uuid references community_posts(id) on delete set null;
 alter table community_posts add column if not exists script_id uuid references scripts(id) on delete cascade;
 
+-- Serverseitig gemerkte aktive Organisation (migration_92).
+create table if not exists active_org (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  organization_id uuid references organizations(id) on delete cascade,
+  gesetzt_at timestamptz not null default now()
+);
+
 create table if not exists community_comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references community_posts(id) on delete cascade,
@@ -801,13 +808,42 @@ $$;
 -- Nutzeranfragen nicht). Zusätzlich ist jedes freigegebene Profil
 -- grundsätzlich auffindbar (nötig für die globale Suche/Community: "Profil
 -- ansehen" MUSS schon vor einer Freundschaftsanfrage möglich sein).
+-- Welche Organisation sieht diese Person gerade (migration_92)? Normale
+-- Konten immer ihre eigene; Plattform-Admins die per Firmencode gewählte.
+create or replace function public.aktive_org(uid uuid)
+returns uuid
+language sql stable security definer as $$
+  select case
+    when coalesce((select is_platform_admin from profiles where id = uid), false)
+      then coalesce(
+        (select organization_id from active_org where user_id = uid),
+        (select organization_id from profiles where id = uid))
+    else (select organization_id from profiles where id = uid)
+  end;
+$$;
+
+-- Ersetzt in den Regeln sowohl same_org() als auch den Plattform-Admin-Zweig:
+-- für normale Konten dasselbe wie bisher, für Plattform-Admins eine
+-- Einschränkung statt einer Öffnung.
+create or replace function public.sieht_person(ziel uuid)
+returns boolean
+language sql stable security definer as $$
+  select (select organization_id from profiles where id = ziel)
+         is not distinct from aktive_org(auth.uid());
+$$;
+
+-- Der frühere dritte Zweig gab JEDES freigegebene Profil organisations-
+-- übergreifend frei. Er bleibt nur für Personen, die selbst etwas bewusst mit
+-- allen Organisationen geteilt haben — sonst stünde im globalen Austausch ein
+-- Beitrag ohne Namen.
 create or replace function public.can_view_profile(target_id uuid, viewer_id uuid)
 returns boolean
 language sql stable security definer as $$
   select
     target_id = viewer_id
-    or same_org(target_id, viewer_id)
-    or exists (select 1 from profiles t where t.id = target_id and t.status = 'approved')
+    or (select organization_id from profiles where id = target_id)
+       is not distinct from aktive_org(viewer_id)
+    or exists (select 1 from community_posts p where p.user_id = target_id and p.visibility = 'global')
 $$;
 
 -- Atomarer XP-Zuwachs + Protokoll-Eintrag, aufgerufen via supabase.rpc('increment_xp', ...).
@@ -868,6 +904,15 @@ alter table xp_log enable row level security;
 alter table teams enable row level security;
 alter table team_members enable row level security;
 alter table team_goals enable row level security;
+alter table active_org enable row level security;
+drop policy if exists "active_org_select_own" on active_org;
+create policy "active_org_select_own" on active_org for select using (auth.uid() = user_id);
+drop policy if exists "active_org_insert_own" on active_org;
+create policy "active_org_insert_own" on active_org for insert with check (auth.uid() = user_id);
+drop policy if exists "active_org_update_own" on active_org;
+create policy "active_org_update_own" on active_org for update using (auth.uid() = user_id);
+drop policy if exists "active_org_delete_own" on active_org;
+create policy "active_org_delete_own" on active_org for delete using (auth.uid() = user_id);
 alter table team_requests enable row level security;
 alter table mentor_pairs enable row level security;
 alter table call_log_days enable row level security;
@@ -1563,12 +1608,11 @@ create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = 
 -- custom_courses, migration_53).
 drop policy if exists "teams_select_all" on teams;
 create policy "teams_select_all" on teams for select using (
-  same_org(created_by, auth.uid())
+  sieht_person(created_by)
   -- Auch das eigene Team lesen dürfen, unabhängig davon, in welcher
   -- Organisation die anlegende Person sitzt (migration_89): sonst stand für
   -- Mitglieder "Du bist noch in keinem Team".
   or exists (select 1 from team_members tm where tm.team_id = teams.id and tm.user_id = auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "teams_insert_managers" on teams;
 create policy "teams_insert_managers" on teams for insert with check (
@@ -1581,10 +1625,7 @@ create policy "teams_delete_own" on teams for delete using (created_by = auth.ui
 
 -- --- team_members ---
 drop policy if exists "team_members_select_all" on team_members;
-create policy "team_members_select_all" on team_members for select using (
-  same_org(user_id, auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-);
+create policy "team_members_select_all" on team_members for select using (sieht_person(user_id));
 drop policy if exists "team_members_insert_lead" on team_members;
 create policy "team_members_insert_lead" on team_members for insert with check (
   kann_team_verwalten(team_id, auth.uid())
@@ -1600,10 +1641,7 @@ create policy "team_members_delete_lead_or_self" on team_members for delete usin
 
 -- --- team_goals ---
 drop policy if exists "team_goals_select_all" on team_goals;
-create policy "team_goals_select_all" on team_goals for select using (
-  same_org(manager_id, auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-);
+create policy "team_goals_select_all" on team_goals for select using (sieht_person(manager_id));
 drop policy if exists "team_goals_insert_manager" on team_goals;
 create policy "team_goals_insert_manager" on team_goals for insert with check (kann_team_verwalten(team_id, auth.uid()));
 drop policy if exists "team_goals_update_manager" on team_goals;
@@ -1649,9 +1687,11 @@ drop policy if exists "call_log_days_select_own" on call_log_days;
 create policy "call_log_days_select_own" on call_log_days for select using (auth.uid() = user_id);
 drop policy if exists "call_log_days_select_managers" on call_log_days;
 create policy "call_log_days_select_managers" on call_log_days for select using (
-  is_team_lead_of(user_id, auth.uid())
-  or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)
-  or (exists (select 1 from profiles where id = auth.uid() and is_admin = true) and same_org(user_id, auth.uid()))
+  sieht_person(user_id)
+  and (
+    is_team_lead_of(user_id, auth.uid())
+    or exists (select 1 from profiles where id = auth.uid() and (is_admin or is_platform_admin))
+  )
 );
 drop policy if exists "call_log_days_upsert_own" on call_log_days;
 create policy "call_log_days_upsert_own" on call_log_days for insert with check (auth.uid() = user_id);
@@ -1662,10 +1702,9 @@ create policy "call_log_days_update_own" on call_log_days for update using (auth
 drop policy if exists "leads_select" on leads;
 create policy "leads_select" on leads for select using (
   created_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(created_by, auth.uid())
+    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
+    and sieht_person(created_by)
   )
   -- Sonst wäre ein per Aufgabe/Erwähnung verlinkter fremder Termin für die
   -- zugewiesene/erwähnte Person unauffindbar (migration_77). Über die

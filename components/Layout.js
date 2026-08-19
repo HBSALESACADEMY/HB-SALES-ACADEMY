@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { wochenStartTag } from "../lib/woche";
+import { merkeAktiveOrg } from "../lib/activeOrg";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
@@ -576,6 +577,11 @@ export default function Layout({ children, fullBleed }) {
     cachedOrg = null;
     resetOrgBranding();
     sessionStorage.removeItem("hb_active_org_id");
+    // Auch serverseitig zurücksetzen (migration_92) — sonst bliebe die zuletzt
+    // per Firmencode gewählte Organisation nach dem Abmelden weiter aktiv und
+    // ein Plattform-Admin sähe sie beim nächsten Anmelden ohne Code erneut.
+    const { data: { session: alteSitzung } } = await supabase.auth.getSession();
+    if (alteSitzung) await merkeAktiveOrg(supabase, alteSitzung.user.id, null);
     await supabase.auth.signOut();
     router.replace("/login");
   }
