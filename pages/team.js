@@ -140,11 +140,21 @@ export default function Team() {
                       <div className="cursor-pointer flex-shrink-0" onClick={() => openProfile(m.id)}>
                         <Avatar name={m.name} src={m.avatar_url} size={28} />
                       </div>
-                      <span className="text-sm text-textMain flex-1 min-w-0 truncate cursor-pointer" onClick={() => openProfile(m.id)}>
-                        {m.name}
-                        {m.id === selfId && <span className="text-textMuted"> (du)</span>}
-                        {m.istLeitung && <span className="text-amber text-xs"> · Lead</span>}
-                      </span>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(m.id)}>
+                        <div className="text-sm text-textMain truncate">
+                          {m.name}
+                          {m.id === selfId && <span className="text-textMuted"> (du)</span>}
+                          {m.istLeitung && <span className="text-amber text-xs"> · Lead</span>}
+                        </div>
+                        {/* Lernstand ist bewusst für alle im Team sichtbar —
+                            anders als die Anruf-Zahlen weiter rechts. */}
+                        <div className="text-[11px] text-textMuted truncate">
+                          {m.module.fertig}/{m.module.gesamt} Module
+                          {m.kurse.length > 0
+                            ? ` · abgeschlossen: ${m.kurse.join(", ")}`
+                            : " · noch kein Kurs abgeschlossen"}
+                        </div>
+                      </div>
                       {/* Der Beitrag je Person ist bewusst nicht für alle sichtbar —
                           er zeigt die Leistung einzelner Kolleg:innen. */}
                       {t.ziele.map((z) => z.beitraege && (

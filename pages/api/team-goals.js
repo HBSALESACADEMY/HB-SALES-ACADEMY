@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { goalMetric } from "../../lib/goalMetrics";
+import { COURSES } from "../../lib/curriculum";
 import { ranglisteMetrik, werteProPerson, summeFuer } from "../../lib/goalProgress";
 import { wochenStartTag, wochenStartZeitpunkt } from "../../lib/woche";
 
@@ -81,6 +82,27 @@ export default async function handler(req, res) {
     const { data: personen } = await admin.from("profiles").select("id, full_name, avatar_url").in("id", namensIds);
     const personVon = new Map((personen || []).map((p) => [p.id, p]));
 
+    // --- Lernfortschritt je Person -----------------------------------------
+    // Anders als die Kennzahlen oben ist das nicht zeitraumbezogen: gefragt
+    // ist der Gesamtstand ("wer hat was abgeschlossen"), nicht die Woche.
+    // Zwei gebündelte Abfragen für alle statt zwei je Person.
+    const [{ data: quizzes }, { data: pruefungen }] = await Promise.all([
+      alleIds.length ? admin.from("quiz_results").select("user_id, module_id").in("user_id", alleIds) : { data: [] },
+      alleIds.length ? admin.from("exam_results").select("user_id, course_id").eq("passed", true).in("user_id", alleIds) : { data: [] },
+    ]);
+    const modulGesamt = COURSES.reduce((s2, k) => s2 + k.modules.length, 0);
+    const modulePro = new Map();
+    (quizzes || []).forEach((q) => {
+      if (!modulePro.has(q.user_id)) modulePro.set(q.user_id, new Set());
+      modulePro.get(q.user_id).add(q.module_id);
+    });
+    const kursePro = new Map();
+    (pruefungen || []).forEach((e) => {
+      if (!kursePro.has(e.user_id)) kursePro.set(e.user_id, new Set());
+      kursePro.get(e.user_id).add(e.course_id);
+    });
+    const kursTitel = new Map(COURSES.map((k) => [k.id, k.title]));
+
     // --- Werte je Kennzahl: jede Kennzahl genau einmal abfragen -------------
     const gebraucht = new Map();
     (ziele || []).forEach((z) => { const m = goalMetric(z.metric); if (m) gebraucht.set(m.key, m); });
@@ -111,6 +133,9 @@ export default async function handler(req, res) {
           name: personVon.get(id)?.full_name || "Unbenannt",
           avatar_url: personVon.get(id)?.avatar_url || null,
           istLeitung: t?.created_by === id,
+          module: { fertig: modulePro.get(id)?.size || 0, gesamt: modulGesamt },
+          // Nur bestandene Prüfungen — das ist der Abschluss eines Kurses.
+          kurse: Array.from(kursePro.get(id) || []).map((kid) => kursTitel.get(kid) || kid).sort((a, b) => a.localeCompare(b, "de")),
         })).sort((a, b) => a.name.localeCompare(b.name, "de")),
         ziele: (ziele || []).filter((z) => z.team_id === tid).map((z) => {
           const w = werte.get(z.metric);
