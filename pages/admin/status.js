@@ -61,6 +61,11 @@ export default function SystemStatus() {
   }
 
   const alt = stand && (Date.now() - new Date(stand.geprueft_at).getTime()) > 3 * 60 * 60 * 1000;
+  const gestoert = (stand?.pruefungen || []).filter((p) => !p.ok);
+  // Der gespeicherte Stand kann von einer älteren Fassung stammen, die Folge
+  // und Behebung noch nicht mitgeschrieben hat. Dann fehlen die Details nicht
+  // etwa — sie stehen schlicht nicht in den Daten.
+  const detailsFehlen = gestoert.length > 0 && gestoert.every((p) => !p.folge);
 
   return (
     <Layout>
@@ -92,13 +97,23 @@ export default function SystemStatus() {
               <span className="text-2xl">{stand.gesund ? "✅" : "🔴"}</span>
               <div>
                 <div className="font-display font-semibold text-textMain">
-                  {stand.gesund ? "Alles in Ordnung" : "Störung erkannt"}
+                  {/* Nur "Störung erkannt" liess offen, WAS gestört ist —
+                      die betroffenen Prüfungen gehören in die Überschrift. */}
+                  {stand.gesund
+                    ? "Alles in Ordnung"
+                    : `Störung erkannt: ${gestoert.map((p) => p.name).join(", ")}`}
                 </div>
                 <div className="text-xs text-textMuted">
                   Zuletzt geprüft: {new Date(stand.geprueft_at).toLocaleString("de-DE")}
                 </div>
               </div>
             </div>
+            {detailsFehlen && (
+              <p className="text-xs text-textMuted mt-3">
+                Dieser Stand stammt aus einer älteren Fassung und enthält noch keine Angaben zu Folge und Behebung.
+                Ein Klick auf „Jetzt prüfen“ holt sie.
+              </p>
+            )}
             {alt && (
               <p className="text-xs text-coral mt-3">
                 Die letzte Prüfung liegt über drei Stunden zurück — möglicherweise läuft die automatische Prüfung nicht.
