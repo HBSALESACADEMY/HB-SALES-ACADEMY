@@ -8,6 +8,7 @@ import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 export default function Scripts() {
   const [scripts, setScripts] = useState([]);
   const [isManager, setIsManager] = useState(false);
+  const [userId, setUserId] = useState(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
@@ -30,6 +31,7 @@ export default function Scripts() {
       ]);
       // Teamleads dürfen Skripte genauso verwalten wie Manager/Admins — siehe
       // is_team_lead() in der RLS-Policy (migration_52).
+      setUserId(session.user.id);
       setIsManager(me?.role === "manager" || !!me?.is_admin || !!me?.is_platform_admin || (ownTeams || []).length > 0);
     }
     const { data } = await supabase.from("scripts").select("*").order("category").order("title");
@@ -179,6 +181,11 @@ export default function Scripts() {
               </button>
             ))}
           </div>
+          {!isManager && (
+            <p className="text-[11px] text-textMuted mb-3">
+              Dein Skript ist nur für dich sichtbar. Für die ganze Organisation veröffentlichen kann die Teamleitung.
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <button disabled={saving} onClick={() => setShowForm(false)} className="btn-ghost text-xs flex-1 disabled:opacity-40">Abbrechen</button>
             <button disabled={saving} onClick={saveScript} className="btn text-xs flex-1 justify-center disabled:opacity-40">{saving ? "Speichert..." : "Speichern"}</button>
@@ -228,8 +235,11 @@ export default function Scripts() {
                       <button onClick={() => copy(s)} className="btn-ghost text-xs">
                         {copiedId === s.id ? "Kopiert!" : <><Icon name="copy" size={12} /> Kopieren</>}
                       </button>
-                      {isManager && <button onClick={() => startEdit(s)} className="btn-ghost text-xs">Bearbeiten</button>}
-                      {isManager && <button onClick={() => deleteScript(s.id)} className="btn-ghost text-xs text-coral">Löschen</button>}
+                      {/* Eigene private Skripte darf man selbst bearbeiten und
+                          löschen — sonst könnte man etwas anlegen und danach
+                          nie wieder anfassen. */}
+                      {(isManager || (s.created_by === userId && s.visibility === "private")) && <button onClick={() => startEdit(s)} className="btn-ghost text-xs">Bearbeiten</button>}
+                      {(isManager || (s.created_by === userId && s.visibility === "private")) && <button onClick={() => deleteScript(s.id)} className="btn-ghost text-xs text-coral">Löschen</button>}
                     </div>
                   </div>
                   <p className="text-sm text-textMuted whitespace-pre-wrap">{s.body}</p>

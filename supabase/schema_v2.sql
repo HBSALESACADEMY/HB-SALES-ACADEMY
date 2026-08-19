@@ -1116,24 +1116,43 @@ create policy "scripts_select_all" on scripts for select using (
   or (visibility = 'org' and same_org(created_by, auth.uid()))
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
+create or replace function public.darf_skripte_veroeffentlichen(uid uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (
+    select 1 from profiles where id = uid and (role = 'manager' or is_admin or is_platform_admin)
+  ) or is_team_lead(uid);
+$$;
+
+-- Jede Person darf ein eigenes, privates Skript anlegen (migration_90) —
+-- veröffentlichen für die ganze Organisation bleibt Führungsrollen
+-- vorbehalten. with check ist dabei entscheidend: ohne sie liesse sich ein
+-- privates Skript nachträglich auf "für alle" umstellen.
 drop policy if exists "scripts_insert_managers" on scripts;
-create policy "scripts_insert_managers" on scripts for insert with check (
-  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
-  or is_team_lead(auth.uid())
+drop policy if exists "scripts_insert" on scripts;
+create policy "scripts_insert" on scripts for insert with check (
+  created_by = auth.uid()
+  and (visibility = 'private' or darf_skripte_veroeffentlichen(auth.uid()))
 );
 drop policy if exists "scripts_update_managers" on scripts;
-create policy "scripts_update_managers" on scripts for update using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+drop policy if exists "scripts_update" on scripts;
+create policy "scripts_update" on scripts for update
+using (
+  (created_by = auth.uid() and visibility = 'private')
+  or (darf_skripte_veroeffentlichen(auth.uid())
+      and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
+)
+with check (
+  (created_by = auth.uid() and visibility = 'private')
+  or (darf_skripte_veroeffentlichen(auth.uid())
+      and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
 );
 drop policy if exists "scripts_delete_managers" on scripts;
-create policy "scripts_delete_managers" on scripts for delete using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+drop policy if exists "scripts_delete" on scripts;
+create policy "scripts_delete" on scripts for delete using (
+  (created_by = auth.uid() and visibility = 'private')
+  or (darf_skripte_veroeffentlichen(auth.uid())
+      and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
 );
 
 -- --- guides ---
