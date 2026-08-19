@@ -438,6 +438,15 @@ export default function Manager() {
               Mehrere Ziele gleichzeitig sind möglich — etwa 200 Anwahlen <em>und</em> 10 Termine.
               Der Fortschritt zählt alle Teammitglieder zusammen und startet jeden Montag neu.
             </p>
+            {/* Ohne Mitglieder ist ein Ziel wirkungslos: niemand sieht es unter
+                „Mein Team", und der Fortschritt bleibt zwangsläufig bei null.
+                Das war sonst nirgends zu erkennen. */}
+            {team.length === 0 && (
+              <p className="text-[11px] text-amber mt-2">
+                Dieses Team hat noch keine Mitglieder. Ein Ziel bleibt dann für alle unsichtbar und der
+                Fortschritt steht dauerhaft auf 0 — füge zuerst unten Mitglieder hinzu.
+              </p>
+            )}
           </div>
 
           <div className="card mb-5">
