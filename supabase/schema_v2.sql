@@ -731,10 +731,12 @@ $$;
 create or replace function public.same_org(a uuid, b uuid)
 returns boolean
 language sql stable security definer as $$
-  select exists (
-    select 1 from profiles pa, profiles pb
-    where pa.id = a and pb.id = b and pa.organization_id is not distinct from pb.organization_id
-  );
+  -- Vergleicht gegen die AKTIVE Organisation des Betrachters (migration_95),
+  -- nicht gegen dessen feste Heimat. a = b zuerst, sonst verlöre ein
+  -- Plattform-Admin per Firmencode den Zugriff auf die eigenen Eintraege.
+  select a = b
+      or (select organization_id from profiles where id = a)
+         is not distinct from aktive_org(b);
 $$;
 
 -- Bricht die gegenseitige Abfrage zwischen leads und lead_tasks auf (siehe
@@ -975,11 +977,9 @@ drop policy if exists "quiz_select_team" on quiz_results;
 create policy "quiz_select_team" on quiz_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "quiz_results_select_admin" on quiz_results;
 create policy "quiz_results_select_admin" on quiz_results for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
-  )
+  exists (select 1 from profiles where profiles.id = auth.uid()
+          and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
+  and same_org(user_id, auth.uid())
 );
 
 -- --- exam_results ---
@@ -991,11 +991,9 @@ drop policy if exists "exam_select_team" on exam_results;
 create policy "exam_select_team" on exam_results for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "exam_results_select_admin" on exam_results;
 create policy "exam_results_select_admin" on exam_results for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
-  )
+  exists (select 1 from profiles where profiles.id = auth.uid()
+          and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
+  and same_org(user_id, auth.uid())
 );
 
 -- --- roleplay_sessions ---
@@ -1007,11 +1005,9 @@ drop policy if exists "rp_select_team" on roleplay_sessions;
 create policy "rp_select_team" on roleplay_sessions for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "roleplay_sessions_select_admin" on roleplay_sessions;
 create policy "roleplay_sessions_select_admin" on roleplay_sessions for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
-  )
+  exists (select 1 from profiles where profiles.id = auth.uid()
+          and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
+  and same_org(user_id, auth.uid())
 );
 
 -- --- nav_items ---
@@ -1055,8 +1051,7 @@ create policy "nav_items_delete_managers" on nav_items for delete using (
 -- Organisation des/der Erstellenden statt der gerade aktiven Organisation.
 drop policy if exists "custom_courses_select_all" on custom_courses;
 create policy "custom_courses_select_all" on custom_courses for select using (
-  organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  organization_id is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "custom_courses_write_managers" on custom_courses;
 create policy "custom_courses_write_managers" on custom_courses for insert with check (
@@ -1135,15 +1130,15 @@ create policy "custom_modules_delete_managers" on custom_modules for delete usin
 -- nav_items/custom_courses/teams, siehe migration_53/57).
 drop policy if exists "kb_entries_select_approved" on kb_entries;
 create policy "kb_entries_select_approved" on kb_entries for select using (
-  status = 'approved'
-  and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  status = 'approved' and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_select_managers_all" on kb_entries;
 create policy "kb_entries_select_managers_all" on kb_entries for select using (
   (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
+    exists (select 1 from profiles where profiles.id = auth.uid()
+            and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
     or is_team_lead(auth.uid())
-  ) and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  ) and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_insert_pending" on kb_entries;
 create policy "kb_entries_insert_pending" on kb_entries for insert with check (status = 'pending');
@@ -1212,8 +1207,7 @@ drop policy if exists "guides_select_own" on guides;
 create policy "guides_select_own" on guides for select using (auth.uid() = created_by);
 drop policy if exists "guides_select_published" on guides;
 create policy "guides_select_published" on guides for select using (
-  is_published = true
-  and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  is_published = true and same_org(created_by, auth.uid())
 );
 drop policy if exists "guides_insert_own" on guides;
 create policy "guides_insert_own" on guides for insert with check (auth.uid() = created_by);
@@ -1228,9 +1222,14 @@ create policy "guides_delete_own_or_manager" on guides for delete using (
 
 -- --- flashcards ---
 drop policy if exists "flashcards_select_all" on flashcards;
-create policy "flashcards_select_all" on flashcards for select using (
-  same_org(created_by, auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+create policy "flashcards_select_all" on flashcards for select using (same_org(created_by, auth.uid()));
+
+drop policy if exists "xp_log_select_all" on xp_log;
+create policy "xp_log_select_all" on xp_log for select using (same_org(user_id, auth.uid()));
+
+drop policy if exists "guides_select_published" on guides;
+create policy "guides_select_published" on guides for select using (
+  is_published = true and same_org(created_by, auth.uid())
 );
 drop policy if exists "flashcards_write_managers" on flashcards;
 create policy "flashcards_write_managers" on flashcards for insert with check (
@@ -1257,9 +1256,9 @@ create policy "fp_update_own" on flashcard_progress for update using (auth.uid()
 drop policy if exists "personal_courses_select" on personal_courses;
 create policy "personal_courses_select" on personal_courses for select using (
   user_id = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
+    exists (select 1 from profiles where profiles.id = auth.uid()
+            and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
     and same_org(user_id, auth.uid())
   )
 );
@@ -1328,13 +1327,13 @@ create or replace function public.community_post_same_org(p_org uuid, p_author u
 returns boolean
 language sql stable security definer as $$
   select coalesce(p_org, (select organization_id from profiles where profiles.id = p_author))
-       = (select organization_id from profiles where profiles.id = viewer);
+         is not distinct from aktive_org(viewer);
 $$;
 
 drop policy if exists "community_posts_select_all" on community_posts;
 create policy "community_posts_select_all" on community_posts for select using (
+  -- 'global' bleibt: bewusst organisationsübergreifend geteilt.
   visibility = 'global'
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
   or community_post_same_org(organization_id, user_id, auth.uid())
 );
 drop policy if exists "community_posts_insert_own" on community_posts;
@@ -1370,8 +1369,7 @@ create policy "community_posts_update_own_or_manager" on community_posts for upd
 -- --- community_comments --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_comments_select_all" on community_comments;
 create policy "community_comments_select_all" on community_comments for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
+  exists (
     select 1 from community_posts cp where cp.id = community_comments.post_id
     and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
@@ -1406,8 +1404,7 @@ create policy "community_notifications_update_own" on community_notifications fo
 -- --- community_kudos --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_kudos_select_all" on community_kudos;
 create policy "community_kudos_select_all" on community_kudos for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
+  exists (
     select 1 from community_posts cp where cp.id = community_kudos.post_id
     and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
@@ -1429,8 +1426,7 @@ create policy "community_kudos_delete_own" on community_kudos for delete using (
 -- --- community_comment_kudos --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
 drop policy if exists "community_comment_kudos_select_all" on community_comment_kudos;
 create policy "community_comment_kudos_select_all" on community_comment_kudos for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
+  exists (
     select 1 from community_comments cc
     join community_posts cp on cp.id = cc.post_id
     where cc.id = community_comment_kudos.comment_id
@@ -1458,8 +1454,7 @@ alter table community_poll_options enable row level security;
 alter table community_poll_votes enable row level security;
 drop policy if exists "community_poll_options_select_all" on community_poll_options;
 create policy "community_poll_options_select_all" on community_poll_options for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
+  exists (
     select 1 from community_posts cp where cp.id = community_poll_options.post_id
     and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
@@ -1470,8 +1465,7 @@ create policy "community_poll_options_insert_own_post" on community_poll_options
 );
 drop policy if exists "community_poll_votes_select_all" on community_poll_votes;
 create policy "community_poll_votes_select_all" on community_poll_votes for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
+  exists (
     select 1 from community_posts cp where cp.id = community_poll_votes.post_id
     and (cp.visibility = 'global' or community_post_same_org(cp.organization_id, cp.user_id, auth.uid()))
   )
@@ -1598,10 +1592,7 @@ create policy "conversation_reads_update_own" on conversation_reads for update u
 
 -- --- xp_log ---
 drop policy if exists "xp_log_select_all" on xp_log;
-create policy "xp_log_select_all" on xp_log for select using (
-  same_org(user_id, auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-);
+create policy "xp_log_select_all" on xp_log for select using (same_org(user_id, auth.uid()));
 drop policy if exists "xp_log_insert_own" on xp_log;
 create policy "xp_log_insert_own" on xp_log for insert with check (auth.uid() = user_id);
 
@@ -1852,11 +1843,9 @@ create policy "lead_mentions_update_own" on lead_mentions for update using (user
 -- --- notification_emails ---
 drop policy if exists "notification_emails_select" on notification_emails;
 create policy "notification_emails_select" on notification_emails for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'backend') or profiles.is_admin))
-    and organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-  )
+  exists (select 1 from profiles where profiles.id = auth.uid()
+          and (profiles.role in ('manager', 'backend') or profiles.is_admin or profiles.is_platform_admin))
+  and organization_id is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "notification_emails_insert" on notification_emails;
 create policy "notification_emails_insert" on notification_emails for insert with check (
@@ -1880,8 +1869,7 @@ create policy "notification_emails_delete" on notification_emails for delete usi
 -- Üben), nur Manager/Admins verwalten sie.
 drop policy if exists "custom_objections_select" on custom_objections;
 create policy "custom_objections_select" on custom_objections for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
+  organization_id is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "custom_objections_insert" on custom_objections;
 create policy "custom_objections_insert" on custom_objections for insert with check (
@@ -1955,11 +1943,9 @@ drop policy if exists "login_events_select_managers" on login_events;
 create policy "login_events_select_managers" on login_events for select using (is_team_lead_of(user_id, auth.uid()));
 drop policy if exists "login_events_select_admin" on login_events;
 create policy "login_events_select_admin" on login_events for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
-  )
+  exists (select 1 from profiles where profiles.id = auth.uid()
+          and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
+  and same_org(user_id, auth.uid())
 );
 
 -- --- page_views ---
@@ -1967,11 +1953,9 @@ drop policy if exists "page_views_insert_own" on page_views;
 create policy "page_views_insert_own" on page_views for insert with check (auth.uid() = user_id);
 drop policy if exists "page_views_select_admin" on page_views;
 create policy "page_views_select_admin" on page_views for select using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
-  )
+  exists (select 1 from profiles where profiles.id = auth.uid()
+          and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
+  and same_org(user_id, auth.uid())
 );
 
 -- --- system_health ---
