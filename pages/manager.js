@@ -47,10 +47,21 @@ export default function Manager() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
     setSelfId(session.user.id);
-    const { data: me } = await supabase.from("profiles").select("role, organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
-    if (!me || me.role !== "manager") { setIsManager(false); setLoading(false); return null; }
+    const { data: me } = await supabase.from("profiles").select("role, organization_id, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    // Admins der Organisation und Plattform-Admins gehören hierher, auch ohne
+    // role='manager' — sie verwalten die Teams ihrer Organisation (siehe
+    // migration_88). Vorher sperrte diese Prüfung genau die Personen aus, die
+    // dafür zuständig sind.
+    const darfVerwalten = !!(me && (me.role === "manager" || me.is_admin || me.is_platform_admin));
+    if (!darfVerwalten) { setIsManager(false); setLoading(false); return null; }
 
-    const { data: teams } = await supabase.from("teams").select("*").eq("created_by", session.user.id).order("created_at");
+    // Wer die Organisation verwaltet, sieht ALLE ihre Teams — nicht nur die
+    // selbst angelegten. Ein Team eines ausgeschiedenen Leads war sonst für
+    // niemanden mehr erreichbar. Die Auswahl ist ohnehin durch die
+    // Zugriffsregeln auf die eigene Organisation begrenzt.
+    let query = supabase.from("teams").select("*").order("created_at");
+    if (!me.is_admin && !me.is_platform_admin) query = query.eq("created_by", session.user.id);
+    const { data: teams } = await query;
     setMyTeams(teams || []);
     return { session, teams: teams || [] };
   }
