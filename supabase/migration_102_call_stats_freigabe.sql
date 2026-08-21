@@ -1,0 +1,11 @@
+-- Die Spalte hinter dem Schalter "Auswertung sichtbar".
+--
+-- Sie wurde im Code seit Langem gelesen und geschrieben (Manager-Ansicht,
+-- pages/api/manager/set-call-stats-access.js), aber nie angelegt — in keiner
+-- Migration. Der Schalter lief deshalb in "Could not find the
+-- 'can_view_call_stats' column of 'profiles' in the schema cache".
+--
+-- Bedeutung: Ist sie true, darf diese Person die Anruf-Auswertung ihres
+-- Teams einsehen — also auch, wie viel einzelne Kolleg:innen beigetragen
+-- haben. Standard ist false: Einzelwerte sieht sonst nur die Teamleitung.
+alter table profiles add column if not exists can_view_call_stats boolean not null default false;

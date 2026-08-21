@@ -31,7 +31,12 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
     const { data: ich } = await client.from("profiles")
-      .select("organization_id, is_admin, is_platform_admin, can_view_call_stats, role").eq("id", user.id).maybeSingle();
+      .select("organization_id, is_admin, is_platform_admin, role").eq("id", user.id).maybeSingle();
+    // Eigene Abfrage: fehlt die Spalte (migration_102 nicht eingespielt),
+    // scheiterte sonst die GESAMTE Profil-Abfrage — und damit die ganze
+    // Team-Seite, nicht nur die Freigabe. Dieselbe Falle wie seinerzeit bei
+    // last_seen_team_goals_at.
+    const { data: freigabe } = await client.from("profiles").select("can_view_call_stats").eq("id", user.id).maybeSingle();
 
     const activeOrgId = req.query.activeOrgId || null;
     let orgId = ich?.organization_id || null;
@@ -157,7 +162,7 @@ export default async function handler(req, res) {
 
     // Wer darf sehen, wie viel eine EINZELNE Person beigetragen hat?
     const istLeitung = alleTeams.some((t) => t.created_by === user.id);
-    const darfDetails = !!(istLeitung || ich?.is_platform_admin || ich?.is_admin || ich?.can_view_call_stats);
+    const darfDetails = !!(istLeitung || ich?.is_platform_admin || ich?.is_admin || freigabe?.can_view_call_stats);
 
     // Leistung im Team: nach dem Maßstab der Organisation. Steht der auf
     // Anruf-Zahlen und fehlt die Berechtigung für Einzelwerte, wird auf XP

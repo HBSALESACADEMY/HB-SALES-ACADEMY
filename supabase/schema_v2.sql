@@ -524,6 +524,9 @@ create table if not exists team_members (
   primary key (team_id, user_id)
 );
 
+-- Darf diese Person die Anruf-Auswertung des Teams einsehen (migration_102)?
+alter table profiles add column if not exists can_view_call_stats boolean not null default false;
+
 -- Wer berichtet an wen (migration_100/101). vorgesetzter_id ist die
 -- Hauptzuordnung, nach der gezeichnet wird; org_zusatz_chefs trägt weitere.
 alter table profiles add column if not exists vorgesetzter_id uuid references profiles(id) on delete set null;
