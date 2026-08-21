@@ -386,3 +386,14 @@ test("lokaler Tagesschlüssel und Server-Zeile nutzen dieselbe Rechnung", () => 
   const d = new Date(2026, 7, 12, 13, 0, 0);
   assert.equal(dateKeyOf(d), "2026-08-12");
 });
+
+test("der Datumsfilter trifft den Tag, an dem der Termin stattfindet", () => {
+  // Die ersten zehn Zeichen einer ISO-Zeichenkette stehen in UTC. Ein Termin
+  // kurz nach Mitternacht liegt dort noch auf dem Vortag — der Filter zeigte
+  // ihn dann am falschen Tag oder gar nicht.
+  const spaet = new Date(2026, 7, 22, 0, 30);            // 22.08., halb eins
+  const frueh = new Date(2026, 7, 21, 23, 30);           // 21.08., halb zwölf
+  assert.equal(istGleicherTag(spaet.toISOString(), new Date("2026-08-22T12:00:00")), true);
+  assert.equal(istGleicherTag(spaet.toISOString(), new Date("2026-08-21T12:00:00")), false);
+  assert.equal(istGleicherTag(frueh.toISOString(), new Date("2026-08-21T12:00:00")), true);
+});

@@ -687,7 +687,12 @@ export default function Termine() {
       return d >= startOfMonth(kalenderMonat) && d <= endOfMonth(kalenderMonat);
     }
 
-    const matchesDate = !dateFilter || (lead.appointment_at && lead.appointment_at.slice(0, 10) === dateFilter);
+    // Über istGleicherTag statt über die ersten zehn Zeichen der
+    // ISO-Zeichenkette: die stehen in UTC. Ein Termin am 22.08. um 00:30
+    // liegt dort noch auf dem 21.08. — wer den 22. im Datumsfeld wählte,
+    // bekam ihn nicht zu sehen, und wer den 21. wählte, bekam einen Termin,
+    // der an dem Tag gar nicht stattfindet.
+    const matchesDate = !dateFilter || istGleicherTag(lead.appointment_at, new Date(`${dateFilter}T12:00:00`));
     if (!matchesDate) return false;
     if (!zeitVon) return true; // "Alle"
     if (!lead.appointment_at) return false;
