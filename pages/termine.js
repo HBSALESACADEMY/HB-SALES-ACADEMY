@@ -14,7 +14,7 @@ import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import { ABSTAND } from "../lib/autoRefresh";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
-import { loescheGeprueft } from "../lib/loeschen";
+import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { formatiere, formatiereDatum, formatiereUhrzeit } from "../lib/zeit";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
@@ -363,8 +363,8 @@ export default function Termine() {
   async function verschiebeTermin(id) {
     if (!verschiebeDatum) return;
     const neu = new Date(verschiebeDatum).toISOString();
-    const { error: err } = await supabase.from("leads").update({ appointment_at: neu, status: "geplant" }).eq("id", id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("leads").update({ appointment_at: neu, status: "geplant" }).eq("id", id), "Diesen Termin darf nur verschieben, wer ihn angelegt hat, oder ein Manager.");
+    if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, appointment_at: neu, status: "geplant" } : l)));
     meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${formatiere(neu)}.`);
     setVerschiebeId(null);
@@ -395,8 +395,8 @@ export default function Termine() {
       ...columnUpdates,
       custom_fields: customFields,
     };
-    const { error: err } = await supabase.from("leads").update(patch).eq("id", id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("leads").update(patch).eq("id", id), "Diesen Termin darf nur bearbeiten, wer ihn angelegt hat, oder ein Manager.");
+    if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     // Nur den Zeitpunkt eigens benennen — eine Verschiebung ist die Änderung,
     // auf die das Team wirklich reagieren muss.
@@ -512,8 +512,8 @@ export default function Termine() {
   }
 
   async function toggleTaskDone(task) {
-    const { error: err } = await supabase.from("lead_tasks").update({ done: !task.done }).eq("id", task.id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("lead_tasks").update({ done: !task.done }).eq("id", task.id), "Diese Aufgabe darf nur abhaken, wem sie zugewiesen ist, oder wer sie gestellt hat.");
+    if (err) { setError(err); return; }
     setTasksByLead((prev) => ({
       ...prev,
       [task.lead_id]: (prev[task.lead_id] || []).map((t) => (t.id === task.id ? { ...t, done: !task.done } : t)),
@@ -531,8 +531,8 @@ export default function Termine() {
   }
 
   async function updateStatus(id, status) {
-    const { error: err } = await supabase.from("leads").update({ status }).eq("id", id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("leads").update({ status }).eq("id", id), "Den Status darf nur ändern, wer den Termin angelegt hat, oder ein Manager.");
+    if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
     meldeTerminAenderung(id, "status", `Neuer Status: ${STATUS_LABELS[status] || status}`);
   }
@@ -544,8 +544,8 @@ export default function Termine() {
       setFollowUpDate("");
       return;
     }
-    const { error: err } = await supabase.from("leads").update({ outcome }).eq("id", id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("leads").update({ outcome }).eq("id", id), "Das Ergebnis darf nur eintragen, wer den Termin angelegt hat, oder ein Manager.");
+    if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome } : l)));
     meldeTerminAenderung(id, "ergebnis", `Ergebnis: ${OUTCOME_LABELS[outcome] || outcome}`);
   }

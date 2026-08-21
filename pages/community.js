@@ -9,7 +9,7 @@ import { openProfile } from "../lib/profileModalBus";
 import { validatePostAttachment } from "../lib/uploadValidation";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { effectiveStreak } from "../lib/streak";
-import { loescheGeprueft } from "../lib/loeschen";
+import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 
 const REACTION_TYPES = [
   { key: "flame", emoji: "🔥" },
@@ -549,8 +549,8 @@ export default function Community() {
 
   async function togglePin(p) {
     setError("");
-    const { error: err } = await supabase.from("community_posts").update({ pinned: !p.pinned }).eq("id", p.id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("community_posts").update({ pinned: !p.pinned }).eq("id", p.id), "Das Anheften wurde abgelehnt — das dürfen nur Manager und Admins.");
+    if (err) { setError(err); return; }
     setPosts((prev) => prev.map((row) => (row.id === p.id ? { ...row, pinned: !p.pinned } : row)));
   }
 

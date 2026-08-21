@@ -6,7 +6,7 @@ import AIBadge from "../components/AIBadge";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
-import { loescheGeprueft } from "../lib/loeschen";
+import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 
 const TYPES = [
@@ -76,8 +76,8 @@ export default function GuideGenerator() {
   }
 
   async function togglePublish(g) {
-    const { error: err } = await supabase.from("guides").update({ is_published: !g.is_published }).eq("id", g.id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("guides").update({ is_published: !g.is_published }).eq("id", g.id), "Das Veröffentlichen wurde abgelehnt — eigene Leitfäden darf nur die Verfasserin oder der Verfasser freigeben.");
+    if (err) { setError(err); return; }
     setGuides((prev) => prev.map((x) => (x.id === g.id ? { ...x, is_published: !g.is_published } : x)));
     if (currentGuide?.id === g.id) setCurrentGuide((c) => ({ ...c, is_published: !g.is_published }));
   }

@@ -11,6 +11,7 @@ import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
 import { wochenStartTag } from "../lib/woche";
 import { ZEITRAEUME, zeitraumFuer, zeitraumLabel } from "../lib/zielzeitraum";
 import ZielDeuter from "../components/ZielDeuter";
+import { aendereGeprueft } from "../lib/loeschen";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -241,8 +242,8 @@ export default function Manager() {
   async function saveTeamName() {
     if (!editingName.trim() || !selectedTeamId) return;
     setSavingName(true);
-    const { error } = await supabase.from("teams").update({ name: editingName.trim() }).eq("id", selectedTeamId);
-    if (error) { alert(error.message); setSavingName(false); return; }
+    const error = await aendereGeprueft(supabase.from("teams").update({ name: editingName.trim() }).eq("id", selectedTeamId), "Das Umbenennen wurde abgelehnt — nur die Teamleitung oder eine Führungsrolle der Organisation darf das.");
+    if (error) { alert(error); setSavingName(false); return; }
     setMyTeams((prev) => prev.map((t) => t.id === selectedTeamId ? { ...t, name: editingName.trim() } : t));
     setSavingName(false);
   }
@@ -421,8 +422,8 @@ export default function Manager() {
   }
 
   async function dissolvePair(pairId) {
-    const { error } = await supabase.from("mentor_pairs").update({ active: false }).eq("id", pairId);
-    if (error) { alert(error.message); return; }
+    const error = await aendereGeprueft(supabase.from("mentor_pairs").update({ active: false }).eq("id", pairId), "Das Auflösen wurde abgelehnt — nur die zuweisende Person oder eine Führungsrolle darf das.");
+    if (error) { alert(error); return; }
     const { data: { session } } = await supabase.auth.getSession();
     await loadTeamData(selectedTeamId, session);
   }
