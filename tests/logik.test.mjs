@@ -14,6 +14,7 @@ import { storagePrefix, dayKey, loadDay, saveDay, aggregateRange, buildReport, F
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
+import { FUEHRUNGSROLLEN } from "../lib/rollen.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -273,4 +274,48 @@ test("jede verwendete Komponente ist im selben Modul bekannt", () => {
     }
   }
   assert.deepEqual(fehler, [], `Nicht importierte Komponenten:\n${fehler.join("\n")}`);
+});
+
+// --- Rollenprüfung an einer Stelle ----------------------------------------
+
+test("die Frage nach der Führungsrolle wird nirgends nachgebaut", () => {
+  // Diese Prüfung stand einmal fünfmal wortgleich im Code — und lief
+  // auseinander: ein Manager durfte Ziele serverseitig ändern, bekam die
+  // Knöpfe dafür aber nicht angezeigt, weil eine Stelle role='manager' nicht
+  // mitzählte. Wer sie erneut ausschreibt statt istFuehrungsrolle() zu
+  // benutzen, soll das hier merken.
+  const dateien = [];
+  const sammle = (verzeichnis) => {
+    for (const eintrag of readdirSync(verzeichnis, { withFileTypes: true })) {
+      const pfad = `${verzeichnis}/${eintrag.name}`;
+      if (eintrag.isDirectory()) sammle(pfad);
+      else if (eintrag.name.endsWith(".js")) dateien.push(pfad);
+    }
+  };
+  sammle(new URL("../pages/api", import.meta.url).pathname);
+
+  const treffer = [];
+  for (const pfad of dateien) {
+    const quelle = readFileSync(pfad, "utf8");
+    // Ein Ausdruck, der role='manager' UND is_platform_admin in derselben
+    // Zeile verodert — das ist die nachgebaute Prüfung.
+    for (const zeile of quelle.split("\n")) {
+      if (/role\s*===\s*"manager"/.test(zeile) && /is_platform_admin/.test(zeile) && zeile.includes("||")) {
+        treffer.push(`${pfad.split("/").slice(-2).join("/")}: ${zeile.trim().slice(0, 80)}`);
+      }
+    }
+  }
+  assert.deepEqual(treffer, [], `Statt istFuehrungsrolle() aus lib/rollen.js nachgebaut:\n${treffer.join("\n")}`);
+});
+
+test("Code und Datenbank nennen dieselben Führungsrollen", () => {
+  // lib/rollen.js und public.ist_fuehrungsrolle() (migration_103) müssen
+  // übereinstimmen — sonst darf jemand laut Oberfläche etwas, das die
+  // Datenbank ablehnt.
+  const sql = readFileSync(new URL("../supabase/migration_103_manager_sehen_alles.sql", import.meta.url), "utf8");
+  const block = sql.slice(sql.indexOf("function public.ist_fuehrungsrolle"), sql.indexOf("$$;", sql.indexOf("function public.ist_fuehrungsrolle")));
+  for (const rolle of FUEHRUNGSROLLEN) {
+    assert.ok(block.includes(`'${rolle}'`), `Rolle "${rolle}" fehlt in ist_fuehrungsrolle()`);
+  }
+  assert.ok(block.includes("is_admin") && block.includes("is_platform_admin"), "is_admin/is_platform_admin fehlen in ist_fuehrungsrolle()");
 });

@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { goalMetric } from "../../lib/goalMetrics";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Legt ein Ziel an — mit ausdrücklicher Rechteprüfung statt allein über die
 // Zugriffsregeln.
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
     const istLeitung = team.created_by === user.id;
     // Gleichgezogen mit migration_103: jede Führungsrolle der Organisation
     // darf die Teams ihrer Organisation verwalten, nicht nur Admins.
-    const istFuehrung = ich.role === "manager" || ich.role === "backend" || !!ich.is_admin || !!ich.is_platform_admin;
+    const istFuehrung = istFuehrungsrolle(ich);
     const darfVerwalten = istLeitung || istFuehrung;
 
     // Persönliches Ziel für sich selbst darf jede Person setzen, die im Team
@@ -108,7 +109,7 @@ async function darfZielVerwalten(admin, ich, userId, team, ziel) {
   if (ziel?.user_id && ziel.user_id === userId) return { ok: true };
   if (team.created_by === userId) return { ok: true };
 
-  const istFuehrung = ich.role === "manager" || ich.role === "backend" || !!ich.is_admin || !!ich.is_platform_admin;
+  const istFuehrung = istFuehrungsrolle(ich);
   if (!istFuehrung) return { ok: false, grund: "Ziele für das Team darf nur die Teamleitung setzen oder ändern." };
 
   // Organisation des Teams mit Rückfall auf die der anlegenden Person —

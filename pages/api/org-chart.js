@@ -1,5 +1,6 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Organigramm der Organisation.
 //
@@ -20,7 +21,7 @@ export const config = { maxDuration: 20 };
 export async function darfOrganigrammSehen(client, userId) {
   const { data: p } = await client.from("profiles")
     .select("role, is_admin, is_platform_admin, organization_id").eq("id", userId).maybeSingle();
-  const darf = !!(p && (p.role === "manager" || p.role === "backend" || p.is_admin || p.is_platform_admin));
+  const darf = istFuehrungsrolle(p);
   return { darf, profil: p };
 }
 

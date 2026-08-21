@@ -10,7 +10,6 @@ import { zeitraumLabel, zeitraumFuer, ZEITRAEUME } from "../lib/zielzeitraum";
 import { goalMetricGroups } from "../lib/goalMetrics";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
-import { loescheGeprueft } from "../lib/loeschen";
 import Organigramm from "../components/Organigramm";
 import Strukturbaum from "../components/Strukturbaum";
 import Personenbaum from "../components/Personenbaum";
@@ -27,7 +26,6 @@ export default function Team() {
   const [rangMetrik, setRangMetrik] = useState("xp");
   const [myTeams, setMyTeams] = useState([]);
   const [darfDetails, setDarfDetails] = useState(false);
-  const [wochenStart, setWochenStart] = useState("");
   const [leistungMetrik, setLeistungMetrik] = useState("xp");
   const [organigramm, setOrganigramm] = useState(null);
   const [ansicht, setAnsicht] = useState("personen");
@@ -81,7 +79,6 @@ export default function Team() {
       setRangliste(daten.rangliste || []);
       setRangMetrik(daten.ranglisteMetrik || "xp");
       setDarfDetails(!!daten.darfDetails);
-      setWochenStart(daten.wochenStart || "");
       setLeistungMetrik(daten.leistungMetrik || "xp");
       setFehler("");
     } catch (e) {

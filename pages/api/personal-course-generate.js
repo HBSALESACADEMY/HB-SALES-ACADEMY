@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { generatePersonalCourseFor } from "../../lib/generatePersonalCourse";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Ein vollständiger Kurs (3 Module × Theorie+6 MC+offene Frage, plus
 // Abschlussprüfung) ist deutlich mehr Text als die bisherigen Generatoren —
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
   let target = user.id;
 
   if (!forSelf) {
-    const canManageOthers = me.role === "manager" || me.is_admin || me.is_platform_admin;
+    const canManageOthers = istFuehrungsrolle(me);
     if (!canManageOthers) return res.status(403).json({ error: "Nur Manager/Admins können Kurse für andere generieren." });
     const { data: targetProfile } = await admin.from("profiles").select("organization_id").eq("id", targetUserId).maybeSingle();
     if (!targetProfile) return res.status(404).json({ error: "Nutzer nicht gefunden." });

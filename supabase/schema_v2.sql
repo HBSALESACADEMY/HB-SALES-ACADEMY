@@ -1697,12 +1697,11 @@ create policy "teams_delete_own" on teams for delete using (created_by = auth.ui
 
 -- --- team_members ---
 drop policy if exists "team_members_select_all" on team_members;
+-- Über team_organisation() (migration_105): direkt auf teams.organization_id
+-- zu prüfen machte die Mitgliederliste eines Teams ohne eingetragene
+-- Organisation für alle unsichtbar, obwohl das Team selbst sichtbar ist.
 create policy "team_members_select_all" on team_members for select using (
-  exists (
-    select 1 from teams t
-    where t.id = team_members.team_id
-      and t.organization_id is not distinct from aktive_org(auth.uid())
-  )
+  team_organisation(team_id) is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "team_members_insert_lead" on team_members;
 create policy "team_members_insert_lead" on team_members for insert with check (
@@ -1719,7 +1718,12 @@ create policy "team_members_delete_lead_or_self" on team_members for delete usin
 
 -- --- team_goals ---
 drop policy if exists "team_goals_select_all" on team_goals;
-create policy "team_goals_select_all" on team_goals for select using (sieht_person(manager_id));
+-- Ein Ziel gehört zum TEAM, nicht zu seinem Urheber (migration_105): hing
+-- die Sichtbarkeit an der Organisation der anlegenden Person, war ein von
+-- einem Plattform-Admin gesetztes Ziel für das Kundenteam unsichtbar.
+create policy "team_goals_select_all" on team_goals for select using (
+  team_organisation(team_id) is not distinct from aktive_org(auth.uid())
+);
 drop policy if exists "team_goals_insert_manager" on team_goals;
 -- Zusätzlich darf sich jede Person ein Ziel FÜR SICH SELBST setzen
 -- (migration_97). Team-Ziele bleiben der Leitung vorbehalten.

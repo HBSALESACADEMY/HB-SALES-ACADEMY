@@ -4,6 +4,7 @@ import { goalMetric } from "../../lib/goalMetrics";
 import { COURSES } from "../../lib/curriculum";
 import { ranglisteMetrik, werteProPerson, summeFuer, XP_METRIK } from "../../lib/goalProgress";
 import { wochenStartTag, wochenStartZeitpunkt, tagesBeginnZeitpunkt, tagPlus, berlinHeute } from "../../lib/woche";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Alles, was die Seite „Mein Team" an Zahlen braucht: die Wochenziele der
 // eigenen Teams samt Fortschritt, die Mitglieder jedes Teams mit ihrem
@@ -162,7 +163,13 @@ export default async function handler(req, res) {
 
     // Wer darf sehen, wie viel eine EINZELNE Person beigetragen hat?
     const istLeitung = alleTeams.some((t) => t.created_by === user.id);
-    const darfDetails = !!(istLeitung || ich?.is_platform_admin || ich?.is_admin || freigabe?.can_view_call_stats);
+    // Eine Definition für alle Stellen. Vorher fehlte hier role='manager':
+    // ein Manager sah die Einzelbeiträge nicht, obwohl die Datenbank ihm die
+    // Rohdaten längst freigab (migration_103) — und obwohl der Server ihm
+    // erlaubt, die Ziele zu ändern (pages/api/team-goal.js). Drei Stellen,
+    // drei verschiedene Antworten auf dieselbe Frage.
+    const fuehrung = istFuehrungsrolle(ich);
+    const darfDetails = !!(istLeitung || fuehrung || freigabe?.can_view_call_stats);
 
     // Leistung im Team: nach dem Maßstab der Organisation. Steht der auf
     // Anruf-Zahlen und fehlt die Berechtigung für Einzelwerte, wird auf XP
@@ -179,10 +186,11 @@ export default async function handler(req, res) {
         id: tid,
         name: t?.name || "Team",
         isLead: t?.created_by === user.id,
-        // Wer Ziele dieses Teams ändern darf. Bewusst enger als darfDetails:
-        // das schliesst auch Mitglieder mit freigegebener Auswertung ein,
-        // die aber nichts setzen dürfen.
-        darfZiele: !!(t?.created_by === user.id || ich?.is_admin || ich?.is_platform_admin),
+        // Wer Ziele dieses Teams ändern darf — dieselbe Regel wie in
+        // pages/api/team-goal.js, das es serverseitig durchsetzt. Enger als
+        // darfDetails: dort zählt zusätzlich die Freigabe can_view_call_stats,
+        // die nur zum Sehen berechtigt.
+        darfZiele: !!(t?.created_by === user.id || fuehrung),
         leadName: lead?.full_name || null,
         mitglieder: ids.map((id) => ({
           id,
