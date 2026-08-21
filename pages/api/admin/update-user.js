@@ -48,8 +48,17 @@ export default async function handler(req, res) {
     }
 
     let update = {};
-    if (action === "make_manager") update = { role: "manager" };
-    else if (action === "remove_manager") update = { role: "rep" };
+    // Manager IST Admin seiner Organisation — anders als beim Anlegen einer
+    // neuen Organisation (pages/api/platform/create-organization.js) wurde
+    // is_admin hier bisher nicht mitgesetzt. Die so ernannten Manager sahen
+    // dadurch weniger und durften weniger als die zum Kunden mitgelieferten,
+    // ohne dass irgendwo ein Unterschied erkennbar war.
+    //
+    // "Admin" ist dabei immer organisationsbezogen: die Zugriffsregeln
+    // prüfen zusätzlich die Organisation, plattformweite Rechte gibt nur
+    // is_platform_admin.
+    if (action === "make_manager") update = { role: "manager", is_admin: true };
+    else if (action === "remove_manager") update = { role: "rep", is_admin: false };
     else if (action === "make_trainer") update = { role: "trainer" };
     else if (action === "remove_trainer") update = { role: "rep" };
     else if (action === "make_backend") update = { role: "backend" };
