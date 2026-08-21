@@ -1752,8 +1752,10 @@ create policy "team_goals_delete_manager" on team_goals for delete using (
 
 -- --- team_requests ---
 drop policy if exists "team_requests_select_participant" on team_requests;
+-- kann_team_verwalten statt is_lead_of_team (migration_106): sonst bleibt
+-- eine Anfrage unbeantwortet liegen, sobald die Teamleitung ausscheidet.
 create policy "team_requests_select_participant" on team_requests for select using (
-  auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
+  auth.uid() = requester_id or kann_team_verwalten(team_id, auth.uid())
 );
 drop policy if exists "team_requests_insert_own" on team_requests;
 create policy "team_requests_insert_own" on team_requests for insert with check (
@@ -1762,7 +1764,7 @@ create policy "team_requests_insert_own" on team_requests for insert with check 
 );
 drop policy if exists "team_requests_update_manager" on team_requests;
 create policy "team_requests_update_manager" on team_requests for update using (
-  auth.uid() = requester_id or is_lead_of_team(team_id, auth.uid())
+  auth.uid() = requester_id or kann_team_verwalten(team_id, auth.uid())
 );
 drop policy if exists "team_requests_delete_participant" on team_requests;
 create policy "team_requests_delete_participant" on team_requests for delete using (

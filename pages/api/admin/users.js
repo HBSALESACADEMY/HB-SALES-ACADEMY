@@ -10,7 +10,10 @@ export default async function handler(req, res) {
   const { client, user } = auth;
 
   const { data: me } = await client.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", user.id).maybeSingle();
-  if (!me || (me.role !== "manager" && !me.is_platform_admin)) {
+  // is_admin gehört dazu: "Admin der Organisation" ist genau die Rolle, die
+  // Nutzer freischaltet. Vorher war ausgesperrt, wer als Admin gekennzeichnet
+  // ist, aber nicht zusätzlich role='manager' trägt.
+  if (!me || (me.role !== "manager" && !me.is_admin && !me.is_platform_admin)) {
     return res.status(403).json({ error: "Nur Manager können die Nutzerverwaltung sehen." });
   }
 
