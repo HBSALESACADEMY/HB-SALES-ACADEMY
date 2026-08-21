@@ -30,6 +30,11 @@ export default function Kunden() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  // Die Liste zeigt nur Namen; alles Weitere klappt beim Darüberfahren auf.
+  // Zwei Zustände, weil ein Touchgerät nicht "darüberfahren" kann: der Tipp
+  // hält den Eintrag offen, bis er erneut angetippt wird.
+  const [hoverId, setHoverId] = useState(null);
+  const [fixiertId, setFixiertId] = useState(null);
 
   async function load(silent) {
     if (!silent) setLoading(true);
@@ -207,8 +212,13 @@ export default function Kunden() {
         {customers.map((c) => {
           const owner = profileMap[c.created_by];
           const isEditing = editingId === c.id;
+          // Beim Löschen offen halten — sonst verschwindet die Rückfrage,
+          // sobald die Maus wegwandert.
+          const offen = isEditing || confirmDelete === c.id || hoverId === c.id || fixiertId === c.id;
           return (
-            <div key={c.id} className="card">
+            <div key={c.id} className="card"
+              onMouseEnter={() => setHoverId(c.id)}
+              onMouseLeave={() => setHoverId((v) => (v === c.id ? null : v))}>
               {isEditing ? (
                 <div className="flex flex-col gap-2.5">
                   <input className="input" placeholder="Name *" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
@@ -228,15 +238,22 @@ export default function Kunden() {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                  {/* Der Name ist zugleich die Schaltfläche: mit Tastatur und
+                      auf dem Handy kommt man so an die Einzelheiten. */}
+                  <button type="button"
+                    onClick={() => setFixiertId((v) => (v === c.id ? null : c.id))}
+                    aria-expanded={offen}
+                    className="w-full text-left flex items-start justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
                       <div className="font-display font-semibold text-textMain">{c.name}</div>
-                      <div className="text-xs text-textMuted mt-0.5">{c.company || "Kein Unternehmen angegeben"}</div>
                     </div>
                     <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 flex-shrink-0 border ${outcomeTab === "kunde" ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
                       {outcomeTab === "kunde" ? "Kunde" : "Absage"}
                     </span>
-                  </div>
+                  </button>
+                  {offen && (
+                  <>
+                  <div className="text-xs text-textMuted mt-2 mb-2">{c.company || "Kein Unternehmen angegeben"}</div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted">
                     {c.phone && <span>📞 {c.phone}</span>}
                     {c.email && <span>✉️ {c.email}</span>}
@@ -263,6 +280,8 @@ export default function Kunden() {
                       )
                     )}
                   </div>
+                  </>
+                  )}
                 </>
               )}
             </div>
