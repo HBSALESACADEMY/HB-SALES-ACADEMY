@@ -351,28 +351,24 @@ export default function Manager() {
       target_count: Number(goalPatch.target_count),
       ends_on: goalPatch.ends_on || null,
     };
-    const { data: geaendert, error } = await supabase.from("team_goals").update(patch).eq("id", id).select();
-    if (error) { alert(error.message); return; }
-    // Wie beim Löschen: eine von den Zugriffsregeln abgelehnte Änderung
-    // meldet keinen Fehler, sie trifft null Zeilen.
-    if (!geaendert || geaendert.length === 0) {
-      alert("Die Änderung wurde abgelehnt. Ziele darf nur verwalten, wer das Team angelegt hat, oder ein Admin der Organisation.");
-      return;
-    }
+    try {
+      // Siehe pages/api/team-goal.js: nennt bei einer Ablehnung den Grund.
+      await apiPost("/api/team-goal", {
+        aktion: "aendern", zielId: id,
+        title: patch.title, target: patch.target_count, bis: patch.ends_on,
+      });
+    } catch (e) { alert(e.message || "Die Änderung konnte nicht gespeichert werden."); return; }
     setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
     setGoalEdit(null);
     setGoalPatch(null);
   }
 
   async function deleteGoal(id) {
-    // Siehe removeMember: ohne .select() bliebe eine abgelehnte Löschung
-    // unbemerkt und das Ziel käme beim nächsten Laden zurück.
-    const { data: geloescht, error } = await supabase.from("team_goals").delete().eq("id", id).select();
-    if (error) { alert(error.message); return; }
-    if (!geloescht || geloescht.length === 0) {
-      alert("Das Löschen wurde abgelehnt. Ziele darf nur verwalten, wer das Team angelegt hat, oder ein Admin der Organisation.");
-      return;
-    }
+    try {
+      // Über den Server: eine Ablehnung nennt dort den Grund samt beteiligter
+      // Organisationen (siehe pages/api/team-goal.js).
+      await apiPost("/api/team-goal", { aktion: "loeschen", zielId: id });
+    } catch (e) { alert(e.message || "Das Ziel konnte nicht gelöscht werden."); return; }
     setGoals((prev) => prev.filter((g) => g.id !== id));
   }
 

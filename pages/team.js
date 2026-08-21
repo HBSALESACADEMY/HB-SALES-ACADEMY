@@ -172,12 +172,14 @@ export default function Team() {
   // selbst, Team-Ziele nur die Leitung.
   async function speichereZielAenderung(id) {
     if (!zielPatch?.title?.trim() || !zielPatch.target_count) return;
-    const { error } = await supabase.from("team_goals").update({
-      title: zielPatch.title.trim(),
-      target_count: Number(zielPatch.target_count),
-      ends_on: zielPatch.ends_on || null,
-    }).eq("id", id);
-    if (error) { alert(error.message); return; }
+    try {
+      // Über den Server, damit eine Ablehnung den GRUND nennt (siehe
+      // pages/api/team-goal.js) statt nur "wurde abgelehnt".
+      await apiPost("/api/team-goal", {
+        aktion: "aendern", zielId: id,
+        title: zielPatch.title, target: zielPatch.target_count, bis: zielPatch.ends_on || null,
+      });
+    } catch (e) { alert(e.message || "Die Änderung konnte nicht gespeichert werden."); return; }
     setZielBearbeiten(null);
     setZielPatch(null);
     await load();
@@ -187,10 +189,9 @@ export default function Team() {
     if (!confirm(`Ziel „${titel}“ wirklich löschen?`)) return;
     // .select() ist nötig: eine von den Regeln abgelehnte Löschung meldet
     // keinen Fehler, sie trifft null Zeilen (siehe lib/loeschen.js).
-    const fehler = await loescheGeprueft(
-      supabase.from("team_goals").delete().eq("id", id),
-      "Das Löschen wurde abgelehnt. Team-Ziele darf nur die Teamleitung entfernen.");
-    if (fehler) { alert(fehler); return; }
+    try {
+      await apiPost("/api/team-goal", { aktion: "loeschen", zielId: id });
+    } catch (e) { alert(e.message || "Das Ziel konnte nicht gelöscht werden."); return; }
     await load();
   }
 
