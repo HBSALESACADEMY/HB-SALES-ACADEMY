@@ -11,6 +11,7 @@ import { goalMetricGroups } from "../lib/goalMetrics";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
 import Organigramm from "../components/Organigramm";
+import Strukturbaum from "../components/Strukturbaum";
 
 const RANG_LABEL = (key) => (key === "xp" ? "XP" : goalMetricLabel(key));
 
@@ -26,6 +27,8 @@ export default function Team() {
   const [wochenStart, setWochenStart] = useState("");
   const [leistungMetrik, setLeistungMetrik] = useState("xp");
   const [organigramm, setOrganigramm] = useState(null);
+  const [ansicht, setAnsicht] = useState("struktur");
+  const [strukturBusy, setStrukturBusy] = useState(false);
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [offenesZiel, setOffenesZiel] = useState(null);
   const [vergangeneOffen, setVergangeneOffen] = useState(null);
@@ -133,6 +136,23 @@ export default function Team() {
     setZielFormular(null);
     setZielEntwurf({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
     await load();
+  }
+
+  // Struktur ändern (migration_98). Danach neu laden statt lokal zu
+  // rechnen: Einheiten hängen aneinander, ein Löschen nimmt Untereinheiten
+  // mit — das lokal nachzubilden wäre fehleranfällig.
+  async function strukturAktion(daten) {
+    setStrukturBusy(true);
+    try {
+      await apiPost("/api/org-unit", daten);
+      const { data: profil2 } = await supabase.from("profiles")
+        .select("organization_id, is_platform_admin").eq("id", selfId).maybeSingle();
+      const oid = getActiveOrgId(profil2);
+      setOrganigramm(await apiGet("/api/org-chart" + (oid ? `?activeOrgId=${oid}` : "")));
+    } catch (e) {
+      alert(e.message || "Die Änderung konnte nicht gespeichert werden.");
+    }
+    setStrukturBusy(false);
   }
 
   async function setzeRolle(personId, rolle) {
@@ -413,17 +433,41 @@ export default function Team() {
           genau das zunichte. */}
       {organigramm && (
         <div className="mb-5">
-          <div className="flex items-baseline justify-between gap-2 mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
             <span className="font-semibold text-textMain text-sm">🗂️ Organigramm</span>
-            <span className="text-[11px] text-textMuted flex-shrink-0">
-              {organigramm.teams.length} {organigramm.teams.length === 1 ? "Team" : "Teams"}
-            </span>
+            {/* Zwei Sichten nebeneinander: die selbst gebaute Struktur und
+                das, was sich aus den Teams von selbst ergibt. */}
+            <div className="flex items-center gap-1.5">
+              {[["struktur", "Struktur"], ["teams", "Aus den Teams"]].map(([key, label]) => (
+                <button key={key} onClick={() => setAnsicht(key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="text-[11px] text-textMuted mb-3">
-            Die Struktur entsteht von selbst: gründet jemand aus einem Team ein eigenes Team,
-            erscheint es automatisch eine Ebene tiefer. Rollenbezeichnungen lassen sich direkt anklicken und ändern.
-          </p>
-          <Organigramm daten={organigramm} onRolle={setzeRolle} />
+
+          {ansicht === "struktur" ? (
+            <>
+              <p className="text-[11px] text-textMuted mb-3">
+                Deine eigene Gliederung — Abteilungen, Standorte, Bereiche. Teams hängst du hier ein;
+                neu entstandene stehen unten unter „Noch nicht zugeordnet“.
+              </p>
+              <Strukturbaum
+                struktur={organigramm.struktur || []}
+                teamsOhneEinheit={organigramm.teamsOhneEinheit || []}
+                onAktion={strukturAktion}
+                busy={strukturBusy} />
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] text-textMuted mb-3">
+                Ergibt sich von selbst aus den Teams: gründet jemand aus einem Team ein eigenes,
+                erscheint es automatisch eine Ebene tiefer. Rollenbezeichnungen lassen sich anklicken und ändern.
+              </p>
+              <Organigramm daten={organigramm} onRolle={setzeRolle} />
+            </>
+          )}
         </div>
       )}
 

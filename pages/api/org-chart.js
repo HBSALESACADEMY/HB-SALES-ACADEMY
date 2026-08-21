@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     // Über teams.organization_id statt über die anlegende Person
     // (migration_93): ein per Firmencode angelegtes Team gehört der
     // Kundenorganisation, nicht der Heimat-Organisation des Plattform-Admins.
-    const { data: alleTeams } = await admin.from("teams").select("id, name, created_by, organization_id").eq("organization_id", orgId);
+    const { data: alleTeams } = await admin.from("teams").select("id, name, created_by, organization_id, org_unit_id").eq("organization_id", orgId);
     const teams = alleTeams || [];
     const teamIds = teams.map((t) => t.id);
 
@@ -127,7 +127,27 @@ export default async function handler(req, res) {
       .map((p) => ({ id: p.id, name: p.full_name || "Unbenannt", avatar_url: p.avatar_url, rolle: p.role_title || "" }))
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
 
-    return res.status(200).json({ teams: knoten, ohneTeam });
+    // Selbst gebaute Struktur (migration_98). Teams hängen über org_unit_id
+    // daran; wer keiner Einheit zugeordnet ist, steht gesondert.
+    const { data: einheiten } = await admin.from("org_units")
+      .select("id, name, parent_id, order_index").eq("organization_id", orgId)
+      .order("order_index").order("created_at");
+
+    const struktur = (einheiten || []).map((e) => ({
+      id: e.id,
+      name: e.name,
+      elternId: e.parent_id || null,
+      teams: teams.filter((t) => t.org_unit_id === e.id).map((t) => ({
+        id: t.id,
+        name: t.name,
+        anzahl: (idsVon.get(t.id) || []).length,
+        leitung: personVon.get(t.created_by)?.full_name || null,
+      })),
+    }));
+    const teamsOhneEinheit = teams.filter((t) => !t.org_unit_id || !(einheiten || []).some((e) => e.id === t.org_unit_id))
+      .map((t) => ({ id: t.id, name: t.name, anzahl: (idsVon.get(t.id) || []).length, leitung: personVon.get(t.created_by)?.full_name || null }));
+
+    return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit });
   } catch (e) {
     console.error("Organigramm fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message });

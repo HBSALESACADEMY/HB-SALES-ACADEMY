@@ -524,6 +524,35 @@ create table if not exists team_members (
   primary key (team_id, user_id)
 );
 
+-- Selbst gebaute Organisationsstruktur (migration_98): Einheiten, denen
+-- Teams zugeordnet werden. Das automatische Organigramm aus den Teams bleibt
+-- daneben bestehen.
+create table if not exists org_units (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  parent_id uuid references org_units(id) on delete cascade,
+  name text not null,
+  order_index integer not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table teams add column if not exists org_unit_id uuid references org_units(id) on delete set null;
+
+alter table org_units enable row level security;
+drop policy if exists "org_units_select" on org_units;
+create policy "org_units_select" on org_units for select using (
+  organization_id is not distinct from aktive_org(auth.uid())
+);
+drop policy if exists "org_units_write" on org_units;
+create policy "org_units_write" on org_units for all
+using (
+  organization_id is not distinct from aktive_org(auth.uid())
+  and exists (select 1 from profiles where id = auth.uid() and (role = 'manager' or role = 'backend' or is_admin or is_platform_admin))
+)
+with check (
+  organization_id is not distinct from aktive_org(auth.uid())
+  and exists (select 1 from profiles where id = auth.uid() and (role = 'manager' or role = 'backend' or is_admin or is_platform_admin))
+);
+
 -- Ein Team gehört einer Organisation (migration_93) — nicht der der Person,
 -- die es angelegt hat: ein Plattform-Admin arbeitet per Firmencode für eine
 -- andere Organisation als seine eigene.
