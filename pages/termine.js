@@ -15,7 +15,8 @@ import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLead
 import { ABSTAND } from "../lib/autoRefresh";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
-import { formatiere, formatiereDatum, formatiereUhrzeit } from "../lib/zeit";
+import { formatiereDatum, formatiereUhrzeit, terminAnzeige } from "../lib/zeit";
+import { deutscheZeit } from "../lib/terminzeit";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -366,7 +367,7 @@ export default function Termine() {
     const err = await aendereGeprueft(supabase.from("leads").update({ appointment_at: neu, status: "geplant" }).eq("id", id), "Diesen Termin darf nur verschieben, wer ihn angelegt hat, oder ein Manager.");
     if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, appointment_at: neu, status: "geplant" } : l)));
-    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${formatiere(neu)}.`);
+    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${deutscheZeit(neu)} Uhr.`);
     setVerschiebeId(null);
     setVerschiebeDatum("");
   }
@@ -402,7 +403,7 @@ export default function Termine() {
     // auf die das Team wirklich reagieren muss.
     const verschoben = original && original.appointment_at !== patch.appointment_at;
     meldeTerminAenderung(id, "bearbeitet", verschoben
-      ? `Der Termin wurde verschoben auf ${patch.appointment_at ? formatiere(patch.appointment_at) : "keinen Zeitpunkt"}.`
+      ? `Der Termin wurde verschoben auf ${patch.appointment_at ? `${deutscheZeit(patch.appointment_at)} Uhr` : "keinen Zeitpunkt"}.`
       : "Die Termindaten wurden bearbeitet.");
     setEditingLeadId(null);
     setEditDraft(null);
@@ -656,10 +657,12 @@ export default function Termine() {
     setEditingEmailId(null);
   }
 
+  // Deutsche Zeit ist massgeblich; die eigene Ortszeit erscheint nur, wenn
+  // sie abweicht. Wer in Deutschland sitzt, sieht genau eine Angabe.
   function formatAppointment(iso) {
     if (!iso) return "Kein Termin-Zeitpunkt";
-    const d = new Date(iso);
-    return formatiereDatum(d, { weekday: "short", day: "2-digit", month: "2-digit" }) + " · " + formatiereUhrzeit(d);
+    const { haupt, zusatz } = terminAnzeige(iso);
+    return zusatz ? `${haupt} Uhr (bei dir ${zusatz})` : `${haupt} Uhr`;
   }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;

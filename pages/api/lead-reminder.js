@@ -3,6 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 import { sendeAlarm } from "../../lib/alarm";
+import { deutscheZeit, terminText } from "../../lib/terminzeit";
 
 // Manuelle Erinnerung an einen bestehenden Termin — geht NICHT an die
 // Kund:in, sondern an dieselben Empfänger wie die automatische
@@ -48,15 +49,18 @@ export default async function handler(req, res) {
     const { data: org } = await admin.from("organizations").select("name, telegram_chat_id").eq("id", effectiveOrgId).maybeSingle();
     const orgName = org?.name || null;
 
-    const appointmentText = lead.appointment_at
-      ? new Date(lead.appointment_at).toLocaleString("de-DE", { dateStyle: "full", timeStyle: "short" })
+    const appointmentDeutsch = lead.appointment_at
+      ? `${deutscheZeit(lead.appointment_at, { dateStyle: "full", timeStyle: "short" })} Uhr`
       : "noch offen";
+    const appointmentFuer = (e) => (lead.appointment_at
+      ? terminText(lead.appointment_at, e?.zeitzone)
+      : "noch offen");
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     const link = appUrl ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
-    const html =
+    const htmlFuer = (e) =>
       `<p><strong>Erinnerung</strong> an den Termin mit <strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}${orgName ? ` bei ${orgName}` : ""}:</p>` +
-      `<p>Termin: ${appointmentText}` +
+      `<p>Termin: ${appointmentFuer(e)}` +
       (lead.phone ? `<br/>Telefon: ${lead.phone}` : "") +
       (lead.email ? `<br/>E-Mail: ${lead.email}` : "") +
       (lead.website ? `<br/>Webseite: ${lead.website}` : "") +
@@ -67,9 +71,11 @@ export default async function handler(req, res) {
     const subject = `Erinnerung: Termin mit ${lead.name}`;
     const fromName = orgName || "HB Sales Academy";
 
-    await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName, art: "termine" });
+    await notifyOrgManagers(admin, effectiveOrgId, { subject, html: htmlFuer, fromName, art: "termine" });
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
+    // Zusatz-Adressen haben kein Konto und damit keine Zeitzone.
+    const html = htmlFuer(null);
     const extraEmails = (extra || []).map((e) => e.email);
     // Einzeln statt als Sammel-Anfrage, siehe Kommentar in notifyManagers.js.
     await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html, fromName })));
@@ -80,7 +86,7 @@ export default async function handler(req, res) {
       const text = [
         `🔔 Erinnerung: Termin mit ${lead.name}` + (lead.company ? ` (${lead.company})` : ""),
         ``,
-        `Termin: ${appointmentText}`,
+        `Termin: ${appointmentDeutsch}`,
         lead.phone ? `Telefon: ${lead.phone}` : null,
         lead.email ? `E-Mail: ${lead.email}` : null,
         lead.notes ? `\n${lead.notes}` : null,

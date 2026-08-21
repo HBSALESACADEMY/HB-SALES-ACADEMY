@@ -3,6 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 import { sendeAlarm } from "../../lib/alarm";
+import { deutscheZeit, terminText } from "../../lib/terminzeit";
 
 // Meldet Änderungen an einem bestehenden Termin an das Team — Statuswechsel,
 // Ergebnis, Folgetermin, Bearbeitung, Löschung.
@@ -52,20 +53,23 @@ export default async function handler(req, res) {
     const { data: org } = await admin.from("organizations").select("name, telegram_chat_id").eq("id", orgId).maybeSingle();
     const orgName = org?.name || null;
     const wer = me?.full_name || "Ein Teammitglied";
-    const termin = lead.appointment_at ? new Date(lead.appointment_at).toLocaleString("de-DE") : "kein Zeitpunkt";
+    const terminDeutsch = lead.appointment_at ? `${deutscheZeit(lead.appointment_at)} Uhr` : "kein Zeitpunkt";
+    const terminFuer = (e) => (lead.appointment_at ? terminText(lead.appointment_at, e?.zeitzone) : "kein Zeitpunkt");
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     // Nach dem Löschen führt der Link ins Leere — dann weglassen.
     const link = appUrl && ereignis !== "geloescht" ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
     const subject = `${TITEL[ereignis].replace(/^\S+\s/, "")}: ${lead.name}`;
-    const html =
+    const htmlFuer = (e) =>
       `<p><strong>${wer}</strong>: ${beschreibung || TITEL[ereignis]}</p>` +
-      `<p><strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}<br/>Termin: ${termin}</p>` +
+      `<p><strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}<br/>Termin: ${terminFuer(e)}</p>` +
       (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
-    await notifyOrgManagers(admin, orgId, { subject, html, fromName: orgName || "HB Sales Academy", art: "termine" });
+    await notifyOrgManagers(admin, orgId, { subject, html: htmlFuer, fromName: orgName || "HB Sales Academy", art: "termine" });
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", orgId);
+    // Zusatz-Adressen haben kein Konto und damit keine Zeitzone.
+    const html = htmlFuer(null);
     await Promise.all((extra || []).map((e) =>
       sendEmail({ to: e.email, subject, html, fromName: orgName || "HB Sales Academy" })));
 
@@ -75,7 +79,7 @@ export default async function handler(req, res) {
         beschreibung ? beschreibung : null,
         `Von ${wer}`,
         ``,
-        `Termin: ${termin}`,
+        `Termin: ${terminDeutsch}`,
         link ? `\n${link}` : null,
       ].filter((z) => z !== null).join("\n");
       await sendeAlarm(text, org.telegram_chat_id);

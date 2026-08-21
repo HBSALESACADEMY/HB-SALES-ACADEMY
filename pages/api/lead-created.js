@@ -4,6 +4,7 @@ import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 import { sendeAlarm } from "../../lib/alarm";
 import { RESERVED_FIELD_COLUMNS } from "../../lib/leadFields";
+import { deutscheZeit, terminText } from "../../lib/terminzeit";
 
 // Läuft anstelle eines direkten Client-Inserts (Call Tracker und die
 // Termine-Seite nutzen beide diese Route) — nur so gibt es einen Server-Zeitpunkt,
@@ -90,10 +91,10 @@ export default async function handler(req, res) {
           })
           .filter(Boolean);
 
-        const html =
+        const htmlFuer = (empfaenger) =>
           `<p><strong>${me.full_name || "Ein/e Vertriebler:in"}</strong> hat einen neuen Termin erfasst${orgName ? ` bei ${orgName}` : ""}:</p>` +
           `<p><strong>${name}</strong>${companyValue ? ` (${companyValue})` : ""}<br/>` +
-          `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}` +
+          `Termin: ${terminText(appointmentAt, empfaenger?.zeitzone)}` +
           // Telefon/E-Mail sind seit migration_81 pro Organisation optional —
           // leere Zeilen ("Telefon: ") wären sonst in jeder Mail zu sehen.
           (phone ? `<br/>Telefon: ${phone}` : "") +
@@ -114,9 +115,14 @@ export default async function handler(req, res) {
         // Termin-Benachrichtigungen. Das ist anders als bei den
         // Freischaltungs-Benachrichtigungen (notify-pending-approval.js),
         // wo der Plattform-Betreiber bewusst alles sehen soll.
-        await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName, art: "termine" });
+        // Als Funktion: jede Mail nennt die deutsche Zeit und, falls die
+        // empfangende Person anderswo sitzt, ihre Ortszeit dahinter.
+        await notifyOrgManagers(admin, effectiveOrgId, { subject, html: htmlFuer, fromName, art: "termine" });
 
         const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
+        // Zusatz-Adressen haben kein Konto und damit keine Zeitzone —
+        // dort steht die deutsche Zeit allein.
+        const html = htmlFuer(null);
         const extraEmails = (extra || []).map((e) => e.email);
         // Einzeln statt als Sammel-Anfrage, siehe Kommentar in notifyManagers.js.
         await Promise.all(extraEmails.map((to) => sendEmail({ to, subject, html, fromName })));
@@ -130,7 +136,7 @@ export default async function handler(req, res) {
             `📅 Neuer Termin: ${name}` + (companyValue ? ` (${companyValue})` : ""),
             `Erfasst von ${me.full_name || "einem Teammitglied"}`,
             ``,
-            `Termin: ${new Date(appointmentAt).toLocaleString("de-DE")}`,
+            `Termin: ${deutscheZeit(appointmentAt)} Uhr`,
             phone ? `Telefon: ${phone}` : null,
             email ? `E-Mail: ${email}` : null,
             ...extraLines,
