@@ -5,6 +5,7 @@ import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import AudioPlayer from "../components/AudioPlayer";
+import PersonenAuswahl from "../components/PersonenAuswahl";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
@@ -54,6 +55,12 @@ export default function Termine() {
   const [verschiebeDatum, setVerschiebeDatum] = useState("");
   const [editDraft, setEditDraft] = useState(null);
   const [orgMembers, setOrgMembers] = useState([]);
+  // Einladungen zu Terminen (migration_112). Wer eingeladen ist, muss selbst
+  // zusagen — eine Einladung ist keine Zuweisung.
+  const [einladungenByLead, setEinladungenByLead] = useState({});
+  const [einladenFuer, setEinladenFuer] = useState(null);
+  const [einladenAuswahl, setEinladenAuswahl] = useState([]);
+  const [neueGaeste, setNeueGaeste] = useState([]);
   const [commentsByLead, setCommentsByLead] = useState({});
   const [tasksByLead, setTasksByLead] = useState({});
   const [commentDrafts, setCommentDrafts] = useState({});
@@ -163,6 +170,15 @@ export default function Termine() {
 
     const leadIds = (leadRows || []).map((l) => l.id);
     if (leadIds.length) {
+      const { data: einladungen } = await supabase.from("termin_einladungen")
+        .select("*").eq("quelle", "lead").in("ziel_id", leadIds);
+      const nachLead = {};
+      (einladungen || []).forEach((e) => {
+        nachLead[e.ziel_id] = nachLead[e.ziel_id] || [];
+        nachLead[e.ziel_id].push(e);
+      });
+      setEinladungenByLead(nachLead);
+
       const [{ data: comments }, { data: tasks }] = await Promise.all([
         supabase.from("lead_comments").select("*").in("lead_id", leadIds).order("created_at", { ascending: true }),
         supabase.from("lead_tasks").select("*").in("lead_id", leadIds).order("created_at", { ascending: true }),
@@ -307,6 +323,8 @@ export default function Termine() {
         appointmentAt: new Date(addDraft.appointmentAt).toISOString(),
         activeOrgId,
       });
+      if (neueGaeste.length && leadId) await ladeEin(leadId, neueGaeste);
+      setNeueGaeste([]);
       setAddDraft({ name: "", phone: "", email: "", appointmentAt: "", fields: {} });
       setShowAddForm(false);
       await load(true);
@@ -316,6 +334,49 @@ export default function Termine() {
     } finally {
       setAddSaving(false);
     }
+  }
+
+  // Einladen: mehrere auf einmal, und ohne dass die Seite dabei neu aufbaut.
+  async function ladeEin(leadId, personIds) {
+    const liste = (personIds || []).filter(Boolean);
+    if (!liste.length) return;
+    setError("");
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const activeOrgId = getActiveOrgId(me);
+    const zeilen = liste.map((personId) => ({
+      quelle: "lead", ziel_id: leadId, person_id: personId,
+      eingeladen_von: session.user.id, organization_id: activeOrgId,
+    }));
+    const { data: angelegt, error: err } = await supabase.from("termin_einladungen").insert(zeilen).select();
+    if (err) { setError(err.message); return; }
+    setEinladungenByLead((prev) => ({ ...prev, [leadId]: [...(prev[leadId] || []), ...(angelegt || [])] }));
+    setEinladenFuer(null);
+    setEinladenAuswahl([]);
+  }
+
+  async function beantworteEinladung(leadId, einladungId, status) {
+    setError("");
+    // Sofort umschalten; die Prüfung bestätigt es nur noch.
+    setEinladungenByLead((prev) => ({
+      ...prev,
+      [leadId]: (prev[leadId] || []).map((e) => (e.id === einladungId ? { ...e, status } : e)),
+    }));
+    const fehler = await aendereGeprueft(
+      supabase.from("termin_einladungen").update({ status, beantwortet_am: new Date().toISOString() }).eq("id", einladungId),
+      "Nur die eingeladene Person selbst kann zu- oder absagen."
+    );
+    if (fehler) { setError(fehler); await load(true); }
+  }
+
+  async function nimmEinladungZurueck(leadId, einladungId) {
+    setError("");
+    const fehler = await loescheGeprueft(
+      supabase.from("termin_einladungen").delete().eq("id", einladungId),
+      "Zurücknehmen darf nur, wer eingeladen hat."
+    );
+    if (fehler) { setError(fehler); return; }
+    setEinladungenByLead((prev) => ({ ...prev, [leadId]: (prev[leadId] || []).filter((e) => e.id !== einladungId) }));
   }
 
   // Notizen nachträglich erstellen — für Termine, deren Aufnahme vor dieser
@@ -792,6 +853,15 @@ export default function Termine() {
               <textarea className="input !py-1.5 text-xs" rows={2} value={addDraft.fields[f.key] || ""} onChange={(e) => setAddDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
             </div>
           ))}
+          <div className="mb-3">
+            <label className="block text-xs text-textMuted mb-1">Zum Termin einladen (optional)</label>
+            <PersonenAuswahl
+              personen={orgMembers.filter((m) => m.id !== selfId).map((m) => ({ id: m.id, name: m.full_name || "Unbenannt", avatar_url: m.avatar_url }))}
+              ausgewaehlt={neueGaeste}
+              onChange={setNeueGaeste}
+            />
+            <p className="text-[11px] text-textMuted mt-1">Die Eingeladenen müssen selbst zusagen.</p>
+          </div>
           <button disabled={addSaving} onClick={submitNewLead} className="btn text-xs disabled:opacity-40">{addSaving ? "Speichert..." : "Termin speichern"}</button>
         </div>
       )}
@@ -1100,6 +1170,54 @@ export default function Termine() {
                 )}
               </div>
               {playingId === lead.id && playingUrl && <AudioPlayer src={playingUrl} />}
+
+              {/* Einladungen: wer dabei sein soll, muss selbst zusagen
+                  (migration_112). */}
+              {(() => {
+                const eingeladen = einladungenByLead[lead.id] || [];
+                const meine = eingeladen.find((e) => e.person_id === selfId && e.status === "offen");
+                const auswahl = orgMembers
+                  .filter((m) => m.id !== selfId && !eingeladen.some((e) => e.person_id === m.id))
+                  .map((m) => ({ id: m.id, name: m.full_name || "Unbenannt", avatar_url: m.avatar_url }));
+                return (
+                  <div className="flex flex-col gap-1.5 pt-2 border-t border-line mt-2">
+                    <div className="flex items-center gap-2 flex-wrap text-[11px] text-textMuted">
+                      <span className="flex-shrink-0">Eingeladen:</span>
+                      {eingeladen.length === 0 && <span>niemand</span>}
+                      {eingeladen.map((e) => (
+                        <span key={e.id} className="flex items-center gap-1">
+                          <span title={e.status}>{e.status === "zugesagt" ? "✅" : e.status === "abgesagt" ? "❌" : "⏳"}</span>
+                          {nameFor(e.person_id)}
+                          {e.eingeladen_von === selfId && e.status === "offen" && (
+                            <button onClick={() => nimmEinladungZurueck(lead.id, e.id)} className="text-coral hover:underline">×</button>
+                          )}
+                        </span>
+                      ))}
+                      {auswahl.length > 0 && einladenFuer !== lead.id && (
+                        <button onClick={() => { setEinladenFuer(lead.id); setEinladenAuswahl([]); }} className="btn-ghost text-xs ml-auto">+ Einladen</button>
+                      )}
+                    </div>
+                    {meine && (
+                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                        <span className="text-amber">Du bist eingeladen.</span>
+                        <button onClick={() => beantworteEinladung(lead.id, meine.id, "zugesagt")} className="btn text-xs">Zusagen</button>
+                        <button onClick={() => beantworteEinladung(lead.id, meine.id, "abgesagt")} className="btn-ghost text-xs">Absagen</button>
+                      </div>
+                    )}
+                    {einladenFuer === lead.id && (
+                      <div className="flex flex-col gap-1.5">
+                        <PersonenAuswahl personen={auswahl} ausgewaehlt={einladenAuswahl} onChange={setEinladenAuswahl} />
+                        <div className="flex items-center gap-2">
+                          <button disabled={!einladenAuswahl.length} onClick={() => ladeEin(lead.id, einladenAuswahl)} className="btn text-xs disabled:opacity-40">
+                            {einladenAuswahl.length > 1 ? `${einladenAuswahl.length} einladen` : "Einladen"}
+                          </button>
+                          <button onClick={() => { setEinladenFuer(null); setEinladenAuswahl([]); }} className="btn-ghost text-xs">Abbrechen</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line mt-2">
                 <span className="text-[11px] text-textMuted flex-shrink-0">Ergebnis:</span>
