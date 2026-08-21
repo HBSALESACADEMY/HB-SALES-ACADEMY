@@ -9,7 +9,7 @@ import { apiPost, apiGet } from "../lib/apiClient";
 import { validateRecordingUpload } from "../lib/uploadValidation";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
-import { loescheGeprueft } from "../lib/loeschen";
+import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 
 const STATUS_LABELS = { pending: "Wird ausgewertet...", evaluated: "Ausgewertet", failed: "Auswertung fehlgeschlagen" };
 
@@ -128,9 +128,9 @@ export default function Recordings() {
   async function deleteRecording(id) {
     if (!confirm("Aufnahme wirklich löschen?")) return;
     const rec = recordings.find((r) => r.id === id);
-    const loeschFehler = await loescheGeprueft(supabase.from("call_recordings").delete().eq("id", id));
-    const err = loeschFehler ? { message: loeschFehler } : null;
-    if (err) { setError(err.message); return; }
+    const loeschFehler = await loescheGeprueft(supabase.from("call_recordings").delete().eq("id", id),
+      "Diese Aufnahme darf nur löschen, wer sie hochgeladen hat.");
+    if (loeschFehler) { setError(loeschFehler); return; }
     // Ohne das hier würde die eigentliche Audiodatei im Speicher liegen
     // bleiben — nur der Datenbank-Eintrag verschwindet sonst (DSGVO: Löschung
     // muss auch die Datei selbst treffen, nicht nur die Metadaten).
@@ -151,13 +151,13 @@ export default function Recordings() {
   async function saveEdit(id) {
     setSavingEdit(true);
     setError("");
-    const { error: err } = await supabase.from("call_recordings").update({
+    const err = await aendereGeprueft(supabase.from("call_recordings").update({
       label: editLabel.trim() || null,
       lead_id: editLeadId || null,
       visibility: editVisibility,
       outcome: editOutcome,
-    }).eq("id", id);
-    if (err) { setError(err.message); setSavingEdit(false); return; }
+    }).eq("id", id), "Diese Aufnahme darf nur bearbeiten, wer sie hochgeladen hat.");
+    if (err) { setError(err); setSavingEdit(false); return; }
     setEditingId(null);
     setSavingEdit(false);
     await load(true);

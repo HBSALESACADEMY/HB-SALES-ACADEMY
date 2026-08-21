@@ -6,10 +6,11 @@ import { apiPost } from "../lib/apiClient";
 import { COURSES, allMcQuestionsOfCourse } from "../lib/curriculum";
 import { effectiveStreak } from "../lib/streak";
 import BereichsTabs, { UEBEN } from "../components/BereichsTabs";
+import { tagesSchluessel } from "../lib/dateRange";
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
+// Über lib/dateRange.js: der Tag wechselt um Mitternacht, nicht erst beim
+// UTC-Tageswechsel — sonst bekäme man nachts noch die Frage von gestern.
+const todayStr = () => tagesSchluessel();
 
 function pickTodaysQuestion() {
   const all = [];

@@ -10,6 +10,7 @@ import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet } from "../lib/apiClient";
 import { goalMetricLabel } from "../lib/goalMetrics";
+import { tagesSchluessel } from "../lib/dateRange";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -118,7 +119,7 @@ export default function Dashboard() {
       ]);
       const msgCount = unreadInfo.total;
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = tagesSchluessel();
       const progressByCard = {};
       (progress || []).forEach((p) => { progressByCard[p.card_id] = p; });
       const dueFlashcards = (cards || []).filter((c) => !progressByCard[c.id] || progressByCard[c.id].next_review_date <= today).length;
@@ -298,7 +299,7 @@ export default function Dashboard() {
           <div className="brand-stripe w-16 mb-4" />
           <p className="text-textMuted text-sm mb-6">Dein Überblick über Fortschritt und nächste Schritte.</p>
 
-          {profile?.streak_count > 0 && profile?.last_challenge_date !== new Date().toISOString().slice(0, 10) && (
+          {profile?.streak_count > 0 && profile?.last_challenge_date !== tagesSchluessel() && (
             <div className="card mb-5 border border-amber/30 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/daily-challenge")}>
               <Icon name="flame" color="var(--org-accent, #CE3A5C)" size={18} />
               <span className="text-sm text-textMain flex-1">Deine {profile.streak_count}-Tage-Serie ist in Gefahr — heute noch die Tages-Challenge machen!</span>

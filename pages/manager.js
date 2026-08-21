@@ -8,10 +8,11 @@ import { openProfile } from "../lib/profileModalBus";
 import { COURSES } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
-import { wochenStartTag } from "../lib/woche";
+import { wochenStartTag, berlinHeute } from "../lib/woche";
 import { ZEITRAEUME, zeitraumFuer, zeitraumLabel } from "../lib/zielzeitraum";
 import ZielDeuter from "../components/ZielDeuter";
 import { aendereGeprueft } from "../lib/loeschen";
+import { tagesSchluessel } from "../lib/dateRange";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -184,7 +185,9 @@ export default function Manager() {
     const teamMemberIdSet = new Set([...memberIds, session.user.id]);
     setPairs((existingPairs || []).filter((p) => teamMemberIdSet.has(p.mentor_id) && teamMemberIdSet.has(p.mentee_id)));
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // Derselbe Schlüssel, den der Call Tracker schreibt (lib/callTracker.js)
+    // — mit UTC wurde nachts die Zeile eines anderen Tages abgefragt.
+    const todayStr = tagesSchluessel();
     const { data: calls } = await supabase.from("call_log_days").select("*").in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]).eq("log_date", todayStr);
     const nameById = {};
     memberProfiles.forEach((m) => { nameById[m.id] = m.full_name || "Unbenannt"; });
@@ -579,7 +582,9 @@ export default function Manager() {
             </div>
 
             {(() => {
-              const heute = wochenStartTag() && new Date().toISOString().slice(0, 10);
+              // Deutsche Zeit wie auf dem Server (pages/api/team-goals.js) —
+              // sonst gilt ein Ziel hier als vorbei und dort noch als laufend.
+              const heute = berlinHeute();
               const bisVon = (g) => g.ends_on || g.week_start;
               const laufend = goals.filter((g) => bisVon(g) >= heute);
               const vorbei = goals.filter((g) => bisVon(g) < heute);
