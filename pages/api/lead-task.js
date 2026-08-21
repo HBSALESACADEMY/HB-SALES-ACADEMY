@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendEmail } from "../../lib/email";
+import { willMeldung } from "../../lib/benachrichtigungen";
 
 // Aufgabe zu einem Termin zuweisen + Best-effort-Benachrichtigung an die
 // zugewiesene Person. Insert läuft über den RLS-gebundenen Client (siehe
@@ -44,7 +45,12 @@ export default async function handler(req, res) {
         const { data: me } = await client.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
         const { data: authList } = await admin.auth.admin.listUsers({ perPage: 1000 });
         const emailById = new Map((authList?.users || []).map((u) => [u.id, u.email]));
-        const to = emailById.get(assignedTo);
+        // Wer Aufgaben-Mails abbestellt hat, bekommt keine (migration_108).
+        // Die Aufgabe selbst erscheint weiterhin im Dashboard — abbestellt
+        // ist der Briefkasten, nicht der Vorgang.
+        const { data: empfaenger } = await admin.from("profiles")
+          .select("benachrichtigungen").eq("id", assignedTo).maybeSingle();
+        const to = willMeldung(empfaenger, "aufgaben") ? emailById.get(assignedTo) : null;
         if (to) {
           const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
           const link = appUrl ? `${appUrl}/termine?leadId=${leadId}` : null;

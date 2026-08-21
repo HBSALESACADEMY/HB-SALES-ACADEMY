@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendEmail } from "../../lib/email";
+import { willMeldung } from "../../lib/benachrichtigungen";
 
 // Kommentar zu einem Termin + Best-effort-Benachrichtigung an @erwähnte
 // Personen. Läuft über den RLS-gebundenen Client, damit die Berechtigung
@@ -52,7 +53,16 @@ export default async function handler(req, res) {
             `<p><strong>${me?.full_name || "Jemand"}</strong> hat dich in einem Kommentar zum Termin mit <strong>${lead.name}</strong> erwähnt:</p>` +
             `<p>${content.trim()}</p>` +
             (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
-          const recipients = eligibleIds.map((id) => emailById.get(id)).filter(Boolean);
+          // Erwähnungs-Mails nur an die, die sie wollen (migration_108). Der
+          // Eintrag in lead_mentions bleibt für alle — im Dashboard sieht man
+          // die Erwähnung weiterhin.
+          const { data: wuensche } = await admin.from("profiles")
+            .select("id, benachrichtigungen").in("id", eligibleIds);
+          const wahlVon = new Map((wuensche || []).map((p2) => [p2.id, p2]));
+          const recipients = eligibleIds
+            .filter((id) => willMeldung(wahlVon.get(id), "erwaehnungen"))
+            .map((id) => emailById.get(id))
+            .filter(Boolean);
           await Promise.all(recipients.map((to) => sendEmail({ to, subject, html })));
         }
       }
