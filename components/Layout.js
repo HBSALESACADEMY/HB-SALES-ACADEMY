@@ -6,6 +6,8 @@ import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { berlinHeute } from "../lib/woche";
 import { merkeAktiveOrg } from "../lib/activeOrg";
 import { merkeZeitzone } from "../lib/zeit";
+import { fehlendeProfilangaben } from "../lib/profilPflicht";
+import { istFuehrungsrolle } from "../lib/rollen";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
@@ -254,7 +256,10 @@ export default function Layout({ children, fullBleed }) {
       // Profil, Einstellungen und Datenschutz bleiben erreichbar, sonst
       // säße man fest.
       const offeneSeiten = ["/profile", "/settings", "/datenschutz", "/agb", "/login"];
-      if (data && data.profil_vollstaendig === false && !offeneSeiten.includes(router.pathname)) {
+      // Nach den TATSÄCHLICHEN Feldern, nicht nach der gespeicherten
+      // Markierung: sonst käme jedes bestehende Konto an der Aufforderung
+      // vorbei, nur weil es vor der Umstellung angelegt wurde.
+      if (data && fehlendeProfilangaben(data).length > 0 && !offeneSeiten.includes(router.pathname)) {
         router.replace("/profile");
       }
 
@@ -665,9 +670,15 @@ export default function Layout({ children, fullBleed }) {
     // enthalten, das bleibt bei Manager/Trainer/Admin.
     const ELEVATED_NAV_IDS = ["admin-content", "admin-suggestions", "admin-flashcards", "scripts"];
     const isElevated = profile?.is_admin || profile?.is_platform_admin || profile?.is_team_lead;
+    // Zwei Ergänzungen (migration_110):
+    // - Führungsrollen statt nur role='manager': ein Admin der Organisation
+    //   ohne diese Rolle sah die Verwaltung sonst gar nicht.
+    // - Wer ein eigenes Team gegründet hat, sieht "Team (Manager)" — dort
+    //   verwaltet er ausschliesslich seine eigenen Teams.
     const visibleItems = sortedNav(navItems.filter((n) =>
-      !n.requires_manager || profile?.role === "manager" ||
+      !n.requires_manager || istFuehrungsrolle(profile) ||
       (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key)) ||
+      (profile?.is_team_lead && n.key === "manager") ||
       (isElevated && ELEVATED_NAV_IDS.includes(n.key))
     ));
     const byCategory = {};

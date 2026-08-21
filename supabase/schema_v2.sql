@@ -1725,10 +1725,11 @@ create policy "teams_select_all" on teams for select using (
   team_organisation(id) is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "teams_insert_managers" on teams;
-create policy "teams_insert_managers" on teams for insert with check (
+-- Jede Person darf ein eigenes Team gründen (migration_110) und wird dadurch
+-- dessen Leitung — ohne Rechte an fremden Teams zu bekommen.
+create policy "teams_insert" on teams for insert with check (
   created_by = auth.uid()
   and organization_id is not distinct from aktive_org(auth.uid())
-  and exists (select 1 from profiles where id = auth.uid() and (role = 'manager' or is_admin or is_platform_admin))
 );
 drop policy if exists "teams_update_own" on teams;
 create policy "teams_update_own" on teams for update using (created_by = auth.uid());

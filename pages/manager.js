@@ -73,8 +73,13 @@ export default function Manager() {
     const { error: rpcFehler } = await supabase.rpc("kann_team_verwalten", { tid: "00000000-0000-0000-0000-000000000000", uid: session.user.id });
     setMigrationFehlt(!!(rpcFehler && /(does not exist|not find|schema cache|404)/i.test(rpcFehler.message || "")));
 
-    const darfVerwalten = !!(me && (me.role === "manager" || me.is_admin || me.is_platform_admin));
-    if (!darfVerwalten) { setIsManager(false); setLoading(false); return null; }
+    // Führungsrollen sehen alle Teams der Organisation. Wer selbst ein Team
+    // gegründet hat, kommt ebenfalls hierher — sieht dort aber ausschliesslich
+    // die eigenen (migration_110). Ein Vertriebler mit eigenem Team ist dessen
+    // Leitung, nicht Manager der Firma.
+    const istFuehrung = !!(me && (me.role === "manager" || me.role === "backend" || me.is_admin || me.is_platform_admin));
+    const { data: eigeneTeams } = await supabase.from("teams").select("id").eq("created_by", session.user.id).limit(1);
+    if (!istFuehrung && !(eigeneTeams || []).length) { setIsManager(false); setLoading(false); return null; }
 
     // ALLE Teams der Organisation — auch für einfache Manager. Vorher sahen
     // die nur ihre selbst angelegten; Teams von Kolleg:innen und die eines
@@ -84,7 +89,9 @@ export default function Manager() {
     // und Admins (migration_88), darauf weist die Ansicht unten hin.
     //
     // Auf die eigene Organisation begrenzen die Zugriffsregeln ohnehin.
-    const { data: teams } = await supabase.from("teams").select("*").order("created_at");
+    let abfrage = supabase.from("teams").select("*").order("created_at");
+    if (!istFuehrung) abfrage = abfrage.eq("created_by", session.user.id);
+    const { data: teams } = await abfrage;
     setMyTeams(teams || []);
     return { session, teams: teams || [] };
   }
