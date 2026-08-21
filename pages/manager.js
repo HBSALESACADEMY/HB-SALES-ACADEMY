@@ -52,6 +52,7 @@ export default function Manager() {
   const [addBusyId, setAddBusyId] = useState(null);
   const [orgName, setOrgName] = useState("");
   const [migrationFehlt, setMigrationFehlt] = useState(false);
+  const [darfAllesVerwalten, setDarfAllesVerwalten] = useState(false);
 
   async function loadTeams() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -72,14 +73,17 @@ export default function Manager() {
     const darfVerwalten = !!(me && (me.role === "manager" || me.is_admin || me.is_platform_admin));
     if (!darfVerwalten) { setIsManager(false); setLoading(false); return null; }
 
-    // Wer die Organisation verwaltet, sieht ALLE ihre Teams — nicht nur die
-    // selbst angelegten. Ein Team eines ausgeschiedenen Leads war sonst für
-    // niemanden mehr erreichbar. Die Auswahl ist ohnehin durch die
-    // Zugriffsregeln auf die eigene Organisation begrenzt.
-    let query = supabase.from("teams").select("*").order("created_at");
-    if (!me.is_admin && !me.is_platform_admin) query = query.eq("created_by", session.user.id);
-    const { data: teams } = await query;
+    // ALLE Teams der Organisation — auch für einfache Manager. Vorher sahen
+    // die nur ihre selbst angelegten; Teams von Kolleg:innen und die eines
+    // ausgeschiedenen Leads waren für sie unsichtbar, samt Zielen,
+    // Mitgliedern und Zahlen. Sehen und Verwalten sind zwei verschiedene
+    // Dinge: verwalten darf weiterhin nur die Leitung des jeweiligen Teams
+    // und Admins (migration_88), darauf weist die Ansicht unten hin.
+    //
+    // Auf die eigene Organisation begrenzen die Zugriffsregeln ohnehin.
+    const { data: teams } = await supabase.from("teams").select("*").order("created_at");
     setMyTeams(teams || []);
+    setDarfAllesVerwalten(!!(me.is_admin || me.is_platform_admin));
     return { session, teams: teams || [] };
   }
 
@@ -738,6 +742,19 @@ export default function Manager() {
               </div>
             </div>
           )}
+          {(() => {
+            const team = myTeams.find((t) => t.id === selectedTeamId);
+            if (!team || darfAllesVerwalten || team.created_by === selfId) return null;
+            return (
+              <div className="card mb-3 border-amber/40">
+                <p className="text-xs text-textMuted">
+                  Du siehst dieses Team, weil es zu eurer Organisation gehört — <strong>geleitet wird es von jemand
+                  anderem</strong>. Mitglieder, Ziele und Mentoring ändern darf nur die Teamleitung oder ein Admin.
+                </p>
+              </div>
+            );
+          })()}
+
           <p className="text-[11px] text-textMuted mb-2">
             📞 entscheidet, ob eine Person auf „Mein Team“ sieht, <strong>wer wie viel beigetragen hat</strong> —
             oder nur die Summen des Teams und die eigenen Zahlen. Die Teamleitung sieht die Aufschlüsselung immer.
