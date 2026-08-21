@@ -48,31 +48,48 @@ function Person({ person, zusatz, onRolle }) {
   );
 }
 
-function Knoten({ team, alle, onRolle, tiefe }) {
+function Knoten({ team, alle, onRolle }) {
   const kinder = alle.filter((t) => t.elternId === team.id);
   const anzahl = team.mitglieder.length + (team.leitung ? 1 : 0);
+  const [offen, setOffen] = useState(false);
+
   return (
-    // Verbindungslinie zur übergeordneten Einheit: die Struktur soll man
-    // sehen, nicht aus der Einrückung erschliessen müssen.
-    <div className={tiefe > 0 ? "relative pl-6 border-l-2 border-line ml-4" : ""}>
-      {tiefe > 0 && <span aria-hidden="true" className="absolute left-0 top-7 w-6 border-t-2 border-line" />}
-      <div className="card mb-3">
-        <div className="flex items-baseline justify-between gap-2 mb-2">
-          <div className="font-display font-semibold text-textMain text-sm truncate">{team.name}</div>
-          <span className="text-[10.5px] text-textMuted flex-shrink-0">
-            {anzahl} {anzahl === 1 ? "Person" : "Personen"}
-            {kinder.length > 0 && ` · ${kinder.length} ${kinder.length === 1 ? "Untereinheit" : "Untereinheiten"}`}
-          </span>
-        </div>
-        {team.leitung && <Person person={team.leitung} zusatz="Leitung" onRolle={onRolle} />}
-        {team.mitglieder.map((m) => (
-          <Person key={m.id} person={m} zusatz={m.fuehrtTeamId ? "leitet eigenes Team" : null} onRolle={onRolle} />
-        ))}
-        {!team.leitung && team.mitglieder.length === 0 && (
-          <p className="text-xs text-textMuted">Noch niemand in diesem Team.</p>
+    <div className="org-knoten">
+      <div className="org-kasten">
+        <div className="font-display font-semibold text-textMain text-sm leading-tight break-words">{team.name}</div>
+        <div className="text-[11px] text-textMuted">{anzahl} {anzahl === 1 ? "Person" : "Personen"}</div>
+        {team.leitung && (
+          <div className="text-[11px] text-textMain mt-1 truncate">
+            {team.leitung.name}
+            {team.leitung.rolle && <span className="text-textMuted"> · {team.leitung.rolle}</span>}
+          </div>
+        )}
+        {/* Die Namensliste erst auf Klick: sonst wird jeder Kasten so hoch,
+            dass das Diagramm nicht mehr als Aufbau lesbar ist. */}
+        {anzahl > 0 && (
+          <button onClick={() => setOffen((v) => !v)} className="text-[11px] text-textMuted hover:text-textMain mt-1">
+            {offen ? "Namen ausblenden" : "Namen zeigen"}
+          </button>
+        )}
+        {offen && (
+          <div className="mt-1.5 text-left">
+            {team.leitung && <Person person={team.leitung} zusatz="Leitung" onRolle={onRolle} />}
+            {team.mitglieder.map((m) => (
+              <Person key={m.id} person={m} zusatz={m.fuehrtTeamId ? "leitet eigenes Team" : null} onRolle={onRolle} />
+            ))}
+          </div>
         )}
       </div>
-      {kinder.map((k) => <Knoten key={k.id} team={k} alle={alle} onRolle={onRolle} tiefe={tiefe + 1} />)}
+
+      {kinder.length > 0 && (
+        <div className="org-kinder">
+          {kinder.map((k) => (
+            <div key={k.id} className="org-kind">
+              <Knoten team={k} alle={alle} onRolle={onRolle} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -83,7 +100,15 @@ export default function Organigramm({ daten, onRolle }) {
   return (
     <div>
       {daten.teams.length === 0 && <p className="text-textMuted text-sm">Noch keine Teams angelegt.</p>}
-      {wurzeln.map((t) => <Knoten key={t.id} team={t} alle={daten.teams} onRolle={onRolle} tiefe={0} />)}
+      {wurzeln.length > 0 && (
+        <div className="org-flaeche">
+          <div className="org-baum">
+            <div className="flex items-start justify-center gap-6 flex-wrap">
+              {wurzeln.map((t) => <Knoten key={t.id} team={t} alle={daten.teams} onRolle={onRolle} />)}
+            </div>
+          </div>
+        </div>
+      )}
       {daten.ohneTeam.length > 0 && (
         <div className="card mt-3">
           <div className="font-semibold text-textMain text-sm mb-1.5">Ohne Team</div>

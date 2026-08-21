@@ -262,3 +262,62 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
     font-size: 13px;
   }
 }
+
+/* --- Organigramm als Kästchen-Diagramm ------------------------------------
+   Ein eingerückter Baum liest sich als Liste, nicht als Aufbau. Hier ein
+   klassisches Organigramm: Kästen von oben nach unten, Untereinheiten
+   nebeneinander, verbunden durch gezeichnete Linien.
+
+   Rein mit CSS statt einer Bibliothek — die Sicherheitsregeln lassen keine
+   fremden Skripte zu, und ein Diagramm aus Rahmen und Rändern bleibt in
+   beiden Farbschemata lesbar, weil es dieselben Farbvariablen nutzt. */
+.org-flaeche { overflow-x: auto; padding: 4px 2px 8px; }
+.org-baum { display: inline-flex; flex-direction: column; align-items: center; min-width: 100%; }
+
+.org-knoten { display: flex; flex-direction: column; align-items: center; }
+
+.org-kasten {
+  background: rgb(var(--org-surface-rgb, var(--theme-surface-rgb, 28 30 41)));
+  border: 1px solid rgb(var(--org-line-rgb, var(--theme-line-rgb, 47 50 66)));
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 150px;
+  max-width: 230px;
+  text-align: center;
+}
+
+/* Reihe der Untereinheiten. Der senkrechte Strich oben führt vom Elternkasten
+   herunter zur Querlinie. */
+.org-kinder { display: flex; justify-content: center; position: relative; padding-top: 30px; gap: 20px; }
+.org-kinder::before {
+  content: ""; position: absolute; top: 0; left: 50%;
+  width: 2px; height: 15px; margin-left: -1px;
+  background: rgb(var(--org-line-rgb, var(--theme-line-rgb, 47 50 66)));
+}
+
+/* Jedes Kind trägt seinen Teil der Querlinie und den Stich nach unten. Beim
+   ersten und letzten Kind endet die Querlinie in der Mitte, sonst stünde sie
+   aussen über. */
+.org-kind { position: relative; padding-top: 15px; }
+.org-kind::before {
+  /* Über die eigene Breite hinaus in die Lücke hinein (halber gap je Seite),
+     sonst reisst die Querlinie zwischen den Kästen auf. */
+  content: ""; position: absolute; top: 0; left: -10px; right: -10px; height: 2px;
+  background: rgb(var(--org-line-rgb, var(--theme-line-rgb, 47 50 66)));
+}
+.org-kind:first-child::before { left: 50%; }
+.org-kind:last-child::before { right: 50%; }
+.org-kind:only-child::before { display: none; }
+.org-kind::after {
+  content: ""; position: absolute; top: 0; left: 50%;
+  width: 2px; height: 15px; margin-left: -1px;
+  background: rgb(var(--org-line-rgb, var(--theme-line-rgb, 47 50 66)));
+}
+.org-kind:only-child::after { top: -15px; height: 30px; }
+
+@media (max-width: 640px) {
+  .org-kasten { min-width: 128px; padding: 8px 10px; }
+  .org-kinder { gap: 12px; }
+  /* gap ist hier 12px — die Überlappung muss mitwandern. */
+  .org-kind::before { left: -6px; right: -6px; }
+}
