@@ -18,6 +18,7 @@ import { FUEHRUNGSROLLEN } from "../lib/rollen.js";
 import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
 import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
 import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
+import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -459,4 +460,23 @@ test("Speicher-Pfad wird aus der öffentlichen Adresse zurückgewonnen", () => {
   assert.equal(pfadAusOeffentlicherUrl(`${basis}/course-videos/u/a.mp4`, "content-files"), null);
   assert.equal(pfadAusOeffentlicherUrl(null, "course-videos"), null);
   assert.equal(pfadAusOeffentlicherUrl("https://example.com/a.mp4", "course-videos"), null);
+});
+
+// Der Schnellzugriff gehorcht der eigenen Auswahl — sonst tauchen Kacheln
+// wieder auf, die jemand bewusst weggeklickt hat.
+test("Schnellzugriff: eigene Auswahl schlägt Vorgabe", () => {
+  const standard = sichtbareKacheln({}, false).map((k) => k.key);
+  assert.ok(standard.includes("kalender"), "Kalender gehört zur Grundausstattung.");
+  assert.ok(!standard.includes("recordings"), "Aufnahmen sind erst auf Wunsch dabei.");
+  assert.ok(!standard.includes("admin"), "Verwaltungs-Kacheln nur für Führungsrollen.");
+  assert.ok(sichtbareKacheln({}, true).map((k) => k.key).includes("admin"));
+
+  // Ausdrücklich ausgeblendet bleibt ausgeblendet, auch als Standardkachel.
+  assert.ok(!sichtbareKacheln({ hidden: ["kalender"] }, false).map((k) => k.key).includes("kalender"));
+  // Ausdrückliche Auswahl ersetzt die Vorgabe vollständig.
+  const eigene = sichtbareKacheln({ sichtbar: ["recordings", "duel"] }, false).map((k) => k.key);
+  assert.deepEqual(eigene.sort(), ["duel", "recordings"]);
+  // Reihenfolge kommt aus den eigenen Einstellungen.
+  const sortiert = sichtbareKacheln({ sichtbar: ["duel", "recordings"], order: ["recordings", "duel"] }, false).map((k) => k.key);
+  assert.deepEqual(sortiert, ["recordings", "duel"]);
 });

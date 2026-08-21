@@ -23,23 +23,10 @@ const CONTACT_FIELDS = [
   { key: "phone", label: "Telefon" },
 ];
 
-const ALL_DASHBOARD_TILES = [
-  { key: "messages", label: "Nachrichten" },
-  { key: "members", label: "Mitglieder" },
-  { key: "community", label: "Community" },
-  { key: "daily-challenge", label: "Tages-Challenge" },
-  { key: "duel", label: "Quiz-Duell" },
-  { key: "flashcards", label: "Flashcards" },
-  { key: "simulator", label: "Simulator" },
-  { key: "leaderboard", label: "Rangliste" },
-];
-
 export default function Settings() {
   const [profile, setProfile] = useState(null);
   const [visibility, setVisibility] = useState({});
   const [leaderboardOptOut, setLeaderboardOptOut] = useState(false);
-  const [tileOrder, setTileOrder] = useState(ALL_DASHBOARD_TILES.map((t) => t.key));
-  const [hiddenTiles, setHiddenTiles] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -115,11 +102,6 @@ export default function Settings() {
       merkeZeitzone(data?.zeitzone || "");
       setVisibility(data?.contact_visibility || {});
       setLeaderboardOptOut(data?.leaderboard_opt_out || false);
-      const prefs = data?.dashboard_prefs || {};
-      const savedOrder = prefs.order && prefs.order.length ? prefs.order : ALL_DASHBOARD_TILES.map((t) => t.key);
-      const merged = [...savedOrder, ...ALL_DASHBOARD_TILES.map((t) => t.key).filter((k) => !savedOrder.includes(k))];
-      setTileOrder(merged);
-      setHiddenTiles(new Set(prefs.hidden || []));
       setLoading(false);
     }
     load();
@@ -129,33 +111,16 @@ export default function Settings() {
     setVisibility((v) => ({ ...v, [key]: v[key] === "friends" ? "public" : "friends" }));
   }
 
-  function toggleTileHidden(key) {
-    setHiddenTiles((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  }
-
-  function moveTile(key, dir) {
-    setTileOrder((prev) => {
-      const idx = prev.indexOf(key);
-      const newIdx = idx + dir;
-      if (newIdx < 0 || newIdx >= prev.length) return prev;
-      const copy = [...prev];
-      [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
-      return copy;
-    });
-  }
-
   async function save() {
     setSaved(false);
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
-    const dashboard_prefs = { order: tileOrder, hidden: Array.from(hiddenTiles) };
-    const { error: err } = await supabase.from("profiles").update({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut }).eq("id", session.user.id);
+    // dashboard_prefs bleibt unangetastet: die Kacheln werden auf dem
+    // Dashboard selbst bearbeitet. Würde hier gespeichert, überschriebe ein
+    // Klick auf "Speichern" die dort getroffene Auswahl.
+    const { error: err } = await supabase.from("profiles").update({ contact_visibility: visibility, leaderboard_opt_out: leaderboardOptOut }).eq("id", session.user.id);
     if (err) { setError(err.message); return; }
-    patchCachedProfile({ contact_visibility: visibility, dashboard_prefs, leaderboard_opt_out: leaderboardOptOut });
+    patchCachedProfile({ contact_visibility: visibility, leaderboard_opt_out: leaderboardOptOut });
     setSaved(true);
   }
 
@@ -285,26 +250,14 @@ export default function Settings() {
 
       <div className="card max-w-lg mb-5">
         <div className="font-semibold text-textMain text-sm mb-1">Dashboard-Kacheln</div>
-        {/* Die Reihenfolge wird auf dem Dashboard selbst per Ziehen
-            geändert — hier standen dieselben Kacheln nochmal mit Pfeilen,
-            zwei Wege für dieselbe Sache. Geblieben ist das Ein- und
-            Ausblenden, das es auf dem Dashboard nicht gibt. */}
-        <p className="text-xs text-textMuted mb-4">Welche Kacheln auf dem Dashboard erscheinen. Die Reihenfolge änderst du dort direkt per Ziehen.</p>
-        <div className="flex flex-col gap-1.5">
-          {tileOrder.map((key) => {
-            const tile = ALL_DASHBOARD_TILES.find((t) => t.key === key);
-            if (!tile) return null;
-            const isHidden = hiddenTiles.has(key);
-            return (
-              <div key={key} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isHidden ? "opacity-40" : ""}`}>
-                <span className="text-sm text-textMain flex-1">{tile.label}</span>
-                <button onClick={() => toggleTileHidden(key)} className="btn-ghost text-xs">
-                  {isHidden ? "Einblenden" : "Ausblenden"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        {/* Bearbeitet wird direkt am Schnellzugriff auf dem Dashboard —
+            dieselbe Sache an zwei Stellen zu pflegen, führte zuverlässig
+            dazu, dass beide Listen auseinanderliefen. */}
+        <p className="text-xs text-textMuted">
+          Welche Kacheln im Schnellzugriff stehen, stellst du auf dem Dashboard selbst ein:
+          dort oben rechts über dem Schnellzugriff auf <strong>Bearbeiten</strong>. Die Reihenfolge
+          änderst du ebenfalls dort per Ziehen. Deine Auswahl gilt nur für dich.
+        </p>
       </div>
 
       <div className="card max-w-lg mb-5">

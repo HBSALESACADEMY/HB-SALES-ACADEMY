@@ -9,9 +9,12 @@ import { COURSES } from "../lib/curriculum";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet } from "../lib/apiClient";
+import { aendereGeprueft } from "../lib/loeschen";
+import { deutscheZeit } from "../lib/terminzeit";
 import { goalMetricLabel } from "../lib/goalMetrics";
 import { tagesSchluessel } from "../lib/dateRange";
 import { zeitraumLabel } from "../lib/zielzeitraum";
+import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -21,6 +24,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [hub, setHub] = useState({ unreadMessages: 0, unreadCommunity: 0, openDuels: 0, dueFlashcards: 0, pendingApprovals: 0, pendingSuggestions: 0, pendingFriendRequests: 0, isManager: false });
   const [draggedTileKey, setDraggedTileKey] = useState(null);
+  // Schnellzugriff bearbeiten: direkt dort, wo die Kacheln stehen.
+  const [kachelnBearbeiten, setKachelnBearbeiten] = useState(false);
   const [dashboardPrefs, setDashboardPrefs] = useState({});
   const [onboarding, setOnboarding] = useState(null); // null = noch nicht geladen/nicht nötig
   const [adminSnapshot, setAdminSnapshot] = useState(null);
@@ -30,8 +35,36 @@ export default function Dashboard() {
   const [teamUpcomingLeads, setTeamUpcomingLeads] = useState([]);
   const [myMentions, setMyMentions] = useState([]);
   const [myOpenTasks, setMyOpenTasks] = useState([]);
+  // Offene Termin-Einladungen: sie brauchen eine Antwort, gehören also
+  // nach oben zu dem, was heute zu tun ist (migration_112).
+  const [einladungen, setEinladungen] = useState([]);
+  const [einladungBusy, setEinladungBusy] = useState(null);
   const [teamZiele, setTeamZiele] = useState([]);
   const [showCourseList, setShowCourseList] = useState(false);
+
+  async function ladeEinladungen() {
+    try {
+      const { einladungen: offene } = await apiGet("/api/einladungen");
+      setEinladungen(offene || []);
+    } catch (e) {
+      // Eine fehlende Einladungsliste darf das Dashboard nicht aufhalten.
+      setEinladungen([]);
+    }
+  }
+
+  // Zu- und absagen darf nur die eingeladene Person selbst — das erzwingt
+  // die Datenbank. Hier verschwindet die Karte sofort, das Ergebnis wird
+  // danach geprüft.
+  async function beantworteEinladung(id, status) {
+    setEinladungBusy(id);
+    setEinladungen((prev) => prev.filter((e) => e.id !== id));
+    const fehler = await aendereGeprueft(
+      supabase.from("termin_einladungen").update({ status, beantwortet_am: new Date().toISOString() }).eq("id", id),
+      "Nur die eingeladene Person selbst kann zu- oder absagen."
+    );
+    if (fehler) await ladeEinladungen();
+    setEinladungBusy(null);
+  }
 
   async function loadPendingFriendRequests(uid) {
     const { data: reqs } = await supabase.from("friendships").select("id, requester_id").eq("addressee_id", uid).eq("status", "pending").order("created_at", { ascending: false });
@@ -54,6 +87,23 @@ export default function Dashboard() {
   async function persistTileOrder(newOrder) {
     setDashboardPrefs((prev) => {
       const next = { ...prev, order: newOrder };
+      (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        patchCachedProfile({ dashboard_prefs: next });
+        await supabase.from("profiles").update({ dashboard_prefs: next }).eq("id", session.user.id);
+      })();
+      return next;
+    });
+  }
+
+  // Ein- und Ausblenden schreibt eine ausdrückliche Auswahl. Danach zählt
+  // nur noch sie — neue Kacheln drängen sich niemandem mehr auf.
+  function kachelUmschalten(key, istFuehrung) {
+    setDashboardPrefs((prev) => {
+      const aktuell = sichtbareKacheln(prev, istFuehrung).map((k) => k.key);
+      const naechste = aktuell.includes(key) ? aktuell.filter((k) => k !== key) : [...aktuell, key];
+      const next = { ...prev, sichtbar: naechste, hidden: (prev?.hidden || []).filter((k) => k !== key) };
       (async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
@@ -98,6 +148,7 @@ export default function Dashboard() {
       setRpSessions(rp || []);
       setLoading(false);
       loadPendingFriendRequests(uid);
+      ladeEinladungen();
 
       const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, last_seen_community_at, dashboard_prefs, onboarding_dismissed, full_name, bio, avatar_url").eq("id", uid).maybeSingle();
       const since = me?.last_seen_community_at || new Date(0).toISOString();
@@ -326,6 +377,32 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Einladungen zuerst: sie warten auf eine Antwort, alles andere
+              ist nur Anzeige. */}
+          {einladungen.length > 0 && (
+            <div className="card mb-5 border-amber/40 flex flex-col gap-3">
+              <div className="text-sm font-semibold text-amber">
+                {einladungen.length === 1 ? "Du bist zu einem Termin eingeladen" : `${einladungen.length} Termin-Einladungen für dich`}
+              </div>
+              {einladungen.map((e) => (
+                <div key={e.id} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-textMain">{e.titel}</span>
+                  <span className="text-xs text-textMuted">
+                    {e.zeitpunkt
+                      ? `${deutscheZeit(e.zeitpunkt)} Uhr`
+                      : `${e.tag.slice(8)}.${e.tag.slice(5, 7)}.${e.uhrzeit ? ` · ${e.uhrzeit}` : ""}`}
+                    {" · von "}{e.von_name}
+                  </span>
+                  <span className="flex items-center gap-1.5 ml-auto">
+                    <button disabled={einladungBusy === e.id} onClick={() => beantworteEinladung(e.id, "zugesagt")} className="btn text-xs disabled:opacity-40">Annehmen</button>
+                    <button disabled={einladungBusy === e.id} onClick={() => beantworteEinladung(e.id, "abgesagt")} className="btn-ghost text-xs disabled:opacity-40">Ablehnen</button>
+                  </span>
+                </div>
+              ))}
+              <p className="text-[11px] text-textMuted">Zugesagte Termine stehen danach in deinem Kalender.</p>
+            </div>
+          )}
+
           {(myOpenTasks.length > 0 || upcomingLeads.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
               <div className="text-[11px] uppercase tracking-wide text-textMuted">Heute</div>
@@ -501,51 +578,76 @@ export default function Dashboard() {
 
               {/* Schnellzugriff und Austausch stehen bewusst unten: sie sind
                   Absprünge, keine Aufgaben. Oben gehört hin, was heute zu tun ist. */}
-              <div className="text-[11px] uppercase tracking-wide text-textMuted mt-5 mb-2">Schnellzugriff</div>
+              <div className="flex items-center gap-2 mt-5 mb-2">
+                <span className="text-[11px] uppercase tracking-wide text-textMuted">Schnellzugriff</span>
+                <button onClick={() => setKachelnBearbeiten((v) => !v)} className="btn-ghost text-[11px] ml-auto">
+                  {kachelnBearbeiten ? "Fertig" : "Bearbeiten"}
+                </button>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-5">
                 {(() => {
-                  const allTiles = [
-                    { key: "messages", label: "Nachrichten", icon: "chat", route: "/messages", badge: hub.unreadMessages },
-                    { key: "members", label: "Mitglieder", icon: "users", route: "/members", badge: hub.pendingFriendRequests },
-                    { key: "community", label: "Community", icon: "users", route: "/community", badge: hub.unreadCommunity },
-                    { key: "daily-challenge", label: "Tages-Challenge", icon: "flame", route: "/daily-challenge", sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
-                    { key: "duel", label: "Quiz-Duell", icon: "target", route: "/duel", badge: hub.openDuels },
-                    { key: "flashcards", label: "Flashcards", icon: "library", route: "/flashcards", sub: hub.dueFlashcards > 0 ? `${hub.dueFlashcards} fällig` : "Alles erledigt" },
-                    { key: "simulator", label: "Simulator", icon: "chat", route: "/simulator" },
-                    { key: "leaderboard", label: "Rangliste", icon: "award", route: "/leaderboard" },
-                    ...(hub.isManager ? [
-                      { key: "admin", label: "Freigaben", icon: "lock", route: "/admin", badge: hub.pendingApprovals },
-                      { key: "admin-suggestions", label: "Wissens-Vorschläge", icon: "lock", route: "/admin/suggestions", badge: hub.pendingSuggestions },
-                    ] : []),
-                  ];
-                  const prefs = dashboardPrefs || {};
-                  const order = prefs.order || [];
-                  const hidden = new Set(prefs.hidden || []);
-                  const visibleTiles = allTiles.filter((t) => !hidden.has(t.key));
-                  visibleTiles.sort((a, b) => {
-                    const ia = order.indexOf(a.key), ib = order.indexOf(b.key);
-                    if (ia === -1 && ib === -1) return 0;
-                    if (ia === -1) return 1;
-                    if (ib === -1) return -1;
-                    return ia - ib;
-                  });
+                  // Zähler und Untertitel gehören ins Dashboard, die Liste
+                  // selbst nach lib/dashboardKacheln.js — sonst steht sie an
+                  // zwei Stellen und läuft auseinander.
+                  const zusatz = {
+                    messages: { badge: hub.unreadMessages },
+                    members: { badge: hub.pendingFriendRequests },
+                    community: { badge: hub.unreadCommunity },
+                    duel: { badge: hub.openDuels },
+                    admin: { badge: hub.pendingApprovals },
+                    "admin-suggestions": { badge: hub.pendingSuggestions },
+                    "daily-challenge": { sub: profile?.streak_count ? `${profile.streak_count} Tage Serie` : null },
+                    flashcards: { sub: hub.dueFlashcards > 0 ? `${hub.dueFlashcards} fällig` : "Alles erledigt" },
+                  };
+                  const visibleTiles = sichtbareKacheln(dashboardPrefs || {}, hub.isManager)
+                    .map((k) => ({ ...k, ...(zusatz[k.key] || {}) }));
                   return visibleTiles.map((t) => (
-                    <button key={t.key} draggable
+                    <button key={t.key} draggable={!kachelnBearbeiten}
                       onDragStart={() => setDraggedTileKey(t.key)}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => handleTileDrop(t.key, visibleTiles)}
-                      onClick={() => router.push(t.route)}
-                      className={`card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition cursor-grab active:cursor-grabbing ${draggedTileKey === t.key ? "opacity-40" : ""}`}>
+                      onClick={() => (kachelnBearbeiten ? kachelUmschalten(t.key, hub.isManager) : router.push(t.route))}
+                      className={`card !p-3.5 flex flex-col items-start gap-2 text-left hover:-translate-y-0.5 transition ${kachelnBearbeiten ? "border-coral/40 cursor-pointer" : "cursor-grab active:cursor-grabbing"} ${draggedTileKey === t.key ? "opacity-40" : ""}`}>
                       <div className="flex items-center justify-between w-full">
                         <Icon name={t.icon} color="var(--org-accent, #CE3A5C)" size={18} />
-                        {t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
+                        {kachelnBearbeiten
+                          ? <span className="text-coral text-xs" title="Ausblenden">✕</span>
+                          : t.badge > 0 && <span className="badge-count">{t.badge > 9 ? "9+" : t.badge}</span>}
                       </div>
                       <div className="text-[13px] font-semibold text-textMain">{t.label}</div>
-                      {t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
+                      {!kachelnBearbeiten && t.sub && <div className="text-[11px] text-textMuted">{t.sub}</div>}
                     </button>
                   ));
                 })()}
               </div>
+
+              {/* Im Bearbeiten-Modus steht darunter, was noch dazukommen
+                  kann — sonst müsste man raten, was es überhaupt gibt. */}
+              {kachelnBearbeiten && (() => {
+                const sichtbar = new Set(sichtbareKacheln(dashboardPrefs || {}, hub.isManager).map((k) => k.key));
+                const rest = DASHBOARD_KACHELN.filter((k) => !sichtbar.has(k.key) && (!k.nurFuehrung || hub.isManager));
+                return (
+                  <div className="card mb-5">
+                    <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Hinzufügen</div>
+                    {rest.length === 0 ? (
+                      <p className="text-xs text-textMuted">Alle Kacheln sind schon auf dem Dashboard.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {rest.map((k) => (
+                          <button key={k.key} onClick={() => kachelUmschalten(k.key, hub.isManager)}
+                            className="btn-ghost text-xs flex items-center gap-1.5">
+                            <Icon name={k.icon} size={12} /> + {k.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-textMuted mt-2">
+                      Klick auf eine Kachel oben blendet sie aus. Die Reihenfolge änderst du ausserhalb des
+                      Bearbeitens per Ziehen. Deine Auswahl gilt nur für dich.
+                    </p>
+                  </div>
+                );
+              })()}
             </>
           )}
 

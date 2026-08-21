@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { tagesBeginnZeitpunkt, tagPlus } from "../../lib/woche";
+import { offeneEinladungenFuer } from "../../lib/einladungenServer";
 
 // Alles, was im Firmenkalender eines Zeitraums steht: eingetragene Termine,
 // Vertriebstermine, Geburtstage, Abwesenheiten und Einladungen.
@@ -118,31 +119,8 @@ export default async function handler(req, res) {
 
     // Offene Einladungen unabhängig vom Zeitraum: eine Einladung für den
     // nächsten Monat darf nicht erst dann auftauchen, wenn man dorthin
-    // blättert. Titel und Zeitpunkt werden hier aufgelöst.
-    const offeneRoh = (meineEinladungen || []).filter((e) => e.status === "offen");
-    let offeneEinladungen = [];
-    if (offeneRoh.length) {
-      const eventIds = offeneRoh.filter((e) => e.quelle === "org_event").map((e) => e.ziel_id);
-      const leadIds = offeneRoh.filter((e) => e.quelle === "lead").map((e) => e.ziel_id);
-      const [{ data: evs }, { data: lds }] = await Promise.all([
-        eventIds.length ? admin.from("org_events").select("id, titel, von, uhrzeit").in("id", eventIds) : Promise.resolve({ data: [] }),
-        leadIds.length ? admin.from("leads").select("id, name, appointment_at").in("id", leadIds) : Promise.resolve({ data: [] }),
-      ]);
-      const evMap = new Map((evs || []).map((e) => [e.id, e]));
-      const ldMap = new Map((lds || []).map((l) => [l.id, l]));
-      offeneEinladungen = offeneRoh.map((e) => {
-        const ev = e.quelle === "org_event" ? evMap.get(e.ziel_id) : null;
-        const ld = e.quelle === "lead" ? ldMap.get(e.ziel_id) : null;
-        return {
-          ...e,
-          titel: ev?.titel || ld?.name || "Termin",
-          zeitpunkt: ld?.appointment_at || null,
-          tag: ev?.von || null,
-          uhrzeit: ev?.uhrzeit || null,
-        };
-      // Ein Termin, den es nicht mehr gibt, braucht keine Einladung mehr.
-      }).filter((e) => e.tag || e.zeitpunkt);
-    }
+    // blättert. Dieselbe Auflösung wie auf dem Dashboard.
+    const offeneEinladungen = await offeneEinladungenFuer(admin, auth.user.id, orgId);
 
     const personenListe = (personen || []).map((p) => ({ id: p.id, name: p.full_name || "Unbenannt", avatar_url: p.avatar_url }));
     const namen = new Map(personenListe.map((p) => [p.id, p.name]));
@@ -158,7 +136,7 @@ export default async function handler(req, res) {
       abwesenheiten,
       // Für die Auswahlliste beim Einladen — nur die eigene Organisation.
       personen: personenListe,
-      offeneEinladungen: offeneEinladungen.map((e) => ({ ...e, von_name: namen.get(e.eingeladen_von) || "Unbenannt" })),
+      offeneEinladungen,
       selbst: auth.user.id,
       organisation: { name: org?.name || null, logo_url: org?.logo_url || null },
     });
