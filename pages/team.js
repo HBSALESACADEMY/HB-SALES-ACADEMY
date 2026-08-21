@@ -131,14 +131,18 @@ export default function Team() {
       return;
     }
     setZielBusy(true);
-    const { error } = await supabase.from("team_goals").insert({
-      manager_id: selfId, team_id: teamId, user_id: selfId,
-      title: zielEntwurf.titel.trim(), metric: zielEntwurf.metrik,
-      target_count: Number(zielEntwurf.ziel),
-      starts_on: raum.von, ends_on: raum.bis, week_start: raum.von,
-    });
+    try {
+      // Siehe pages/api/team-goal.js: benennt den Grund, wenn es abgelehnt wird.
+      await apiPost("/api/team-goal", {
+        teamId, title: zielEntwurf.titel, metric: zielEntwurf.metrik, target: zielEntwurf.ziel,
+        von: raum.von, bis: raum.bis, personId: selfId,
+      });
+    } catch (e) {
+      setZielBusy(false);
+      alert(e.message || "Das Ziel konnte nicht angelegt werden.");
+      return;
+    }
     setZielBusy(false);
-    if (error) { alert(error.message); return; }
     setZielFormular(null);
     setZielEntwurf({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
     await load();

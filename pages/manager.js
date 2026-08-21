@@ -309,16 +309,22 @@ export default function Manager() {
       alert("Bitte einen gültigen Zeitraum wählen — das Ende darf nicht vor dem Beginn liegen.");
       return;
     }
-    const { data: neu, error } = await supabase.from("team_goals").insert({
-      manager_id: session.user.id, team_id: selectedTeamId,
-      title: goalTitle.trim(), metric: goalMetric, target_count: Number(goalTarget),
-      starts_on: raum.von, ends_on: raum.bis,
-      // week_start bleibt befüllt, damit nichts bricht, was noch danach fragt.
-      week_start: raum.von,
-      user_id: goalPerson || null,
-    }).select().single();
+    // Über den Server (pages/api/team-goal.js): dort wird jede Bedingung
+    // einzeln geprüft und benannt. Direkt aus dem Browser kam bei jeder
+    // Ablehnung nur "new row violates row-level security policy".
+    let neu = null;
+    try {
+      const antwort = await apiPost("/api/team-goal", {
+        teamId: selectedTeamId, title: goalTitle, metric: goalMetric, target: goalTarget,
+        von: raum.von, bis: raum.bis, personId: goalPerson || null,
+      });
+      neu = antwort.ziel;
+    } catch (e) {
+      setSavingGoal(false);
+      alert(e.message || "Das Ziel konnte nicht angelegt werden.");
+      return;
+    }
     setSavingGoal(false);
-    if (error) { alert(error.message); return; }
     // Statt einer Erfolgsmeldung: das Ziel erscheint direkt in der Liste
     // darunter — man sieht selbst, dass es steht.
     setGoals((prev) => [...prev, neu]);
