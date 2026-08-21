@@ -39,15 +39,16 @@ function Kasten({ einheit, alle, teamsOhneEinheit, onAktion, busy, bearbeiten })
         )}
 
         {einheit.teams.length > 0 && (
-          <div className="flex flex-col gap-0.5 mt-1.5">
+          <div className="flex flex-wrap justify-center gap-1 mt-1.5">
             {einheit.teams.map((t) => (
-              <div key={t.id} className="text-[11px] text-textMuted leading-tight">
+              <span key={t.id}
+                className="text-[10.5px] text-textMuted leading-tight border border-line rounded-full px-1.5 py-0.5 whitespace-nowrap">
                 👥 {t.name} · {t.anzahl}
                 {bearbeiten && (
                   <button onClick={() => onAktion({ aktion: "team-zuordnen", teamId: t.id, einheitId: null })}
                     className="ml-1 text-coral hover:underline">✕</button>
                 )}
-              </div>
+              </span>
             ))}
           </div>
         )}

@@ -282,7 +282,9 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   border-radius: 10px;
   padding: 10px 14px;
   min-width: 150px;
-  max-width: 230px;
+  /* Lieber breiter als höher: der Inhalt eines Kastens (Teams, Rolle) läuft
+     in die Breite, damit die Kästen flach bleiben und der Aufbau lesbar. */
+  max-width: 340px;
   text-align: center;
 }
 

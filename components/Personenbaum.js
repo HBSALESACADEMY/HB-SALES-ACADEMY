@@ -39,12 +39,16 @@ function PersonKasten({ person, alle, onChef, bearbeiten, busy }) {
           {person.rolle && <div className="text-[11px] text-textMuted leading-tight">{person.rolle}</div>}
         </div>
 
+        {/* Nebeneinander statt untereinander: gestapelt wird der Kasten mit
+            jedem Team höher, und ein Organigramm aus hohen Kästen liest sich
+            nicht mehr als Aufbau. */}
         {person.teams.length > 0 && (
-          <div className="mt-1.5 flex flex-col gap-0.5">
+          <div className="mt-1.5 flex flex-wrap justify-center gap-1">
             {person.teams.map((t) => (
-              <div key={t.id} className="text-[11px] text-textMuted leading-tight">
+              <span key={t.id}
+                className="text-[10.5px] text-textMuted leading-tight border border-line rounded-full px-1.5 py-0.5 whitespace-nowrap">
                 {t.leitet ? "★" : "👥"} {t.name}
-              </div>
+              </span>
             ))}
           </div>
         )}
