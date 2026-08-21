@@ -12,6 +12,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
 import Organigramm from "../components/Organigramm";
 import Strukturbaum from "../components/Strukturbaum";
+import ZielDeuter from "../components/ZielDeuter";
 
 const RANG_LABEL = (key) => (key === "xp" ? "XP" : goalMetricLabel(key));
 
@@ -35,6 +36,7 @@ export default function Team() {
   const [zielFormular, setZielFormular] = useState(null);
   const [zielEntwurf, setZielEntwurf] = useState({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
   const [zielBusy, setZielBusy] = useState(false);
+  const [zielFrei, setZielFrei] = useState(false);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
@@ -272,8 +274,9 @@ export default function Team() {
                   <input className="input" placeholder="z.B. 150 Anwahlen diese Woche"
                     value={zielEntwurf.titel} onChange={(e) => setZielEntwurf((z) => ({ ...z, titel: e.target.value }))} />
                   <div className="flex items-center gap-2 flex-wrap">
-                    <select className="input !w-auto" value={zielEntwurf.metrik}
-                      onChange={(e) => setZielEntwurf((z) => ({ ...z, metrik: e.target.value }))}>
+                    <select className="input !w-auto" value={zielFrei ? "__frei" : zielEntwurf.metrik}
+                      onChange={(e) => { if (e.target.value === "__frei") setZielFrei(true); else { setZielFrei(false); setZielEntwurf((z) => ({ ...z, metrik: e.target.value })); } }}>
+                      <option value="__frei">✨ Frei beschreiben …</option>
                       {goalMetricGroups().map((g) => (
                         <optgroup key={g.name} label={g.name}>
                           {g.metriken.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
@@ -295,6 +298,11 @@ export default function Team() {
                       </>
                     )}
                   </div>
+                  {zielFrei && (
+                    <ZielDeuter
+                      onAbbrechen={() => setZielFrei(false)}
+                      onUebernehmen={(e) => { setZielEntwurf((z) => ({ ...z, titel: e.title, metrik: e.metric, ziel: e.target })); setZielFrei(false); }} />
+                  )}
                   <div className="flex items-center gap-2">
                     <button disabled={zielBusy} onClick={() => speichereEigenesZiel(t.id)} className="btn text-xs disabled:opacity-40">
                       {zielBusy ? "Speichert..." : "Ziel setzen"}

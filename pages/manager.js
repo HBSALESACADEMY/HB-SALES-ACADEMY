@@ -10,6 +10,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
 import { wochenStartTag } from "../lib/woche";
 import { ZEITRAEUME, zeitraumFuer, zeitraumLabel } from "../lib/zielzeitraum";
+import ZielDeuter from "../components/ZielDeuter";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -37,6 +38,7 @@ export default function Manager() {
   const [goalVon, setGoalVon] = useState("");
   const [goalBis, setGoalBis] = useState("");
   const [goalPerson, setGoalPerson] = useState("");
+  const [goalFrei, setGoalFrei] = useState(false);
   const [pairs, setPairs] = useState([]);
   const [pairMentorId, setPairMentorId] = useState("");
   const [pairMenteeId, setPairMenteeId] = useState("");
@@ -560,7 +562,11 @@ export default function Manager() {
 
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[160px]" placeholder="z.B. 200 Anwahlen im Team" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} />
-              <select className="input !w-auto" value={goalMetric} onChange={(e) => setGoalMetric(e.target.value)}>
+              <select className="input !w-auto" value={goalFrei ? "__frei" : goalMetric}
+                onChange={(e) => { if (e.target.value === "__frei") { setGoalFrei(true); } else { setGoalFrei(false); setGoalMetric(e.target.value); } }}>
+                {/* Frei formulieren statt Kennzahl raten: die KI übersetzt
+                    den Satz in Kennzahl und Zielwert. */}
+                <option value="__frei">✨ Frei beschreiben …</option>
                 {goalMetricGroups().map((gruppe) => (
                   <optgroup key={gruppe.name} label={gruppe.name}>
                     {gruppe.metriken.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
@@ -569,6 +575,14 @@ export default function Manager() {
               </select>
               <input className="input !w-20" type="number" min="1" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} />
             </div>
+
+            {goalFrei && (
+              <div className="mt-2">
+                <ZielDeuter
+                  onAbbrechen={() => setGoalFrei(false)}
+                  onUebernehmen={(e) => { setGoalTitle(e.title); setGoalMetric(e.metric); setGoalTarget(e.target); setGoalFrei(false); }} />
+              </div>
+            )}
 
             {/* Zeitraum und Empfänger (migration_96): früher galt jedes Ziel
                 fest für die laufende Woche und immer fürs ganze Team. */}

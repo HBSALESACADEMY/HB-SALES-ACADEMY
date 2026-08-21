@@ -185,7 +185,9 @@ test("die Datenbank erlaubt genau die Kennzahlen, die es im Code gibt", () => {
   // als check-Regel in der Datenbank. Läuft sie auseinander, lehnt die
   // Datenbank neue Ziele mit einem Constraint-Fehler ab — im Manager sieht man
   // dann nur eine kryptische Meldung.
-  const sql = readFileSync(new URL("../supabase/migration_85_team_goal_metrics.sql", import.meta.url), "utf8");
+  // Immer die JÜNGSTE Migration, die den check setzt — sonst prüft der
+  // Test eine überholte Liste.
+  const sql = readFileSync(new URL("../supabase/migration_99_ziel_kennzahlen.sql", import.meta.url), "utf8");
   const block = sql.slice(sql.indexOf("metric in ("), sql.indexOf("));", sql.indexOf("metric in (")));
   const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(erlaubt, [...GOAL_METRIC_KEYS].sort());
@@ -195,9 +197,10 @@ test("der Wettbewerbs-Maßstab kennt dieselben Kennzahlen plus XP", () => {
   // Zweite check-Regel, zweite Gelegenheit zum Auseinanderlaufen: stimmt sie
   // nicht, lässt sich die Einstellung in der Verwaltung schlicht nicht
   // speichern.
-  const sql = readFileSync(new URL("../supabase/migration_86_team_ranking_metric.sql", import.meta.url), "utf8");
-  const block = sql.slice(sql.indexOf("team_ranking_metric in ("), sql.indexOf(")", sql.indexOf("'termine'")));
-  const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+  const sql = readFileSync(new URL("../supabase/migration_99_ziel_kennzahlen.sql", import.meta.url), "utf8");
+  const block = sql.slice(sql.indexOf("team_ranking_metric in ("));
+  const ende = block.indexOf("\n  )");
+  const erlaubt = [...block.slice(0, ende).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(erlaubt, ["xp", ...GOAL_METRIC_KEYS].sort());
 });
 
