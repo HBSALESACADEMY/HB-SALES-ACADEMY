@@ -101,7 +101,7 @@ export default async function handler(req, res) {
 
     // Namen: Leitungen sind nicht zwingend als Mitglied eingetragen.
     const namensIds = Array.from(new Set([...alleIds, ...alleTeams.map((t) => t.created_by)]));
-    const { data: personen } = await admin.from("profiles").select("id, full_name, avatar_url").in("id", namensIds);
+    const { data: personen } = await admin.from("profiles").select("id, full_name, avatar_url, role_title").in("id", namensIds);
     const personVon = new Map((personen || []).map((p) => [p.id, p]));
 
     // --- Lernfortschritt je Person -----------------------------------------
@@ -188,6 +188,7 @@ export default async function handler(req, res) {
           id,
           name: personVon.get(id)?.full_name || "Unbenannt",
           avatar_url: personVon.get(id)?.avatar_url || null,
+          rolle: personVon.get(id)?.role_title || "",
           istLeitung: t?.created_by === id,
           module: { fertig: modulePro.get(id)?.size || 0, gesamt: modulGesamt },
           // Nur bestandene Prüfungen — das ist der Abschluss eines Kurses.

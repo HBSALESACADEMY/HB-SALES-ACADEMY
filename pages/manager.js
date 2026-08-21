@@ -41,6 +41,8 @@ export default function Manager() {
   const [goalFrei, setGoalFrei] = useState(false);
   const [goalEdit, setGoalEdit] = useState(null);
   const [goalPatch, setGoalPatch] = useState(null);
+  const [rolleEdit, setRolleEdit] = useState(null);
+  const [rolleWert, setRolleWert] = useState("");
   const [pairs, setPairs] = useState([]);
   const [pairMentorId, setPairMentorId] = useState("");
   const [pairMenteeId, setPairMenteeId] = useState("");
@@ -372,6 +374,20 @@ export default function Manager() {
       return;
     }
     setGoals((prev) => prev.filter((g) => g.id !== id));
+  }
+
+  // Rollenbezeichnung (profiles.role_title) — dasselbe Feld wie im
+  // Organigramm und im eigenen Profil. Läuft über die Route mit
+  // Rechteprüfung, weil die Regeln auf profiles nur das eigene Profil zum
+  // Ändern freigeben.
+  async function speichereRolle(personId) {
+    try {
+      await apiPost("/api/org-role-title", { personId, rolle: rolleWert });
+      setTeam((prev) => prev.map((m) => (m.id === personId ? { ...m, role_title: rolleWert.trim() || null } : m)));
+      setRolleEdit(null);
+    } catch (e) {
+      alert(e.message || "Die Bezeichnung konnte nicht gespeichert werden.");
+    }
   }
 
   async function toggleCallStatsAccess(memberId, allow) {
@@ -774,6 +790,23 @@ export default function Manager() {
                     <button onClick={() => openProfile(m.id)} className="font-semibold text-textMain text-sm hover:underline">
                       {m.full_name || "Unbenannt"}{m.id === selfId && <span className="text-amber"> · du</span>}
                     </button>
+                    {/* Wer ist was: frei beschriftbar, direkt in der Liste.
+                        Vorher gab es das nur im Organigramm. */}
+                    {rolleEdit === m.id ? (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <input autoFocus className="input !py-1 text-xs" maxLength={60} value={rolleWert}
+                          placeholder="z.B. Vertriebsleitung"
+                          onChange={(e) => setRolleWert(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") speichereRolle(m.id); if (e.key === "Escape") setRolleEdit(null); }} />
+                        <button onClick={() => speichereRolle(m.id)} className="btn-ghost text-xs flex-shrink-0">Speichern</button>
+                        <button onClick={() => setRolleEdit(null)} className="btn-ghost text-xs text-textMuted flex-shrink-0">Abbrechen</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setRolleEdit(m.id); setRolleWert(m.role_title || ""); }}
+                        className="text-[11px] text-textMuted hover:text-textMain mt-0.5 block text-left">
+                        {m.role_title || "Bezeichnung hinzufügen"} ✎
+                      </button>
+                    )}
                     <div className="text-xs text-textMuted mt-1">
                       {m.doneModules}/{m.totalModules} Module · Ø MC {m.avgMc !== null ? m.avgMc + "%" : "–"} · {m.certs}/{COURSES.length} Zertifikate · {m.roleplayCount} Rollenspiele
                     </div>

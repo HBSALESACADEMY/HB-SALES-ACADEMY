@@ -479,6 +479,7 @@ export default function Team() {
                         </div>
                         {/* Lernstand ist bewusst für alle im Team sichtbar —
                             anders als die Anruf-Zahlen weiter rechts. */}
+                        {m.rolle && <div className="text-[11px] text-amber truncate">{m.rolle}</div>}
                         <div className="text-[11px] text-textMuted truncate">
                           {m.module.fertig}/{m.module.gesamt} Module
                           {m.kurse.length > 0
