@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
 import { meldeTerminAenderung } from "../lib/leadNotify";
-import { loescheGeprueft } from "../lib/loeschen";
+import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 
 const emptyForm = { name: "", phone: "", email: "", company: "", website: "", notes: "" };
 
@@ -113,15 +113,15 @@ export default function Kunden() {
     if (!editForm.name.trim()) { setError("Name ist erforderlich."); return; }
     setSaving(true);
     setError("");
-    const { error: err } = await supabase.from("leads").update({
+    const err = await aendereGeprueft(supabase.from("leads").update({
       name: editForm.name.trim(),
       phone: editForm.phone.trim() || null,
       email: editForm.email.trim() || null,
       company: editForm.company.trim() || null,
       website: editForm.website.trim() || null,
       notes: editForm.notes.trim() || null,
-    }).eq("id", id);
-    if (err) { setError(err.message); setSaving(false); return; }
+    }).eq("id", id), "Diesen Eintrag darf nur bearbeiten, wer ihn angelegt hat, oder ein Manager.");
+    if (err) { setError(err); setSaving(false); return; }
     meldeTerminAenderung(id, "bearbeitet", "Die Kontaktdaten wurden bearbeitet.");
     setEditingId(null);
     setSaving(false);

@@ -560,7 +560,13 @@ export default function Termine() {
     setError("");
 
     // Der ursprüngliche Termin behält sein Datum, bekommt nur das Ergebnis.
-    await supabase.from("leads").update({ outcome: "follow_up" }).eq("id", id);
+    // Auch hier prüfen: eine abgelehnte Änderung meldet keinen Fehler. Ohne
+    // das entstünde der Folgetermin, während der ursprüngliche weiterhin
+    // ohne Ergebnis dastünde — und niemand wüsste, warum.
+    const setzFehler = await aendereGeprueft(
+      supabase.from("leads").update({ outcome: "follow_up" }).eq("id", id),
+      "Das Ergebnis konnte nicht gesetzt werden — diesen Termin darf nur bearbeiten, wer ihn angelegt hat, oder ein Manager.");
+    if (setzFehler) { setError(setzFehler); return; }
 
     const { data: neuerTermin, error: err } = await supabase.from("leads").insert({
       created_by: original.created_by,
@@ -637,15 +643,15 @@ export default function Termine() {
       setError("Bitte eine gültige E-Mail-Adresse eingeben (z.B. name@beispiel.de).");
       return;
     }
-    const { error: err } = await supabase.from("leads").update({ email: value || null }).eq("id", lead.id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("leads").update({ email: value || null }).eq("id", lead.id), "Die E-Mail darf nur ändern, wer den Termin angelegt hat, oder ein Manager.");
+    if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, email: value || null } : l)));
     setEditingEmailId(null);
   }
 
   async function clearEmail(lead) {
-    const { error: err } = await supabase.from("leads").update({ email: null }).eq("id", lead.id);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("leads").update({ email: null }).eq("id", lead.id), "Die E-Mail darf nur entfernen, wer den Termin angelegt hat, oder ein Manager.");
+    if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, email: null } : l)));
     setEditingEmailId(null);
   }
