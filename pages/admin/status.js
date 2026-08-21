@@ -126,7 +126,12 @@ export default function SystemStatus() {
                     : `Störung erkannt: ${gestoert.map((p) => p.name).join(", ")}`}
                 </div>
                 <div className="text-xs text-textMuted">
-                  Gemessen: {new Date(stand.geprueft_at).toLocaleString("de-DE")}
+                  {/* Fest auf deutsche Zeit statt auf die Zeitzone des
+                      Geräts: der Morgenbericht und die Cron-Läufe rechnen
+                      ebenfalls in Europa/Berlin (siehe lib/woche.js). Zwei
+                      verschiedene Zeitrechnungen auf derselben Seite wären
+                      nicht einzuordnen. */}
+                  Gemessen: {new Date(stand.geprueft_at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" })} Uhr (deutsche Zeit)
                   {(() => {
                     const min = Math.round((Date.now() - new Date(stand.geprueft_at).getTime()) / 60000);
                     return min < 2 ? " · gerade eben" : ` · vor ${min < 90 ? `${min} Minuten` : `${Math.round(min / 60)} Stunden`}`;
