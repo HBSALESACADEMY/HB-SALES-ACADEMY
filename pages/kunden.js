@@ -6,6 +6,17 @@ import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
 import { meldeTerminAenderung } from "../lib/leadNotify";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
+import { getActiveOrgId } from "../lib/activeOrg";
+import { apiGet } from "../lib/apiClient";
+import AudioPlayer from "../components/AudioPlayer";
+import { DEFAULT_LEAD_FIELDS, resolveLeadFields, getLeadFieldValue } from "../lib/leadFields";
+import { terminMitZusatz } from "../lib/terminzeit";
+import { getZeitzone } from "../lib/zeit";
+
+const STATUS_LABEL = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
+// Diese Felder stehen schon im Kopf oder als eigene Zeile — sie sollen nicht
+// ein zweites Mal aus der Feld-Konfiguration der Organisation auftauchen.
+const SCHON_GEZEIGT = ["name", "company", "phone", "email", "website", "notes"];
 
 const emptyForm = { name: "", phone: "", email: "", company: "", website: "", notes: "" };
 
@@ -30,11 +41,12 @@ export default function Kunden() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  // Die Liste zeigt nur Namen; alles Weitere klappt beim Darüberfahren auf.
-  // Zwei Zustände, weil ein Touchgerät nicht "darüberfahren" kann: der Tipp
-  // hält den Eintrag offen, bis er erneut angetippt wird.
-  const [hoverId, setHoverId] = useState(null);
-  const [fixiertId, setFixiertId] = useState(null);
+  // Die Liste zeigt nur Namen. Ein Klick öffnet einen Eintrag und zeigt
+  // alles, was zu ihm gespeichert ist — bis hin zur Aufnahme.
+  const [offenId, setOffenId] = useState(null);
+  const [aufnahmeUrl, setAufnahmeUrl] = useState(null);
+  const [aufnahmeId, setAufnahmeId] = useState(null);
+  const [leadFields, setLeadFields] = useState(DEFAULT_LEAD_FIELDS);
 
   async function load(silent) {
     if (!silent) setLoading(true);
@@ -42,7 +54,14 @@ export default function Kunden() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
+    // Zusatzfelder der Organisation, damit im Detail auch das auftaucht, was
+    // sich eine Firma selbst angelegt hat (siehe lib/leadFields.js).
+    const orgId = getActiveOrgId(me);
+    if (orgId) {
+      const { data: org } = await supabase.from("organizations").select("lead_field_config").eq("id", orgId).maybeSingle();
+      setLeadFields(resolveLeadFields(org));
+    }
     const canManage = !!(me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin);
     setCanSeeTeam(canManage);
     setSelfId(session.user.id);
@@ -153,6 +172,33 @@ export default function Kunden() {
     await load();
   }
 
+  // Aufnahme: die Datei liegt in einem privaten Bucket, die Adresse holt
+  // die Route und ist nur kurz gültig (siehe pages/api/lead-recording-url.js).
+  async function aufnahmeUmschalten(lead) {
+    if (aufnahmeId === lead.id) { setAufnahmeId(null); setAufnahmeUrl(null); return; }
+    try {
+      const { url } = await apiGet(`/api/lead-recording-url?leadId=${lead.id}`);
+      setAufnahmeId(lead.id);
+      setAufnahmeUrl(url);
+    } catch (e) {
+      setError(e.message || "Die Aufnahme konnte nicht geladen werden.");
+    }
+  }
+
+  // Deutsche Uhrzeit ist massgeblich, die eigene Ortszeit nur bei Abweichung.
+  function terminZeile(iso) {
+    if (!iso) return null;
+    const { haupt, zusatz } = terminMitZusatz(iso, getZeitzone() || undefined);
+    return zusatz ? `${haupt} Uhr (bei dir ${zusatz})` : `${haupt} Uhr`;
+  }
+
+  function eintragOeffnen(id) {
+    setOffenId((v) => (v === id ? null : id));
+    // Eine laufende Aufnahme gehört zum Eintrag, nicht zur Seite.
+    setAufnahmeId(null);
+    setAufnahmeUrl(null);
+  }
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
   return (
@@ -214,11 +260,9 @@ export default function Kunden() {
           const isEditing = editingId === c.id;
           // Beim Löschen offen halten — sonst verschwindet die Rückfrage,
           // sobald die Maus wegwandert.
-          const offen = isEditing || confirmDelete === c.id || hoverId === c.id || fixiertId === c.id;
+          const offen = isEditing || offenId === c.id;
           return (
-            <div key={c.id} className="card"
-              onMouseEnter={() => setHoverId(c.id)}
-              onMouseLeave={() => setHoverId((v) => (v === c.id ? null : v))}>
+            <div key={c.id} className="card">
               {isEditing ? (
                 <div className="flex flex-col gap-2.5">
                   <input className="input" placeholder="Name *" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
@@ -238,14 +282,15 @@ export default function Kunden() {
                 </div>
               ) : (
                 <>
-                  {/* Der Name ist zugleich die Schaltfläche: mit Tastatur und
-                      auf dem Handy kommt man so an die Einzelheiten. */}
+                  {/* Ein Klick auf den Namen öffnet den Eintrag — und zeigt
+                      alles, was zu ihm gespeichert ist. */}
                   <button type="button"
-                    onClick={() => setFixiertId((v) => (v === c.id ? null : c.id))}
+                    onClick={() => eintragOeffnen(c.id)}
                     aria-expanded={offen}
                     className="w-full text-left flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="font-display font-semibold text-textMain">{c.name}</div>
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className={`text-textMuted text-xs transition-transform ${offen ? "rotate-90" : ""}`}>›</span>
+                      <span className="font-display font-semibold text-textMain">{c.name}</span>
                     </div>
                     <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 flex-shrink-0 border ${outcomeTab === "kunde" ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
                       {outcomeTab === "kunde" ? "Kunde" : "Absage"}
@@ -266,7 +311,63 @@ export default function Kunden() {
                   </div>
                   {c.notes && <p className="text-sm text-textMain mt-2">{c.notes}</p>}
 
-                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-line">
+                  {/* Termin-Zeitpunkt, Status und alles, was die Organisation
+                      sich an eigenen Feldern angelegt hat. */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted mt-2">
+                    {terminZeile(c.appointment_at) && <span>🗓️ {terminZeile(c.appointment_at)}</span>}
+                    {c.status && <span>Status: {STATUS_LABEL[c.status] || c.status}</span>}
+                    {c.is_decision_maker && <span>✅ Entscheider:in</span>}
+                    {c.follow_up_of && <span>↩︎ Folgetermin</span>}
+                    <span>Angelegt: {new Date(c.created_at).toLocaleDateString("de-DE")}</span>
+                  </div>
+                  {leadFields
+                    .filter((f) => !SCHON_GEZEIGT.includes(f.key))
+                    .map((f) => [f, getLeadFieldValue(c, f)])
+                    .filter(([, wert]) => wert !== undefined && wert !== null && wert !== "" && wert !== false)
+                    .map(([f, wert]) => (
+                      <div key={f.key} className="text-xs text-textMuted mt-1">
+                        <span className="text-textMain">{f.label}:</span> {wert === true ? "Ja" : String(wert)}
+                      </div>
+                    ))}
+
+                  {c.recording_path && (
+                    <div className="mt-3">
+                      <button onClick={() => aufnahmeUmschalten(c)} className="btn-ghost text-xs">
+                        🎧 {aufnahmeId === c.id ? "Aufnahme ausblenden" : "Aufnahme abspielen"}
+                      </button>
+                      {aufnahmeId === c.id && aufnahmeUrl && <AudioPlayer src={aufnahmeUrl} />}
+                    </div>
+                  )}
+
+                  {(c.call_notes_status || c.call_notes) && (
+                    <div className="card !py-3 !px-3.5 mt-3 border border-violet/30">
+                      <div className="text-[10.5px] uppercase tracking-wide text-violet mb-1.5">Notizen aus der Aufnahme</div>
+                      {c.call_notes_status === "pending" && <p className="text-xs text-textMuted">Wird erstellt — das dauert einen Moment.</p>}
+                      {c.call_notes_status === "failed" && <p className="text-xs text-coral">Konnte nicht erstellt werden.</p>}
+                      {c.call_notes && (
+                        <>
+                          {c.call_notes.zusammenfassung && <p className="text-sm text-textMain mb-2">{c.call_notes.zusammenfassung}</p>}
+                          {[["bedarf", "Bedarf"], ["einwaende", "Einwände"], ["vereinbarungen", "Vereinbarungen"], ["naechsteSchritte", "Nächste Schritte"], ["sonstiges", "Sonstiges"]].map(([k, titel]) => {
+                            const eintraege = c.call_notes[k];
+                            if (!Array.isArray(eintraege) || !eintraege.length) return null;
+                            return (
+                              <div key={k} className="mb-1.5">
+                                <div className="text-[11px] font-semibold text-textMain">{titel}</div>
+                                <ul className="list-disc pl-4 text-xs text-textMuted">
+                                  {eintraege.map((e, i) => <li key={i}>{e}</li>)}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-line flex-wrap">
+                    {/* Kommentare und Aufgaben hängen am Termin selbst — dort
+                        stehen sie schon, statt sie hier zu verdoppeln. */}
+                    <a href={`/termine?leadId=${c.id}`} className="btn-ghost text-xs">Im Termin öffnen →</a>
                     <button onClick={() => startEdit(c)} className="btn-ghost text-xs">Bearbeiten</button>
                     {(c.created_by === selfId || canDeleteTeam) && (
                       confirmDelete === c.id ? (
