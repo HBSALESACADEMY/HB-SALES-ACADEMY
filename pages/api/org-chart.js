@@ -196,7 +196,13 @@ export default async function handler(req, res) {
       if (p.chefId && !chefVon.has(p.chefId)) p.chefId = null;
     });
 
-    return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit, personenBaum });
+    // Zusatz-Zuordnungen (migration_101) — nur zwischen Personen, die hier
+    // ohnehin im Bild sind.
+    const bekannt = new Set(personenBaum.map((p) => p.id));
+    const { data: zusatzRoh } = await admin.from("org_zusatz_chefs").select("person_id, chef_id");
+    const zusatz = (zusatzRoh || []).filter((z) => bekannt.has(z.person_id) && bekannt.has(z.chef_id));
+
+    return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit, personenBaum, zusatz });
   } catch (e) {
     console.error("Organigramm fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message });

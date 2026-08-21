@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const { darf, profil } = await darfOrganigrammSehen(auth.client, auth.user.id);
   if (!darf) return res.status(403).json({ error: "Nur Führungsrollen dürfen das Organigramm ändern." });
 
-  const { personId, vorgesetzterId } = req.body || {};
+  const { personId, vorgesetzterId, aktion } = req.body || {};
   if (!personId) return res.status(400).json({ error: "personId erforderlich." });
   if (personId === vorgesetzterId) return res.status(400).json({ error: "Eine Person kann sich nicht selbst unterstellt sein." });
 
@@ -50,6 +50,22 @@ export default async function handler(req, res) {
         gesehen.add(lauf);
         lauf = chefVon.get(lauf) || null;
       }
+    }
+
+    // Zusätzliche Zuordnung (migration_101): die Hauptzuordnung bleibt, es
+    // kommt nur eine weitere Linie dazu.
+    if (aktion === "zusatz-hinzufuegen") {
+      if (!vorgesetzterId) return res.status(400).json({ error: "Bitte eine Person auswählen." });
+      const { error } = await admin.from("org_zusatz_chefs")
+        .upsert({ person_id: personId, chef_id: vorgesetzterId }, { onConflict: "person_id,chef_id" });
+      if (error) throw error;
+      return res.status(200).json({ ok: true });
+    }
+    if (aktion === "zusatz-entfernen") {
+      const { error } = await admin.from("org_zusatz_chefs")
+        .delete().eq("person_id", personId).eq("chef_id", vorgesetzterId);
+      if (error) throw error;
+      return res.status(200).json({ ok: true });
     }
 
     const { error } = await admin.from("profiles").update({ vorgesetzter_id: vorgesetzterId || null }).eq("id", personId);

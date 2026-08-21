@@ -190,10 +190,18 @@ export default function Team() {
     await load();
   }
 
+  async function setzeZusatz(aktion, personId, chefId) {
+    await setzeChefRoh({ aktion, personId, vorgesetzterId: chefId });
+  }
+
   async function setzeChef(personId, chefId) {
+    await setzeChefRoh({ personId, vorgesetzterId: chefId });
+  }
+
+  async function setzeChefRoh(daten) {
     setStrukturBusy(true);
     try {
-      await apiPost("/api/org-supervisor", { personId, vorgesetzterId: chefId });
+      await apiPost("/api/org-supervisor", daten);
       const { data: profil2 } = await supabase.from("profiles")
         .select("organization_id, is_platform_admin").eq("id", selfId).maybeSingle();
       const oid = getActiveOrgId(profil2);
@@ -540,7 +548,8 @@ export default function Team() {
                 Wer unter wem steht — von dir festgelegt. Über „Zuordnen“ hängst du jede Person an die richtige Stelle.
                 Die Teams, die jemand leitet (★) oder in denen jemand steckt, erscheinen automatisch im Kasten.
               </p>
-              <Personenbaum personen={organigramm.personenBaum || []} onChef={setzeChef} busy={strukturBusy} />
+              <Personenbaum personen={organigramm.personenBaum || []} zusatz={organigramm.zusatz || []}
+                onChef={setzeChef} onZusatz={setzeZusatz} busy={strukturBusy} />
             </>
           ) : ansicht === "struktur" ? (
             <>

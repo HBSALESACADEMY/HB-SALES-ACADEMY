@@ -524,6 +524,21 @@ create table if not exists team_members (
   primary key (team_id, user_id)
 );
 
+-- Wer berichtet an wen (migration_100/101). vorgesetzter_id ist die
+-- Hauptzuordnung, nach der gezeichnet wird; org_zusatz_chefs trägt weitere.
+alter table profiles add column if not exists vorgesetzter_id uuid references profiles(id) on delete set null;
+
+create table if not exists org_zusatz_chefs (
+  person_id uuid not null references profiles(id) on delete cascade,
+  chef_id uuid not null references profiles(id) on delete cascade,
+  angelegt_at timestamptz not null default now(),
+  primary key (person_id, chef_id),
+  constraint org_zusatz_chefs_nicht_selbst check (person_id <> chef_id)
+);
+alter table org_zusatz_chefs enable row level security;
+drop policy if exists "org_zusatz_chefs_select" on org_zusatz_chefs;
+create policy "org_zusatz_chefs_select" on org_zusatz_chefs for select using (sieht_person(person_id));
+
 -- Selbst gebaute Organisationsstruktur (migration_98): Einheiten, denen
 -- Teams zugeordnet werden. Das automatische Organigramm aus den Teams bleibt
 -- daneben bestehen.
