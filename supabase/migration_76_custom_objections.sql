@@ -1,7 +1,7 @@
 -- Einwand-Trainer, weißes Label, Fortsetzung: Organisationen können jetzt
 -- eigene Einwand-Szenarien anlegen (Frage/Antwort Sie+Du, Tipp), zusätzlich
 -- zu den festen HB-Standard-Einwänden — siehe pages/admin/objections.js und
--- public/tools/einwand-trainer.html.
+-- dem Einwand-Trainer (heute pages/einwand-trainer.js).
 create table if not exists custom_objections (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,

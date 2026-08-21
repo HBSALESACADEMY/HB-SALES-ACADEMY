@@ -622,7 +622,8 @@ create table if not exists call_log_days (
 );
 
 -- Leads/Termine — beim "Terminiert"-Klick im Call Tracker erfasste
--- Kundendaten (siehe public/tools/call-tracker.html und pages/termine.js).
+-- Kundendaten (erfasst im Call Tracker, siehe pages/call-tracker.js und
+-- pages/termine.js).
 create table if not exists leads (
   id uuid primary key default gen_random_uuid(),
   created_by uuid not null references profiles(id) on delete cascade,
@@ -694,7 +695,7 @@ create table if not exists notification_emails (
 
 -- Einwand-Trainer, weißes Label: eigene Einwand-Szenarien pro Organisation,
 -- zusätzlich zu den festen HB-Standard-Einwänden (siehe
--- pages/admin/objections.js, public/tools/einwand-trainer.html).
+-- pages/admin/objections.js, pages/einwand-trainer.js).
 create table if not exists custom_objections (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
