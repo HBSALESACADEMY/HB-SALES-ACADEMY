@@ -16,7 +16,7 @@ import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
 import { FUEHRUNGSROLLEN } from "../lib/rollen.js";
 import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
-import { fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
+import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -433,4 +433,16 @@ test("ein Profil gilt erst mit Foto, vollem Namen, Geburtstag und Telefon als ei
   assert.deepEqual(fehlendeProfilangaben({ ...voll, geburtstag: null }), ["Geburtsdatum"]);
   assert.deepEqual(fehlendeProfilangaben({ ...voll, phone: "   " }), ["Telefonnummer"]);
   assert.equal(fehlendeProfilangaben(null).length, 4);
+});
+
+// Jedes Pflichtfeld muss im Profil auch als Pflichtfeld erkennbar sein.
+// Sonst blockiert das Speichern an einer Stelle, die harmlos aussieht.
+test("Profil: jedes Pflichtfeld trägt einen Stern", () => {
+  const quelle = readFileSync(new URL("../pages/profile.js", import.meta.url), "utf8");
+  for (const feld of PFLICHTFELDER) {
+    assert.ok(
+      quelle.includes(`<Stern feld="${feld.key}" />`),
+      `Pflichtfeld ${feld.label} (${feld.key}) ist im Profil nicht als Pflichtfeld markiert.`
+    );
+  }
 });

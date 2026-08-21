@@ -3,7 +3,15 @@ import Layout, { patchCachedProfile } from "../components/Layout";
 import Avatar from "../components/Avatar";
 import AvatarCropper from "../components/AvatarCropper";
 import { supabase } from "../lib/supabaseClient";
-import { fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht";
+import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht";
+
+// Der Stern kommt aus PFLICHTFELDER und nicht aus der Hand: sonst steht er
+// eines Tages an einem Feld, das längst freiwillig ist — oder fehlt an einem,
+// das ohne ihn beim Speichern überraschend blockiert.
+function Stern({ feld }) {
+  if (!PFLICHTFELDER.some((f) => f.key === feld)) return null;
+  return <span className="text-coral" title="Pflichtfeld"> *</span>;
+}
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
@@ -130,17 +138,20 @@ export default function Profile() {
       <div className="card max-w-md mb-4">
         <div className="flex items-center gap-4 mb-2">
           <Avatar name={fields.full_name || "?"} src={profile?.avatar_url} size={72} />
+          <div>
+            <div className="text-xs text-textMuted mb-2">Profilfoto<Stern feld="avatar_url" /></div>
           <label className="btn-ghost text-xs cursor-pointer">
             {uploading ? "Lädt hoch..." : "Foto ändern"}
             <input type="file" accept="image/*" className="hidden" onChange={pickFile} disabled={uploading} />
           </label>
+          </div>
         </div>
       </div>
 
       <div className="card max-w-md">
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-xs text-textMuted mb-1 block">Name</label>
+            <label className="text-xs text-textMuted mb-1 block">Name<Stern feld="full_name" /></label>
             <input className="input" value={fields.full_name} onChange={(e) => setField("full_name", e.target.value)} />
           </div>
           <div>
@@ -172,13 +183,13 @@ export default function Profile() {
                 <input className="input" placeholder="linkedin.com/in/..." value={fields.linkedin} onChange={(e) => setField("linkedin", e.target.value)} />
               </div>
               <div>
-                <label className="text-xs text-textMuted mb-1 block">Telefon</label>
+                <label className="text-xs text-textMuted mb-1 block">Telefon<Stern feld="phone" /></label>
                 <input className="input" value={fields.phone} onChange={(e) => setField("phone", e.target.value)} />
               </div>
               <div>
                 {/* Nur Tag und Monat werden im Kalender gezeigt — das
                     Geburtsjahr bleibt zwischen dir und der Academy. */}
-                <label className="text-xs text-textMuted mb-1 block">Geburtsdatum</label>
+                <label className="text-xs text-textMuted mb-1 block">Geburtsdatum<Stern feld="geburtstag" /></label>
                 <input type="date" className="input" value={fields.geburtstag} onChange={(e) => setField("geburtstag", e.target.value)} />
               </div>
             </div>
@@ -188,6 +199,9 @@ export default function Profile() {
             {saving ? "Speichert..." : "Speichern"}
           </button>
           {saved && <p className="text-teal text-xs">Gespeichert!</p>}
+          <p className="text-[11px] text-textMuted">
+            <span className="text-coral">*</span> Pflichtfeld — ohne diese Angaben bleibt das Profil unvollständig.
+          </p>
         </div>
       </div>
 
