@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGetBlob } from "../lib/apiClient";
 import { getStoredThemePref, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { applyOrgBranding } from "../lib/orgBranding";
+import { ZEITZONEN, merkeZeitzone, formatiere } from "../lib/zeit";
 
 const THEME_OPTIONS = [
   ["light", "Hell"],
@@ -44,6 +45,8 @@ export default function Settings() {
   const [exporting, setExporting] = useState(false);
   const [themePref, setThemePrefState] = useState("system");
   const [themeStatus, setThemeStatus] = useState("");
+  const [zeitzone, setZeitzone] = useState("");
+  const [zeitzoneStatus, setZeitzoneStatus] = useState("");
 
   useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
 
@@ -94,6 +97,10 @@ export default function Settings() {
       // Am Konto gespeicherte Wahl hat Vorrang — sonst stünde hier auf einem
       // neuen Gerät "Systemeinstellung", obwohl bewusst etwas gewählt wurde.
       if (data?.theme_pref) setThemePrefState(data.theme_pref);
+      // Zeitzone aus dem Profil übernehmen und für die Anzeige spiegeln
+      // (siehe lib/zeit.js) — sonst gilt sie erst nach dem nächsten Speichern.
+      setZeitzone(data?.zeitzone || "");
+      merkeZeitzone(data?.zeitzone || "");
       setVisibility(data?.contact_visibility || {});
       setLeaderboardOptOut(data?.leaderboard_opt_out || false);
       const prefs = data?.dashboard_prefs || {};
@@ -156,6 +163,18 @@ export default function Settings() {
     }
   }
 
+  async function speichereZeitzone(wert) {
+    setZeitzone(wert);
+    merkeZeitzone(wert);
+    setZeitzoneStatus("");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error: err } = await supabase.from("profiles").update({ zeitzone: wert || null }).eq("id", session.user.id);
+    // Fehlt die Spalte (migration_107), gilt die Wahl trotzdem auf diesem
+    // Gerät — sie wird nur nicht mitgenommen.
+    setZeitzoneStatus(err ? "nur auf diesem Gerät gespeichert" : "gespeichert");
+  }
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
   return (
@@ -175,6 +194,21 @@ export default function Settings() {
           ))}
         </div>
         {themeStatus && <p className="text-xs text-teal mt-3">{themeStatus}</p>}
+      </div>
+
+      <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">Zeitzone</div>
+        <p className="text-xs text-textMuted mb-3">
+          In welcher Zeit Termine, Erinnerungen und Prüfzeitpunkte angezeigt werden.
+          „Automatisch“ nimmt die Einstellung deines Geräts — geht die falsch, stimmen auch die Zeiten nicht.
+        </p>
+        <select className="input" value={zeitzone} onChange={(e) => speichereZeitzone(e.target.value)}>
+          {ZEITZONEN.map((z) => <option key={z.key} value={z.key}>{z.label}</option>)}
+        </select>
+        <p className="text-[11px] text-textMuted mt-2">
+          Aktuelle Uhrzeit in dieser Zeitzone: <strong>{formatiere(new Date(), { dateStyle: "short", timeStyle: "medium" })}</strong>
+          {zeitzoneStatus && <span className="text-teal"> · {zeitzoneStatus}</span>}
+        </p>
       </div>
 
       <div className="card max-w-lg mb-5">
@@ -211,18 +245,18 @@ export default function Settings() {
 
       <div className="card max-w-lg mb-5">
         <div className="font-semibold text-textMain text-sm mb-1">Dashboard-Kacheln</div>
-        <p className="text-xs text-textMuted mb-4">Reihenfolge anpassen oder Kacheln ausblenden.</p>
+        {/* Die Reihenfolge wird auf dem Dashboard selbst per Ziehen
+            geändert — hier standen dieselben Kacheln nochmal mit Pfeilen,
+            zwei Wege für dieselbe Sache. Geblieben ist das Ein- und
+            Ausblenden, das es auf dem Dashboard nicht gibt. */}
+        <p className="text-xs text-textMuted mb-4">Welche Kacheln auf dem Dashboard erscheinen. Die Reihenfolge änderst du dort direkt per Ziehen.</p>
         <div className="flex flex-col gap-1.5">
-          {tileOrder.map((key, i) => {
+          {tileOrder.map((key) => {
             const tile = ALL_DASHBOARD_TILES.find((t) => t.key === key);
             if (!tile) return null;
             const isHidden = hiddenTiles.has(key);
             return (
               <div key={key} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isHidden ? "opacity-40" : ""}`}>
-                <div className="flex flex-col">
-                  <button onClick={() => moveTile(key, -1)} disabled={i === 0} className="text-textMuted hover:text-textMain disabled:opacity-20 leading-none text-xs">▲</button>
-                  <button onClick={() => moveTile(key, 1)} disabled={i === tileOrder.length - 1} className="text-textMuted hover:text-textMain disabled:opacity-20 leading-none text-xs">▼</button>
-                </div>
                 <span className="text-sm text-textMain flex-1">{tile.label}</span>
                 <button onClick={() => toggleTileHidden(key)} className="btn-ghost text-xs">
                   {isHidden ? "Einblenden" : "Ausblenden"}

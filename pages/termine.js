@@ -15,6 +15,7 @@ import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLead
 import { ABSTAND } from "../lib/autoRefresh";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 import { loescheGeprueft } from "../lib/loeschen";
+import { formatiere, formatiereDatum, formatiereUhrzeit } from "../lib/zeit";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -365,7 +366,7 @@ export default function Termine() {
     const { error: err } = await supabase.from("leads").update({ appointment_at: neu, status: "geplant" }).eq("id", id);
     if (err) { setError(err.message); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, appointment_at: neu, status: "geplant" } : l)));
-    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${new Date(neu).toLocaleString("de-DE")}.`);
+    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${formatiere(neu)}.`);
     setVerschiebeId(null);
     setVerschiebeDatum("");
   }
@@ -401,7 +402,7 @@ export default function Termine() {
     // auf die das Team wirklich reagieren muss.
     const verschoben = original && original.appointment_at !== patch.appointment_at;
     meldeTerminAenderung(id, "bearbeitet", verschoben
-      ? `Der Termin wurde verschoben auf ${patch.appointment_at ? new Date(patch.appointment_at).toLocaleString("de-DE") : "keinen Zeitpunkt"}.`
+      ? `Der Termin wurde verschoben auf ${patch.appointment_at ? formatiere(patch.appointment_at) : "keinen Zeitpunkt"}.`
       : "Die Termindaten wurden bearbeitet.");
     setEditingLeadId(null);
     setEditDraft(null);
@@ -652,7 +653,7 @@ export default function Termine() {
   function formatAppointment(iso) {
     if (!iso) return "Kein Termin-Zeitpunkt";
     const d = new Date(iso);
-    return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) + " · " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    return formatiereDatum(d, { weekday: "short", day: "2-digit", month: "2-digit" }) + " · " + formatiereUhrzeit(d);
   }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;

@@ -5,6 +5,7 @@ import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { wochenStartTag } from "../lib/woche";
 import { merkeAktiveOrg } from "../lib/activeOrg";
+import { merkeZeitzone } from "../lib/zeit";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
@@ -248,6 +249,9 @@ export default function Layout({ children, fullBleed }) {
       // Inhalte-Verwaltungsseiten (Skripte, eigene Kurse, Flashcards,
       // Wissensdatenbank) in der Sidebar sichtbar sind (siehe unten).
       const activeOrgId = getActiveOrgId(data);
+      // Zeitzone der Person für die Anzeige verfügbar machen (lib/zeit.js).
+      // Ohne das gälte auf jeder Seite wieder die des Geräts.
+      if (data) merkeZeitzone(data.zeitzone || "");
 
       // Die Zugriffsregeln lesen die aktive Organisation aus der Tabelle
       // active_org (migration_92) — geschrieben wurde sie bisher nur beim

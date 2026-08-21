@@ -31,11 +31,13 @@ export default async function handler(req, res) {
       // eingerichtet ist — das muss der Knopf zurückmelden, sonst meldet er
       // Erfolg, obwohl nichts ankam.
       if (ergebnis?.skipped) {
-        return res.status(200).json({ ok: true, system, gesendet: false, hinweis: "Telegram ist nicht eingerichtet (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID fehlen).", schreibFehler });
+        return res.status(200).json({ ok: true, system, jetzt: new Date().toISOString(), gesendet: false, hinweis: "Telegram ist nicht eingerichtet (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID fehlen).", schreibFehler });
       }
       gesendet = true;
     }
-    return res.status(200).json({ ok: true, system, gesendet, vorschau: text, schreibFehler });
+    // Die Serverzeit mitgeben: das Alter der Messung darf nicht von der
+    // Uhr des Geräts abhängen, die auch mal ein paar Minuten vorgeht.
+    return res.status(200).json({ ok: true, system, jetzt: new Date().toISOString(), gesendet, vorschau: text, schreibFehler });
   } catch (e) {
     console.error("Systemprüfung fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message });

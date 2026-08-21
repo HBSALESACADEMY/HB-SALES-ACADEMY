@@ -15,6 +15,8 @@ export default function SystemStatus() {
   const [busy, setBusy] = useState("");
   const [meldung, setMeldung] = useState("");
   const [version, setVersion] = useState(null);
+  // Zeitpunkt vom SERVER, nicht vom Gerät — siehe Kommentar bei der Anzeige.
+  const [serverJetzt, setServerJetzt] = useState(null);
 
   async function laden() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -41,7 +43,11 @@ export default function SystemStatus() {
       await laden();
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      try { await apiPost("/api/admin/system-check", {}); await laden(); } catch { /* Anzeige bleibt beim gespeicherten Stand */ }
+      try {
+        const r = await apiPost("/api/admin/system-check", {});
+        if (r?.jetzt) setServerJetzt(r.jetzt);
+        await laden();
+      } catch { /* Anzeige bleibt beim gespeicherten Stand */ }
     })();
     const timer = setInterval(() => { if (!document.hidden) laden(); }, ABSTAND.GELEGENTLICH);
     const beiSichtbar = () => { if (!document.hidden) laden(); };
@@ -56,6 +62,7 @@ export default function SystemStatus() {
     setMeldung("");
     try {
       const r = await apiPost("/api/admin/system-check", { senden });
+      if (r.jetzt) setServerJetzt(r.jetzt);
       if (r.schreibFehler) setMeldung(`Geprüft, aber der Zustand liess sich nicht speichern: ${r.schreibFehler} — fehlt migration_83?`);
       else if (senden) setMeldung(r.gesendet ? "Bericht an Telegram gesendet." : (r.hinweis || "Nicht gesendet."));
       else setMeldung("Prüfung abgeschlossen.");
@@ -133,7 +140,12 @@ export default function SystemStatus() {
                       nicht einzuordnen. */}
                   Gemessen: {new Date(stand.geprueft_at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" })} Uhr (deutsche Zeit)
                   {(() => {
-                    const min = Math.round((Date.now() - new Date(stand.geprueft_at).getTime()) / 60000);
+                    // Gegen die SERVERzeit rechnen, nicht gegen Date.now():
+                    // geht die Uhr des Geräts ein paar Minuten vor, sähe eine
+                    // frische Messung sonst nach "vor 4 Minuten" aus.
+                    const bezug = serverJetzt ? new Date(serverJetzt).getTime() : Date.now();
+                    const min = Math.round((bezug - new Date(stand.geprueft_at).getTime()) / 60000);
+                    if (min < 0) return " · gerade eben";
                     return min < 2 ? " · gerade eben" : ` · vor ${min < 90 ? `${min} Minuten` : `${Math.round(min / 60)} Stunden`}`;
                   })()}
                 </div>
