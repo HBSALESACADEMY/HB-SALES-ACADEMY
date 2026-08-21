@@ -829,6 +829,17 @@ $$;
 -- an ein Team heran, das jemand anderes angelegt hatte.
 -- Verwalten dürfen alle Führungsrollen der Organisation, zu der das Team
 -- gehört (migration_103) — nicht mehr nur die anlegende Person und Admins.
+-- Organisation eines Teams, mit Rückfall auf die der anlegenden Person
+-- (migration_104): ein leeres Feld sperrte sonst jede Verwaltung aus.
+create or replace function public.team_organisation(tid uuid)
+returns uuid
+language sql stable security definer as $$
+  select coalesce(
+    (select organization_id from teams where id = tid),
+    (select p.organization_id from teams t join profiles p on p.id = t.created_by where t.id = tid)
+  );
+$$;
+
 create or replace function public.kann_team_verwalten(tid uuid, uid uuid)
 returns boolean
 language sql stable security definer as $$
@@ -838,7 +849,7 @@ language sql stable security definer as $$
     where t.id = tid
       and (
         t.created_by = uid
-        or (ist_fuehrungsrolle(uid) and t.organization_id is not distinct from aktive_org(uid))
+        or (ist_fuehrungsrolle(uid) and team_organisation(tid) is not distinct from aktive_org(uid))
       )
   );
 $$;
@@ -1671,7 +1682,7 @@ drop policy if exists "teams_select_all" on teams;
 -- Organisation selbst trägt, löst er kein Problem mehr, machte aber ein Team
 -- in JEDER aktiven Organisation sichtbar, sobald man selbst Mitglied war.
 create policy "teams_select_all" on teams for select using (
-  organization_id is not distinct from aktive_org(auth.uid())
+  team_organisation(id) is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "teams_insert_managers" on teams;
 create policy "teams_insert_managers" on teams for insert with check (
