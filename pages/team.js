@@ -26,6 +26,7 @@ export default function Team() {
   const [organigramm, setOrganigramm] = useState(null);
   const [organigrammOffen, setOrganigrammOffen] = useState(false);
   const [offenesTeam, setOffenesTeam] = useState(null);
+  const [offenesZiel, setOffenesZiel] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
@@ -171,6 +172,41 @@ export default function Team() {
                   <div className="h-2 bg-line rounded-full overflow-hidden">
                     <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (z.fortschritt / z.target_count) * 100)}%` }} />
                   </div>
+
+                  {/* Wer hat wie viel beigetragen — direkt am Ziel, nicht
+                      versteckt in der Mitgliederliste. beitraege ist null,
+                      wenn die Einzelwerte für diese Person nicht sichtbar
+                      sein dürfen (siehe pages/api/team-goals.js). */}
+                  {z.beitraege && (
+                    <>
+                      <button
+                        onClick={() => setOffenesZiel(offenesZiel === z.id ? null : z.id)}
+                        className="text-[11px] text-textMuted hover:text-textMain mt-1.5">
+                        {offenesZiel === z.id ? "Aufteilung ausblenden" : "Wer hat was beigetragen?"}
+                      </button>
+                      {offenesZiel === z.id && (
+                        <div className="mt-2 pl-1 flex flex-col gap-1">
+                          {t.mitglieder
+                            .map((m) => ({ ...m, wert: z.beitraege[m.id] || 0 }))
+                            .sort((a, b) => b.wert - a.wert)
+                            .map((m) => (
+                              <div key={m.id} className="flex items-center gap-2">
+                                <span className="text-[11px] text-textMain flex-1 min-w-0 truncate">
+                                  {m.name}{m.id === selfId && <span className="text-textMuted"> (du)</span>}
+                                </span>
+                                {/* Auch ein Balken je Person: die blosse Zahl
+                                    sagt nichts darüber, wie weit jemand vom
+                                    Rest entfernt liegt. */}
+                                <div className="w-20 h-1 bg-line rounded-full overflow-hidden flex-shrink-0">
+                                  <div className="h-full brand-gradient" style={{ width: `${z.fortschritt ? Math.round((m.wert / z.fortschritt) * 100) : 0}%` }} />
+                                </div>
+                                <span className="text-[11px] font-mono text-textMuted w-10 text-right flex-shrink-0">{m.wert}</span>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
 
