@@ -9,7 +9,7 @@ import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
-  FIELDS, storagePrefix, dayKey, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  FIELDS, storagePrefix, dayKey, dateKeyOf, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   zeroCounts, zeroReasons, todayFullLabel, weekLabel, monthLabel,
   loadDay, saveDay, aggregateRange, buildReport,
 } from "../lib/callTracker";
@@ -118,7 +118,11 @@ export default function CallTracker() {
       try {
         await supabase.from("call_log_days").upsert({
           user_id: userId,
-          log_date: new Date().toISOString().slice(0, 10),
+          // Derselbe Tagesschlüssel wie lokal (siehe lib/callTracker.js).
+          // Mit UTC landeten die ersten Anrufe nach Mitternacht in der Zeile
+          // des VORTAGS und überschrieben dessen Zahlen mit den frisch bei
+          // null begonnenen Zählern.
+          log_date: dateKeyOf(new Date()),
           counts,
           reasons: reasonCounts,
           updated_at: new Date().toISOString(),

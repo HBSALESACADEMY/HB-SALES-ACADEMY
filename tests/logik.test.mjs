@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, loadDay, saveDay, aggregateRange, buildReport, FIELDS } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, buildReport, FIELDS } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
@@ -368,4 +368,21 @@ test("niemand rechnet den Wochenstart selbst aus", () => {
     }
   }
   assert.deepEqual(treffer, [], `Eigene Wochenrechnung statt lib/woche.js:\n${treffer.join("\n")}`);
+});
+
+test("lokaler Tagesschlüssel und Server-Zeile nutzen dieselbe Rechnung", () => {
+  // Der Server nahm UTC, der Browser die Gerätezeit. Zwischen Mitternacht
+  // und dem UTC-Tageswechsel ist das ein anderer Tag: die ersten Anrufe der
+  // Nacht landeten in der Zeile des Vortags und überschrieben dessen Zahlen
+  // mit den frisch bei null begonnenen. Deshalb darf in der Schreibstelle
+  // kein toISOString().slice(0,10) mehr stehen.
+  const quelle = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
+  const schreibstelle = quelle.slice(quelle.indexOf('from("call_log_days").upsert'), quelle.indexOf('from("call_log_days").upsert') + 500);
+  assert.ok(schreibstelle.includes("dateKeyOf("), "log_date muss über dateKeyOf() gebildet werden");
+  assert.ok(!/toISOString\(\)\.slice\(0, ?10\)/.test(schreibstelle), "log_date darf nicht aus UTC kommen");
+
+  // Und dateKeyOf bleibt die Gerätezeit — sonst wären alte Tage im
+  // Browserspeicher unter einem anderen Schlüssel abgelegt.
+  const d = new Date(2026, 7, 12, 13, 0, 0);
+  assert.equal(dateKeyOf(d), "2026-08-12");
 });
