@@ -5,7 +5,8 @@ import Icon from "../../components/Icon";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
-import { loescheGeprueft } from "../../lib/loeschen";
+import { loescheGeprueft, aendereGeprueft } from "../../lib/loeschen";
+import { pfadAusOeffentlicherUrl } from "../../lib/speicherPfad";
 
 const COLORS = ["amber", "teal", "coral", "violet"];
 const COLOR_HEX = { amber: "var(--org-accent, #CE3A5C)", teal: "#00E5C7", coral: "#FF4D6D", violet: "var(--org-color-1, #4C5DC9)" };
@@ -99,12 +100,16 @@ export default function ContentAdmin() {
     setCreatingCourse(false);
   }
 
-  async function deleteCourse(id) {
+  async function deleteCourse(c) {
+    const mods = modulesByCourse[c.id] || [];
+    const zusatz = mods.length ? ` Die ${mods.length} enthaltenen Module werden mitgelöscht.` : "";
+    if (!confirm(`Kurs „${c.title}“ wirklich löschen?${zusatz}`)) return;
     setError("");
-    const loeschFehler = await loescheGeprueft(supabase.from("custom_courses").delete().eq("id", id));
-    const err = loeschFehler ? { message: loeschFehler } : null;
-    if (err) setError(err.message);
-    else await load();
+    const loeschFehler = await loescheGeprueft(supabase.from("custom_courses").delete().eq("id", c.id));
+    if (loeschFehler) { setError(loeschFehler); return; }
+    // Die Modulzeilen verschwinden per Kaskade, die Dateien nicht.
+    await dateienEntfernen(mods);
+    await load();
   }
 
   function setDraft(courseId, patch) {
@@ -164,12 +169,52 @@ export default function ContentAdmin() {
     }
   }
 
-  async function deleteModule(id) {
+  // Video und Anhang liegen im Speicher, nicht in der Zeile. Wird nur die
+  // Zeile gelöscht, bleibt die Datei für immer liegen — dieselbe Regel wie
+  // bei den Aufnahmen (siehe pages/termine.js).
+  async function dateienEntfernen(module) {
+    const videos = [], dateien = [];
+    (Array.isArray(module) ? module : [module]).forEach((m) => {
+      const v = pfadAusOeffentlicherUrl(m?.video_url, "course-videos");
+      const d = pfadAusOeffentlicherUrl(m?.file_url, "content-files");
+      if (v) videos.push(v);
+      if (d) dateien.push(d);
+    });
+    if (videos.length) await supabase.storage.from("course-videos").remove(videos);
+    if (dateien.length) await supabase.storage.from("content-files").remove(dateien);
+  }
+
+  async function deleteModule(m) {
+    if (!confirm(`Modul „${m.title}“ wirklich löschen? Video und Anhang werden mit entfernt.`)) return;
     setError("");
-    const loeschFehler = await loescheGeprueft(supabase.from("custom_modules").delete().eq("id", id));
-    const err = loeschFehler ? { message: loeschFehler } : null;
-    if (err) setError(err.message);
-    else await load();
+    const loeschFehler = await loescheGeprueft(supabase.from("custom_modules").delete().eq("id", m.id));
+    if (loeschFehler) { setError(loeschFehler); return; }
+    // Erst nach der erfolgreichen Löschung — sonst wäre die Datei weg und
+    // das Modul stünde noch da.
+    await dateienEntfernen(m);
+    await load();
+  }
+
+  // Reihenfolge: die Module tauschen ihre Plätze. Zwei Änderungen, beide
+  // geprüft — eine abgelehnte Änderung meldet sonst keinen Fehler.
+  async function verschiebeModul(m, richtung) {
+    const liste = modulesByCourse[m.course_id] || [];
+    const i = liste.findIndex((x) => x.id === m.id);
+    const j = i + richtung;
+    if (i === -1 || j < 0 || j >= liste.length) return;
+    const anderes = liste[j];
+    setError("");
+    const f1 = await aendereGeprueft(
+      supabase.from("custom_modules").update({ order_index: anderes.order_index }).eq("id", m.id),
+      "Die Reihenfolge konnte nicht geändert werden."
+    );
+    if (f1) { setError(f1); return; }
+    const f2 = await aendereGeprueft(
+      supabase.from("custom_modules").update({ order_index: m.order_index }).eq("id", anderes.id),
+      "Die Reihenfolge konnte nicht geändert werden."
+    );
+    if (f2) { setError(f2); return; }
+    await load();
   }
 
   function startEditCourse(c) {
@@ -181,14 +226,14 @@ export default function ContentAdmin() {
     if (!courseEditForm.title.trim() || !courseEditForm.navItemId) return;
     setSavingCourseEdit(true);
     setError("");
-    const { error: err } = await supabase.from("custom_courses").update({
+    const fehler = await aendereGeprueft(supabase.from("custom_courses").update({
       title: courseEditForm.title.trim(),
       description: courseEditForm.description.trim(),
       color: courseEditForm.color,
       nav_item_id: courseEditForm.navItemId,
-    }).eq("id", id);
+    }).eq("id", id), "Diesen Kurs darf nur bearbeiten, wer ihn angelegt hat, oder eine Führungsrolle.");
     setSavingCourseEdit(false);
-    if (err) { setError(err.message); return; }
+    if (fehler) { setError(fehler); return; }
     setEditingCourseId(null);
     setCourseEditForm(null);
     await load();
@@ -199,6 +244,9 @@ export default function ContentAdmin() {
     setModuleEditForm({
       title: m.title, content: m.content || "", file: null, attachment: null,
       existingVideoUrl: m.video_url, existingFileUrl: m.file_url, existingFileName: m.file_name,
+      // Entfernen ist etwas anderes als Ersetzen — beides muss gehen.
+      videoEntfernen: false, anhangEntfernen: false,
+      courseId: m.course_id,
     });
   }
 
@@ -208,8 +256,13 @@ export default function ContentAdmin() {
     setError("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      let videoUrl = moduleEditForm.existingVideoUrl;
-      let fileUrl = moduleEditForm.existingFileUrl, fileName = moduleEditForm.existingFileName;
+      let videoUrl = moduleEditForm.videoEntfernen ? null : moduleEditForm.existingVideoUrl;
+      let fileUrl = moduleEditForm.anhangEntfernen ? null : moduleEditForm.existingFileUrl;
+      let fileName = moduleEditForm.anhangEntfernen ? null : moduleEditForm.existingFileName;
+      // Was aus dem Speicher verschwinden soll, erst NACH der erfolgreichen
+      // Änderung — sonst ist die Datei weg und der Verweis steht noch.
+      const altVideo = (moduleEditForm.videoEntfernen || moduleEditForm.file) ? moduleEditForm.existingVideoUrl : null;
+      const altAnhang = (moduleEditForm.anhangEntfernen || moduleEditForm.attachment) ? moduleEditForm.existingFileUrl : null;
 
       if (moduleEditForm.file) {
         const ext = moduleEditForm.file.name.split(".").pop();
@@ -229,14 +282,27 @@ export default function ContentAdmin() {
         fileName = moduleEditForm.attachment.name;
       }
 
-      const { error: updErr } = await supabase.from("custom_modules").update({
+      // Umhängen in einen anderen Kurs: hinten anstellen, sonst hätte das
+      // Modul dort denselben Platz wie ein bereits vorhandenes.
+      const altesModul = (modulesByCourse[moduleEditForm.courseId] || []).find((x) => x.id === id);
+      const wechselt = !altesModul;
+      const aenderung = {
         title: moduleEditForm.title.trim(),
         content: moduleEditForm.content.trim() || null,
         video_url: videoUrl,
         file_url: fileUrl,
         file_name: fileName,
-      }).eq("id", id);
-      if (updErr) throw updErr;
+        course_id: moduleEditForm.courseId,
+      };
+      if (wechselt) aenderung.order_index = (modulesByCourse[moduleEditForm.courseId] || []).length;
+
+      const fehler = await aendereGeprueft(
+        supabase.from("custom_modules").update(aenderung).eq("id", id),
+        "Dieses Modul darf nur bearbeiten, wer es angelegt hat, oder eine Führungsrolle."
+      );
+      if (fehler) throw new Error(fehler);
+
+      if (altVideo || altAnhang) await dateienEntfernen({ video_url: altVideo, file_url: altAnhang });
 
       setEditingModuleId(null);
       setModuleEditForm(null);
@@ -326,7 +392,7 @@ export default function ContentAdmin() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => startEditCourse(c)} className="btn-ghost text-xs">Bearbeiten</button>
-                    <button onClick={() => deleteCourse(c.id)} className="btn-ghost text-xs text-coral">Kurs löschen</button>
+                    <button onClick={() => deleteCourse(c)} className="btn-ghost text-xs text-coral">Kurs löschen</button>
                   </div>
                 </div>
               )}
@@ -338,15 +404,33 @@ export default function ContentAdmin() {
                       <div key={m.id} className="border border-line rounded-lg px-3 py-2.5 flex flex-col gap-2">
                         <input className="input" placeholder="Modultitel" value={moduleEditForm.title} onChange={(e) => setModuleEditForm({ ...moduleEditForm, title: e.target.value })} />
                         <textarea className="input" placeholder="Inhalt / Beschreibung" rows={2} value={moduleEditForm.content} onChange={(e) => setModuleEditForm({ ...moduleEditForm, content: e.target.value })} />
+                        {/* In welchem Kurs das Modul steht, lässt sich hier
+                            ändern — dafür muss es nicht neu angelegt werden. */}
+                        <select className="input" value={moduleEditForm.courseId}
+                          onChange={(e) => setModuleEditForm({ ...moduleEditForm, courseId: e.target.value })}>
+                          {courses.map((k) => <option key={k.id} value={k.id}>{k.title}</option>)}
+                        </select>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5">
-                            <Icon name="chat" size={12} /> {moduleEditForm.file ? moduleEditForm.file.name : (moduleEditForm.existingVideoUrl ? "Video ersetzen" : "Video (optional)")}
-                            <input type="file" accept="video/*" className="hidden" onChange={(e) => setModuleEditForm({ ...moduleEditForm, file: e.target.files[0] })} />
+                          <label className={`btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 ${moduleEditForm.videoEntfernen ? "opacity-40" : ""}`}>
+                            <Icon name="chat" size={12} /> {moduleEditForm.file ? moduleEditForm.file.name : (moduleEditForm.existingVideoUrl && !moduleEditForm.videoEntfernen ? "Video ersetzen" : "Video (optional)")}
+                            <input type="file" accept="video/*" className="hidden" onChange={(e) => setModuleEditForm({ ...moduleEditForm, file: e.target.files[0], videoEntfernen: false })} />
                           </label>
-                          <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5">
-                            <Icon name="download" size={12} /> {moduleEditForm.attachment ? moduleEditForm.attachment.name : (moduleEditForm.existingFileUrl ? "Anhang ersetzen" : "Datei anhängen (optional)")}
-                            <input type="file" className="hidden" onChange={(e) => setModuleEditForm({ ...moduleEditForm, attachment: e.target.files[0] })} />
+                          {moduleEditForm.existingVideoUrl && !moduleEditForm.file && (
+                            <button onClick={() => setModuleEditForm({ ...moduleEditForm, videoEntfernen: !moduleEditForm.videoEntfernen })}
+                              className={`btn-ghost text-xs ${moduleEditForm.videoEntfernen ? "text-amber" : "text-coral"}`}>
+                              {moduleEditForm.videoEntfernen ? "Video doch behalten" : "Video entfernen"}
+                            </button>
+                          )}
+                          <label className={`btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 ${moduleEditForm.anhangEntfernen ? "opacity-40" : ""}`}>
+                            <Icon name="download" size={12} /> {moduleEditForm.attachment ? moduleEditForm.attachment.name : (moduleEditForm.existingFileUrl && !moduleEditForm.anhangEntfernen ? "Anhang ersetzen" : "Datei anhängen (optional)")}
+                            <input type="file" className="hidden" onChange={(e) => setModuleEditForm({ ...moduleEditForm, attachment: e.target.files[0], anhangEntfernen: false })} />
                           </label>
+                          {moduleEditForm.existingFileUrl && !moduleEditForm.attachment && (
+                            <button onClick={() => setModuleEditForm({ ...moduleEditForm, anhangEntfernen: !moduleEditForm.anhangEntfernen })}
+                              className={`btn-ghost text-xs ${moduleEditForm.anhangEntfernen ? "text-amber" : "text-coral"}`}>
+                              {moduleEditForm.anhangEntfernen ? "Anhang doch behalten" : "Anhang entfernen"}
+                            </button>
+                          )}
                           <button disabled={savingModuleEdit} onClick={() => { setEditingModuleId(null); setModuleEditForm(null); }} className="btn-ghost text-xs ml-auto disabled:opacity-40">Abbrechen</button>
                           <button disabled={savingModuleEdit || !moduleEditForm.title.trim()} onClick={() => saveEditModule(m.id)} className="btn text-xs disabled:opacity-40">{savingModuleEdit ? "Speichert..." : "Speichern"}</button>
                         </div>
@@ -363,8 +447,14 @@ export default function ContentAdmin() {
                           <Icon name="download" size={11} /> {m.file_name || "Anhang"}
                         </a>
                       )}
+                      <span className="flex items-center gap-0.5">
+                        <button onClick={() => verschiebeModul(m, -1)} disabled={mods[0]?.id === m.id}
+                          title="Nach oben" className="btn-ghost text-xs disabled:opacity-25">↑</button>
+                        <button onClick={() => verschiebeModul(m, 1)} disabled={mods[mods.length - 1]?.id === m.id}
+                          title="Nach unten" className="btn-ghost text-xs disabled:opacity-25">↓</button>
+                      </span>
                       <button onClick={() => startEditModule(m)} className="btn-ghost text-xs">Bearbeiten</button>
-                      <button onClick={() => deleteModule(m.id)} className="btn-ghost text-xs text-coral">Löschen</button>
+                      <button onClick={() => deleteModule(m)} className="btn-ghost text-xs text-coral">Löschen</button>
                     </div>
                   );
                 })}

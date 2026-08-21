@@ -17,6 +17,7 @@ import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
 import { FUEHRUNGSROLLEN } from "../lib/rollen.js";
 import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
 import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
+import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -445,4 +446,17 @@ test("Profil: jedes Pflichtfeld trägt einen Stern", () => {
       `Pflichtfeld ${feld.label} (${feld.key}) ist im Profil nicht als Pflichtfeld markiert.`
     );
   }
+});
+
+// Wird der Pfad falsch zurückgerechnet, bleibt beim Löschen eines Moduls die
+// Videodatei im Speicher liegen — sichtbar wird das erst an der Rechnung.
+test("Speicher-Pfad wird aus der öffentlichen Adresse zurückgewonnen", () => {
+  const basis = "https://abc.supabase.co/storage/v1/object/public";
+  assert.equal(pfadAusOeffentlicherUrl(`${basis}/course-videos/user-1/1699.mp4`, "course-videos"), "user-1/1699.mp4");
+  assert.equal(pfadAusOeffentlicherUrl(`${basis}/content-files/user-1/1699.pdf?t=2`, "content-files"), "user-1/1699.pdf");
+  assert.equal(pfadAusOeffentlicherUrl(`${basis}/content-files/u/Preis%20Liste.pdf`, "content-files"), "u/Preis Liste.pdf");
+  // Fremder Eimer, leere Angabe: lieber nichts löschen als das Falsche.
+  assert.equal(pfadAusOeffentlicherUrl(`${basis}/course-videos/u/a.mp4`, "content-files"), null);
+  assert.equal(pfadAusOeffentlicherUrl(null, "course-videos"), null);
+  assert.equal(pfadAusOeffentlicherUrl("https://example.com/a.mp4", "course-videos"), null);
 });
