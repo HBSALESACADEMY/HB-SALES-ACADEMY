@@ -827,18 +827,18 @@ $$;
 -- Verwalten (Mitglieder, Ziele) darf zusätzlich, wer Admin derselben
 -- Organisation oder Plattform-Admin ist (migration_88). Vorher kam niemand
 -- an ein Team heran, das jemand anderes angelegt hatte.
+-- Verwalten dürfen alle Führungsrollen der Organisation, zu der das Team
+-- gehört (migration_103) — nicht mehr nur die anlegende Person und Admins.
 create or replace function public.kann_team_verwalten(tid uuid, uid uuid)
 returns boolean
 language sql stable security definer as $$
   select exists (
     select 1
     from teams t
-    join profiles viewer on viewer.id = uid
     where t.id = tid
       and (
         t.created_by = uid
-        or ((viewer.is_admin or viewer.is_platform_admin)
-            and t.organization_id is not distinct from aktive_org(uid))
+        or (ist_fuehrungsrolle(uid) and t.organization_id is not distinct from aktive_org(uid))
       )
   );
 $$;
@@ -884,6 +884,17 @@ $$;
 -- Ersetzt in den Regeln sowohl same_org() als auch den Plattform-Admin-Zweig:
 -- für normale Konten dasselbe wie bisher, für Plattform-Admins eine
 -- Einschränkung statt einer Öffnung.
+-- Führungsrolle: Manager, Backend, Admin oder Plattform-Admin
+-- (migration_103).
+create or replace function public.ist_fuehrungsrolle(uid uuid)
+returns boolean
+language sql stable security definer as $$
+  select exists (
+    select 1 from profiles
+    where id = uid and (role = 'manager' or role = 'backend' or is_admin or is_platform_admin)
+  );
+$$;
+
 create or replace function public.sieht_person(ziel uuid)
 returns boolean
 language sql stable security definer as $$
@@ -1745,7 +1756,10 @@ create policy "team_requests_delete_participant" on team_requests for delete usi
 
 -- --- mentor_pairs ---
 drop policy if exists "mentor_pairs_select_participant" on mentor_pairs;
-create policy "mentor_pairs_select_participant" on mentor_pairs for select using (auth.uid() = mentor_id or auth.uid() = mentee_id or auth.uid() = manager_id);
+create policy "mentor_pairs_select_participant" on mentor_pairs for select using (
+  auth.uid() = mentor_id or auth.uid() = mentee_id or auth.uid() = manager_id
+  or (ist_fuehrungsrolle(auth.uid()) and sieht_person(mentee_id))
+);
 drop policy if exists "mentor_pairs_insert_manager" on mentor_pairs;
 create policy "mentor_pairs_insert_manager" on mentor_pairs for insert with check (
   auth.uid() = manager_id
@@ -1755,7 +1769,10 @@ create policy "mentor_pairs_insert_manager" on mentor_pairs for insert with chec
   )
 );
 drop policy if exists "mentor_pairs_update_manager" on mentor_pairs;
-create policy "mentor_pairs_update_manager" on mentor_pairs for update using (auth.uid() = manager_id);
+create policy "mentor_pairs_update_manager" on mentor_pairs for update using (
+  auth.uid() = manager_id
+  or (ist_fuehrungsrolle(auth.uid()) and sieht_person(mentee_id))
+);
 
 -- --- call_log_days ---
 drop policy if exists "call_log_days_select_own" on call_log_days;
@@ -1763,10 +1780,7 @@ create policy "call_log_days_select_own" on call_log_days for select using (auth
 drop policy if exists "call_log_days_select_managers" on call_log_days;
 create policy "call_log_days_select_managers" on call_log_days for select using (
   sieht_person(user_id)
-  and (
-    is_team_lead_of(user_id, auth.uid())
-    or exists (select 1 from profiles where id = auth.uid() and (is_admin or is_platform_admin))
-  )
+  and (is_team_lead_of(user_id, auth.uid()) or ist_fuehrungsrolle(auth.uid()))
 );
 drop policy if exists "call_log_days_upsert_own" on call_log_days;
 create policy "call_log_days_upsert_own" on call_log_days for insert with check (auth.uid() = user_id);

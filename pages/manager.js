@@ -170,7 +170,14 @@ export default function Manager() {
     setTeam(enriched);
     setPrincipleCounts(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6));
 
-    const { data: existingPairs } = await supabase.from("mentor_pairs").select("*, mentor:mentor_id(full_name), mentee:mentee_id(full_name)").eq("manager_id", session.user.id).eq("active", true);
+    // Nach den MITGLIEDERN des Teams filtern, nicht nach der zuweisenden
+    // Person: sonst sieht ein Manager nur die Paare, die er selbst angelegt
+    // hat, und ein fremdes Team wirkt so, als gäbe es dort kein Mentoring
+    // (migration_103).
+    const idsFuerPaare = memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"];
+    const { data: existingPairs } = await supabase.from("mentor_pairs")
+      .select("*, mentor:mentor_id(full_name), mentee:mentee_id(full_name)")
+      .in("mentee_id", idsFuerPaare).eq("active", true);
     // Team-Lead selbst mit aufnehmen — sonst verschwindet ein Paar, in dem
     // man sich selbst als Mentor/Mentee eingetragen hat, aus der Anzeige.
     const teamMemberIdSet = new Set([...memberIds, session.user.id]);
@@ -748,8 +755,8 @@ export default function Manager() {
             return (
               <div className="card mb-3 border-amber/40">
                 <p className="text-xs text-textMuted">
-                  Du siehst dieses Team, weil es zu eurer Organisation gehört — <strong>geleitet wird es von jemand
-                  anderem</strong>. Mitglieder, Ziele und Mentoring ändern darf nur die Teamleitung oder ein Admin.
+                  Dieses Team wird von jemand anderem geleitet. Du kannst es trotzdem verwalten, weil es zu eurer
+                  Organisation gehört — <strong>sprich Änderungen an Mitgliedern oder Zielen mit der Teamleitung ab</strong>.
                 </p>
               </div>
             );

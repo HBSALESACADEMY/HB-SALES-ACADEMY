@@ -39,7 +39,10 @@ export default async function handler(req, res) {
     }
 
     const istLeitung = team.created_by === user.id;
-    const darfVerwalten = istLeitung || !!ich.is_admin || !!ich.is_platform_admin;
+    // Gleichgezogen mit migration_103: jede Führungsrolle der Organisation
+    // darf die Teams ihrer Organisation verwalten, nicht nur Admins.
+    const istFuehrung = ich.role === "manager" || ich.role === "backend" || !!ich.is_admin || !!ich.is_platform_admin;
+    const darfVerwalten = istLeitung || istFuehrung;
 
     // Persönliches Ziel für sich selbst darf jede Person setzen, die im Team
     // ist. Alles andere — Team-Ziele und Ziele für andere — nur die Leitung.
