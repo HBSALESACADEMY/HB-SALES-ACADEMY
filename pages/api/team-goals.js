@@ -102,7 +102,7 @@ export default async function handler(req, res) {
 
     // Namen: Leitungen sind nicht zwingend als Mitglied eingetragen.
     const namensIds = Array.from(new Set([...alleIds, ...alleTeams.map((t) => t.created_by)]));
-    const { data: personen } = await admin.from("profiles").select("id, full_name, avatar_url, role_title").in("id", namensIds);
+    const { data: personen } = await admin.from("profiles").select("id, full_name, avatar_url, role_title, abwesend_von, abwesend_bis").in("id", namensIds);
     const personVon = new Map((personen || []).map((p) => [p.id, p]));
 
     // --- Lernfortschritt je Person -----------------------------------------
@@ -197,6 +197,16 @@ export default async function handler(req, res) {
           name: personVon.get(id)?.full_name || "Unbenannt",
           avatar_url: personVon.get(id)?.avatar_url || null,
           rolle: personVon.get(id)?.role_title || "",
+          // Abwesend (migration_108): erspart die Rückfrage, warum jemand
+          // eine Woche lang keine Anwahlen hat.
+          abwesend: (() => {
+            const p2 = personVon.get(id);
+            if (!p2?.abwesend_von && !p2?.abwesend_bis) return null;
+            const heute2 = berlinHeute();
+            const von = p2.abwesend_von || heute2;
+            const bis = p2.abwesend_bis || heute2;
+            return heute2 >= von && heute2 <= bis ? { von, bis } : null;
+          })(),
           istLeitung: t?.created_by === id,
           module: { fertig: modulePro.get(id)?.size || 0, gesamt: modulGesamt },
           // Nur bestandene Prüfungen — das ist der Abschluss eines Kurses.

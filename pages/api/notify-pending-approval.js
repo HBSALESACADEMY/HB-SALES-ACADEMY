@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     // über jede Freischaltung informiert bleibt, nicht nur die jeweilige
     // Organisation selbst.
     await Promise.all([
-      notifyOrgManagers(admin, me.organization_id, { subject: `Neue Registrierung wartet auf Freigabe — ${orgName}`, html, fromName: orgName }),
+      notifyOrgManagers(admin, me.organization_id, { subject: `Neue Registrierung wartet auf Freigabe — ${orgName}`, html, fromName: orgName, art: "freigaben" }),
       notifyPlatformAdmins(admin, { subject: `Neue Registrierung wartet auf Freigabe — ${orgName}`, html, fromName: orgName }),
     ]);
 

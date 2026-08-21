@@ -141,7 +141,17 @@ export default function Login() {
         // Darf die Registrierung selbst nie blockieren, falls das fehlschlägt.
         apiPost("/api/notify-pending-approval", {}).catch((e) => console.error("notify-pending-approval failed:", e.message));
       }
-      router.push("/");
+      // Startseite aus den Einstellungen (migration_108) — wer den ganzen
+      // Tag telefoniert, will den Call Tracker sehen, nicht das Dashboard.
+      let ziel = "/";
+      try {
+        const { data: { session: s2 } } = await supabase.auth.getSession();
+        if (s2) {
+          const { data: p2 } = await supabase.from("profiles").select("startseite").eq("id", s2.user.id).maybeSingle();
+          if (p2?.startseite) ziel = p2.startseite;
+        }
+      } catch (e) { /* fehlt die Spalte, bleibt es beim Dashboard */ }
+      router.push(ziel);
     } catch (err) {
       setError(err.message || "Etwas ist schiefgelaufen.");
     } finally {

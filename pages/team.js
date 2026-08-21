@@ -478,6 +478,11 @@ export default function Team() {
                         {/* Lernstand ist bewusst für alle im Team sichtbar —
                             anders als die Anruf-Zahlen weiter rechts. */}
                         {m.rolle && <div className="text-[11px] text-amber truncate">{m.rolle}</div>}
+                        {m.abwesend && (
+                          <div className="text-[11px] text-textMuted truncate">
+                            🌴 abwesend bis {new Date(`${m.abwesend.bis}T12:00:00Z`).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+                          </div>
+                        )}
                         <div className="text-[11px] text-textMuted truncate">
                           {m.module.fertig}/{m.module.gesamt} Module
                           {m.kurse.length > 0

@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         // Termin-Benachrichtigungen. Das ist anders als bei den
         // Freischaltungs-Benachrichtigungen (notify-pending-approval.js),
         // wo der Plattform-Betreiber bewusst alles sehen soll.
-        await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName });
+        await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName, art: "termine" });
 
         const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
         const extraEmails = (extra || []).map((e) => e.email);

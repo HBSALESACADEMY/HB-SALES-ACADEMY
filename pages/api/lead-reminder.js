@@ -67,7 +67,7 @@ export default async function handler(req, res) {
     const subject = `Erinnerung: Termin mit ${lead.name}`;
     const fromName = orgName || "HB Sales Academy";
 
-    await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName });
+    await notifyOrgManagers(admin, effectiveOrgId, { subject, html, fromName, art: "termine" });
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", effectiveOrgId);
     const extraEmails = (extra || []).map((e) => e.email);

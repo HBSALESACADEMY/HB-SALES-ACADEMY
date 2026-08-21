@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import Layout, { patchCachedProfile, getCachedOrg } from "../components/Layout";
 import { supabase } from "../lib/supabaseClient";
-import { apiGetBlob } from "../lib/apiClient";
+import { apiGetBlob, apiPost } from "../lib/apiClient";
 import { getStoredThemePref, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { applyOrgBranding } from "../lib/orgBranding";
 import { ZEITZONEN, merkeZeitzone, formatiere } from "../lib/zeit";
+import { MELDUNGSARTEN, standardWahl } from "../lib/benachrichtigungen";
 
 const THEME_OPTIONS = [
   ["light", "Hell"],
@@ -47,6 +48,13 @@ export default function Settings() {
   const [themeStatus, setThemeStatus] = useState("");
   const [zeitzone, setZeitzone] = useState("");
   const [zeitzoneStatus, setZeitzoneStatus] = useState("");
+  const [meldungen, setMeldungen] = useState({});
+  const [startseite, setStartseite] = useState("");
+  const [abwesendVon, setAbwesendVon] = useState("");
+  const [abwesendBis, setAbwesendBis] = useState("");
+  const [kontoLoeschen, setKontoLoeschen] = useState(false);
+  const [loeschText, setLoeschText] = useState("");
+  const [loeschBusy, setLoeschBusy] = useState(false);
 
   useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
 
@@ -100,6 +108,10 @@ export default function Settings() {
       // Zeitzone aus dem Profil übernehmen und für die Anzeige spiegeln
       // (siehe lib/zeit.js) — sonst gilt sie erst nach dem nächsten Speichern.
       setZeitzone(data?.zeitzone || "");
+      setMeldungen(data?.benachrichtigungen || standardWahl());
+      setStartseite(data?.startseite || "");
+      setAbwesendVon(data?.abwesend_von || "");
+      setAbwesendBis(data?.abwesend_bis || "");
       merkeZeitzone(data?.zeitzone || "");
       setVisibility(data?.contact_visibility || {});
       setLeaderboardOptOut(data?.leaderboard_opt_out || false);
@@ -160,6 +172,34 @@ export default function Settings() {
       setError(e.message);
     } finally {
       setExporting(false);
+    }
+  }
+
+  // Ein gemeinsamer Speicherweg für die schlichten Felder — jedes einzeln
+  // zu behandeln hiesse dieselbe Fehlerbehandlung viermal.
+  async function speichereFeld(felder, beiFehler) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error: err } = await supabase.from("profiles").update(felder).eq("id", session.user.id);
+    if (err) setError(beiFehler || err.message);
+    else { setSaved(true); setTimeout(() => setSaved(false), 1200); }
+  }
+
+  function setzeMeldung(key, an) {
+    const neu = { ...standardWahl(), ...meldungen, [key]: an };
+    setMeldungen(neu);
+    speichereFeld({ benachrichtigungen: neu }, "Einstellung konnte nicht gespeichert werden (fehlt migration_108?).");
+  }
+
+  async function loescheKonto() {
+    setLoeschBusy(true);
+    try {
+      await apiPost("/api/delete-own-account", {});
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+    } catch (e) {
+      setError(e.message || "Das Konto konnte nicht gelöscht werden.");
+      setLoeschBusy(false);
     }
   }
 
@@ -268,11 +308,92 @@ export default function Settings() {
       </div>
 
       <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">E-Mail-Benachrichtigungen</div>
+        <p className="text-xs text-textMuted mb-3">
+          Was dir per E-Mail zugestellt wird. Im Dashboard und in der Navigation siehst du alles weiterhin —
+          hier geht es nur um Mails.
+        </p>
+        <div className="flex flex-col gap-2.5">
+          {MELDUNGSARTEN.map((m) => {
+            const an = meldungen[m.key] !== false;
+            return (
+              <label key={m.key} className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={an} onChange={(e) => setzeMeldung(m.key, e.target.checked)} />
+                <span className="min-w-0">
+                  <span className="text-sm text-textMain block">{m.label}</span>
+                  <span className="text-[11px] text-textMuted">{m.hinweis}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">Startseite</div>
+        <p className="text-xs text-textMuted mb-3">Welcher Bereich sich nach dem Anmelden öffnet.</p>
+        <select className="input" value={startseite}
+          onChange={(e) => { setStartseite(e.target.value); speichereFeld({ startseite: e.target.value || null }); }}>
+          <option value="">Dashboard (Standard)</option>
+          <option value="/call-tracker">Call Tracker</option>
+          <option value="/termine">Termine</option>
+          <option value="/courses">Kurse</option>
+          <option value="/team">Mein Team</option>
+          <option value="/community">Community</option>
+        </select>
+      </div>
+
+      <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">Abwesenheit</div>
+        <p className="text-xs text-textMuted mb-3">
+          Urlaub oder Krankheit eintragen. Dein Team sieht dann, warum in dieser Zeit keine Anwahlen
+          und Termine von dir kommen — statt dass es nach Nachlassen aussieht.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input type="date" className="input !w-auto" value={abwesendVon || ""}
+            onChange={(e) => { setAbwesendVon(e.target.value); speichereFeld({ abwesend_von: e.target.value || null }); }} />
+          <span className="text-xs text-textMuted">bis</span>
+          <input type="date" className="input !w-auto" value={abwesendBis || ""}
+            onChange={(e) => { setAbwesendBis(e.target.value); speichereFeld({ abwesend_bis: e.target.value || null }); }} />
+          {(abwesendVon || abwesendBis) && (
+            <button className="btn-ghost text-xs text-textMuted"
+              onClick={() => { setAbwesendVon(""); setAbwesendBis(""); speichereFeld({ abwesend_von: null, abwesend_bis: null }); }}>
+              Zurücksetzen
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="card max-w-lg mb-5">
         <div className="font-semibold text-textMain text-sm mb-1">Meine Daten</div>
         <p className="text-xs text-textMuted mb-4">Lade eine Kopie aller dir zugeordneten Daten herunter (Profil, Leads, Aufnahmen-Metadaten, Quiz-/Prüfungsergebnisse, Rollenspiele, Community-Beiträge u.a.) — dein Auskunfts- und Mitnahmerecht nach Art. 15/20 DSGVO.</p>
         <button onClick={exportData} disabled={exporting} className="btn-ghost text-xs disabled:opacity-40">
           {exporting ? "Wird erstellt..." : "Daten exportieren (JSON)"}
         </button>
+      </div>
+
+      <div className="card max-w-lg mb-5 border-coral/30">
+        <div className="font-semibold text-coral text-sm mb-1">Konto löschen</div>
+        <p className="text-xs text-textMuted mb-3">
+          Entfernt dein Konto und alles, was daran hängt: Kursfortschritt, Zertifikate, Termine,
+          Aufnahmen und Beiträge. <strong>Das lässt sich nicht rückgängig machen.</strong> Lade dir vorher
+          oben deine Daten herunter, wenn du sie behalten willst.
+        </p>
+        {!kontoLoeschen ? (
+          <button onClick={() => setKontoLoeschen(true)} className="btn-ghost text-xs text-coral">Konto löschen …</button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-textMuted">Tipp zur Bestätigung <strong>LÖSCHEN</strong> ein:</p>
+            <input className="input" value={loeschText} onChange={(e) => setLoeschText(e.target.value)} placeholder="LÖSCHEN" />
+            <div className="flex items-center gap-2">
+              <button disabled={loeschText !== "LÖSCHEN" || loeschBusy} onClick={loescheKonto}
+                className="btn text-xs disabled:opacity-40">
+                {loeschBusy ? "Wird gelöscht…" : "Endgültig löschen"}
+              </button>
+              <button onClick={() => { setKontoLoeschen(false); setLoeschText(""); }} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <button onClick={save} className="btn">Speichern</button>

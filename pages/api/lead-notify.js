@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       `<p><strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}<br/>Termin: ${termin}</p>` +
       (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
-    await notifyOrgManagers(admin, orgId, { subject, html, fromName: orgName || "HB Sales Academy" });
+    await notifyOrgManagers(admin, orgId, { subject, html, fromName: orgName || "HB Sales Academy", art: "termine" });
 
     const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", orgId);
     await Promise.all((extra || []).map((e) =>
