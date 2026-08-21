@@ -83,6 +83,8 @@ function fasseZusammen(items) {
 let cachedProfile = null;
 let cachedNavItems = null;
 let cachedBadges = null;
+// Einmal je Sitzung: die aktive Organisation auch serverseitig nachziehen.
+let aktiveOrgAbgeglichen = false;
 let cachedOrg = null;
 
 export function patchCachedProfile(patch) {
@@ -246,6 +248,19 @@ export default function Layout({ children, fullBleed }) {
       // Inhalte-Verwaltungsseiten (Skripte, eigene Kurse, Flashcards,
       // Wissensdatenbank) in der Sidebar sichtbar sind (siehe unten).
       const activeOrgId = getActiveOrgId(data);
+
+      // Die Zugriffsregeln lesen die aktive Organisation aus der Tabelle
+      // active_org (migration_92) — geschrieben wurde sie bisher nur beim
+      // Anmelden. Wer den Firmencode danach wechselte oder schon vorher
+      // angemeldet war, sah in der Oberfläche die eine Organisation, während
+      // die Datenbank noch die andere annahm. Folge: Löschen und Ändern
+      // wurden abgelehnt, ohne dass irgendwo ein Grund stand.
+      //
+      // Deshalb hier bei jedem Sitzungsstart abgleichen statt nur beim Login.
+      if (!aktiveOrgAbgeglichen && data?.is_platform_admin && activeOrgId) {
+        aktiveOrgAbgeglichen = true;
+        merkeAktiveOrg(supabase, data.id, activeOrgId);
+      }
 
       // Diese drei Abfragen hängen nur vom bereits geladenen Profil ab, nicht
       // voneinander — sie liefen bisher aber NACHEINANDER, jede ein eigener
