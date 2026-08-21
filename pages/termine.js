@@ -17,6 +17,7 @@ import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } f
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { formatiereDatum, formatiereUhrzeit, terminAnzeige } from "../lib/zeit";
 import { deutscheZeit } from "../lib/terminzeit";
+import { berlinHeute, tagesBeginnZeitpunkt } from "../lib/woche";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
@@ -680,12 +681,27 @@ export default function Termine() {
   const extraTextFields = leadFields.filter((f) => f.type === "text" && f.key !== companyField?.key && f.key !== websiteField?.key && f.key !== notesField?.key);
 
   const [zeitVon, zeitBis] = bereichFuer(timeFilter);
+  // Die Grenze zwischen "bevorstehend" und "vergangen" ist der Beginn des
+  // heutigen Tages in Deutschland — alles ab gestern gilt als vergangen.
+  // Über lib/woche.js, weil der Server in UTC läuft und das Gerät in seiner
+  // eigenen Zeitzone (siehe migration_92 / lib/woche.js).
+  const heuteBeginn = new Date(tagesBeginnZeitpunkt(berlinHeute()));
   const filteredLeads = leads.filter((lead) => {
     const q = leadSearchQuery.trim().toLowerCase();
     const companyValue = companyField ? getLeadFieldValue(lead, companyField) : "";
     const matchesQuery = !q || [lead.name, companyValue, lead.phone, lead.email].some((f) => (f || "").toLowerCase().includes(q));
     const matchesTasks = !onlyOpenTasks || (tasksByLead[lead.id] || []).some((t) => !t.done);
     if (!matchesQuery || !matchesTasks) return false;
+
+    // Vergangene Termine haben einen eigenen Ordner. Wer keinen Zeitpunkt
+    // hat, ist nicht vorbei — der bleibt bei den bevorstehenden stehen.
+    const istVergangen = !!lead.appointment_at && new Date(lead.appointment_at) < heuteBeginn;
+    if (ansicht === "vergangen") {
+      if (!istVergangen) return false;
+      const passtZumDatum = !dateFilter || istGleicherTag(lead.appointment_at, new Date(`${dateFilter}T12:00:00`));
+      return passtZumDatum;
+    }
+    if (istVergangen) return false;
 
     // Im Kalender bestimmt der angetippte Tag bzw. der angezeigte Monat,
     // was unten steht — die Zeitraum-Knöpfe gelten dort nicht.
@@ -708,6 +724,12 @@ export default function Termine() {
     const d = new Date(lead.appointment_at);
     return d >= zeitVon && d <= zeitBis;
   });
+
+  // Bei den vergangenen Terminen steht das Jüngste oben — geladen wird
+  // aufsteigend, was dort die ältesten nach vorne holen würde.
+  const sichtbareLeads = ansicht === "vergangen"
+    ? [...filteredLeads].sort((a, b) => String(b.appointment_at).localeCompare(String(a.appointment_at)))
+    : filteredLeads;
 
   return (
     <Layout>
@@ -839,7 +861,7 @@ export default function Termine() {
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* Ansicht umschalten: gewohnte Kachel-Liste oder Monatskalender. */}
-        {[["liste", "Liste", "dashboard"], ["kalender", "Kalender", "calendar"]].map(([key, label, icon]) => (
+        {[["liste", "Bevorstehend", "dashboard"], ["vergangen", "Vergangene Termine", "history"], ["kalender", "Kalender", "calendar"]].map(([key, label, icon]) => (
           <button key={key} onClick={() => setAnsicht(key)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
             <Icon name={icon} size={12} /> {label}
@@ -848,6 +870,9 @@ export default function Termine() {
         <span className="w-px h-5 bg-line mx-1" />
         {/* Zeitraum gilt nur in der Liste — im Kalender bestimmt der
             angezeigte Monat bzw. der angetippte Tag, was zu sehen ist. */}
+        {ansicht === "vergangen" && (
+          <span className="text-[11px] text-textMuted">Alles, was vor dem heutigen Tag lag — das Jüngste zuerst.</span>
+        )}
         {ansicht === "liste" && [["tag", "Heute"], ["woche", "Diese Woche"], ["monat", "Dieser Monat"], ["alle", "Alle"]].map(([key, label]) => (
           <button key={key} onClick={() => setTimeFilter(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${timeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
             {label}
@@ -872,7 +897,7 @@ export default function Termine() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filteredLeads.map((lead) => {
+        {sichtbareLeads.map((lead) => {
           const owner = profileMap[lead.created_by];
           const statusColor = STATUS_COLORS[lead.status];
           const isHighlighted = highlightId === lead.id;
@@ -1236,7 +1261,11 @@ export default function Termine() {
             </div>
           );
         })}
-        {filteredLeads.length === 0 && leads.length > 0 && <p className="text-textMuted text-sm">Keine Termine gefunden.</p>}
+        {sichtbareLeads.length === 0 && leads.length > 0 && (
+          <p className="text-textMuted text-sm">
+            {ansicht === "vergangen" ? "Keine vergangenen Termine gefunden." : "Keine bevorstehenden Termine gefunden."}
+          </p>
+        )}
         {leads.length === 0 && <p className="text-textMuted text-sm">Noch keine Termine erfasst — beim "Terminiert"-Klick im Call Tracker landen sie hier.</p>}
       </div>
     </Layout>
