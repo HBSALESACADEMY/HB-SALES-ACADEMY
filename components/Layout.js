@@ -248,6 +248,16 @@ export default function Layout({ children, fullBleed }) {
       // mindestens ein Team gegründet zu haben — bestimmt u.a., ob die
       // Inhalte-Verwaltungsseiten (Skripte, eigene Kurse, Flashcards,
       // Wissensdatenbank) in der Sidebar sichtbar sind (siehe unten).
+      // Wer sein Profil noch nicht eingerichtet hat, landet dort — sonst
+      // entstehen Konten ohne Namen und Bild, die im Organigramm und in der
+      // Mitgliederliste als "Unbenannt" stehen (migration_109). Die Seiten
+      // Profil, Einstellungen und Datenschutz bleiben erreichbar, sonst
+      // säße man fest.
+      const offeneSeiten = ["/profile", "/settings", "/datenschutz", "/agb", "/login"];
+      if (data && data.profil_vollstaendig === false && !offeneSeiten.includes(router.pathname)) {
+        router.replace("/profile");
+      }
+
       const activeOrgId = getActiveOrgId(data);
       // Zeitzone der Person für die Anzeige verfügbar machen (lib/zeit.js).
       // Ohne das gälte auf jeder Seite wieder die des Geräts.

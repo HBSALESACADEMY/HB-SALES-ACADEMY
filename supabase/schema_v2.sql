@@ -524,6 +524,45 @@ create table if not exists team_members (
   primary key (team_id, user_id)
 );
 
+-- Geburtstag und ob das Profil eingerichtet wurde (migration_109).
+alter table profiles add column if not exists geburtstag date;
+alter table profiles add column if not exists profil_vollstaendig boolean not null default false;
+
+-- Firmenkalender: Schulungen, Messen, Feiertage (migration_109). Eintragen
+-- darf jede Person ihrer Organisation, ändern nur die eigene Zeile oder eine
+-- Führungsrolle.
+create table if not exists org_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  created_by uuid not null references profiles(id) on delete cascade,
+  titel text not null,
+  beschreibung text,
+  von date not null,
+  bis date,
+  uhrzeit text,
+  art text not null default 'sonstiges' check (art in ('schulung', 'meeting', 'messe', 'feiertag', 'urlaub', 'sonstiges')),
+  created_at timestamptz not null default now()
+);
+alter table org_events enable row level security;
+drop policy if exists "org_events_select" on org_events;
+create policy "org_events_select" on org_events for select using (
+  organization_id is not distinct from aktive_org(auth.uid())
+);
+drop policy if exists "org_events_insert" on org_events;
+create policy "org_events_insert" on org_events for insert with check (
+  created_by = auth.uid() and organization_id is not distinct from aktive_org(auth.uid())
+);
+drop policy if exists "org_events_update" on org_events;
+create policy "org_events_update" on org_events for update using (
+  created_by = auth.uid()
+  or (ist_fuehrungsrolle(auth.uid()) and organization_id is not distinct from aktive_org(auth.uid()))
+);
+drop policy if exists "org_events_delete" on org_events;
+create policy "org_events_delete" on org_events for delete using (
+  created_by = auth.uid()
+  or (ist_fuehrungsrolle(auth.uid()) and organization_id is not distinct from aktive_org(auth.uid()))
+);
+
 -- Darf diese Person die Anruf-Auswertung des Teams einsehen (migration_102)?
 alter table profiles add column if not exists can_view_call_stats boolean not null default false;
 

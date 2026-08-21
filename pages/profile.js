@@ -3,10 +3,11 @@ import Layout, { patchCachedProfile } from "../components/Layout";
 import Avatar from "../components/Avatar";
 import AvatarCropper from "../components/AvatarCropper";
 import { supabase } from "../lib/supabaseClient";
+import { fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht";
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
-  const [fields, setFields] = useState({ full_name: "", bio: "", company_name: "", role_title: "", website: "", instagram: "", linkedin: "", phone: "" });
+  const [fields, setFields] = useState({ full_name: "", bio: "", company_name: "", role_title: "", website: "", instagram: "", linkedin: "", phone: "", geburtstag: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -30,6 +31,7 @@ export default function Profile() {
       company_name: data?.company_name || "", role_title: data?.role_title || "",
       website: data?.website || "", instagram: data?.instagram || "",
       linkedin: data?.linkedin || "", phone: data?.phone || "",
+      geburtstag: data?.geburtstag || "",
     });
     setLoading(false);
   }
@@ -71,7 +73,11 @@ export default function Profile() {
       company_name: fields.company_name.trim(), role_title: fields.role_title.trim(),
       website: fields.website.trim(), instagram: fields.instagram.trim(),
       linkedin: fields.linkedin.trim(), phone: fields.phone.trim(),
+      geburtstag: fields.geburtstag || null,
     };
+    // Beim Speichern mitführen, ob das Profil jetzt vollständig ist — daran
+    // hängt die Aufforderung nach der Registrierung (migration_109).
+    payload.profil_vollstaendig = profilVollstaendig({ ...payload, avatar_url: profile?.avatar_url });
     const { error: err } = await supabase.from("profiles").update(payload).eq("id", session.user.id);
     if (err) setError(err.message);
     else { setSaved(true); patchCachedProfile(payload); }
@@ -98,6 +104,22 @@ export default function Profile() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Mein Profil</h1>
       <div className="brand-stripe w-16 mb-4" />
+
+      {/* Aufforderung nach der Registrierung (migration_109): benennt genau,
+          was noch fehlt, statt nur "Profil unvollständig" zu sagen. */}
+      {(() => {
+        const fehlt = fehlendeProfilangaben({ ...fields, avatar_url: profile?.avatar_url });
+        if (!fehlt.length) return null;
+        return (
+          <div className="card border-amber/40 mb-4">
+            <div className="text-sm font-semibold text-amber mb-1">Bitte richte dein Profil ein</div>
+            <p className="text-xs text-textMuted">
+              Deine Kolleg:innen sollen wissen, mit wem sie es zu tun haben. Es fehlt noch:{" "}
+              <strong>{fehlt.join(", ")}</strong>.
+            </p>
+          </div>
+        );
+      })()}
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -152,6 +174,12 @@ export default function Profile() {
               <div>
                 <label className="text-xs text-textMuted mb-1 block">Telefon</label>
                 <input className="input" value={fields.phone} onChange={(e) => setField("phone", e.target.value)} />
+              </div>
+              <div>
+                {/* Nur Tag und Monat werden im Kalender gezeigt — das
+                    Geburtsjahr bleibt zwischen dir und der Academy. */}
+                <label className="text-xs text-textMuted mb-1 block">Geburtsdatum</label>
+                <input type="date" className="input" value={fields.geburtstag} onChange={(e) => setField("geburtstag", e.target.value)} />
               </div>
             </div>
           </div>

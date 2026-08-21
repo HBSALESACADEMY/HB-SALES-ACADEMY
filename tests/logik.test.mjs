@@ -16,6 +16,7 @@ import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
 import { FUEHRUNGSROLLEN } from "../lib/rollen.js";
 import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
+import { fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -417,4 +418,19 @@ test("die aktive Organisation wird nirgends nachgebaut", () => {
   const treffer = dateien.filter((p) => readFileSync(p, "utf8").includes('sessionStorage.getItem("hb_active_org_id")'))
     .map((p) => p.split("/").slice(-2).join("/"));
   assert.deepEqual(treffer, [], `Statt getActiveOrgId() aus lib/activeOrg.js nachgebaut:\n${treffer.join("\n")}`);
+});
+
+// --- Pflichtangaben im Profil ---------------------------------------------
+
+test("ein Profil gilt erst mit Foto, vollem Namen, Geburtstag und Telefon als eingerichtet", () => {
+  const voll = { avatar_url: "https://…/bild.jpg", full_name: "Sabine Meyer", geburtstag: "1990-04-12", phone: "0170 1234567" };
+  assert.equal(profilVollstaendig(voll), true);
+  assert.deepEqual(fehlendeProfilangaben(voll), []);
+
+  // Ein Vorname allein hilft beim Zuordnen nicht — genau dafür ist das Feld da.
+  assert.deepEqual(fehlendeProfilangaben({ ...voll, full_name: "Sabine" }), ["Vollständiger Name"]);
+  assert.deepEqual(fehlendeProfilangaben({ ...voll, avatar_url: "" }), ["Profilfoto"]);
+  assert.deepEqual(fehlendeProfilangaben({ ...voll, geburtstag: null }), ["Geburtsdatum"]);
+  assert.deepEqual(fehlendeProfilangaben({ ...voll, phone: "   " }), ["Telefonnummer"]);
+  assert.equal(fehlendeProfilangaben(null).length, 4);
 });
