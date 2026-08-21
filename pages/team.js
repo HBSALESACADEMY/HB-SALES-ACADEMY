@@ -12,6 +12,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
 import Organigramm from "../components/Organigramm";
 import Strukturbaum from "../components/Strukturbaum";
+import Personenbaum from "../components/Personenbaum";
 import ZielDeuter from "../components/ZielDeuter";
 
 const RANG_LABEL = (key) => (key === "xp" ? "XP" : goalMetricLabel(key));
@@ -28,7 +29,7 @@ export default function Team() {
   const [wochenStart, setWochenStart] = useState("");
   const [leistungMetrik, setLeistungMetrik] = useState("xp");
   const [organigramm, setOrganigramm] = useState(null);
-  const [ansicht, setAnsicht] = useState("struktur");
+  const [ansicht, setAnsicht] = useState("personen");
   const [strukturBusy, setStrukturBusy] = useState(false);
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [offenesZiel, setOffenesZiel] = useState(null);
@@ -153,6 +154,22 @@ export default function Team() {
       setOrganigramm(await apiGet("/api/org-chart" + (oid ? `?activeOrgId=${oid}` : "")));
     } catch (e) {
       alert(e.message || "Die Änderung konnte nicht gespeichert werden.");
+    }
+    setStrukturBusy(false);
+  }
+
+  // Wer unter wem hängt (migration_100). Danach neu laden, weil sich der
+  // ganze Baum umbaut.
+  async function setzeChef(personId, chefId) {
+    setStrukturBusy(true);
+    try {
+      await apiPost("/api/org-supervisor", { personId, vorgesetzterId: chefId });
+      const { data: profil2 } = await supabase.from("profiles")
+        .select("organization_id, is_platform_admin").eq("id", selfId).maybeSingle();
+      const oid = getActiveOrgId(profil2);
+      setOrganigramm(await apiGet("/api/org-chart" + (oid ? `?activeOrgId=${oid}` : "")));
+    } catch (e) {
+      alert(e.message || "Die Zuordnung konnte nicht gespeichert werden.");
     }
     setStrukturBusy(false);
   }
@@ -446,7 +463,7 @@ export default function Team() {
             {/* Zwei Sichten nebeneinander: die selbst gebaute Struktur und
                 das, was sich aus den Teams von selbst ergibt. */}
             <div className="flex items-center gap-1.5">
-              {[["struktur", "Struktur"], ["teams", "Aus den Teams"]].map(([key, label]) => (
+              {[["personen", "Personen"], ["struktur", "Abteilungen"], ["teams", "Aus den Teams"]].map(([key, label]) => (
                 <button key={key} onClick={() => setAnsicht(key)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
                   {label}
@@ -455,7 +472,15 @@ export default function Team() {
             </div>
           </div>
 
-          {ansicht === "struktur" ? (
+          {ansicht === "personen" ? (
+            <>
+              <p className="text-[11px] text-textMuted mb-3">
+                Wer unter wem steht — von dir festgelegt. Über „Zuordnen“ hängst du jede Person an die richtige Stelle.
+                Die Teams, die jemand leitet (★) oder in denen jemand steckt, erscheinen automatisch im Kasten.
+              </p>
+              <Personenbaum personen={organigramm.personenBaum || []} onChef={setzeChef} busy={strukturBusy} />
+            </>
+          ) : ansicht === "struktur" ? (
             <>
               <p className="text-[11px] text-textMuted mb-3">
                 Deine eigene Gliederung — Abteilungen, Standorte, Bereiche. Teams hängst du hier ein;

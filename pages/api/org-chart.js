@@ -40,7 +40,7 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
     const { data: personen } = await admin.from("profiles")
-      .select("id, full_name, avatar_url, role_title, role, is_admin").eq("organization_id", orgId);
+      .select("id, full_name, avatar_url, role_title, role, is_admin, vorgesetzter_id").eq("organization_id", orgId);
     const idsDerOrg = new Set((personen || []).map((p) => p.id));
     const personVon = new Map((personen || []).map((p) => [p.id, p]));
 
@@ -147,7 +147,56 @@ export default async function handler(req, res) {
     const teamsOhneEinheit = teams.filter((t) => !t.org_unit_id || !(einheiten || []).some((e) => e.id === t.org_unit_id))
       .map((t) => ({ id: t.id, name: t.name, anzahl: (idsVon.get(t.id) || []).length, leitung: personVon.get(t.created_by)?.full_name || null }));
 
-    return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit });
+    // --- Personen-Organigramm (migration_100) ------------------------------
+    // Wer unter wem hängt, wird von Hand gepflegt. Die Teams, die jemand
+    // leitet oder in denen jemand steckt, kommen automatisch dazu — man
+    // pflegt also die Hierarchie, nicht die Teamzugehörigkeit.
+    const teamsVonPerson = new Map();
+    teams.forEach((t) => {
+      const beteiligte = new Set([t.created_by, ...(idsVon.get(t.id) || [])]);
+      beteiligte.forEach((id) => {
+        if (!teamsVonPerson.has(id)) teamsVonPerson.set(id, []);
+        teamsVonPerson.get(id).push({ id: t.id, name: t.name, leitet: t.created_by === id, anzahl: (idsVon.get(t.id) || []).length });
+      });
+    });
+
+    // Führungskräfte aus einer anderen Organisation (Plattform-Admin) müssen
+    // mit auftauchen, sonst hinge ihr halbes Team an einer leeren Stelle.
+    const chefIds = Array.from(new Set((personen || []).map((p) => p.vorgesetzter_id).filter(Boolean)));
+    const fremdeChefs = chefIds.filter((id) => !idsDerOrg.has(id));
+    let zusaetzliche = [];
+    if (fremdeChefs.length) {
+      const { data: extra2 } = await admin.from("profiles")
+        .select("id, full_name, avatar_url, role_title, vorgesetzter_id").in("id", fremdeChefs);
+      zusaetzliche = extra2 || [];
+    }
+
+    const alsKnoten = (p) => ({
+      id: p.id,
+      name: p.full_name || "Unbenannt",
+      avatar_url: p.avatar_url || null,
+      rolle: p.role_title || "",
+      chefId: p.vorgesetzter_id || null,
+      teams: teamsVonPerson.get(p.id) || [],
+    });
+    const personenBaum = [...(personen || []), ...zusaetzliche].map(alsKnoten)
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
+
+    // Ringschlüsse aus Altdaten abfangen: sonst gäbe es keine Wurzel.
+    const chefVon = new Map(personenBaum.map((p) => [p.id, p.chefId]));
+    personenBaum.forEach((p) => {
+      const gesehen = new Set();
+      let lauf = p.id;
+      while (lauf) {
+        if (gesehen.has(lauf)) { p.chefId = null; break; }
+        gesehen.add(lauf);
+        lauf = chefVon.get(lauf) || null;
+      }
+      // Zeigt jemand auf eine Person, die es hier nicht gibt, steht er oben.
+      if (p.chefId && !chefVon.has(p.chefId)) p.chefId = null;
+    });
+
+    return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit, personenBaum });
   } catch (e) {
     console.error("Organigramm fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message });
