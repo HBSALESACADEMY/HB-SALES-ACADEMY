@@ -52,7 +52,6 @@ export default function Manager() {
   const [addBusyId, setAddBusyId] = useState(null);
   const [orgName, setOrgName] = useState("");
   const [migrationFehlt, setMigrationFehlt] = useState(false);
-  const [darfAllesVerwalten, setDarfAllesVerwalten] = useState(false);
 
   async function loadTeams() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -83,7 +82,6 @@ export default function Manager() {
     // Auf die eigene Organisation begrenzen die Zugriffsregeln ohnehin.
     const { data: teams } = await supabase.from("teams").select("*").order("created_at");
     setMyTeams(teams || []);
-    setDarfAllesVerwalten(!!(me.is_admin || me.is_platform_admin));
     return { session, teams: teams || [] };
   }
 
@@ -749,17 +747,14 @@ export default function Manager() {
               </div>
             </div>
           )}
+          {/* Nur noch ein Vermerk, keine Warnung: jede Führungsrolle darf die
+              Teams ihrer Organisation verwalten (migration_103). Wer es
+              aufgebaut hat, ist trotzdem gut zu wissen. */}
           {(() => {
             const team = myTeams.find((t) => t.id === selectedTeamId);
-            if (!team || darfAllesVerwalten || team.created_by === selfId) return null;
-            return (
-              <div className="card mb-3 border-amber/40">
-                <p className="text-xs text-textMuted">
-                  Dieses Team wird von jemand anderem geleitet. Du kannst es trotzdem verwalten, weil es zu eurer
-                  Organisation gehört — <strong>sprich Änderungen an Mitgliedern oder Zielen mit der Teamleitung ab</strong>.
-                </p>
-              </div>
-            );
+            if (!team || team.created_by === selfId) return null;
+            const name = team.created_by === selfId ? "dir" : (allProfiles.find((p) => p.id === team.created_by)?.full_name || null);
+            return name ? <p className="text-[11px] text-textMuted mb-2">Angelegt von {name}.</p> : null;
           })()}
 
           <p className="text-[11px] text-textMuted mb-2">
