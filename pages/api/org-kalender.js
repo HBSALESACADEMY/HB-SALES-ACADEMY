@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     const [j, m] = monat.split("-").map(Number);
     const monatsLetzter = `${monat}-${String(new Date(Date.UTC(j, m, 0)).getUTCDate()).padStart(2, "0")}`;
 
-    const [{ data: eintraege }, { data: personen }] = await Promise.all([
+    const [{ data: eintraege }, { data: personen }, { data: org }] = await Promise.all([
       // Überlappend statt nur beginnend: ein mehrtägiger Eintrag, der im
       // Vormonat startet, gehört trotzdem in diesen Monat.
       admin.from("org_events").select("*").eq("organization_id", orgId)
@@ -38,6 +38,9 @@ export default async function handler(req, res) {
         .order("von"),
       admin.from("profiles").select("id, full_name, avatar_url, geburtstag, abwesend_von, abwesend_bis")
         .eq("organization_id", orgId),
+      // Für das Logo im Kalender-Hintergrund. Bewusst über die AKTIVE
+      // Organisation, damit im Kalender kein fremdes Logo auftaucht.
+      admin.from("organizations").select("name, logo_url").eq("id", orgId).maybeSingle(),
     ]);
 
     // Ein Eintrag, der im Vormonat begann und kein Ende hat, dauert einen Tag
@@ -72,6 +75,7 @@ export default async function handler(req, res) {
       geburtstage,
       abwesenheiten,
       selbst: auth.user.id,
+      organisation: { name: org?.name || null, logo_url: org?.logo_url || null },
     });
   } catch (e) {
     console.error("Kalender konnte nicht geladen werden:", e.message);

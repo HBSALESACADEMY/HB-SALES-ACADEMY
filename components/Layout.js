@@ -29,6 +29,7 @@ const FALLBACK_NAV = [
   { id: "roleplay", label: "Training", icon: "chat", route: "/roleplay", is_builtin: true, requires_manager: false },
   { id: "call-tracker", label: "Call Tracker", icon: "phone", route: "/call-tracker", is_builtin: true, requires_manager: false },
   { id: "knowledge", label: "Wissen", icon: "library", route: "/knowledge", is_builtin: true, requires_manager: false },
+  { id: "kalender", label: "Kalender", icon: "calendar", route: "/kalender", is_builtin: true, requires_manager: false },
   { id: "manager", label: "Team (Manager)", icon: "users", route: "/manager", is_builtin: true, requires_manager: true },
   { id: "admin", label: "Verwaltung", icon: "lock", route: "/admin", is_builtin: true, requires_manager: true },
 ];
@@ -44,7 +45,7 @@ const NAV_GROUPS = {
   "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen", "leitfaden-generator": "Lernen",
   "einwand-trainer": "Lernen", lernpfad: "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team", termine: "Team", "call-tracker": "Team", kunden: "Team", recordings: "Team",
-  einwandbehandlung: "Team",
+  einwandbehandlung: "Team", kalender: "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
   "admin-lernpfade": "Verwaltung",

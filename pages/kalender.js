@@ -155,13 +155,24 @@ export default function Kalender() {
         <p className="text-textMuted text-sm">Lädt…</p>
       ) : (
         <>
-          <div className="card mb-4">
-            <div className="grid grid-cols-7 gap-1 mb-1">
+          {/* Das Logo der eigenen Organisation liegt hinter dem Raster —
+              blass genug, dass die Tage lesbar bleiben, und ohne Klickfläche,
+              damit es die Tages-Knöpfe nicht abfängt. */}
+          <div className="card mb-4 relative overflow-hidden">
+            {daten?.organisation?.logo_url && (
+              <img
+                src={daten.organisation.logo_url}
+                alt=""
+                aria-hidden="true"
+                className="pointer-events-none select-none absolute inset-0 m-auto w-2/3 max-h-[70%] object-contain opacity-[0.07]"
+              />
+            )}
+            <div className="relative grid grid-cols-7 gap-1 mb-1">
               {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((t) => (
                 <div key={t} className="text-[10px] uppercase tracking-wide text-textMuted text-center">{t}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="relative grid grid-cols-7 gap-1">
               {tage.map((tag, i) => {
                 if (!tag) return <div key={`leer-${i}`} />;
                 const inhalt = eintraegeAm(tag);
