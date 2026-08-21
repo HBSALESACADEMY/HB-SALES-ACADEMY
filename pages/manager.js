@@ -575,7 +575,7 @@ export default function Manager() {
 
           <div className="card mb-5">
             <div className="flex items-baseline justify-between gap-2 mb-3">
-              <div className="font-semibold text-textMain text-sm">🎯 Ziele für diese Woche</div>
+              <div className="font-semibold text-textMain text-sm">🎯 Ziele</div>
               {/* Die Woche mit anzeigen: sonst lässt sich ein Ziel, das hier
                   steht und unter „Mein Team" fehlt, nicht einordnen. */}
               <div className="text-xs text-textMuted flex-shrink-0">ab {new Date(`${wochenStartTag()}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>

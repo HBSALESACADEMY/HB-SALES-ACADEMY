@@ -11,6 +11,7 @@ import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet } from "../lib/apiClient";
 import { goalMetricLabel } from "../lib/goalMetrics";
 import { tagesSchluessel } from "../lib/dateRange";
+import { zeitraumLabel } from "../lib/zielzeitraum";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -377,12 +378,20 @@ export default function Dashboard() {
               <div className="text-[11px] uppercase tracking-wide text-textMuted">Mein Team</div>
               {teamZiele.length > 0 && (
                 <div className="">
-                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/team")}>🎯 Team-Ziele diese Woche</div>
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/team")}>🎯 Team-Ziele</div>
                   <div className="flex flex-col gap-2.5">
                     {teamZiele.slice(0, 3).map((z) => (
                       <div key={z.id} onClick={() => router.push("/team")} className="cursor-pointer">
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-xs text-textMuted min-w-0 truncate">{z.title}</span>
+                          {/* Der Zeitraum gehört dazu: seit migration_96 kann
+                              ein Ziel über eine Woche, einen Monat oder ein
+                              Quartal laufen. Die Überschrift sagte pauschal
+                              "diese Woche" — bei einem Quartalsziel schlicht
+                              falsch. */}
+                          <span className="text-xs text-textMuted min-w-0 truncate">
+                            {z.title}
+                            {z.von && z.bis && <span className="text-textMuted"> · {zeitraumLabel(z.von, z.bis)}</span>}
+                          </span>
                           <span className="text-xs text-textMuted flex-shrink-0 font-mono">{z.fortschritt}/{z.target_count} {goalMetricLabel(z.metric)}</span>
                         </div>
                         <div className="h-2 bg-line rounded-full overflow-hidden">

@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
-import { wochenStartTag } from "../lib/woche";
+import { berlinHeute } from "../lib/woche";
 import { merkeAktiveOrg } from "../lib/activeOrg";
 import { merkeZeitzone } from "../lib/zeit";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
@@ -379,7 +379,11 @@ export default function Layout({ children, fullBleed }) {
         const { data: gesehen } = await supabase.from("profiles").select("last_seen_team_goals_at").eq("id", uid).maybeSingle();
         const gesehenSeit = gesehen?.last_seen_team_goals_at || new Date(0).toISOString();
         const { count } = await supabase.from("team_goals").select("id", { count: "exact", head: true })
-          .in("team_id", meineTeamIds).eq("week_start", wochenStartTag())
+          // Nach dem laufenden ZEITRAUM, nicht nach der Woche: seit
+          // migration_96 kann ein Ziel über einen Monat oder ein Quartal
+          // gehen. Mit der Wochenprüfung wäre für ein Quartalsziel nie ein
+          // Zähler erschienen.
+          .in("team_id", meineTeamIds).gte("ends_on", berlinHeute())
           .gt("created_at", gesehenSeit).neq("manager_id", uid);
         zieleCount = count || 0;
       }

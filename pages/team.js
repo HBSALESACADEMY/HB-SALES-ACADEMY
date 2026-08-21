@@ -250,7 +250,7 @@ export default function Team() {
         <div className="card mb-5">
           <p className="text-textMuted text-sm">
             Du bist noch in keinem Team. Deine Teamleitung kann dich hinzufügen — danach siehst du hier
-            die Wochenziele, wer sonst im Team ist und wie ihr im Wettbewerb steht.
+            die Ziele, wer sonst im Team ist und wie ihr im Wettbewerb steht.
           </p>
         </div>
       )}
