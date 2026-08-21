@@ -8,7 +8,7 @@ import { openProfile } from "../lib/profileModalBus";
 import { COURSES } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
-import { wochenStartTag, berlinHeute } from "../lib/woche";
+import { wochenStartTag, berlinHeute, tagPlus } from "../lib/woche";
 import { ZEITRAEUME, zeitraumFuer, zeitraumLabel } from "../lib/zielzeitraum";
 import ZielDeuter from "../components/ZielDeuter";
 import { aendereGeprueft } from "../lib/loeschen";
@@ -585,7 +585,11 @@ export default function Manager() {
               // Deutsche Zeit wie auf dem Server (pages/api/team-goals.js) —
               // sonst gilt ein Ziel hier als vorbei und dort noch als laufend.
               const heute = berlinHeute();
-              const bisVon = (g) => g.ends_on || g.week_start;
+              // Ziele aus der Zeit vor migration_96 haben kein Enddatum —
+              // sie liefen von Montag bis Sonntag. Der Server rechnet genau
+              // so (pages/api/team-goals.js); nähme man hier den START als
+              // Ende, gälten sie eine Woche zu früh als vorbei.
+              const bisVon = (g) => g.ends_on || tagPlus(g.starts_on || g.week_start, 6);
               const laufend = goals.filter((g) => bisVon(g) >= heute);
               const vorbei = goals.filter((g) => bisVon(g) < heute);
               const nameVon = (id) => team.find((m) => m.id === id)?.full_name || "Unbenannt";
@@ -616,7 +620,7 @@ export default function Manager() {
                           {g.user_id && <span className="text-amber text-xs"> · nur {nameVon(g.user_id)}</span>}
                         </div>
                         <div className="text-[11px] text-textMuted">
-                          {g.starts_on ? zeitraumLabel(g.starts_on, g.ends_on || g.starts_on) : "Zeitraum offen"}
+                          {g.starts_on || g.week_start ? zeitraumLabel(g.starts_on || g.week_start, bisVon(g)) : "Zeitraum offen"}
                         </div>
                       </div>
                       <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
@@ -689,7 +693,8 @@ export default function Manager() {
             </div>
             <p className="text-[11px] text-textMuted mt-2">
               Mehrere Ziele gleichzeitig sind möglich — etwa 200 Anwahlen <em>und</em> 10 Termine.
-              Der Fortschritt zählt alle Teammitglieder zusammen und startet jeden Montag neu.
+              Der Fortschritt zählt alle Teammitglieder zusammen und gilt genau für den gewählten
+              Zeitraum. Ein persönliches Ziel zählt nur den Beitrag dieser einen Person.
             </p>
             {/* Ohne Mitglieder ist ein Ziel wirkungslos: niemand sieht es unter
                 „Mein Team", und der Fortschritt bleibt zwangsläufig bei null.
