@@ -529,6 +529,12 @@ create table if not exists team_members (
 -- andere Organisation als seine eigene.
 alter table teams add column if not exists organization_id uuid references organizations(id) on delete cascade;
 
+-- starts_on/ends_on: frei wählbarer Zeitraum statt fester Woche.
+-- user_id: gesetzt = persönliches Ziel für diese Person (migration_96).
+alter table team_goals add column if not exists starts_on date;
+alter table team_goals add column if not exists ends_on date;
+alter table team_goals add column if not exists user_id uuid references profiles(id) on delete cascade;
+
 create table if not exists team_goals (
   id uuid primary key default gen_random_uuid(),
   manager_id uuid not null references profiles(id) on delete cascade,
@@ -1646,7 +1652,13 @@ create policy "team_members_delete_lead_or_self" on team_members for delete usin
 drop policy if exists "team_goals_select_all" on team_goals;
 create policy "team_goals_select_all" on team_goals for select using (sieht_person(manager_id));
 drop policy if exists "team_goals_insert_manager" on team_goals;
-create policy "team_goals_insert_manager" on team_goals for insert with check (kann_team_verwalten(team_id, auth.uid()));
+create policy "team_goals_insert_manager" on team_goals for insert with check (
+  kann_team_verwalten(team_id, auth.uid())
+  and (
+    user_id is null
+    or exists (select 1 from team_members tm where tm.team_id = team_goals.team_id and tm.user_id = team_goals.user_id)
+  )
+);
 drop policy if exists "team_goals_update_manager" on team_goals;
 create policy "team_goals_update_manager" on team_goals for update using (kann_team_verwalten(team_id, auth.uid()));
 drop policy if exists "team_goals_delete_manager" on team_goals;

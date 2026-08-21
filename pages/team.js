@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { apiGet } from "../lib/apiClient";
 import { goalMetricLabel } from "../lib/goalMetrics";
+import { zeitraumLabel } from "../lib/zielzeitraum";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
 import Organigramm from "../components/Organigramm";
@@ -27,6 +28,7 @@ export default function Team() {
   const [organigrammOffen, setOrganigrammOffen] = useState(false);
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [offenesZiel, setOffenesZiel] = useState(null);
+  const [vergangeneOffen, setVergangeneOffen] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
@@ -159,16 +161,20 @@ export default function Team() {
               </div>
               {!t.isLead && t.leadName && <div className="text-xs text-textMuted mb-2">Lead: {t.leadName}</div>}
               {t.ziele.length === 0 && (
-                <div className="text-xs text-textMuted mb-2">
-                  Für diese Woche{wochenStart ? ` (ab ${new Date(`${wochenStart}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })})` : ""} ist noch kein Ziel gesetzt.
-                </div>
+                <div className="text-xs text-textMuted mb-2">Zurzeit läuft kein Ziel.</div>
               )}
               {t.ziele.map((z) => (
                 <div key={z.id} className="mb-2 last:mb-0">
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <span className="text-xs text-textMuted min-w-0 truncate">🎯 {z.title}</span>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-xs text-textMuted min-w-0 truncate">
+                      {z.user_id ? "👤" : "🎯"} {z.title}
+                      {z.personName && <span className="text-amber"> · nur {z.personName}</span>}
+                    </span>
                     <span className="text-xs text-textMuted flex-shrink-0">{z.fortschritt}/{z.target_count} {goalMetricLabel(z.metric)}</span>
                   </div>
+                  {/* Bis wann das Ziel läuft — ohne das ist ein Fortschritt
+                      von 60 % nicht einzuordnen (migration_96). */}
+                  <div className="text-[10.5px] text-textMuted mb-1.5">{zeitraumLabel(z.von, z.bis)}</div>
                   <div className="h-2 bg-line rounded-full overflow-hidden">
                     <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (z.fortschritt / z.target_count) * 100)}%` }} />
                   </div>
@@ -209,6 +215,35 @@ export default function Team() {
                   )}
                 </div>
               ))}
+
+              {t.vergangeneZiele?.length > 0 && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => setVergangeneOffen(vergangeneOffen === t.id ? null : t.id)}
+                    className="text-[11px] text-textMuted hover:text-textMain">
+                    {vergangeneOffen === t.id ? "Vergangene Ziele ausblenden" : `Vergangene Ziele (${t.vergangeneZiele.length})`}
+                  </button>
+                  {vergangeneOffen === t.id && (
+                    <div className="mt-2 flex flex-col gap-2">
+                      {t.vergangeneZiele.map((z) => {
+                        const erreicht = z.fortschritt >= z.target_count;
+                        return (
+                          <div key={z.id} className="opacity-70">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-textMuted min-w-0 truncate">
+                                {erreicht ? "✅" : "▫️"} {z.title}
+                                {z.personName && <span className="text-amber"> · nur {z.personName}</span>}
+                              </span>
+                              <span className="text-xs text-textMuted flex-shrink-0">{z.fortschritt}/{z.target_count}</span>
+                            </div>
+                            <div className="text-[10.5px] text-textMuted">{zeitraumLabel(z.von, z.bis)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Wer diese Woche vorn liegt — der ausdrücklich gewünschte
                   Blick auf die Leistung INNERHALB des Teams, nicht nur im

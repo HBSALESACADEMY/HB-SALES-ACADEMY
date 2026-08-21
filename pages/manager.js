@@ -9,6 +9,7 @@ import { COURSES } from "../lib/curriculum";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { goalMetricGroups, goalMetricLabel } from "../lib/goalMetrics";
 import { wochenStartTag } from "../lib/woche";
+import { ZEITRAEUME, zeitraumFuer, zeitraumLabel } from "../lib/zielzeitraum";
 
 export default function Manager() {
   const [selfId, setSelfId] = useState(null);
@@ -32,6 +33,10 @@ export default function Manager() {
   const [goalTarget, setGoalTarget] = useState(20);
   const [savingGoal, setSavingGoal] = useState(false);
   const [goals, setGoals] = useState([]);
+  const [goalZeitraum, setGoalZeitraum] = useState("woche");
+  const [goalVon, setGoalVon] = useState("");
+  const [goalBis, setGoalBis] = useState("");
+  const [goalPerson, setGoalPerson] = useState("");
   const [pairs, setPairs] = useState([]);
   const [pairMentorId, setPairMentorId] = useState("");
   const [pairMenteeId, setPairMenteeId] = useState("");
@@ -91,9 +96,10 @@ export default function Manager() {
     }
 
     // Bereits gesetzte Ziele dieser Woche — ein Team kann mehrere haben.
+    // Alle Ziele des Teams laden; laufende und vergangene trennt die
+    // Anzeige (migration_96).
     const { data: gesetzteZiele } = await supabase.from("team_goals")
-      .select("*").eq("team_id", teamId).eq("week_start", wochenStartTag())
-      .order("created_at", { ascending: true });
+      .select("*").eq("team_id", teamId).order("starts_on", { ascending: false }).limit(100);
     setGoals(gesetzteZiele || []);
 
     const [{ data: memberRows }, { data: allApproved }] = await Promise.all([
@@ -284,11 +290,25 @@ export default function Manager() {
     if (!goalTitle.trim() || !goalTarget || !selectedTeamId) return;
     setSavingGoal(true);
     const { data: { session } } = await supabase.auth.getSession();
-    // Zeitzonen-fest, siehe lib/woche.js — der Server fragt mit derselben
-    // Funktion ab, sonst findet er das Ziel nie.
-    const week_start = wochenStartTag();
+    // Zeitraum: Vorgabe (Woche/Monat/Quartal) oder frei gewählte Daten.
+    // Zeitzonen-fest gerechnet, siehe lib/woche.js — der Server nutzt
+    // dieselben Funktionen, sonst sucht er einen anderen Zeitraum als hier
+    // geschrieben wurde.
+    const raum = goalZeitraum === "frei"
+      ? { von: goalVon, bis: goalBis }
+      : zeitraumFuer(goalZeitraum);
+    if (!raum.von || !raum.bis || raum.bis < raum.von) {
+      setSavingGoal(false);
+      alert("Bitte einen gültigen Zeitraum wählen — das Ende darf nicht vor dem Beginn liegen.");
+      return;
+    }
     const { data: neu, error } = await supabase.from("team_goals").insert({
-      manager_id: session.user.id, team_id: selectedTeamId, title: goalTitle.trim(), metric: goalMetric, target_count: Number(goalTarget), week_start,
+      manager_id: session.user.id, team_id: selectedTeamId,
+      title: goalTitle.trim(), metric: goalMetric, target_count: Number(goalTarget),
+      starts_on: raum.von, ends_on: raum.bis,
+      // week_start bleibt befüllt, damit nichts bricht, was noch danach fragt.
+      week_start: raum.von,
+      user_id: goalPerson || null,
     }).select().single();
     setSavingGoal(false);
     if (error) { alert(error.message); return; }
@@ -499,17 +519,39 @@ export default function Manager() {
               <div className="text-xs text-textMuted flex-shrink-0">ab {new Date(`${wochenStartTag()}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>
             </div>
 
-            {goals.length > 0 && (
-              <div className="mb-3">
-                {goals.map((g) => (
-                  <div key={g.id} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
-                    <span className="text-sm text-textMain flex-1 min-w-0 truncate">{g.title}</span>
-                    <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
-                    <button onClick={() => deleteGoal(g.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+            {(() => {
+              const heute = wochenStartTag() && new Date().toISOString().slice(0, 10);
+              const bisVon = (g) => g.ends_on || g.week_start;
+              const laufend = goals.filter((g) => bisVon(g) >= heute);
+              const vorbei = goals.filter((g) => bisVon(g) < heute);
+              const nameVon = (id) => team.find((m) => m.id === id)?.full_name || "Unbenannt";
+              const zeile = (g, grau) => (
+                <div key={g.id} className={`flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0 ${grau ? "opacity-60" : ""}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-textMain truncate">
+                      {g.title}
+                      {g.user_id && <span className="text-amber text-xs"> · nur {nameVon(g.user_id)}</span>}
+                    </div>
+                    <div className="text-[11px] text-textMuted">
+                      {g.starts_on ? zeitraumLabel(g.starts_on, g.ends_on || g.starts_on) : "Zeitraum offen"}
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
+                  <button onClick={() => deleteGoal(g.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+                </div>
+              );
+              return (
+                <>
+                  {laufend.length > 0 && <div className="mb-3">{laufend.map((g) => zeile(g, false))}</div>}
+                  {vorbei.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[11px] uppercase tracking-wide text-textMuted mt-2 mb-1">Vergangene Ziele</div>
+                      {vorbei.slice(0, 10).map((g) => zeile(g, true))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[160px]" placeholder="z.B. 200 Anwahlen im Team" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} />
@@ -521,6 +563,29 @@ export default function Manager() {
                 ))}
               </select>
               <input className="input !w-20" type="number" min="1" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} />
+            </div>
+
+            {/* Zeitraum und Empfänger (migration_96): früher galt jedes Ziel
+                fest für die laufende Woche und immer fürs ganze Team. */}
+            <div className="flex items-center gap-2 flex-wrap mt-2">
+              <select className="input !w-auto" value={goalZeitraum} onChange={(e) => setGoalZeitraum(e.target.value)}>
+                {ZEITRAEUME.map((z) => <option key={z.key} value={z.key}>{z.label}</option>)}
+              </select>
+              {goalZeitraum === "frei" ? (
+                <>
+                  <input className="input !w-auto" type="date" value={goalVon} onChange={(e) => setGoalVon(e.target.value)} />
+                  <span className="text-xs text-textMuted">bis</span>
+                  <input className="input !w-auto" type="date" value={goalBis} onChange={(e) => setGoalBis(e.target.value)} />
+                </>
+              ) : (
+                <span className="text-xs text-textMuted">
+                  {(() => { const r = zeitraumFuer(goalZeitraum); return zeitraumLabel(r.von, r.bis); })()}
+                </span>
+              )}
+              <select className="input !w-auto" value={goalPerson} onChange={(e) => setGoalPerson(e.target.value)}>
+                <option value="">Für das ganze Team</option>
+                {team.map((m) => <option key={m.id} value={m.id}>Nur für {m.full_name || "Unbenannt"}</option>)}
+              </select>
               <button disabled={savingGoal} onClick={saveGoal} className="btn text-xs disabled:opacity-40">Hinzufügen</button>
             </div>
             <p className="text-[11px] text-textMuted mt-2">

@@ -3,7 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { goalMetric } from "../../lib/goalMetrics";
 import { COURSES } from "../../lib/curriculum";
 import { ranglisteMetrik, werteProPerson, summeFuer, XP_METRIK } from "../../lib/goalProgress";
-import { wochenStartTag, wochenStartZeitpunkt } from "../../lib/woche";
+import { wochenStartTag, wochenStartZeitpunkt, tagesBeginnZeitpunkt, tagPlus, berlinHeute } from "../../lib/woche";
 
 // Alles, was die Seite „Mein Team" an Zahlen braucht: die Wochenziele der
 // eigenen Teams samt Fortschritt, die Mitglieder jedes Teams mit ihrem
@@ -79,8 +79,11 @@ export default async function handler(req, res) {
 
     const [{ data: mitgliedschaften }, { data: ziele }, { data: org }] = await Promise.all([
       admin.from("team_members").select("team_id, user_id").in("team_id", teamIds),
+      // Nicht mehr auf eine Woche eingegrenzt (migration_96): Ziele haben
+      // einen eigenen Zeitraum. Laufende und vergangene kommen zusammen,
+      // getrennt wird unten — sonst bräuchte es zwei Abfragen.
       admin.from("team_goals").select("*").in("team_id", meineTeamIds.length ? meineTeamIds : ["00000000-0000-0000-0000-000000000000"])
-        .eq("week_start", startTag).order("created_at", { ascending: true }),
+        .order("starts_on", { ascending: false }).limit(200),
       orgId ? admin.from("organizations").select("team_ranking_metric").eq("id", orgId).maybeSingle() : { data: null },
     ]);
 
@@ -127,10 +130,30 @@ export default async function handler(req, res) {
     // steht und die anfragende Person die nicht einzeln sehen darf.
     gebraucht.set(XP_METRIK.key, XP_METRIK);
 
+    // Rangliste und Leistung beziehen sich weiter auf die laufende Woche.
     const werte = new Map();
     await Promise.all(Array.from(gebraucht.values()).map(async (m) => {
       werte.set(m.key, await werteProPerson(admin, m, alleIds, startISO, startTag));
     }));
+
+    // Ziele dagegen zählen in IHREM Zeitraum. Gleiche Zeiträume werden nur
+    // einmal abgefragt — mehrere Ziele teilen sich oft denselben.
+    const heute = berlinHeute();
+    const zielWerte = new Map();
+    await Promise.all((ziele || []).map(async (z) => {
+      const m = goalMetric(z.metric);
+      if (!m) return;
+      const von = z.starts_on || z.week_start;
+      const bisTag = z.ends_on || tagPlus(von, 6);
+      const schluessel = `${z.metric}|${von}|${bisTag}`;
+      if (zielWerte.has(schluessel)) return;
+      zielWerte.set(schluessel, null);
+      // Ende einschliesslich: als obere Schranke der Beginn des Folgetages.
+      const w = await werteProPerson(admin, m, alleIds, tagesBeginnZeitpunkt(von), von,
+        tagesBeginnZeitpunkt(tagPlus(bisTag, 1)), bisTag);
+      zielWerte.set(schluessel, w);
+    }));
+    const werteFuerZiel = (z) => zielWerte.get(`${z.metric}|${z.starts_on || z.week_start}|${z.ends_on || tagPlus(z.starts_on || z.week_start, 6)}`);
 
     // Wer darf sehen, wie viel eine EINZELNE Person beigetragen hat?
     const istLeitung = alleTeams.some((t) => t.created_by === user.id);
@@ -167,16 +190,33 @@ export default async function handler(req, res) {
           avatar_url: personVon.get(id)?.avatar_url || null,
           wert: leistungWerte?.get(id) || 0,
         })).sort((a, b) => b.wert - a.wert),
-        ziele: (ziele || []).filter((z) => z.team_id === tid).map((z) => {
-          const w = werte.get(z.metric);
-          return {
-            ...z,
-            fortschritt: w ? summeFuer(w, ids) : 0,
-            // null statt eines leeren Objekts: die Seite soll den Unterschied
-            // zwischen „darf ich nicht sehen" und „alle bei null" kennen.
-            beitraege: darfDetails && w ? Object.fromEntries(ids.map((id) => [id, w.get(id) || 0])) : null,
+        ...(() => {
+          const aufbereiten = (z) => {
+            const w = werteFuerZiel(z);
+            // Persönliches Ziel: nur der Beitrag dieser einen Person zählt.
+            const beteiligte = z.user_id ? [z.user_id] : ids;
+            return {
+              ...z,
+              von: z.starts_on || z.week_start,
+              bis: z.ends_on || tagPlus(z.starts_on || z.week_start, 6),
+              fortschritt: w ? summeFuer(w, beteiligte) : 0,
+              personName: z.user_id ? (personVon.get(z.user_id)?.full_name || "Unbenannt") : null,
+              // null statt eines leeren Objekts: die Seite soll den Unterschied
+              // zwischen „darf ich nicht sehen" und „alle bei null" kennen.
+              // Bei persönlichen Zielen gibt es nichts aufzuteilen.
+              beitraege: !z.user_id && darfDetails && w ? Object.fromEntries(ids.map((id) => [id, w.get(id) || 0])) : null,
+            };
           };
-        }),
+          const meine = (ziele || []).filter((z) => z.team_id === tid)
+            // Persönliche Ziele anderer Leute gehen mich nichts an — ausser
+            // ich darf die Einzelwerte des Teams ohnehin sehen.
+            .filter((z) => !z.user_id || z.user_id === user.id || darfDetails)
+            .map(aufbereiten);
+          return {
+            ziele: meine.filter((z) => z.bis >= heute).sort((a, b) => a.bis.localeCompare(b.bis)),
+            vergangeneZiele: meine.filter((z) => z.bis < heute).sort((a, b) => b.bis.localeCompare(a.bis)).slice(0, 12),
+          };
+        })(),
       };
     });
 
