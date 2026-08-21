@@ -174,6 +174,10 @@ export default async function handler(req, res) {
         id: tid,
         name: t?.name || "Team",
         isLead: t?.created_by === user.id,
+        // Wer Ziele dieses Teams ändern darf. Bewusst enger als darfDetails:
+        // das schliesst auch Mitglieder mit freigegebener Auswertung ein,
+        // die aber nichts setzen dürfen.
+        darfZiele: !!(t?.created_by === user.id || ich?.is_admin || ich?.is_platform_admin),
         leadName: lead?.full_name || null,
         mitglieder: ids.map((id) => ({
           id,

@@ -10,6 +10,7 @@ import { zeitraumLabel, zeitraumFuer, ZEITRAEUME } from "../lib/zielzeitraum";
 import { goalMetricGroups } from "../lib/goalMetrics";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
+import { loescheGeprueft } from "../lib/loeschen";
 import Organigramm from "../components/Organigramm";
 import Strukturbaum from "../components/Strukturbaum";
 import Personenbaum from "../components/Personenbaum";
@@ -38,6 +39,8 @@ export default function Team() {
   const [zielEntwurf, setZielEntwurf] = useState({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
   const [zielBusy, setZielBusy] = useState(false);
   const [zielFrei, setZielFrei] = useState(false);
+  const [zielBearbeiten, setZielBearbeiten] = useState(null);
+  const [zielPatch, setZielPatch] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
@@ -160,6 +163,33 @@ export default function Team() {
 
   // Wer unter wem hängt (migration_100). Danach neu laden, weil sich der
   // ganze Baum umbaut.
+  // Ziele ändern und entfernen. Was erlaubt ist, entscheiden die
+  // Zugriffsregeln (migration_97): eigene persönliche Ziele darf jede Person
+  // selbst, Team-Ziele nur die Leitung.
+  async function speichereZielAenderung(id) {
+    if (!zielPatch?.title?.trim() || !zielPatch.target_count) return;
+    const { error } = await supabase.from("team_goals").update({
+      title: zielPatch.title.trim(),
+      target_count: Number(zielPatch.target_count),
+      ends_on: zielPatch.ends_on || null,
+    }).eq("id", id);
+    if (error) { alert(error.message); return; }
+    setZielBearbeiten(null);
+    setZielPatch(null);
+    await load();
+  }
+
+  async function loescheZiel(id, titel) {
+    if (!confirm(`Ziel „${titel}“ wirklich löschen?`)) return;
+    // .select() ist nötig: eine von den Regeln abgelehnte Löschung meldet
+    // keinen Fehler, sie trifft null Zeilen (siehe lib/loeschen.js).
+    const fehler = await loescheGeprueft(
+      supabase.from("team_goals").delete().eq("id", id),
+      "Das Löschen wurde abgelehnt. Team-Ziele darf nur die Teamleitung entfernen.");
+    if (fehler) { alert(fehler); return; }
+    await load();
+  }
+
   async function setzeChef(personId, chefId) {
     setStrukturBusy(true);
     try {
@@ -246,6 +276,38 @@ export default function Team() {
                   <div className="h-2 bg-line rounded-full overflow-hidden">
                     <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (z.fortschritt / z.target_count) * 100)}%` }} />
                   </div>
+
+                  {(t.darfZiele || z.user_id === selfId) && (
+                    zielBearbeiten === z.id ? (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <input className="input !py-1 text-sm" value={zielPatch?.title || ""}
+                          onChange={(e) => setZielPatch((p) => ({ ...p, title: e.target.value }))} />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input className="input !w-20 !py-1 text-sm" type="number" min="1" value={zielPatch?.target_count || ""}
+                            onChange={(e) => setZielPatch((p) => ({ ...p, target_count: e.target.value }))} />
+                          <span className="text-xs text-textMuted">{goalMetricLabel(z.metric)} bis</span>
+                          <input className="input !w-auto !py-1 text-sm" type="date" value={zielPatch?.ends_on || ""}
+                            onChange={(e) => setZielPatch((p) => ({ ...p, ends_on: e.target.value }))} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => speichereZielAenderung(z.id)} className="btn text-xs">Speichern</button>
+                          <button onClick={() => { setZielBearbeiten(null); setZielPatch(null); }} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                        </div>
+                        {/* Die Kennzahl bleibt: sie im Nachhinein zu tauschen
+                            würde den bisherigen Fortschritt bedeutungslos
+                            machen. Dafür löscht man das Ziel und legt ein
+                            neues an. */}
+                        <p className="text-[11px] text-textMuted">Kennzahl lässt sich nicht ändern — dafür das Ziel löschen und neu anlegen.</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mt-1">
+                        <button onClick={() => { setZielBearbeiten(z.id); setZielPatch({ title: z.title, target_count: z.target_count, ends_on: z.bis }); }}
+                          className="text-[11px] text-textMuted hover:text-textMain">Bearbeiten</button>
+                        <button onClick={() => loescheZiel(z.id, z.title)}
+                          className="text-[11px] text-coral hover:underline">Löschen</button>
+                      </div>
+                    )
+                  )}
 
                   {/* Wer hat wie viel beigetragen — direkt am Ziel, nicht
                       versteckt in der Mitgliederliste. beitraege ist null,
