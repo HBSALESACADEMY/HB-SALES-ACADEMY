@@ -732,6 +732,10 @@ export default function Manager() {
               </div>
             </div>
           )}
+          <p className="text-[11px] text-textMuted mb-2">
+            📞 entscheidet, ob eine Person auf „Mein Team“ sieht, <strong>wer wie viel beigetragen hat</strong> —
+            oder nur die Summen des Teams und die eigenen Zahlen. Die Teamleitung sieht die Aufschlüsselung immer.
+          </p>
           {team.length === 0 ? (
             <p className="text-textMuted text-sm">Noch keine Mitglieder in diesem Team. Füge oben welche hinzu.</p>
           ) : (
@@ -754,7 +758,10 @@ export default function Manager() {
                   </div>
                   <button onClick={() => toggleCallStatsAccess(m.id, !m.can_view_call_stats)}
                     className={`text-xs px-2.5 py-1.5 rounded-full border flex-shrink-0 ${m.can_view_call_stats ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted hover:text-textMain"}`}>
-                    📞 {m.can_view_call_stats ? "Auswertung sichtbar" : "Auswertung verborgen"}
+                    {/* Früher "Auswertung sichtbar/verborgen" — das las sich,
+                        als ginge es um die Auswertung DIESER Person. Gemeint
+                        ist, ob sie die Zahlen der anderen sehen darf. */}
+                    📞 {m.can_view_call_stats ? "sieht Zahlen der anderen" : "sieht nur Summen"}
                   </button>
                   {/* Sich selbst entfernt man nicht aus dem eigenen Team —
                       das Team bliebe führerlos zurück. */}
