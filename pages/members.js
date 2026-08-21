@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 export default function Members() {
   const router = useRouter();
@@ -52,7 +53,7 @@ export default function Members() {
     // Organisation einloggen (sessionStorage, siehe components/Layout.js) —
     // dann muss diese Seite die AKTIVE Organisation zeigen, nicht die
     // eigene Heimat-Organisation des Plattform-Admin-Kontos.
-    const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
+    const activeOrgId = getActiveOrgId(me);
 
     const [{ data: profiles }, { data: fr }, { data: allTeams }, { data: allMemberships }, { data: myMemberships }, { data: tr }] = await Promise.all([
       activeOrgId

@@ -8,6 +8,7 @@ import { openProfile } from "../../lib/profileModalBus";
 import { COURSES } from "../../lib/curriculum";
 import { downloadCsv } from "../../lib/csv";
 import { ABSTAND } from "../../lib/autoRefresh";
+import { getActiveOrgId } from "../../lib/activeOrg";
 
 export default function AdminInsights() {
   const [isAdmin, setIsAdmin] = useState(true);
@@ -28,7 +29,7 @@ export default function AdminInsights() {
       // Plattform-Admins können per Firmencode "als" eine andere
       // Organisation eingeloggt sein (sessionStorage) — dann gelten die
       // Insights für die AKTIVE Organisation, nicht die eigene Heimat-Org.
-      const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
+      const activeOrgId = getActiveOrgId(me);
 
       const tage = zeitraum === "tag" ? 1 : zeitraum === "monat" ? 30 : 7;
       const seit = new Date(Date.now() - tage * 86400000).toISOString();

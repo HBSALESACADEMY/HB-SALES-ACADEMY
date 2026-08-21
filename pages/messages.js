@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { validateChatAttachment } from "../lib/uploadValidation";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 function formatPreviewTime(iso) {
   const d = new Date(iso);
@@ -75,7 +76,7 @@ export default function Messages() {
     // Plattform-Admins können per Firmencode "als" eine andere Organisation
     // eingeloggt sein (sessionStorage) — dann zählen deren Mitglieder als
     // direkt anschreibbar, nicht die der eigenen Heimat-Organisation.
-    const activeOrgId = (me?.is_platform_admin && sessionStorage.getItem("hb_active_org_id")) || me?.organization_id;
+    const activeOrgId = getActiveOrgId(me);
 
     const friendIds = (friendships || []).map((f) => f.requester_id === uid ? f.addressee_id : f.requester_id);
     const [{ data: friendProfiles }, { data: orgColleagues }] = await Promise.all([

@@ -397,3 +397,24 @@ test("der Datumsfilter trifft den Tag, an dem der Termin stattfindet", () => {
   assert.equal(istGleicherTag(spaet.toISOString(), new Date("2026-08-21T12:00:00")), false);
   assert.equal(istGleicherTag(frueh.toISOString(), new Date("2026-08-21T12:00:00")), true);
 });
+
+test("die aktive Organisation wird nirgends nachgebaut", () => {
+  // Dieselbe Falle wie bei der Führungsrolle: Wer die Firmencode-Logik
+  // ausschreibt statt getActiveOrgId() zu benutzen, hat sie beim nächsten
+  // Mal anders — und dann sieht eine Seite eine andere Organisation als der
+  // Rest der App.
+  const dateien = [];
+  const sammle = (verzeichnis) => {
+    for (const eintrag of readdirSync(verzeichnis, { withFileTypes: true })) {
+      const pfad = `${verzeichnis}/${eintrag.name}`;
+      if (eintrag.isDirectory()) sammle(pfad);
+      else if (eintrag.name.endsWith(".js")) dateien.push(pfad);
+    }
+  };
+  sammle(new URL("../pages", import.meta.url).pathname);
+  sammle(new URL("../components", import.meta.url).pathname);
+
+  const treffer = dateien.filter((p) => readFileSync(p, "utf8").includes('sessionStorage.getItem("hb_active_org_id")'))
+    .map((p) => p.split("/").slice(-2).join("/"));
+  assert.deepEqual(treffer, [], `Statt getActiveOrgId() aus lib/activeOrg.js nachgebaut:\n${treffer.join("\n")}`);
+});

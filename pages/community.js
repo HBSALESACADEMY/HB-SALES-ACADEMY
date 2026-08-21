@@ -538,8 +538,8 @@ export default function Community() {
   async function saveEditPost(postId) {
     if (!editDraft.trim()) return;
     setError("");
-    const { error: err } = await supabase.from("community_posts").update({ content: editDraft.trim() }).eq("id", postId);
-    if (err) { setError(err.message); return; }
+    const err = await aendereGeprueft(supabase.from("community_posts").update({ content: editDraft.trim() }).eq("id", postId), "Diesen Beitrag darf nur bearbeiten, wer ihn verfasst hat.");
+    if (err) { setError(err); return; }
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, content: editDraft.trim() } : p)));
     setEditingPostId(null);
   }
