@@ -15,6 +15,7 @@ import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
 import { FUEHRUNGSROLLEN } from "../lib/rollen.js";
+import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -318,4 +319,27 @@ test("Code und Datenbank nennen dieselben Führungsrollen", () => {
     assert.ok(block.includes(`'${rolle}'`), `Rolle "${rolle}" fehlt in ist_fuehrungsrolle()`);
   }
   assert.ok(block.includes("is_admin") && block.includes("is_platform_admin"), "is_admin/is_platform_admin fehlen in ist_fuehrungsrolle()");
+});
+
+// --- Hell/Dunkel mit eigenen Markenfarben ----------------------------------
+
+test("eigene Flächenfarben gelten nur im passenden Modus", () => {
+  // Sonst macht eine Organisation mit hellem Corporate Design den
+  // Dunkelmodus hell — "dunkel" wäre dann nicht dunkel.
+  const dunkel = { background_color: "#14151C" };
+  const hell = { background_color: "#F5F5F0" };
+  assert.equal(eigeneFlaechenGelten(dunkel, "dark"), true);
+  assert.equal(eigeneFlaechenGelten(dunkel, "light"), false);
+  assert.equal(eigeneFlaechenGelten(hell, "light"), true);
+  assert.equal(eigeneFlaechenGelten(hell, "dark"), false);
+  // Ohne eigene Farbe gilt immer das geprüfte Standarddesign.
+  assert.equal(eigeneFlaechenGelten({}, "dark"), false);
+  assert.equal(eigeneFlaechenGelten(null, "light"), false);
+});
+
+test("die Hell/Dunkel-Einstufung trennt an einer sinnvollen Schwelle", () => {
+  for (const [hex, erwartet] of [["#FFFFFF", true], ["#F5F5F0", true], ["#E5E7EB", true],
+                                 ["#14151C", false], ["#1C1E2A", false], ["#374151", false]]) {
+    assert.equal(istHellerTon(hex), erwartet, `${hex} falsch eingestuft`);
+  }
 });
