@@ -5,6 +5,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { wochenStartZeitpunkt } from "../lib/woche";
 
 function rangeStart(range) {
   const d = new Date();
