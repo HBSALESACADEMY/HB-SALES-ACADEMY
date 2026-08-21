@@ -113,7 +113,10 @@ export default function Manager() {
     ]);
     setAllProfiles(allApproved || []);
 
-    const memberIds = (memberRows || []).map((r) => r.user_id).filter((id) => id !== session.user.id);
+    // Die eigene Person zählt mit (früher herausgefiltert): eine
+    // Teamleitung, die selbst telefoniert und Kurse macht, gehört in die
+    // Liste — sonst fehlt sie in Fortschritt, Anruf-Statistik und Ausdruck.
+    const memberIds = (memberRows || []).map((r) => r.user_id);
     const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);
     const counts = {};
 
@@ -128,7 +131,7 @@ export default function Manager() {
       setRequestProfiles({});
     }
 
-    const memberProfiles = (memberRows || []).map((r) => r.profiles).filter((p) => p && p.id !== session.user.id);
+    const memberProfiles = (memberRows || []).map((r) => r.profiles).filter(Boolean);
     // Drei gebündelte Anfragen für das ganze Team statt drei pro Mitglied —
     // bei größeren Teams sonst 3×N statt 3 Datenbank-Anfragen.
     const memberIdsForStats = memberProfiles.map((m) => m.id);
@@ -384,12 +387,14 @@ export default function Manager() {
 
   const memberIdsInTeam = new Set(team.map((m) => m.id));
   const addableProfiles = allProfiles.filter((p) =>
-    p.id !== selfId && !memberIdsInTeam.has(p.id) &&
+    !memberIdsInTeam.has(p.id) &&
     (p.full_name || "").toLowerCase().includes(addQuery.toLowerCase())
   );
-  // team schließt einen selbst als Team-Lead bewusst aus (siehe loadTeamData) —
-  // für die Mentor-Auswahl soll man sich aber selbst als Mentor eintragen können.
-  const mentorCandidates = selfId ? [{ id: selfId, full_name: "Ich" }, ...team] : team;
+  // team enthält seit Neuestem auch die eigene Person — die frühere
+  // Sonderbehandlung ("Ich" vorneweg) würde sie sonst doppelt anbieten.
+  const mentorCandidates = team;
+  // Für den Hinweis unten zählt nur, ob AUSSER der Leitung jemand da ist.
+  const andereMitglieder = team.filter((m) => m.id !== selfId);
 
   return (
     <Layout>
@@ -595,7 +600,7 @@ export default function Manager() {
             {/* Ohne Mitglieder ist ein Ziel wirkungslos: niemand sieht es unter
                 „Mein Team", und der Fortschritt bleibt zwangsläufig bei null.
                 Das war sonst nirgends zu erkennen. */}
-            {team.length === 0 && (
+            {andereMitglieder.length === 0 && (
               <p className="text-[11px] text-amber mt-2">
                 Dieses Team hat noch keine Mitglieder. Ein Ziel bleibt dann für alle unsichtbar und der
                 Fortschritt steht dauerhaft auf 0 — füge zuerst unten Mitglieder hinzu.
@@ -676,7 +681,9 @@ export default function Manager() {
                     <Avatar name={m.full_name || "?"} src={m.avatar_url} size={36} />
                   </button>
                   <div className="flex-1">
-                    <button onClick={() => openProfile(m.id)} className="font-semibold text-textMain text-sm hover:underline">{m.full_name || "Unbenannt"}</button>
+                    <button onClick={() => openProfile(m.id)} className="font-semibold text-textMain text-sm hover:underline">
+                      {m.full_name || "Unbenannt"}{m.id === selfId && <span className="text-amber"> · du</span>}
+                    </button>
                     <div className="text-xs text-textMuted mt-1">
                       {m.doneModules}/{m.totalModules} Module · Ø MC {m.avgMc !== null ? m.avgMc + "%" : "–"} · {m.certs}/{COURSES.length} Zertifikate · {m.roleplayCount} Rollenspiele
                     </div>
@@ -688,7 +695,9 @@ export default function Manager() {
                     className={`text-xs px-2.5 py-1.5 rounded-full border flex-shrink-0 ${m.can_view_call_stats ? "border-teal/40 text-teal bg-teal/10" : "border-line text-textMuted hover:text-textMain"}`}>
                     📞 {m.can_view_call_stats ? "Auswertung sichtbar" : "Auswertung verborgen"}
                   </button>
-                  <button onClick={() => removeMember(m.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+                  {/* Sich selbst entfernt man nicht aus dem eigenen Team —
+                      das Team bliebe führerlos zurück. */}
+                  {m.id !== selfId && <button onClick={() => removeMember(m.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>}
                 </div>
               ))}
             </div>
