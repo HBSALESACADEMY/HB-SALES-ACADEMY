@@ -343,3 +343,29 @@ test("die Hell/Dunkel-Einstufung trennt an einer sinnvollen Schwelle", () => {
     assert.equal(istHellerTon(hex), erwartet, `${hex} falsch eingestuft`);
   }
 });
+
+test("niemand rechnet den Wochenstart selbst aus", () => {
+  // Die eigene Rechnung (getDay + setHours) vergleicht Montag 00:00 ORTSZEIT
+  // und landet je nach Zeitzone auf einem anderen Tag. Genau daran waren die
+  // Wochenziele unsichtbar — Browser schrieb Sonntag, Server suchte Montag.
+  const dateien = [];
+  const sammle = (verzeichnis) => {
+    for (const eintrag of readdirSync(verzeichnis, { withFileTypes: true })) {
+      const pfad = `${verzeichnis}/${eintrag.name}`;
+      if (eintrag.isDirectory()) sammle(pfad);
+      else if (eintrag.name.endsWith(".js")) dateien.push(pfad);
+    }
+  };
+  sammle(new URL("../pages", import.meta.url).pathname);
+  sammle(new URL("../components", import.meta.url).pathname);
+
+  const treffer = [];
+  for (const pfad of dateien) {
+    const quelle = readFileSync(pfad, "utf8");
+    // Das verräterische Muster: (day === 0 ? -6 : 1) - day
+    if (/\(\s*day\s*===\s*0\s*\?\s*-6\s*:\s*1\s*\)/.test(quelle)) {
+      treffer.push(pfad.split("/").slice(-2).join("/"));
+    }
+  }
+  assert.deepEqual(treffer, [], `Eigene Wochenrechnung statt lib/woche.js:\n${treffer.join("\n")}`);
+});

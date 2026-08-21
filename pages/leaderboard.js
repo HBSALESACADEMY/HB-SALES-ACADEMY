@@ -8,11 +8,10 @@ import { getActiveOrgId } from "../lib/activeOrg";
 
 function rangeStart(range) {
   const d = new Date();
+  // Woche über lib/woche.js — sonst beginnt sie je nach Zeitzone des Geräts
+  // an einem anderen Tag als bei den Team-Zielen.
   if (range === "week") {
-    const day = d.getDay();
-    const diff = (day === 0 ? -6 : 1) - day;
-    d.setDate(d.getDate() + diff);
-    d.setHours(0, 0, 0, 0);
+    return wochenStartZeitpunkt();
   } else if (range === "month") {
     d.setDate(1);
     d.setHours(0, 0, 0, 0);

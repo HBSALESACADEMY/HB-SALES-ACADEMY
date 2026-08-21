@@ -162,14 +162,10 @@ export default function Community() {
     // Kudos-Wall: Highlights der Woche — Rohdaten laden, die tatsächliche
     // Berechnung passiert scope-abhängig (Meine Organisation/Global) in
     // einem eigenen Effekt weiter unten, ohne bei jedem Tab-Wechsel neu zu laden.
-    const weekStart = (() => {
-      const d = new Date();
-      const day = d.getDay();
-      const diff = (day === 0 ? -6 : 1) - day;
-      d.setDate(d.getDate() + diff);
-      d.setHours(0, 0, 0, 0);
-      return d.toISOString();
-    })();
+    // Über lib/woche.js statt eigener Rechnung: die verglich Montag 00:00
+    // ORTSZEIT und lief je nach Zeitzone auf einen anderen Tag hinaus —
+    // derselbe Fehler, der die Wochenziele unsichtbar gemacht hat.
+    const weekStart = wochenStartZeitpunkt();
     const postAuthorByPostId = {};
     (posts || []).forEach((p) => { postAuthorByPostId[p.id] = p.user_id; });
 
