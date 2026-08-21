@@ -39,6 +39,8 @@ export default function Manager() {
   const [goalBis, setGoalBis] = useState("");
   const [goalPerson, setGoalPerson] = useState("");
   const [goalFrei, setGoalFrei] = useState(false);
+  const [goalEdit, setGoalEdit] = useState(null);
+  const [goalPatch, setGoalPatch] = useState(null);
   const [pairs, setPairs] = useState([]);
   const [pairMentorId, setPairMentorId] = useState("");
   const [pairMenteeId, setPairMenteeId] = useState("");
@@ -323,6 +325,28 @@ export default function Manager() {
     setGoalTitle("");
   }
 
+  // Ändern statt löschen und neu anlegen: sonst wäre der bisher gezählte
+  // Fortschritt weg, nur weil im Titel ein Tippfehler steckt.
+  async function saveGoalEdit(id) {
+    if (!goalPatch?.title?.trim() || !goalPatch.target_count) return;
+    const patch = {
+      title: goalPatch.title.trim(),
+      target_count: Number(goalPatch.target_count),
+      ends_on: goalPatch.ends_on || null,
+    };
+    const { data: geaendert, error } = await supabase.from("team_goals").update(patch).eq("id", id).select();
+    if (error) { alert(error.message); return; }
+    // Wie beim Löschen: eine von den Zugriffsregeln abgelehnte Änderung
+    // meldet keinen Fehler, sie trifft null Zeilen.
+    if (!geaendert || geaendert.length === 0) {
+      alert("Die Änderung wurde abgelehnt. Ziele darf nur verwalten, wer das Team angelegt hat, oder ein Admin der Organisation.");
+      return;
+    }
+    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+    setGoalEdit(null);
+    setGoalPatch(null);
+  }
+
   async function deleteGoal(id) {
     // Siehe removeMember: ohne .select() bliebe eine abgelehnte Löschung
     // unbemerkt und das Ziel käme beim nächsten Laden zurück.
@@ -533,18 +557,41 @@ export default function Manager() {
               const vorbei = goals.filter((g) => bisVon(g) < heute);
               const nameVon = (id) => team.find((m) => m.id === id)?.full_name || "Unbenannt";
               const zeile = (g, grau) => (
-                <div key={g.id} className={`flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0 ${grau ? "opacity-60" : ""}`}>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-textMain truncate">
-                      {g.title}
-                      {g.user_id && <span className="text-amber text-xs"> · nur {nameVon(g.user_id)}</span>}
+                <div key={g.id} className={`py-1.5 border-b border-white/5 last:border-0 ${grau ? "opacity-60" : ""}`}>
+                  {goalEdit === g.id ? (
+                    <div className="flex flex-col gap-2">
+                      <input className="input !py-1 text-sm" value={goalPatch?.title || ""}
+                        onChange={(e) => setGoalPatch((p) => ({ ...p, title: e.target.value }))} />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input className="input !w-20 !py-1 text-sm" type="number" min="1" value={goalPatch?.target_count || ""}
+                          onChange={(e) => setGoalPatch((p) => ({ ...p, target_count: e.target.value }))} />
+                        <span className="text-xs text-textMuted">{goalMetricLabel(g.metric)} bis</span>
+                        <input className="input !w-auto !py-1 text-sm" type="date" value={goalPatch?.ends_on || ""}
+                          onChange={(e) => setGoalPatch((p) => ({ ...p, ends_on: e.target.value }))} />
+                        <button onClick={() => saveGoalEdit(g.id)} className="btn text-xs">Speichern</button>
+                        <button onClick={() => { setGoalEdit(null); setGoalPatch(null); }} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                      </div>
+                      {/* Die Kennzahl bleibt: sie zu tauschen machte den
+                          bisher gezählten Fortschritt bedeutungslos. */}
+                      <p className="text-[11px] text-textMuted">Kennzahl lässt sich nicht ändern — dafür das Ziel entfernen und neu anlegen.</p>
                     </div>
-                    <div className="text-[11px] text-textMuted">
-                      {g.starts_on ? zeitraumLabel(g.starts_on, g.ends_on || g.starts_on) : "Zeitraum offen"}
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-textMain truncate">
+                          {g.title}
+                          {g.user_id && <span className="text-amber text-xs"> · nur {nameVon(g.user_id)}</span>}
+                        </div>
+                        <div className="text-[11px] text-textMuted">
+                          {g.starts_on ? zeitraumLabel(g.starts_on, g.ends_on || g.starts_on) : "Zeitraum offen"}
+                        </div>
+                      </div>
+                      <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
+                      <button onClick={() => { setGoalEdit(g.id); setGoalPatch({ title: g.title, target_count: g.target_count, ends_on: g.ends_on || "" }); }}
+                        className="btn-ghost text-xs flex-shrink-0">Bearbeiten</button>
+                      <button onClick={() => deleteGoal(g.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
                     </div>
-                  </div>
-                  <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
-                  <button onClick={() => deleteGoal(g.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+                  )}
                 </div>
               );
               return (
