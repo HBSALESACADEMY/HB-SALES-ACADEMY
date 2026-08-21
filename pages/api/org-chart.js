@@ -56,6 +56,19 @@ export default async function handler(req, res) {
     const { data: mitgliedschaften } = teamIds.length
       ? await admin.from("team_members").select("team_id, user_id").in("team_id", teamIds)
       : { data: [] };
+
+    // Namen für Personen nachladen, die zwar in einem Team dieser
+    // Organisation stehen, aber selbst woanders hingehören — etwa ein
+    // Plattform-Admin, der ein Kundenteam leitet. Ohne das stünde im
+    // Organigramm "Unbenannt".
+    const fehlend = Array.from(new Set([
+      ...(mitgliedschaften || []).map((m) => m.user_id),
+      ...teams.map((t) => t.created_by),
+    ])).filter((id) => !personVon.has(id));
+    if (fehlend.length) {
+      const { data: extra } = await admin.from("profiles").select("id, full_name, avatar_url, role_title").in("id", fehlend);
+      (extra || []).forEach((p2) => personVon.set(p2.id, p2));
+    }
     const idsVon = new Map(teamIds.map((id) => [id, []]));
     (mitgliedschaften || []).forEach((m) => { if (idsVon.has(m.team_id)) idsVon.get(m.team_id).push(m.user_id); });
 

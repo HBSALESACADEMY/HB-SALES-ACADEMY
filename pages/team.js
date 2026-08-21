@@ -26,7 +26,6 @@ export default function Team() {
   const [wochenStart, setWochenStart] = useState("");
   const [leistungMetrik, setLeistungMetrik] = useState("xp");
   const [organigramm, setOrganigramm] = useState(null);
-  const [organigrammOffen, setOrganigrammOffen] = useState(false);
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [offenesZiel, setOffenesZiel] = useState(null);
   const [vergangeneOffen, setVergangeneOffen] = useState(null);
@@ -409,21 +408,22 @@ export default function Team() {
         </div>
       </div>
 
+      {/* Direkt sichtbar statt hinter einem Aufklapper: das Organigramm ist
+          der Überblick über die Aufstellung — es zuerst wegzuklappen macht
+          genau das zunichte. */}
       {organigramm && (
-        <div className="card mb-5">
-          <button onClick={() => setOrganigrammOffen((v) => !v)} className="flex items-center justify-between gap-2 w-full text-left">
+        <div className="mb-5">
+          <div className="flex items-baseline justify-between gap-2 mb-2">
             <span className="font-semibold text-textMain text-sm">🗂️ Organigramm</span>
-            <span className="text-xs text-textMuted flex-shrink-0">{organigrammOffen ? "ausblenden" : "anzeigen"}</span>
-          </button>
-          {organigrammOffen && (
-            <div className="mt-3">
-              <p className="text-[11px] text-textMuted mb-3">
-                Die Struktur entsteht von selbst: gründet jemand aus einem Team ein eigenes Team,
-                erscheint es automatisch eine Ebene tiefer. Rollenbezeichnungen lassen sich hier direkt ändern.
-              </p>
-              <Organigramm daten={organigramm} onRolle={setzeRolle} />
-            </div>
-          )}
+            <span className="text-[11px] text-textMuted flex-shrink-0">
+              {organigramm.teams.length} {organigramm.teams.length === 1 ? "Team" : "Teams"}
+            </span>
+          </div>
+          <p className="text-[11px] text-textMuted mb-3">
+            Die Struktur entsteht von selbst: gründet jemand aus einem Team ein eigenes Team,
+            erscheint es automatisch eine Ebene tiefer. Rollenbezeichnungen lassen sich direkt anklicken und ändern.
+          </p>
+          <Organigramm daten={organigramm} onRolle={setzeRolle} />
         </div>
       )}
 

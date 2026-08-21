@@ -50,10 +50,20 @@ function Person({ person, zusatz, onRolle }) {
 
 function Knoten({ team, alle, onRolle, tiefe }) {
   const kinder = alle.filter((t) => t.elternId === team.id);
+  const anzahl = team.mitglieder.length + (team.leitung ? 1 : 0);
   return (
-    <div className={tiefe > 0 ? "ml-3 pl-3 border-l border-line" : ""}>
-      <div className="card mb-2">
-        <div className="font-semibold text-textMain text-sm mb-1.5">{team.name}</div>
+    // Verbindungslinie zur übergeordneten Einheit: die Struktur soll man
+    // sehen, nicht aus der Einrückung erschliessen müssen.
+    <div className={tiefe > 0 ? "relative pl-6 border-l-2 border-line ml-4" : ""}>
+      {tiefe > 0 && <span aria-hidden="true" className="absolute left-0 top-7 w-6 border-t-2 border-line" />}
+      <div className="card mb-3">
+        <div className="flex items-baseline justify-between gap-2 mb-2">
+          <div className="font-display font-semibold text-textMain text-sm truncate">{team.name}</div>
+          <span className="text-[10.5px] text-textMuted flex-shrink-0">
+            {anzahl} {anzahl === 1 ? "Person" : "Personen"}
+            {kinder.length > 0 && ` · ${kinder.length} ${kinder.length === 1 ? "Untereinheit" : "Untereinheiten"}`}
+          </span>
+        </div>
         {team.leitung && <Person person={team.leitung} zusatz="Leitung" onRolle={onRolle} />}
         {team.mitglieder.map((m) => (
           <Person key={m.id} person={m} zusatz={m.fuehrtTeamId ? "leitet eigenes Team" : null} onRolle={onRolle} />
