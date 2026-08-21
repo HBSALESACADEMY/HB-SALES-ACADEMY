@@ -6,7 +6,8 @@ import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
 import { apiGet } from "../lib/apiClient";
 import { goalMetricLabel } from "../lib/goalMetrics";
-import { zeitraumLabel } from "../lib/zielzeitraum";
+import { zeitraumLabel, zeitraumFuer, ZEITRAEUME } from "../lib/zielzeitraum";
+import { goalMetricGroups } from "../lib/goalMetrics";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
 import Organigramm from "../components/Organigramm";
@@ -29,6 +30,9 @@ export default function Team() {
   const [offenesTeam, setOffenesTeam] = useState(null);
   const [offenesZiel, setOffenesZiel] = useState(null);
   const [vergangeneOffen, setVergangeneOffen] = useState(null);
+  const [zielFormular, setZielFormular] = useState(null);
+  const [zielEntwurf, setZielEntwurf] = useState({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
+  const [zielBusy, setZielBusy] = useState(false);
   const [leavingId, setLeavingId] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [mentees, setMentees] = useState([]);
@@ -104,6 +108,32 @@ export default function Team() {
     await supabase.from("profiles").update({ last_seen_team_goals_at: new Date().toISOString() }).eq("id", session.user.id);
 
     setLoading(false);
+  }
+
+  // Eigenes Ziel anlegen (migration_97). Läuft über den normalen Client:
+  // die Zugriffsregeln lassen ausschliesslich Ziele durch, die auf die
+  // eigene Person lauten — ein Team-Ziel liesse sich hier nicht setzen.
+  async function speichereEigenesZiel(teamId) {
+    if (!zielEntwurf.titel.trim() || !zielEntwurf.ziel) return;
+    const raum = zielEntwurf.zeitraum === "frei"
+      ? { von: zielEntwurf.von, bis: zielEntwurf.bis }
+      : zeitraumFuer(zielEntwurf.zeitraum);
+    if (!raum.von || !raum.bis || raum.bis < raum.von) {
+      alert("Bitte einen gültigen Zeitraum wählen — das Ende darf nicht vor dem Beginn liegen.");
+      return;
+    }
+    setZielBusy(true);
+    const { error } = await supabase.from("team_goals").insert({
+      manager_id: selfId, team_id: teamId, user_id: selfId,
+      title: zielEntwurf.titel.trim(), metric: zielEntwurf.metrik,
+      target_count: Number(zielEntwurf.ziel),
+      starts_on: raum.von, ends_on: raum.bis, week_start: raum.von,
+    });
+    setZielBusy(false);
+    if (error) { alert(error.message); return; }
+    setZielFormular(null);
+    setZielEntwurf({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
+    await load();
   }
 
   async function setzeRolle(personId, rolle) {
@@ -215,6 +245,48 @@ export default function Team() {
                   )}
                 </div>
               ))}
+
+              {/* Jede Person darf sich selbst ein Ziel setzen — Team-Ziele
+                  bleiben der Leitung vorbehalten (migration_97). */}
+              {zielFormular === t.id ? (
+                <div className="mt-3 pt-3 border-t border-line flex flex-col gap-2">
+                  <input className="input" placeholder="z.B. 150 Anwahlen diese Woche"
+                    value={zielEntwurf.titel} onChange={(e) => setZielEntwurf((z) => ({ ...z, titel: e.target.value }))} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select className="input !w-auto" value={zielEntwurf.metrik}
+                      onChange={(e) => setZielEntwurf((z) => ({ ...z, metrik: e.target.value }))}>
+                      {goalMetricGroups().map((g) => (
+                        <optgroup key={g.name} label={g.name}>
+                          {g.metriken.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <input className="input !w-20" type="number" min="1" value={zielEntwurf.ziel}
+                      onChange={(e) => setZielEntwurf((z) => ({ ...z, ziel: e.target.value }))} />
+                    <select className="input !w-auto" value={zielEntwurf.zeitraum}
+                      onChange={(e) => setZielEntwurf((z) => ({ ...z, zeitraum: e.target.value }))}>
+                      {ZEITRAEUME.map((z) => <option key={z.key} value={z.key}>{z.label}</option>)}
+                    </select>
+                    {zielEntwurf.zeitraum === "frei" && (
+                      <>
+                        <input className="input !w-auto" type="date" value={zielEntwurf.von}
+                          onChange={(e) => setZielEntwurf((z) => ({ ...z, von: e.target.value }))} />
+                        <input className="input !w-auto" type="date" value={zielEntwurf.bis}
+                          onChange={(e) => setZielEntwurf((z) => ({ ...z, bis: e.target.value }))} />
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button disabled={zielBusy} onClick={() => speichereEigenesZiel(t.id)} className="btn text-xs disabled:opacity-40">
+                      {zielBusy ? "Speichert..." : "Ziel setzen"}
+                    </button>
+                    <button onClick={() => setZielFormular(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                  </div>
+                  <p className="text-[11px] text-textMuted">Gilt nur für dich. Sichtbar für dich und deine Teamleitung.</p>
+                </div>
+              ) : (
+                <button onClick={() => setZielFormular(t.id)} className="btn-ghost text-xs mt-2">+ Eigenes Ziel setzen</button>
+              )}
 
               {t.vergangeneZiele?.length > 0 && (
                 <div className="mt-2">

@@ -1652,17 +1652,30 @@ create policy "team_members_delete_lead_or_self" on team_members for delete usin
 drop policy if exists "team_goals_select_all" on team_goals;
 create policy "team_goals_select_all" on team_goals for select using (sieht_person(manager_id));
 drop policy if exists "team_goals_insert_manager" on team_goals;
-create policy "team_goals_insert_manager" on team_goals for insert with check (
-  kann_team_verwalten(team_id, auth.uid())
-  and (
-    user_id is null
-    or exists (select 1 from team_members tm where tm.team_id = team_goals.team_id and tm.user_id = team_goals.user_id)
+-- Zusätzlich darf sich jede Person ein Ziel FÜR SICH SELBST setzen
+-- (migration_97). Team-Ziele bleiben der Leitung vorbehalten.
+create policy "team_goals_insert" on team_goals for insert with check (
+  (
+    kann_team_verwalten(team_id, auth.uid())
+    and (
+      user_id is null
+      or exists (select 1 from team_members tm where tm.team_id = team_goals.team_id and tm.user_id = team_goals.user_id)
+    )
+  )
+  or (
+    user_id = auth.uid()
+    and manager_id = auth.uid()
+    and exists (select 1 from team_members tm where tm.team_id = team_goals.team_id and tm.user_id = auth.uid())
   )
 );
 drop policy if exists "team_goals_update_manager" on team_goals;
-create policy "team_goals_update_manager" on team_goals for update using (kann_team_verwalten(team_id, auth.uid()));
+create policy "team_goals_update_manager" on team_goals for update
+using (kann_team_verwalten(team_id, auth.uid()) or user_id = auth.uid())
+with check (kann_team_verwalten(team_id, auth.uid()) or user_id = auth.uid());
 drop policy if exists "team_goals_delete_manager" on team_goals;
-create policy "team_goals_delete_manager" on team_goals for delete using (kann_team_verwalten(team_id, auth.uid()));
+create policy "team_goals_delete_manager" on team_goals for delete using (
+  kann_team_verwalten(team_id, auth.uid()) or user_id = auth.uid()
+);
 
 -- --- team_requests ---
 drop policy if exists "team_requests_select_participant" on team_requests;
