@@ -1244,17 +1244,17 @@ drop policy if exists "kb_entries_insert_pending" on kb_entries;
 create policy "kb_entries_insert_pending" on kb_entries for insert with check (status = 'pending');
 drop policy if exists "kb_entries_update_managers" on kb_entries;
 create policy "kb_entries_update_managers" on kb_entries for update using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  (ist_fuehrungsrolle(auth.uid())
+   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+   or is_team_lead(auth.uid()))
+  and same_org(created_by, auth.uid())
 );
 drop policy if exists "kb_entries_delete_managers" on kb_entries;
 create policy "kb_entries_delete_managers" on kb_entries for delete using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  (ist_fuehrungsrolle(auth.uid())
+   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+   or is_team_lead(auth.uid()))
+  and same_org(created_by, auth.uid())
 );
 
 -- --- scripts ---
@@ -1315,8 +1315,7 @@ create policy "guides_update_own" on guides for update using (auth.uid() = creat
 drop policy if exists "guides_delete_own_or_manager" on guides;
 create policy "guides_delete_own_or_manager" on guides for delete using (
   auth.uid() = created_by
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(created_by, auth.uid()))
+  or (ist_fuehrungsrolle(auth.uid()) and same_org(created_by, auth.uid()))
 );
 
 -- --- flashcards ---
@@ -1337,10 +1336,10 @@ create policy "flashcards_write_managers" on flashcards for insert with check (
 );
 drop policy if exists "flashcards_delete_managers" on flashcards;
 create policy "flashcards_delete_managers" on flashcards for delete using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  (ist_fuehrungsrolle(auth.uid())
+   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+   or is_team_lead(auth.uid()))
+  and same_org(created_by, auth.uid())
 );
 
 -- --- flashcard_progress ---
@@ -1364,11 +1363,7 @@ create policy "personal_courses_select" on personal_courses for select using (
 drop policy if exists "personal_courses_insert" on personal_courses;
 create policy "personal_courses_insert" on personal_courses for insert with check (
   user_id = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(user_id, auth.uid())
-  )
+  or (ist_fuehrungsrolle(auth.uid()) and same_org(user_id, auth.uid()))
 );
 
 -- --- daily_challenge_completions ---
@@ -1383,7 +1378,7 @@ create policy "duels_select_participant" on duels for select using (auth.uid() =
 drop policy if exists "duels_insert_challenger" on duels;
 create policy "duels_insert_challenger" on duels for insert with check (
   auth.uid() = challenger_id
-  and (same_org(challenger_id, opponent_id) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  and same_org(challenger_id, opponent_id)
 );
 drop policy if exists "duels_update_participant" on duels;
 create policy "duels_update_participant" on duels for update using (auth.uid() = challenger_id or auth.uid() = opponent_id);
@@ -1438,31 +1433,19 @@ create policy "community_posts_select_all" on community_posts for select using (
 drop policy if exists "community_posts_insert_own" on community_posts;
 create policy "community_posts_insert_own" on community_posts for insert with check (
   auth.uid() = user_id
-  and (
-    organization_id is null
-    or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  and (organization_id is null or organization_id is not distinct from aktive_org(auth.uid()))
 );
 drop policy if exists "community_posts_delete_own_or_manager" on community_posts;
 create policy "community_posts_delete_own_or_manager" on community_posts for delete using (
   auth.uid() = user_id
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager')
-    and community_post_same_org(organization_id, user_id, auth.uid())
-  )
+  or (ist_fuehrungsrolle(auth.uid()) and community_post_same_org(organization_id, user_id, auth.uid()))
 );
 -- Bearbeiten (Inhalt) + Anpinnen (migration_64) — dieselben Rechte wie beim
 -- Löschen, plus is_admin zusätzlich zu role='manager'.
 drop policy if exists "community_posts_update_own_or_manager" on community_posts;
 create policy "community_posts_update_own_or_manager" on community_posts for update using (
   auth.uid() = user_id
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and community_post_same_org(organization_id, user_id, auth.uid())
-  )
+  or (ist_fuehrungsrolle(auth.uid()) and community_post_same_org(organization_id, user_id, auth.uid()))
 );
 
 -- --- community_comments --- (Sichtbarkeit folgt dem übergeordneten Beitrag)
@@ -1487,8 +1470,7 @@ create policy "community_comments_insert_own" on community_comments for insert w
 drop policy if exists "community_comments_delete_own_or_manager" on community_comments;
 create policy "community_comments_delete_own_or_manager" on community_comments for delete using (
   auth.uid() = user_id
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'manager') and same_org(user_id, auth.uid()))
+  or (ist_fuehrungsrolle(auth.uid()) and same_org(user_id, auth.uid()))
 );
 
 -- --- community_notifications --- (Erwähnungs-Benachrichtigungen, migration_63)
@@ -1610,7 +1592,7 @@ create policy "blocks_select_own" on blocks for select using (auth.uid() = block
 drop policy if exists "blocks_insert_own" on blocks;
 create policy "blocks_insert_own" on blocks for insert with check (
   auth.uid() = blocker_id
-  and (same_org(blocker_id, blocked_id) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  and same_org(blocker_id, blocked_id)
 );
 drop policy if exists "blocks_delete_own" on blocks;
 create policy "blocks_delete_own" on blocks for delete using (auth.uid() = blocker_id);
@@ -1635,7 +1617,7 @@ create policy "chat_group_members_insert" on chat_group_members for insert with 
     exists (select 1 from chat_groups g where g.id = chat_group_members.group_id and g.created_by = auth.uid())
     or exists (select 1 from chat_group_members m2 where m2.group_id = chat_group_members.group_id and m2.user_id = auth.uid())
   )
-  and (same_org(user_id, auth.uid()) or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin))
+  and same_org(user_id, auth.uid())
 );
 drop policy if exists "chat_group_members_delete_own" on chat_group_members;
 create policy "chat_group_members_delete_own" on chat_group_members for delete using (auth.uid() = user_id);
@@ -1658,7 +1640,6 @@ create policy "dm_insert_friends" on direct_messages for insert with check (
       group_id is null and recipient_id is not null
       and (
         same_org(sender_id, recipient_id)
-        or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
         or exists (
           select 1 from friendships f
           where f.status = 'accepted'
@@ -1731,10 +1712,7 @@ create policy "team_members_select_all" on team_members for select using (
 drop policy if exists "team_members_insert_lead" on team_members;
 create policy "team_members_insert_lead" on team_members for insert with check (
   kann_team_verwalten(team_id, auth.uid())
-  and (
-    same_org(user_id, auth.uid())
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  and same_org(user_id, auth.uid())
 );
 drop policy if exists "team_members_delete_lead_or_self" on team_members;
 create policy "team_members_delete_lead_or_self" on team_members for delete using (
@@ -1805,10 +1783,8 @@ create policy "mentor_pairs_select_participant" on mentor_pairs for select using
 drop policy if exists "mentor_pairs_insert_manager" on mentor_pairs;
 create policy "mentor_pairs_insert_manager" on mentor_pairs for insert with check (
   auth.uid() = manager_id
-  and (
-    (same_org(mentor_id, auth.uid()) and same_org(mentee_id, auth.uid()))
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  and same_org(mentor_id, auth.uid())
+  and same_org(mentee_id, auth.uid())
 );
 drop policy if exists "mentor_pairs_update_manager" on mentor_pairs;
 create policy "mentor_pairs_update_manager" on mentor_pairs for update using (
@@ -1912,16 +1888,6 @@ create policy "lead_tasks_insert_own" on lead_tasks for insert with check (
   auth.uid() = assigned_by
   and exists (
     select 1 from leads l where l.id = lead_tasks.lead_id
-    and (
-      l.created_by = auth.uid()
-      or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-      or (
-        exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-        and same_org(l.created_by, auth.uid())
-      )
-    )
-    -- Verhindert, dass assigned_to auf eine fremde Organisation zeigt — sonst
-    -- bekäme diese Person seit migration_77 vollen Lesezugriff auf den Termin.
     and same_org(l.created_by, assigned_to)
   )
 );

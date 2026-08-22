@@ -92,3 +92,17 @@ test("keine Endlosschleife zwischen Regeln verschiedener Tabellen", () => {
             `Postgres bricht das mit "infinite recursion detected in policy" ab — betroffene Seiten funktionieren dann gar nicht. ` +
             `Lösung: die Rückfrage in eine security-definer-Funktion auslagern (Vorbild: has_lead_task_or_mention).` : "");
 });
+
+// Der pauschale Zweig "oder ist Plattform-Admin" hebt in derselben Regel
+// wieder auf, was der Rest sorgfältig eingrenzt: die Mandanten-Grenze.
+// Er ist dreimal entfernt worden (migration_95, 115, 116) und dreimal an
+// neuer Stelle wieder aufgetaucht — deshalb hier festgenagelt.
+//
+// Erlaubt bleibt der Plattform-Admin als ROLLE (etwa "darf verwalten"),
+// solange die Regel zusätzlich prüft, ob es um die aktive Organisation geht.
+test("keine Regel hebt die Mandanten-Grenze für Plattform-Admins auf", () => {
+  const pauschal = /or\s+exists\s*\(\s*select 1 from profiles where (profiles\.)?id = auth\.uid\(\) and (profiles\.)?is_platform_admin\s*\)/;
+  const treffer = regeln.filter((r) => pauschal.test(r.rumpf)).map((r) => `${r.tabelle}.${r.name}`);
+  assert.deepEqual(treffer, [],
+    `Diese Regeln lassen einen Plattform-Admin an der Organisationsgrenze vorbei: ${treffer.join(", ")}`);
+});
