@@ -1,12 +1,15 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { notifyOrgManagers } from "../../lib/notifyManagers";
-import { sendEmail } from "../../lib/email";
 import { sendeAlarm } from "../../lib/alarm";
-import { deutscheZeit, terminText } from "../../lib/terminzeit";
+import { deutscheZeit } from "../../lib/terminzeit";
 
 // Meldet Änderungen an einem bestehenden Termin an das Team — Statuswechsel,
 // Ergebnis, Folgetermin, Bearbeitung, Löschung.
+//
+// Nur über Telegram, bewusst ohne E-Mail: das Anlegen eines Termins geht
+// weiterhin über beide Wege (pages/api/lead-created.js), jede Änderung
+// danach nur noch in den Kanal. Sonst füllt ein einziger Termin, an dem
+// mehrmals etwas gedreht wird, das Postfach aller Führungskräfte.
 //
 // Warum eine eigene Route: Diese Änderungen laufen direkt aus dem Browser in
 // die Datenbank (pages/termine.js). Ohne einen Server-Zeitpunkt gibt es keine
@@ -51,27 +54,11 @@ export default async function handler(req, res) {
     if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
     const { data: org } = await admin.from("organizations").select("name, telegram_chat_id").eq("id", orgId).maybeSingle();
-    const orgName = org?.name || null;
     const wer = me?.full_name || "Ein Teammitglied";
     const terminDeutsch = lead.appointment_at ? `${deutscheZeit(lead.appointment_at)} Uhr` : "kein Zeitpunkt";
-    const terminFuer = (e) => (lead.appointment_at ? terminText(lead.appointment_at, e?.zeitzone) : "kein Zeitpunkt");
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     // Nach dem Löschen führt der Link ins Leere — dann weglassen.
     const link = appUrl && ereignis !== "geloescht" ? `${appUrl}/termine?leadId=${lead.id}` : null;
-
-    const subject = `${TITEL[ereignis].replace(/^\S+\s/, "")}: ${lead.name}`;
-    const htmlFuer = (e) =>
-      `<p><strong>${wer}</strong>: ${beschreibung || TITEL[ereignis]}</p>` +
-      `<p><strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}<br/>Termin: ${terminFuer(e)}</p>` +
-      (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
-
-    await notifyOrgManagers(admin, orgId, { subject, html: htmlFuer, fromName: orgName || "HB Sales Academy", art: "termine" });
-
-    const { data: extra } = await admin.from("notification_emails").select("email").eq("organization_id", orgId);
-    // Zusatz-Adressen haben kein Konto und damit keine Zeitzone.
-    const html = htmlFuer(null);
-    await Promise.all((extra || []).map((e) =>
-      sendEmail({ to: e.email, subject, html, fromName: orgName || "HB Sales Academy" })));
 
     if (org?.telegram_chat_id) {
       const text = [
