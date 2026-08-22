@@ -45,8 +45,23 @@ export default async function handler(req, res) {
       else if (value !== null && value !== "") customFields[f.key] = value;
     });
 
+    // Die Organisation gehört AN den Termin (migration_114) — deshalb wird
+    // sie vor dem Speichern aufgelöst, nicht erst für die Benachrichtigung.
+    const admin = getAdminSupabase();
+    const { data: me } = await client.from("profiles").select("full_name, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
+    // Für Plattform-Admins, die per Firmencode "als" eine andere Organisation
+    // unterwegs sind: me.organization_id ist nur deren eigene Heimat, nicht
+    // die gerade aktive — die kommt vom Client und wird nur akzeptiert, wenn
+    // der Aufrufer wirklich Plattform-Admin ist oder es ohnehin die eigene
+    // Organisation ist (wie bei certificate.js).
+    let effectiveOrgId = me?.organization_id || null;
+    if (activeOrgId && (me?.is_platform_admin || activeOrgId === me?.organization_id)) {
+      effectiveOrgId = activeOrgId;
+    }
+
     const { data: lead, error: insertErr } = await client.from("leads").insert({
       created_by: user.id,
+      organization_id: effectiveOrgId,
       name, phone, email,
       ...columnUpdates,
       custom_fields: customFields,
@@ -58,17 +73,6 @@ export default async function handler(req, res) {
     // Benachrichtigung ist best-effort — darf das eigentliche Speichern des
     // Termins nie blockieren, falls der E-Mail-Versand fehlschlägt.
     try {
-      const admin = getAdminSupabase();
-      const { data: me } = await client.from("profiles").select("full_name, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
-      // Für Plattform-Admins, die per Firmencode "als" eine andere
-      // Organisation unterwegs sind: me.organization_id ist nur deren eigene
-      // Heimat-Organisation, nicht die gerade aktive — die kommt vom Client
-      // und wird nur akzeptiert, wenn der Aufrufer wirklich Plattform-Admin
-      // ist oder es ohnehin die eigene Organisation ist (wie bei certificate.js).
-      let effectiveOrgId = me?.organization_id || null;
-      if (activeOrgId && (me?.is_platform_admin || activeOrgId === me?.organization_id)) {
-        effectiveOrgId = activeOrgId;
-      }
       if (effectiveOrgId) {
         const { data: org } = await admin.from("organizations").select("name, telegram_chat_id").eq("id", effectiveOrgId).maybeSingle();
         const orgName = org?.name || null;

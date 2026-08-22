@@ -104,8 +104,13 @@ export default function Kunden() {
     setSaving(true);
     setError("");
     const { data: { session } } = await supabase.auth.getSession();
+    const { data: mich } = await supabase.from("profiles")
+      .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
     const { error: err } = await supabase.from("leads").insert({
       created_by: session.user.id,
+      // Gehört zur AKTIVEN Organisation, nicht zur Heimat des Kontos
+      // (migration_114).
+      organization_id: getActiveOrgId(mich),
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,

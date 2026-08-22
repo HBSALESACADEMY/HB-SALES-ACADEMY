@@ -263,6 +263,9 @@ create table if not exists scripts (
   file_name text,
   visibility text not null default 'org' check (visibility in ('org', 'private')),
   created_by uuid references profiles(id) on delete set null,
+  -- Zu welcher Organisation das Skript gehört (migration_115) — ausdrücklich,
+  -- nicht aus dem Konto abgeleitet.
+  organization_id uuid references organizations(id) on delete cascade,
   created_at timestamptz not null default now()
 );
 
@@ -682,6 +685,10 @@ create table if not exists leads (
   custom_fields jsonb not null default '{}'::jsonb,
   -- Folgetermin: verweist auf den ursprünglichen Termin (migration_82).
   follow_up_of uuid references leads(id) on delete set null,
+  -- Zu welcher Organisation der Termin gehört (migration_114). Ausdrücklich
+  -- statt aus dem Konto abgeleitet: wer per Firmencode in mehreren
+  -- Organisationen arbeitet, nahm seine Termine sonst überallhin mit.
+  organization_id uuid references organizations(id) on delete cascade,
   -- Gesprächsnotizen aus der Aufnahme (Notetaker, keine Bewertung).
   call_notes jsonb,
   call_notes_status text check (call_notes_status in ('pending', 'done', 'failed')),
@@ -1134,8 +1141,7 @@ create policy "roleplay_sessions_select_admin" on roleplay_sessions for select u
 drop policy if exists "nav_items_select_all" on nav_items;
 create policy "nav_items_select_all" on nav_items for select using (
   is_builtin = true
-  or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  or organization_id is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "nav_items_write_managers" on nav_items;
 create policy "nav_items_write_managers" on nav_items for insert with check (
@@ -1143,21 +1149,15 @@ create policy "nav_items_write_managers" on nav_items for insert with check (
 );
 drop policy if exists "nav_items_update_managers" on nav_items;
 create policy "nav_items_update_managers" on nav_items for update using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-  and (
-    is_builtin = true
-    or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  (exists (select 1 from profiles where profiles.id = auth.uid()
+           and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin)))
+  and (is_builtin = true or organization_id is not distinct from aktive_org(auth.uid()))
 );
 drop policy if exists "nav_items_delete_managers" on nav_items;
 create policy "nav_items_delete_managers" on nav_items for delete using (
-  exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-  and (
-    is_builtin = true
-    or organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  (exists (select 1 from profiles where profiles.id = auth.uid()
+           and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin)))
+  and (is_builtin = true or organization_id is not distinct from aktive_org(auth.uid()))
 );
 
 -- --- custom_courses ---
@@ -1175,36 +1175,33 @@ create policy "custom_courses_write_managers" on custom_courses for insert with 
 );
 drop policy if exists "custom_courses_update_managers" on custom_courses;
 create policy "custom_courses_update_managers" on custom_courses for update using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (
-    organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  organization_id is not distinct from aktive_org(auth.uid())
+  and (ist_fuehrungsrolle(auth.uid())
+       or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+       or is_team_lead(auth.uid()))
 );
 drop policy if exists "custom_courses_delete_managers" on custom_courses;
 create policy "custom_courses_delete_managers" on custom_courses for delete using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (
-    organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  organization_id is not distinct from aktive_org(auth.uid())
+  and (ist_fuehrungsrolle(auth.uid())
+       or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+       or is_team_lead(auth.uid()))
 );
 
 -- --- custom_modules ---
 -- Organisation wird über den ÜBERGEORDNETEN Kurs geprüft (custom_courses.
 -- organization_id), nicht über same_org(created_by,...) — ein Modul gehört
 -- immer zur Organisation seines Kurses, unabhängig davon, wer es angelegt hat.
+-- Die Organisation steht am Kurs; das Modul erbt sie (migration_115).
+create or replace function public.kurs_org(p_kurs uuid)
+returns uuid
+language sql stable security definer as $$
+  select organization_id from custom_courses where id = p_kurs;
+$$;
+
 drop policy if exists "custom_modules_select_all" on custom_modules;
 create policy "custom_modules_select_all" on custom_modules for select using (
-  exists (
-    select 1 from custom_courses cc where cc.id = custom_modules.course_id
-    and cc.organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-  )
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  kurs_org(course_id) is not distinct from aktive_org(auth.uid())
 );
 drop policy if exists "custom_modules_write_managers" on custom_modules;
 create policy "custom_modules_write_managers" on custom_modules for insert with check (
@@ -1213,29 +1210,17 @@ create policy "custom_modules_write_managers" on custom_modules for insert with 
 );
 drop policy if exists "custom_modules_update_managers" on custom_modules;
 create policy "custom_modules_update_managers" on custom_modules for update using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (
-    exists (
-      select 1 from custom_courses cc where cc.id = custom_modules.course_id
-      and cc.organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    )
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  kurs_org(course_id) is not distinct from aktive_org(auth.uid())
+  and (ist_fuehrungsrolle(auth.uid())
+       or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+       or is_team_lead(auth.uid()))
 );
 drop policy if exists "custom_modules_delete_managers" on custom_modules;
 create policy "custom_modules_delete_managers" on custom_modules for delete using (
-  (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role in ('manager', 'trainer') or profiles.is_admin or profiles.is_platform_admin))
-    or is_team_lead(auth.uid())
-  ) and (
-    exists (
-      select 1 from custom_courses cc where cc.id = custom_modules.course_id
-      and cc.organization_id = (select organization_id from profiles where profiles.id = auth.uid())
-    )
-    or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  )
+  kurs_org(course_id) is not distinct from aktive_org(auth.uid())
+  and (ist_fuehrungsrolle(auth.uid())
+       or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'trainer')
+       or is_team_lead(auth.uid()))
 );
 
 -- --- kb_entries ---
@@ -1275,9 +1260,8 @@ create policy "kb_entries_delete_managers" on kb_entries for delete using (
 -- --- scripts ---
 drop policy if exists "scripts_select_all" on scripts;
 create policy "scripts_select_all" on scripts for select using (
-  created_by = auth.uid()
-  or (visibility = 'org' and same_org(created_by, auth.uid()))
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (created_by = auth.uid() or visibility = 'org')
 );
 create or replace function public.darf_skripte_veroeffentlichen(uid uuid)
 returns boolean
@@ -1295,26 +1279,26 @@ drop policy if exists "scripts_insert_managers" on scripts;
 drop policy if exists "scripts_insert" on scripts;
 -- Hochladen darf jede Person; aufgeräumt wird hinten (migration_91):
 -- Manager, Admins und Teamleads dürfen fremde Skripte bearbeiten und löschen.
-create policy "scripts_insert" on scripts for insert with check (created_by = auth.uid());
+create policy "scripts_insert" on scripts for insert with check (
+  created_by = auth.uid()
+  and (organization_id is null or organization_id is not distinct from aktive_org(auth.uid()))
+);
 drop policy if exists "scripts_update_managers" on scripts;
 drop policy if exists "scripts_update" on scripts;
 create policy "scripts_update" on scripts for update
 using (
-  created_by = auth.uid()
-  or (darf_skripte_veroeffentlichen(auth.uid())
-      and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (created_by = auth.uid() or darf_skripte_veroeffentlichen(auth.uid()))
 )
 with check (
-  created_by = auth.uid()
-  or (darf_skripte_veroeffentlichen(auth.uid())
-      and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (created_by = auth.uid() or darf_skripte_veroeffentlichen(auth.uid()))
 );
 drop policy if exists "scripts_delete_managers" on scripts;
 drop policy if exists "scripts_delete" on scripts;
 create policy "scripts_delete" on scripts for delete using (
-  created_by = auth.uid()
-  or (darf_skripte_veroeffentlichen(auth.uid())
-      and (same_org(created_by, auth.uid()) or exists (select 1 from profiles where id = auth.uid() and is_platform_admin)))
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (created_by = auth.uid() or darf_skripte_veroeffentlichen(auth.uid()))
 );
 
 -- --- guides ---
@@ -1846,36 +1830,55 @@ drop policy if exists "call_log_days_update_own" on call_log_days;
 create policy "call_log_days_update_own" on call_log_days for update using (auth.uid() = user_id);
 
 -- --- leads ---
+-- Solange Alt-Termine ohne Spalte auftauchen können, bleibt der Rückfall auf
+-- die anlegende Person (migration_114).
+create or replace function public.eintrag_org(p_org uuid, p_ersteller uuid)
+returns uuid
+language sql stable security definer as $$
+  select coalesce(p_org, (select organization_id from profiles where id = p_ersteller));
+$$;
+
 drop policy if exists "leads_select" on leads;
 create policy "leads_select" on leads for select using (
-  created_by = auth.uid()
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin or profiles.is_platform_admin))
-    and sieht_person(created_by)
+  -- Die Mandanten-Grenze steht VOR allen Sichtbarkeits-Gründen.
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (
+    created_by = auth.uid()
+    or (ist_fuehrungsrolle(auth.uid()) and sieht_person(created_by))
+    -- Teamleitung sieht die Termine der eigenen Teammitglieder (migration_113).
+    or is_team_lead_of(created_by, auth.uid())
+    -- Zugewiesen oder erwähnt (migration_77), über die Hilfsfunktion statt
+    -- direkt, sonst Endlosschleife (migration_79).
+    or has_lead_task_or_mention(leads.id)
+    -- Eingeladen (migration_112/113).
+    or ist_zu_termin_eingeladen(leads.id)
   )
-  -- Sonst wäre ein per Aufgabe/Erwähnung verlinkter fremder Termin für die
-  -- zugewiesene/erwähnte Person unauffindbar (migration_77). Über die
-  -- Hilfsfunktion statt direkt, sonst Endlosschleife (migration_79).
-  or has_lead_task_or_mention(leads.id)
 );
 drop policy if exists "leads_insert_own" on leads;
-create policy "leads_insert_own" on leads for insert with check (created_by = auth.uid());
+drop policy if exists "leads_insert" on leads;
+create policy "leads_insert" on leads for insert with check (
+  created_by = auth.uid()
+  and (organization_id is null or organization_id is not distinct from aktive_org(auth.uid()))
+);
 drop policy if exists "leads_update" on leads;
 create policy "leads_update" on leads for update using (
-  created_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(created_by, auth.uid())
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (
+    created_by = auth.uid()
+    or ist_fuehrungsrolle(auth.uid())
+    or is_team_lead_of(created_by, auth.uid())
+    or has_lead_task_or_mention(leads.id)
   )
 );
 drop policy if exists "leads_delete" on leads;
 create policy "leads_delete" on leads for delete using (
-  created_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(created_by, auth.uid())
+  eintrag_org(organization_id, created_by) is not distinct from aktive_org(auth.uid())
+  and (
+    created_by = auth.uid()
+    or (exists (select 1 from profiles where profiles.id = auth.uid()
+                and (profiles.role = 'manager' or profiles.is_admin or profiles.is_platform_admin))
+        and sieht_person(created_by))
+    or is_team_lead_of(created_by, auth.uid())
   )
 );
 
@@ -1883,57 +1886,26 @@ create policy "leads_delete" on leads for delete using (
 alter table lead_comments enable row level security;
 drop policy if exists "lead_comments_select_all" on lead_comments;
 create policy "lead_comments_select_all" on lead_comments for select using (
-  exists (
-    select 1 from leads l where l.id = lead_comments.lead_id
-    and (
-      l.created_by = auth.uid()
-      or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-      or (
-        exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-        and same_org(l.created_by, auth.uid())
-      )
-      or has_lead_task_or_mention(l.id)
-    )
-  )
+  exists (select 1 from leads l where l.id = lead_comments.lead_id)
 );
 drop policy if exists "lead_comments_insert_own" on lead_comments;
 create policy "lead_comments_insert_own" on lead_comments for insert with check (
   auth.uid() = user_id
-  and exists (
-    select 1 from leads l where l.id = lead_comments.lead_id
-    and (
-      l.created_by = auth.uid()
-      or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-      or (
-        exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-        and same_org(l.created_by, auth.uid())
-      )
-    )
-  )
+  and exists (select 1 from leads l where l.id = lead_comments.lead_id)
 );
 drop policy if exists "lead_comments_delete_own_or_manager" on lead_comments;
 create policy "lead_comments_delete_own_or_manager" on lead_comments for delete using (
   auth.uid() = user_id
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
-    select 1 from leads l where l.id = lead_comments.lead_id
-    and exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(l.created_by, auth.uid())
-  )
+  or (ist_fuehrungsrolle(auth.uid())
+      and exists (select 1 from leads l where l.id = lead_comments.lead_id))
 );
 
 -- --- lead_tasks --- (migration_67)
 alter table lead_tasks enable row level security;
 drop policy if exists "lead_tasks_select_all" on lead_tasks;
 create policy "lead_tasks_select_all" on lead_tasks for select using (
-  assigned_to = auth.uid()
-  or assigned_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
-    select 1 from leads l where l.id = lead_tasks.lead_id
-    and exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-    and same_org(l.created_by, auth.uid())
-  )
+  ((assigned_to = auth.uid() or assigned_by = auth.uid()) and sieht_person(assigned_to))
+  or exists (select 1 from leads l where l.id = lead_tasks.lead_id)
 );
 drop policy if exists "lead_tasks_insert_own" on lead_tasks;
 create policy "lead_tasks_insert_own" on lead_tasks for insert with check (
@@ -1955,24 +1927,15 @@ create policy "lead_tasks_insert_own" on lead_tasks for insert with check (
 );
 drop policy if exists "lead_tasks_update_involved_or_manager" on lead_tasks;
 create policy "lead_tasks_update_involved_or_manager" on lead_tasks for update using (
-  assigned_to = auth.uid()
-  or assigned_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
-    select 1 from leads l where l.id = lead_tasks.lead_id
-    and exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(l.created_by, auth.uid())
-  )
+  ((assigned_to = auth.uid() or assigned_by = auth.uid()) and sieht_person(assigned_to))
+  or (ist_fuehrungsrolle(auth.uid())
+      and exists (select 1 from leads l where l.id = lead_tasks.lead_id))
 );
 drop policy if exists "lead_tasks_delete_own_or_manager" on lead_tasks;
 create policy "lead_tasks_delete_own_or_manager" on lead_tasks for delete using (
-  assigned_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or exists (
-    select 1 from leads l where l.id = lead_tasks.lead_id
-    and exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(l.created_by, auth.uid())
-  )
+  (assigned_by = auth.uid() and sieht_person(assigned_to))
+  or (ist_fuehrungsrolle(auth.uid())
+      and exists (select 1 from leads l where l.id = lead_tasks.lead_id))
 );
 
 -- --- lead_mentions --- (migration_68)
@@ -2043,19 +2006,15 @@ create policy "custom_objections_delete" on custom_objections for delete using (
 -- --- call_recordings ---
 drop policy if exists "call_recordings_select" on call_recordings;
 create policy "call_recordings_select" on call_recordings for select using (
-  created_by = auth.uid()
+  (created_by = auth.uid() and sieht_person(created_by))
   or (visibility = 'org' and same_org(created_by, auth.uid()))
   or (
     visibility = 'team_lead'
     and (
       is_team_lead_of(created_by, auth.uid())
-      or (
-        same_org(created_by, auth.uid())
-        and exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.role = 'backend' or profiles.is_admin))
-      )
+      or (same_org(created_by, auth.uid()) and ist_fuehrungsrolle(auth.uid()))
     )
   )
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
 );
 drop policy if exists "call_recordings_insert_own" on call_recordings;
 create policy "call_recordings_insert_own" on call_recordings for insert with check (created_by = auth.uid());
@@ -2063,12 +2022,8 @@ drop policy if exists "call_recordings_update_own" on call_recordings;
 create policy "call_recordings_update_own" on call_recordings for update using (created_by = auth.uid());
 drop policy if exists "call_recordings_delete" on call_recordings;
 create policy "call_recordings_delete" on call_recordings for delete using (
-  created_by = auth.uid()
-  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_platform_admin)
-  or (
-    exists (select 1 from profiles where profiles.id = auth.uid() and (profiles.role = 'manager' or profiles.is_admin))
-    and same_org(created_by, auth.uid())
-  )
+  (created_by = auth.uid() and sieht_person(created_by))
+  or (ist_fuehrungsrolle(auth.uid()) and same_org(created_by, auth.uid()))
 );
 
 -- --- login_attempts ---

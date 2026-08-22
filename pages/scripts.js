@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { loescheGeprueft } from "../lib/loeschen";
 import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 import { apiPost } from "../lib/apiClient";
+import { getActiveOrgId } from "../lib/activeOrg";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState([]);
@@ -74,9 +75,14 @@ export default function Scripts() {
         fileName = form.file.name;
       }
 
+      // Das Skript gehört zur AKTIVEN Organisation (migration_115) — sonst
+      // wandert es mit dem Konto in jede andere mit.
+      const { data: mich } = await supabase.from("profiles")
+        .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
       const { error } = await supabase.from("scripts").insert({
         category: form.category.trim() || "Allgemein", title: form.title.trim(), body: form.body.trim(),
         file_url: fileUrl, file_name: fileName, visibility: form.visibility, created_by: session.user.id,
+        organization_id: getActiveOrgId(mich),
       });
       if (error) throw error;
 

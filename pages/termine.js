@@ -622,6 +622,9 @@ export default function Termine() {
     const original = leads.find((l) => l.id === id);
     if (!original) return;
     setError("");
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: profilFuerOrg } = await supabase.from("profiles")
+      .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
 
     // Der ursprüngliche Termin behält sein Datum, bekommt nur das Ergebnis.
     // Auch hier prüfen: eine abgelehnte Änderung meldet keinen Fehler. Ohne
@@ -634,6 +637,9 @@ export default function Termine() {
 
     const { data: neuerTermin, error: err } = await supabase.from("leads").insert({
       created_by: original.created_by,
+      // Der Folgetermin gehört in dieselbe Organisation wie der ursprüngliche
+      // (migration_114) — nicht in die Heimat-Organisation des Kontos.
+      organization_id: original.organization_id || getActiveOrgId(profilFuerOrg),
       name: original.name,
       phone: original.phone,
       email: original.email,

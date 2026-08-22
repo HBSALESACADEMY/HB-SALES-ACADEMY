@@ -223,6 +223,15 @@ export default function Kalender() {
     await laden(true);
   }
 
+  // Habe ICH zu diesem Termin zu- oder abgesagt? Steht in denselben Daten,
+  // war aber bisher nur an der Einladungsliste im Tagesdetail zu sehen.
+  function meinStatus(quelle, zielId) {
+    const e = (daten?.einladungen || []).find(
+      (x) => x.quelle === quelle && x.ziel_id === zielId && x.person_id === daten?.selbst
+    );
+    return e?.status || null;
+  }
+
   function einladungenZu(quelle, zielId) {
     return (daten?.einladungen || []).filter((e) => e.quelle === quelle && e.ziel_id === zielId);
   }
@@ -390,13 +399,13 @@ export default function Kalender() {
                         ${anzahl ? "text-textMain" : "text-textMuted"} hover:border-amber/60`}>
                       <span className={`px-0.5 ${istHeute ? "font-bold text-amber" : ""}`}>{tag.getDate()}</span>
                       <span className="flex flex-col gap-0.5 mt-0.5 leading-tight">
-                        {zeilenFuerTag(inhalt).slice(0, 3).map((z, k) => (
+                        {zeilenFuerTag(inhalt, meinStatus).slice(0, 3).map((z, k) => (
                           <span key={k} title={z.titel} className="truncate text-[10px] px-0.5">
                             {z.symbol} {z.titel}
                           </span>
                         ))}
-                        {zeilenFuerTag(inhalt).length > 3 && (
-                          <span className="text-[10px] text-textMuted px-0.5">+{zeilenFuerTag(inhalt).length - 3} weitere</span>
+                        {zeilenFuerTag(inhalt, meinStatus).length > 3 && (
+                          <span className="text-[10px] text-textMuted px-0.5">+{zeilenFuerTag(inhalt, meinStatus).length - 3} weitere</span>
                         )}
                       </span>
                     </button>
@@ -416,7 +425,7 @@ export default function Kalender() {
                     <div className={`text-[11px] mb-1.5 ${istHeute ? "text-amber font-semibold" : "text-textMuted"}`}>
                       {tag.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
                     </div>
-                    <TagesInhalt inhalt={inhalt} kompakt />
+                    <TagesInhalt inhalt={inhalt} meinStatus={meinStatus} kompakt />
                   </div>
                 );
               })}
@@ -430,6 +439,7 @@ export default function Kalender() {
               </div>
               <TagesInhalt
                 inhalt={eintraegeAm(detailTag)}
+                meinStatus={meinStatus}
                 bearbeitenId={bearbeitenId}
                 bearbeitenEntwurf={bearbeitenEntwurf}
                 setBearbeitenEntwurf={setBearbeitenEntwurf}
@@ -457,10 +467,19 @@ export default function Kalender() {
 // Was in einer Tageskachel steht — Uhrzeit und Name statt bloss ein Symbol.
 // Vertriebstermine zuerst: sie haben eine Uhrzeit und sind das, wonach im
 // Kalender gesucht wird.
-function zeilenFuerTag(inhalt) {
+// Das eigene Ja oder Nein gehört in die Zeile: eine Zusage, die man nur in
+// der Einladungsliste wiederfindet, sieht aus, als sei sie nie angekommen.
+function zeilenFuerTag(inhalt, meinStatus) {
+  const zeichen = (quelle, id, standard) => {
+    const status = meinStatus ? meinStatus(quelle, id) : null;
+    if (status === "zugesagt") return "✅";
+    if (status === "abgesagt") return "❌";
+    if (status === "offen") return "⏳";
+    return standard;
+  };
   return [
-    ...inhalt.termine.map((t) => ({ symbol: "📞", titel: `${uhrzeitDeutsch(t.appointment_at)} ${t.name}` })),
-    ...inhalt.eintraege.map((e) => ({ symbol: symbolFuer(e.art), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
+    ...inhalt.termine.map((t) => ({ symbol: zeichen("lead", t.id, "📞"), titel: `${uhrzeitDeutsch(t.appointment_at)} ${t.name}` })),
+    ...inhalt.eintraege.map((e) => ({ symbol: zeichen("org_event", e.id, symbolFuer(e.art)), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
     ...inhalt.geburtstage.map((g) => ({ symbol: "🎂", titel: g.name })),
     ...inhalt.abwesend.map((a) => ({ symbol: "🌴", titel: `${a.name} abwesend` })),
   ];
@@ -478,7 +497,7 @@ function tagInDeutschland(iso) {
 
 // Der Inhalt eines Tages — in der Wochenansicht kompakt, in der Tagesansicht
 // mit allem, was dazugehört: Beschreibung, Einladungen, Knöpfe.
-function TagesInhalt({ inhalt, kompakt, einladungenZu, personen, selbst, einladenFuer, setEinladenFuer, onEinladen, onZuruecknehmen, onLoeschen, busy,
+function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, selbst, einladenFuer, setEinladenFuer, onEinladen, onZuruecknehmen, onLoeschen, busy,
   bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
     && inhalt.termine.length === 0 && inhalt.abwesend.length === 0;
@@ -561,6 +580,8 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, personen, selbst, einlade
             </div>
             <div className="text-[11px] text-textMuted">
               {terminZeile(t.appointment_at, kompakt)}{!kompakt && ` · ${t.autor}`}
+              {meinStatus && meinStatus("lead", t.id) === "zugesagt" && <span className="text-teal"> · du hast zugesagt</span>}
+              {meinStatus && meinStatus("lead", t.id) === "abgesagt" && <span className="text-coral"> · du hast abgesagt</span>}
             </div>
             {!kompakt && (
               <button onClick={() => terminInEigenenKalender(t)} className="btn-ghost text-xs mt-1">📥 In meinen Kalender</button>
