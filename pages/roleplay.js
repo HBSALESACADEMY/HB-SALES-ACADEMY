@@ -7,6 +7,7 @@ import { apiPost } from "../lib/apiClient";
 import { COURSES } from "../lib/curriculum";
 import { PERSONAS, SCENARIOS, DIFFICULTY } from "../lib/personas";
 import BereichsTabs, { TRAINING } from "../components/BereichsTabs";
+import LogoHintergrund from "../components/LogoHintergrund";
 
 export default function Roleplay() {
   const [examResults, setExamResults] = useState([]);
@@ -145,13 +146,19 @@ export default function Roleplay() {
       </h1>
       <p className="text-textMuted text-sm mb-4">{persona.tagline} · Szenario: {sc.label} · Modus: {DIFFICULTY[difficulty].label}</p>
 
-      <div ref={chatRef} className="flex flex-col gap-2.5 h-[320px] overflow-y-auto p-4 bg-surfaceRaised border border-line rounded-xl mb-3">
+      {/* Das Logo liegt im ruhenden Rahmen, nicht im scrollenden Verlauf —
+          sonst wanderte es beim Scrollen mit. Die Sprechblasen sind deckend,
+          der Text bleibt also lesbar. */}
+      <div className="relative overflow-hidden bg-surfaceRaised border border-line rounded-xl mb-3">
+      <LogoHintergrund breite="w-1/2" hoehe="max-h-[60%]" />
+      <div ref={chatRef} className="relative flex flex-col gap-2.5 h-[320px] overflow-y-auto p-4">
         {messages.map((m, i) => (
           <div key={i} className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm leading-snug ${m.role === "user" ? "self-end bg-amber text-[var(--org-button-text,#fff)]" : "self-start bg-surfaceRaised text-textMain"}`}>
             {m.content}
           </div>
         ))}
         {loading && <div className="self-start bg-surfaceRaised text-textMain px-3.5 py-2 rounded-xl text-sm">…</div>}
+      </div>
       </div>
 
       {error && <p className="text-coral text-xs mb-2">{error}</p>}
