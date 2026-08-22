@@ -11,6 +11,7 @@ import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet } from "../lib/apiClient";
 import { aendereGeprueft } from "../lib/loeschen";
 import { deutscheZeit } from "../lib/terminzeit";
+import LogoHintergrund from "../components/LogoHintergrund";
 import { goalMetricLabel } from "../lib/goalMetrics";
 import { tagesSchluessel } from "../lib/dateRange";
 import { zeitraumLabel } from "../lib/zielzeitraum";
@@ -347,9 +348,16 @@ export default function Dashboard() {
     <Layout>
       {(profile) => (
         <>
-          <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
-          <div className="brand-stripe w-16 mb-4" />
-          <p className="text-textMuted text-sm mb-6">Dein Überblick über Fortschritt und nächste Schritte.</p>
+          {/* Begrüssung mit dem Logo der eigenen Firma dahinter: eine ruhige
+              Fläche, auf der es als Zugehörigkeit wirkt und nichts verdeckt. */}
+          <div className="card mb-6 relative overflow-hidden">
+            <LogoHintergrund breite="w-1/3" hoehe="max-h-[80%]" />
+            <div className="relative">
+              <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Willkommen zurück{profile?.full_name ? `, ${profile.full_name}` : ""}</h1>
+              <div className="brand-stripe w-16 mb-3" />
+              <p className="text-textMuted text-sm">Dein Überblick über Fortschritt und nächste Schritte.</p>
+            </div>
+          </div>
 
           {profile?.streak_count > 0 && profile?.last_challenge_date !== tagesSchluessel() && (
             <div className="card mb-5 border border-amber/30 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/daily-challenge")}>

@@ -90,6 +90,18 @@ let cachedBadges = null;
 // Einmal je Sitzung: die aktive Organisation auch serverseitig nachziehen.
 let aktiveOrgAbgeglichen = false;
 let cachedOrg = null;
+// Wer auf das Logo der Organisation wartet, meldet sich hier an: die Daten
+// treffen erst nach dem ersten Zeichnen ein (siehe components/LogoHintergrund.js).
+const orgHoerer = new Set();
+function setzeCachedOrg(o) {
+  cachedOrg = o;
+  orgHoerer.forEach((f) => f(o));
+}
+
+export function abonniereOrg(rueckruf) {
+  orgHoerer.add(rueckruf);
+  return () => orgHoerer.delete(rueckruf);
+}
 
 export function patchCachedProfile(patch) {
   cachedProfile = cachedProfile ? { ...cachedProfile, ...patch } : patch;
@@ -337,16 +349,16 @@ export default function Layout({ children, fullBleed }) {
         const { data: orgData } = await orgAbfrage;
         if (mounted && orgData) {
           setOrg(orgData);
-          cachedOrg = orgData;
+          setzeCachedOrg(orgData);
           applyOrgBranding(orgData);
         } else if (mounted) {
           setOrg(null);
-          cachedOrg = null;
+          setzeCachedOrg(null);
           resetOrgBranding();
         }
       } else if (mounted) {
         setOrg(null);
-        cachedOrg = null;
+        setzeCachedOrg(null);
         resetOrgBranding();
       }
     }
@@ -613,7 +625,7 @@ export default function Layout({ children, fullBleed }) {
     cachedProfile = null;
     cachedNavItems = null;
     cachedBadges = null;
-    cachedOrg = null;
+    setzeCachedOrg(null);
     resetOrgBranding();
     sessionStorage.removeItem("hb_active_org_id");
     // Auch serverseitig zurücksetzen (migration_92) — sonst bliebe die zuletzt

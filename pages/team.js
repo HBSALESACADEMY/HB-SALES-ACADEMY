@@ -11,6 +11,7 @@ import { goalMetricGroups } from "../lib/goalMetrics";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { apiPost } from "../lib/apiClient";
 import Organigramm from "../components/Organigramm";
+import LogoHintergrund from "../components/LogoHintergrund";
 import Strukturbaum from "../components/Strukturbaum";
 import Personenbaum from "../components/Personenbaum";
 import ZielDeuter from "../components/ZielDeuter";
@@ -552,8 +553,11 @@ export default function Team() {
             </div>
           </div>
 
-          {/* Ohne Führungsrolle gibt es nur die eigene Linie — und daran
-              gibt es nichts zu verschieben. */}
+          {/* Das Organigramm ist die grösste ruhige Fläche der Academy —
+              das Logo dahinter macht daraus ein Dokument der eigenen Firma. */}
+          <div className="relative overflow-hidden rounded-xl">
+          <LogoHintergrund breite="w-1/2" hoehe="max-h-[60%]" />
+          <div className="relative">
           {organigramm.nurEigeneLinie ? (
             <>
               <p className="text-[11px] text-textMuted mb-3">
@@ -592,6 +596,8 @@ export default function Team() {
               <Organigramm daten={organigramm} onRolle={setzeRolle} />
             </>
           )}
+          </div>
+          </div>
         </div>
       )}
 

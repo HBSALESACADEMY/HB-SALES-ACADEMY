@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     const vonZeitpunkt = tagesBeginnZeitpunkt(von);
     const bisZeitpunkt = tagesBeginnZeitpunkt(tagPlus(bis, 1));
 
-    const [{ data: eintraege }, { data: personen }, { data: org }, { data: termine }] = await Promise.all([
+    const [{ data: eintraege }, { data: personen }, { data: termine }] = await Promise.all([
       // Überlappend statt nur beginnend: ein mehrtägiger Eintrag, der vorher
       // startet, gehört trotzdem in diesen Zeitraum.
       admin.from("org_events").select("*").eq("organization_id", orgId)
@@ -49,9 +49,6 @@ export default async function handler(req, res) {
         .order("von"),
       admin.from("profiles").select("id, full_name, avatar_url, geburtstag, abwesend_von, abwesend_bis")
         .eq("organization_id", orgId),
-      // Für das Logo im Kalender-Hintergrund. Bewusst über die AKTIVE
-      // Organisation, damit im Kalender kein fremdes Logo auftaucht.
-      admin.from("organizations").select("name, logo_url").eq("id", orgId).maybeSingle(),
       auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by")
         .not("appointment_at", "is", null)
         .gte("appointment_at", vonZeitpunkt)
@@ -125,7 +122,6 @@ export default async function handler(req, res) {
       personen: personenListe,
       offeneEinladungen,
       selbst: auth.user.id,
-      organisation: { name: org?.name || null, logo_url: org?.logo_url || null },
     });
   } catch (e) {
     console.error("Kalender konnte nicht geladen werden:", e.message);
