@@ -380,17 +380,24 @@ export default function Kalender() {
                   const istHeute = tagesSchluessel(tag) === heute;
                   const gewaehlt = gewaehlterTag && istGleicherTag(tag, gewaehlterTag);
                   return (
+                    /* In der Kachel steht, WAS an dem Tag ist — ein Symbol
+                       allein zwang dazu, jeden Tag einzeln anzutippen, nur um
+                       herauszufinden, worum es geht. */
                     <button key={tag.toISOString()}
                       onClick={() => setGewaehlterTag(gewaehlt ? null : tag)}
-                      className={`aspect-square rounded-lg border p-1 flex flex-col items-center justify-start text-xs
+                      className={`min-h-[5.5rem] rounded-lg border p-1 flex flex-col items-stretch text-left text-xs overflow-hidden
                         ${gewaehlt ? "border-amber bg-amber/10" : istHeute ? "border-amber/40" : "border-line"}
                         ${anzahl ? "text-textMain" : "text-textMuted"} hover:border-amber/60`}>
-                      <span className={istHeute ? "font-bold" : ""}>{tag.getDate()}</span>
-                      <span className="flex flex-wrap justify-center gap-0.5 mt-0.5 leading-none">
-                        {inhalt.geburtstage.length > 0 && <span title="Geburtstag">🎂</span>}
-                        {inhalt.eintraege.slice(0, 3).map((e) => <span key={e.id} title={e.titel}>{symbolFuer(e.art)}</span>)}
-                        {inhalt.termine.length > 0 && <span title={`${inhalt.termine.length} Termin(e)`}>📞</span>}
-                        {inhalt.abwesend.length > 0 && <span title="jemand abwesend" className="opacity-60">🌴</span>}
+                      <span className={`px-0.5 ${istHeute ? "font-bold text-amber" : ""}`}>{tag.getDate()}</span>
+                      <span className="flex flex-col gap-0.5 mt-0.5 leading-tight">
+                        {zeilenFuerTag(inhalt).slice(0, 3).map((z, k) => (
+                          <span key={k} title={z.titel} className="truncate text-[10px] px-0.5">
+                            {z.symbol} {z.titel}
+                          </span>
+                        ))}
+                        {zeilenFuerTag(inhalt).length > 3 && (
+                          <span className="text-[10px] text-textMuted px-0.5">+{zeilenFuerTag(inhalt).length - 3} weitere</span>
+                        )}
                       </span>
                     </button>
                   );
@@ -445,6 +452,18 @@ export default function Kalender() {
       )}
     </Layout>
   );
+}
+
+// Was in einer Tageskachel steht — Uhrzeit und Name statt bloss ein Symbol.
+// Vertriebstermine zuerst: sie haben eine Uhrzeit und sind das, wonach im
+// Kalender gesucht wird.
+function zeilenFuerTag(inhalt) {
+  return [
+    ...inhalt.termine.map((t) => ({ symbol: "📞", titel: `${uhrzeitDeutsch(t.appointment_at)} ${t.name}` })),
+    ...inhalt.eintraege.map((e) => ({ symbol: symbolFuer(e.art), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
+    ...inhalt.geburtstage.map((g) => ({ symbol: "🎂", titel: g.name })),
+    ...inhalt.abwesend.map((a) => ({ symbol: "🌴", titel: `${a.name} abwesend` })),
+  ];
 }
 
 // Nach welchem deutschen Kalendertag ein Zeitpunkt gehört. Ohne das wandert

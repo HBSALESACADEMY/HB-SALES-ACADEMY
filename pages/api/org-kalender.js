@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     const vonZeitpunkt = tagesBeginnZeitpunkt(von);
     const bisZeitpunkt = tagesBeginnZeitpunkt(tagPlus(bis, 1));
 
-    const [{ data: eintraege }, { data: personen }, { data: org }, { data: termine }, { data: meineEinladungen }] = await Promise.all([
+    const [{ data: eintraege }, { data: personen }, { data: org }, { data: termine }] = await Promise.all([
       // Überlappend statt nur beginnend: ein mehrtägiger Eintrag, der vorher
       // startet, gehört trotzdem in diesen Zeitraum.
       admin.from("org_events").select("*").eq("organization_id", orgId)
@@ -57,30 +57,17 @@ export default async function handler(req, res) {
         .gte("appointment_at", vonZeitpunkt)
         .lt("appointment_at", bisZeitpunkt)
         .order("appointment_at"),
-      admin.from("termin_einladungen").select("*").eq("person_id", auth.user.id).eq("organization_id", orgId),
     ]);
 
     // Ein Eintrag, der vorher begann und kein Ende hat, dauert einen Tag
     // — der gehört dann doch nicht hierher.
     const gefiltert = (eintraege || []).filter((e) => (e.bis || e.von) >= von);
 
-    // Wer zu einem Vertriebstermin eingeladen ist, darf ihn sehen — auch
-    // ohne eigenes Recht auf den Termin. Sonst wäre die Einladung sinnlos.
-    const sichtbareTermine = [...(termine || [])];
-    const bekannt = new Set(sichtbareTermine.map((t) => t.id));
-    const eingeladenAufLeads = (meineEinladungen || [])
-      .filter((e) => e.quelle === "lead" && !bekannt.has(e.ziel_id))
-      .map((e) => e.ziel_id);
-    if (eingeladenAufLeads.length) {
-      const { data: zusatz } = await admin.from("leads")
-        .select("id, name, company, appointment_at, status, outcome, created_by")
-        .in("id", eingeladenAufLeads)
-        .not("appointment_at", "is", null)
-        .gte("appointment_at", vonZeitpunkt)
-        .lt("appointment_at", bisZeitpunkt);
-      (zusatz || []).forEach((t) => { if (!bekannt.has(t.id)) { sichtbareTermine.push(t); bekannt.add(t.id); } });
-    }
-    sichtbareTermine.sort((a, b) => String(a.appointment_at).localeCompare(String(b.appointment_at)));
+    // Welche Termine jemand sieht, entscheidet die Datenbank: angelegt,
+    // eingeladen, zugewiesen, erwähnt — oder Führung bzw. Teamleitung
+    // (migration_113). Deshalb kommen sie über den RLS-gebundenen Client
+    // und nicht über den Admin-Zugang.
+    const sichtbareTermine = termine || [];
 
     // Geburtstage: der Zeitraum kann mehrere Monate berühren, deshalb wird
     // für jeden Monat darin geprüft, ob der Tag hineinfällt.
