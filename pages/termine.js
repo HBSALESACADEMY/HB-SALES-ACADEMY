@@ -6,6 +6,7 @@ import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import AudioPlayer from "../components/AudioPlayer";
 import PersonenAuswahl from "../components/PersonenAuswahl";
+import { ladeIcsHerunter } from "../lib/ics";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { openProfile } from "../lib/profileModalBus";
@@ -658,6 +659,27 @@ export default function Termine() {
     setExpandedLeadId(neuerTermin.id);
   }
 
+  // Übergibt den Termin an den Kalender des eigenen Geräts. Die Datei
+  // enthält, was zum Termin gehört — Kontaktdaten und Notiz —, damit man
+  // unterwegs nicht extra die Academy öffnen muss.
+  function uebertrageInKalender(lead) {
+    const zeilen = [
+      lead.company ? `Firma: ${lead.company}` : null,
+      lead.phone ? `Telefon: ${lead.phone}` : null,
+      lead.email ? `E-Mail: ${lead.email}` : null,
+      lead.notes ? `\nNotiz: ${lead.notes}` : null,
+    ].filter(Boolean);
+    const appUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const ok = ladeIcsHerunter({
+      uid: `lead-${lead.id}@hb-sales-academy.de`,
+      titel: `Termin: ${lead.name}`,
+      beschreibung: [...zeilen, appUrl ? `\n${appUrl}/termine?leadId=${lead.id}` : null].filter(Boolean).join("\n"),
+      start: lead.appointment_at,
+      dauerMinuten: 60,
+    });
+    if (!ok) setError("Für diesen Termin ist kein Zeitpunkt hinterlegt — er lässt sich nicht übertragen.");
+  }
+
   async function togglePlay(lead) {
     if (playingId === lead.id) { setPlayingId(null); setPlayingUrl(null); return; }
     try {
@@ -1147,6 +1169,17 @@ export default function Termine() {
                   className="btn-ghost text-xs">
                   🕒 Verschieben
                 </button>
+                {/* In den eigenen Kalender: eine .ics-Datei, die Apple,
+                    Google und Outlook gleichermassen lesen — ohne Anbindung
+                    an einen einzelnen Anbieter (siehe lib/ics.js). */}
+                {lead.appointment_at && (
+                  <button
+                    onClick={() => uebertrageInKalender(lead)}
+                    title="Als Kalender-Datei speichern und in den eigenen Kalender übernehmen"
+                    className="btn-ghost text-xs">
+                    <Icon name="calendar" size={12} /> In meinen Kalender
+                  </button>
+                )}
                 {lead.status === "geplant" && (
                   <button
                     disabled={reminderSendingId === lead.id}

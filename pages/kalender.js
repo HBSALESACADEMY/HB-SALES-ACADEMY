@@ -10,6 +10,8 @@ import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel }
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { nurUhrzeit, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { terminAnzeige } from "../lib/zeit";
+import { ladeIcsHerunter } from "../lib/ics";
+import { zeitpunktInBerlin } from "../lib/woche";
 
 // Firmenkalender: was die ganze Organisation angeht — Schulungen, Messen,
 // Feiertage, Betriebsausflug. Dazu Geburtstage und Abwesenheiten, die sich
@@ -544,6 +546,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, personen, selbst, einlade
           </div>
           {!kompakt && onLoeschen && (
             <span className="flex items-center gap-1 flex-shrink-0">
+              <button onClick={() => eintragInEigenenKalender(e)} title="In den eigenen Kalender übernehmen" className="btn-ghost text-xs">📥 Übernehmen</button>
               <button onClick={() => onBearbeiten(e)} className="btn-ghost text-xs">Bearbeiten</button>
               <button onClick={() => onLoeschen(e.id, e.titel)} className="btn-ghost text-xs text-coral">Entfernen</button>
             </span>
@@ -561,6 +564,9 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, personen, selbst, einlade
             <div className="text-[11px] text-textMuted">
               {terminZeile(t.appointment_at, kompakt)}{!kompakt && ` · ${t.autor}`}
             </div>
+            {!kompakt && (
+              <button onClick={() => terminInEigenenKalender(t)} className="btn-ghost text-xs mt-1">📥 In meinen Kalender</button>
+            )}
             {!kompakt && (
               <Einladungsleiste
                 quelle="lead" zielId={t.id}
@@ -628,4 +634,38 @@ function Einladungsleiste({ quelle, zielId, einladungen, personen, selbst, offen
       )}
     </div>
   );
+}
+
+// Einen Eintrag an den Kalender des eigenen Geräts übergeben. Ohne Uhrzeit
+// wird daraus ein ganztägiger Termin — so steht er dort, wo er hingehört,
+// statt um Mitternacht (siehe lib/ics.js).
+function eintragInEigenenKalender(e) {
+  // Die eingetragene Uhrzeit ist deutsche Zeit — nicht die des Geräts, das
+  // die Datei erzeugt (siehe lib/woche.js).
+  const start = zeitpunktInBerlin(e.von, e.uhrzeit);
+  ladeIcsHerunter(start
+    ? {
+        uid: `org-event-${e.id}@hb-sales-academy.de`,
+        titel: e.titel,
+        beschreibung: e.beschreibung || "",
+        start,
+        dauerMinuten: 60,
+      }
+    : {
+        uid: `org-event-${e.id}@hb-sales-academy.de`,
+        titel: e.titel,
+        beschreibung: e.beschreibung || "",
+        tagVon: e.von,
+        tagBis: e.bis || e.von,
+      });
+}
+
+function terminInEigenenKalender(t) {
+  ladeIcsHerunter({
+    uid: `lead-${t.id}@hb-sales-academy.de`,
+    titel: `Termin: ${t.name}`,
+    beschreibung: t.company ? `Firma: ${t.company}` : "",
+    start: t.appointment_at,
+    dauerMinuten: 60,
+  });
 }

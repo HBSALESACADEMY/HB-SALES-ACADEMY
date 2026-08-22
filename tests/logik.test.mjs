@@ -19,6 +19,8 @@ import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
 import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
 import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
 import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js";
+import { baueIcs, icsDateiname } from "../lib/ics.js";
+import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
 
@@ -479,4 +481,49 @@ test("Schnellzugriff: eigene Auswahl schlägt Vorgabe", () => {
   // Reihenfolge kommt aus den eigenen Einstellungen.
   const sortiert = sichtbareKacheln({ sichtbar: ["duel", "recordings"], order: ["recordings", "duel"] }, false).map((k) => k.key);
   assert.deepEqual(sortiert, ["recordings", "duel"]);
+});
+
+// Eine .ics-Datei, die ein Kalender nicht liest, merkt man erst, wenn der
+// Termin beim Gegenüber fehlt — deshalb hier geprüft.
+test("Kalender-Datei: Format, Maskierung und ganze Tage", () => {
+  const datei = baueIcs({
+    uid: "lead-1@hb", titel: "Gespräch; Meier, GmbH",
+    beschreibung: "Zeile eins\nZeile zwei", start: "2026-08-22T12:00:00.000Z", dauerMinuten: 30,
+  });
+  assert.ok(datei.startsWith("BEGIN:VCALENDAR\r\n"), "Zeilen enden mit CRLF.");
+  assert.ok(datei.includes("DTSTART:20260822T120000Z"));
+  assert.ok(datei.includes("DTEND:20260822T123000Z"), "30 Minuten Dauer.");
+  // Semikolon, Komma und Zeilenumbruch haben im Format eine Bedeutung.
+  assert.ok(datei.includes("SUMMARY:Gespräch\\; Meier\\, GmbH"));
+  assert.ok(datei.includes("DESCRIPTION:Zeile eins\\nZeile zwei"));
+  assert.ok(datei.trimEnd().endsWith("END:VCALENDAR"));
+
+  // Ohne Uhrzeit: ganztägig, Ende ist der Folgetag.
+  const ganz = baueIcs({ uid: "ev-1@hb", titel: "Messe", tagVon: "2026-09-01", tagBis: "2026-09-03" });
+  assert.ok(ganz.includes("DTSTART;VALUE=DATE:20260901"));
+  assert.ok(ganz.includes("DTEND;VALUE=DATE:20260904"));
+
+  // Ohne verwertbaren Zeitpunkt lieber gar keine Datei als eine kaputte.
+  assert.equal(baueIcs({ titel: "Ohne alles" }), null);
+  assert.equal(baueIcs({ titel: "Unsinn", start: "kein Datum" }), null);
+
+  // Lange Zeilen werden gefaltet — sonst lehnen manche Kalender die Datei ab.
+  const lang = baueIcs({ uid: "x@hb", titel: "T".repeat(200), start: "2026-08-22T12:00:00.000Z" });
+  lang.split("\r\n").forEach((z) => assert.ok(z.length <= 75, `Zeile zu lang: ${z.length}`));
+
+  assert.equal(icsDateiname("Gespräch: Meier & Co"), "Gespräch-Meier-Co.ics");
+});
+
+// Eine im Kalender eingetragene Uhrzeit ist deutsche Zeit. Wird sie auf
+// einem Gerät im Ausland als Ortszeit gelesen, wandert der Termin.
+test("Uhrzeit im Kalender gilt als deutsche Zeit", () => {
+  // Sommerzeit: 14:00 in Berlin sind 12:00 UTC.
+  assert.equal(zeitpunktInBerlin("2026-08-22", "14:00"), "2026-08-22T12:00:00.000Z");
+  // Winterzeit: nur eine Stunde Unterschied.
+  assert.equal(zeitpunktInBerlin("2026-01-15", "14:00"), "2026-01-15T13:00:00.000Z");
+  assert.equal(zeitpunktInBerlin("2026-08-22", "9:30"), "2026-08-22T07:30:00.000Z");
+  // Unbrauchbare Angaben führen zum ganztägigen Termin, nicht zu Mitternacht.
+  assert.equal(zeitpunktInBerlin("2026-08-22", "nachmittags"), null);
+  assert.equal(zeitpunktInBerlin("2026-08-22", "25:00"), null);
+  assert.equal(zeitpunktInBerlin("", "14:00"), null);
 });
