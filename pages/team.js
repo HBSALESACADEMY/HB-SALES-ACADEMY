@@ -87,9 +87,9 @@ export default function Team() {
       setFehler(e.message || "Die Team-Zahlen konnten nicht geladen werden.");
     }
 
-    // Organigramm nur für Führungsrollen — die Route antwortet sonst mit 403.
-    // Fehlschlag bleibt still: für alle anderen ist das der Normalfall, kein
-    // Fehler, und der Rest der Seite hängt nicht daran.
+    // Führungsrollen bekommen die ganze Aufstellung, alle anderen nur ihre
+    // eigene Linie (nurEigeneLinie, siehe pages/api/org-chart.js).
+    // Fehlschlag bleibt still: der Rest der Seite hängt nicht daran.
     try {
       const { data: profil2 } = await supabase.from("profiles")
         .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
@@ -537,10 +537,12 @@ export default function Team() {
       {organigramm && (
         <div className="mb-5">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-            <span className="font-semibold text-textMain text-sm">🗂️ Organigramm</span>
+            <span className="font-semibold text-textMain text-sm">
+              {organigramm.nurEigeneLinie ? "🗂️ Wo du stehst" : "🗂️ Organigramm"}
+            </span>
             {/* Zwei Sichten nebeneinander: die selbst gebaute Struktur und
                 das, was sich aus den Teams von selbst ergibt. */}
-            <div className="flex items-center gap-1.5">
+            <div className={`flex items-center gap-1.5 ${organigramm.nurEigeneLinie ? "hidden" : ""}`}>
               {[["personen", "Personen"], ["struktur", "Abteilungen"], ["teams", "Aus den Teams"]].map(([key, label]) => (
                 <button key={key} onClick={() => setAnsicht(key)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
@@ -550,7 +552,17 @@ export default function Team() {
             </div>
           </div>
 
-          {ansicht === "personen" ? (
+          {/* Ohne Führungsrolle gibt es nur die eigene Linie — und daran
+              gibt es nichts zu verschieben. */}
+          {organigramm.nurEigeneLinie ? (
+            <>
+              <p className="text-[11px] text-textMuted mb-3">
+                Deine Einordnung: du und die Führung über dir. Wer sonst noch im Team ist, sehen die
+                Teamleitung und die Manager.
+              </p>
+              <Personenbaum personen={organigramm.personenBaum || []} zusatz={organigramm.zusatz || []} bearbeiten={false} />
+            </>
+          ) : ansicht === "personen" ? (
             <>
               <p className="text-[11px] text-textMuted mb-3">
                 Wer unter wem steht — von dir festgelegt. Über „Zuordnen“ hängst du jede Person an die richtige Stelle.

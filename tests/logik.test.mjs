@@ -527,3 +527,16 @@ test("Uhrzeit im Kalender gilt als deutsche Zeit", () => {
   assert.equal(zeitpunktInBerlin("2026-08-22", "25:00"), null);
   assert.equal(zeitpunktInBerlin("", "14:00"), null);
 });
+
+// Das Organigramm läuft über den Admin-Zugang, an den Zugriffsregeln der
+// Datenbank vorbei. Was wer sieht, entscheidet allein diese Route — deshalb
+// hier festgehalten, dass die volle Aufstellung an der Führungsrolle hängt.
+test("Organigramm: volle Aufstellung nur für Führungsrollen", () => {
+  const quelle = readFileSync(new URL("../pages/api/org-chart.js", import.meta.url), "utf8");
+  const stelle = quelle.indexOf("teams: knoten, ohneTeam, struktur, teamsOhneEinheit, personenBaum, zusatz");
+  assert.ok(stelle > -1, "Die volle Antwort gibt es nicht mehr — Test anpassen.");
+  const davor = quelle.slice(0, stelle);
+  assert.ok(/if \(darf\) \{\s*$/m.test(davor.split("\n").slice(-3).join("\n")),
+    "Die volle Antwort muss hinter der Prüfung auf die Führungsrolle stehen.");
+  assert.ok(quelle.includes("nurEigeneLinie: true"), "Für alle anderen bleibt nur die eigene Linie.");
+});

@@ -10,8 +10,13 @@ import { istFuehrungsrolle } from "../../lib/rollen";
 // Mitglied von A ist. Es gibt also keine zweite, gepflegte Hierarchie, die
 // mit der Wirklichkeit auseinanderlaufen könnte.
 //
-// Sichtbar für Führungsrollen (Manager, Backend, Admins) — nicht für alle,
-// weil das Organigramm die gesamte Aufstellung der Organisation zeigt.
+// Die gesamte Aufstellung sehen nur Führungsrollen (Manager, Backend,
+// Admins). Alle anderen bekommen ihre EIGENE Linie: sich selbst und die
+// Kette nach oben, unter wem sie stehen — ohne die Kolleg:innen daneben.
+//
+// Warum überhaupt etwas: "unter wem stehe ich" ist eine Frage, die jede
+// Person über sich beantwortet haben darf. Wer neben ihr steht, geht sie
+// dagegen nichts an, solange sie niemanden führt.
 //
 // Als Rollenbezeichnung dient profiles.role_title, dasselbe Feld wie im
 // eigenen Profil. Eine zweite Bezeichnung nur fürs Organigramm hätte sonst
@@ -31,7 +36,6 @@ export default async function handler(req, res) {
   const { client, user } = auth;
 
   const { darf, profil } = await darfOrganigrammSehen(client, user.id);
-  if (!darf) return res.status(403).json({ error: "Das Organigramm ist Führungsrollen vorbehalten." });
 
   const activeOrgId = req.query.activeOrgId || null;
   let orgId = profil?.organization_id || null;
@@ -203,7 +207,42 @@ export default async function handler(req, res) {
     const { data: zusatzRoh } = await admin.from("org_zusatz_chefs").select("person_id, chef_id");
     const zusatz = (zusatzRoh || []).filter((z) => bekannt.has(z.person_id) && bekannt.has(z.chef_id));
 
-    return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit, personenBaum, zusatz });
+    if (darf) {
+      return res.status(200).json({ teams: knoten, ohneTeam, struktur, teamsOhneEinheit, personenBaum, zusatz });
+    }
+
+    // --- Eigene Linie, für alle anderen ------------------------------------
+    // Nur die Kette nach oben. Wer ein Team leitet, ist Führungsrolle und
+    // landet gar nicht erst hier; für alle anderen sind die Kolleg:innen
+    // daneben nicht Teil der Antwort — auch nicht versteckt im JSON.
+    const knotenVon = new Map(personenBaum.map((p) => [p.id, p]));
+    const linie = [];
+    const gesehen = new Set();
+    let lauf = user.id;
+    while (lauf && !gesehen.has(lauf)) {
+      gesehen.add(lauf);
+      const k = knotenVon.get(lauf);
+      if (!k) break;
+      linie.push(k);
+      lauf = k.chefId || null;
+    }
+    // Zusätzliche Vorgesetzte der eigenen Person gehören zur Antwort auf
+    // "unter wem stehe ich" — ihre Kette aber nicht.
+    const eigeneZusatz = zusatz.filter((z) => z.person_id === user.id);
+    eigeneZusatz.forEach((z) => {
+      if (gesehen.has(z.chef_id)) return;
+      const k = knotenVon.get(z.chef_id);
+      if (k) { linie.push({ ...k, chefId: null }); gesehen.add(z.chef_id); }
+    });
+
+    return res.status(200).json({
+      // Teams, Abteilungen und Personen ohne Team bleiben leer: sie zeigen
+      // die Aufstellung der ganzen Organisation.
+      teams: [], ohneTeam: [], struktur: [], teamsOhneEinheit: [],
+      personenBaum: linie,
+      zusatz: eigeneZusatz,
+      nurEigeneLinie: true,
+    });
   } catch (e) {
     console.error("Organigramm fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message });
