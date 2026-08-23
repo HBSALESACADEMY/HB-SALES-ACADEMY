@@ -12,6 +12,14 @@ import { effectiveStreak } from "../lib/streak";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { wochenStartZeitpunkt } from "../lib/woche";
 
+// "@alle" erwähnt alle in der eigenen Organisation. Als eigener Name statt
+// als Aufzählung: sonst müsste man dreissig Namen einzeln antippen, und wer
+// später dazukommt, fehlt in jedem alten Beitrag.
+const ALLE_ID = "__alle__";
+const ALLE_NAME = "alle";
+// "(?!\\S)": "@allerdings" ist keine Erwähnung.
+const ALLE_MUSTER = /@alle(?!\S)/i;
+
 const REACTION_TYPES = [
   { key: "flame", emoji: "🔥" },
   { key: "thumbsup", emoji: "👍" },
@@ -290,12 +298,18 @@ export default function Community() {
     ? shareGlobally
     : mentionTarget != null && posts.find((p) => p.id === mentionTarget)?.visibility === "global";
   const mentionPool = mentionScopeGlobal ? allProfiles : allProfiles.filter((p) => (p.organization_id || null) === myOrgId);
-  const mentionResults = mentionTarget == null ? [] : mentionPool
-    .filter((p) => p.id !== selfId && (!mentionQuery || (p.full_name || "").toLowerCase().includes(mentionQuery.toLowerCase())))
-    .slice(0, 6);
+  // "@alle" benachrichtigt die eigene Organisation — auch bei einem global
+  // geteilten Beitrag. Alle Menschen der Plattform anzuschreiben, weil man
+  // "alle" tippt, wäre etwas anderes, als man meint.
+  const alleIds = allProfiles.filter((p) => (p.organization_id || null) === myOrgId && p.id !== selfId).map((p) => p.id);
+  const alleVorschlag = { id: ALLE_ID, full_name: ALLE_NAME, istAlle: true, anzahl: alleIds.length };
+  const mentionResults = mentionTarget == null ? [] : [
+    ...(alleIds.length && "alle".startsWith((mentionQuery || "").toLowerCase()) ? [alleVorschlag] : []),
+    ...mentionPool.filter((p) => p.id !== selfId && (!mentionQuery || (p.full_name || "").toLowerCase().includes(mentionQuery.toLowerCase()))),
+  ].slice(0, 6);
 
   function selectMention(profile) {
-    const name = profile.full_name || "Unbenannt";
+    const name = profile.istAlle ? ALLE_NAME : (profile.full_name || "Unbenannt");
     const insertion = `@${name} `;
     if (mentionTarget === "compose") {
       const next = newPost.slice(0, mentionStart) + insertion + newPost.slice(mentionStart + 1 + mentionQuery.length);
@@ -321,9 +335,16 @@ export default function Community() {
   // ohne sich selbst — man muss sich nicht selbst benachrichtigen.
   function extractMentionedIds(text) {
     const names = knownNames();
-    if (!text || !names.length) return [];
-    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
+    if (!text) return [];
+    // "@alle" steht für die ganze eigene Organisation.
     const ids = new Set();
+    if (ALLE_MUSTER.test(text)) {
+      allProfiles
+        .filter((p) => (p.organization_id || null) === myOrgId && p.id !== selfId)
+        .forEach((p) => ids.add(p.id));
+    }
+    if (!names.length) return [...ids];
+    const pattern = new RegExp("@(" + names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?!\\S)", "g");
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const found = names.find((n) => n.name === match[1]);
@@ -347,7 +368,7 @@ export default function Community() {
     if (!text) return text;
     const names = knownNames();
     const mentionAlt = names.length ? names.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") : null;
-    const pattern = new RegExp((mentionAlt ? `@(${mentionAlt})(?!\\S)|` : "") + `#([\\p{L}\\p{N}_]+)`, "gu");
+    const pattern = new RegExp((mentionAlt ? `@(${mentionAlt})(?!\\S)|` : "") + `#([\\p{L}\\p{N}_]+)|@(alle)(?!\\S)`, "giu");
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -360,6 +381,9 @@ export default function Community() {
             @{match[1]}
           </span>
         );
+      } else if (match[3]) {
+        // @alle gehört niemandem — hervorgehoben, aber nicht anklickbar.
+        parts.push(<span key={match.index} className="text-amber font-semibold">@{match[3]}</span>);
       } else if (match[2]) {
         const tag = match[2];
         parts.push(
@@ -740,10 +764,13 @@ export default function Community() {
           onBlur={() => setTimeout(() => setMentionTarget((t) => (t === "compose" ? null : t)), 150)}
         />
         {mentionTarget === "compose" && mentionResults.length > 0 && (
-          <div className="absolute z-10 mt-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-[var(--card-bg,#1a1d29)] shadow-lg">
+          <div className="absolute z-10 mt-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-surfaceRaised text-textMain shadow-lg">
             {mentionResults.map((p) => (
-              <button key={p.id} onMouseDown={(e) => { e.preventDefault(); selectMention(p); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs hover:bg-white/5">
-                <Avatar name={p.full_name || "?"} src={p.avatar_url} size={20} /> {p.full_name || "Unbenannt"}
+              <button key={p.id} onMouseDown={(e) => { e.preventDefault(); selectMention(p); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-textMain hover:bg-amber/10">
+                {p.istAlle
+                  ? <><span className="w-5 h-5 rounded-full bg-amber/20 text-amber flex items-center justify-center text-[10px] flex-shrink-0">@</span>
+                      <span>alle <span className="text-textMuted">— {p.anzahl} Personen benachrichtigen</span></span></>
+                  : <><Avatar name={p.full_name || "?"} src={p.avatar_url} size={20} /> {p.full_name || "Unbenannt"}</>}
               </button>
             ))}
           </div>
@@ -990,10 +1017,13 @@ export default function Community() {
                 />
                 <button onClick={() => submitComment(p.id)} className="btn-ghost text-xs">Senden</button>
                 {mentionTarget === p.id && mentionResults.length > 0 && (
-                  <div className="absolute z-10 bottom-full mb-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-[var(--card-bg,#1a1d29)] shadow-lg">
+                  <div className="absolute z-10 bottom-full mb-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-surfaceRaised text-textMain shadow-lg">
                     {mentionResults.map((mp) => (
-                      <button key={mp.id} onMouseDown={(e) => { e.preventDefault(); selectMention(mp); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs hover:bg-white/5">
-                        <Avatar name={mp.full_name || "?"} src={mp.avatar_url} size={20} /> {mp.full_name || "Unbenannt"}
+                      <button key={mp.id} onMouseDown={(e) => { e.preventDefault(); selectMention(mp); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-textMain hover:bg-amber/10">
+                        {mp.istAlle
+                          ? <><span className="w-5 h-5 rounded-full bg-amber/20 text-amber flex items-center justify-center text-[10px] flex-shrink-0">@</span>
+                              <span>alle <span className="text-textMuted">— {mp.anzahl} Personen benachrichtigen</span></span></>
+                          : <><Avatar name={mp.full_name || "?"} src={mp.avatar_url} size={20} /> {mp.full_name || "Unbenannt"}</>}
                       </button>
                     ))}
                   </div>

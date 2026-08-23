@@ -1344,9 +1344,9 @@ export default function Termine() {
                           />
                           <button disabled={commentSending === lead.id} onClick={() => submitComment(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Senden</button>
                           {commentMentionTarget === lead.id && commentMentionResults.length > 0 && (
-                            <div className="absolute z-10 bottom-full mb-1 left-0 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-[var(--card-bg,#1a1d29)] shadow-lg">
+                            <div className="absolute z-10 bottom-full mb-1 left-0 w-64 max-h-48 overflow-y-auto rounded-lg border border-line bg-surfaceRaised text-textMain shadow-lg">
                               {commentMentionResults.map((p) => (
-                                <button key={p.id} onMouseDown={(e) => { e.preventDefault(); selectCommentMention(p); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs hover:bg-white/5">
+                                <button key={p.id} onMouseDown={(e) => { e.preventDefault(); selectCommentMention(p); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-textMain hover:bg-amber/10">
                                   <Avatar name={p.full_name || "?"} src={p.avatar_url} size={20} /> {p.full_name || "Unbenannt"}
                                 </button>
                               ))}
