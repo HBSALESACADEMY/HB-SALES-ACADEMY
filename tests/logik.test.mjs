@@ -22,6 +22,7 @@ import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js"
 import { baueIcs, icsDateiname } from "../lib/ics.js";
 import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
 import { deutscherTag } from "../lib/terminzeit.js";
+import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -577,4 +578,21 @@ test("Tagesgrenze richtet sich nach deutscher Zeit", () => {
   assert.equal(deutscherTag("2026-01-15T23:30:00.000Z"), "2026-01-16");
   assert.equal(deutscherTag(null), null);
   assert.equal(deutscherTag("kein Datum"), null);
+});
+
+// "vor 5 Minuten" ist die Frage, die man an eine Aktivitätsliste stellt.
+test("Relative Zeitangaben", () => {
+  const jetzt = new Date("2026-08-22T12:00:00.000Z").getTime();
+  assert.equal(vorWieLange("2026-08-22T11:59:30.000Z", jetzt), "gerade eben");
+  assert.equal(vorWieLange("2026-08-22T11:55:00.000Z", jetzt), "vor 5 Min.");
+  assert.equal(vorWieLange("2026-08-22T09:00:00.000Z", jetzt), "vor 3 Std.");
+  assert.equal(vorWieLange("2026-08-21T11:00:00.000Z", jetzt), "gestern");
+  assert.equal(vorWieLange("2026-08-19T12:00:00.000Z", jetzt), "vor 3 Tagen");
+  // Eine leicht vorgehende Geräteuhr darf nicht "in 2 Sekunden" ergeben.
+  assert.equal(vorWieLange("2026-08-22T12:00:02.000Z", jetzt), "gerade eben");
+  assert.equal(vorWieLange(null, jetzt), "");
+
+  assert.equal(istGeradeAktiv("2026-08-22T11:50:00.000Z", jetzt), true);
+  assert.equal(istGeradeAktiv("2026-08-22T11:40:00.000Z", jetzt), false);
+  assert.equal(istGeradeAktiv(null, jetzt), false);
 });

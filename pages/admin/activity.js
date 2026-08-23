@@ -9,6 +9,7 @@ import { ABSTAND } from "../../lib/autoRefresh";
 import { getActiveOrgId } from "../../lib/activeOrg";
 import { deutscherTag, nurUhrzeit, DEUTSCHE_ZONE } from "../../lib/terminzeit";
 import { berlinHeute, tagPlus } from "../../lib/woche";
+import { vorWieLange, istGeradeAktiv, AKTIV_FENSTER_MS } from "../../lib/relativeZeit";
 
 // Zeiträume: eine ungefilterte Liste aus Monaten beantwortet keine Frage.
 const ZEITRAEUME = [
@@ -45,6 +46,11 @@ export default function AdminActivity() {
   const [zeitraum, setZeitraum] = useState("woche");
   const [suche, setSuche] = useState("");
   const [anzahlSichtbar, setAnzahlSichtbar] = useState(60);
+  // Wer gerade da ist, steht in keiner Anmeldung: eine offene Sitzung
+  // erzeugt keinen neuen Login-Eintrag. Dafür hinterlässt jeder Seitenaufruf
+  // eine Spur (page_views, siehe components/Layout.js).
+  const [zuletztAktiv, setZuletztAktiv] = useState({});
+  const [stand, setStand] = useState(null);
 
   async function load(silent) {
     if (!silent) setLoading(true);
@@ -106,7 +112,18 @@ export default function AdminActivity() {
       ...(leadTasks || []).map((t) => ({ type: "lead_task", user_id: t.assigned_by, created_at: t.created_at, detail: `${t.title} → ${map[t.assigned_to]?.full_name || "Unbenannt"} (${leadNameById[t.lead_id] || "Termin"})` })),
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+    // Seitenaufrufe des letzten Tages — daraus "wer ist gerade da".
+    const seit = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: aufrufe } = await scoped(
+      supabase.from("page_views").select("user_id, created_at").gt("created_at", seit)
+        .order("created_at", { ascending: false }).limit(2000)
+    );
+    const letzte = {};
+    (aufrufe || []).forEach((a) => { if (!letzte[a.user_id]) letzte[a.user_id] = a.created_at; });
+    setZuletztAktiv(letzte);
+
     setEvents(combined);
+    setStand(new Date().toISOString());
     if (!silent) setLoading(false);
   }
 
@@ -184,8 +201,48 @@ export default function AdminActivity() {
       <AdminTabs />
       <p className="text-textMuted text-sm mb-5">
         Wer war da, wer hat gelernt, wer hat Termine erfasst — {isPlatformAdmin ? "in der Organisation, in der du gerade bist" : "in deiner Organisation"}.
-        Zeiten in deutscher Uhrzeit.
+        Zeiten in deutscher Uhrzeit. „Anmeldung“ heisst: jemand hat sich neu angemeldet —
+        wer die Academy offen hatte, erscheint oben unter „gerade in der Academy“.
       </p>
+
+      {/* Wer gerade da ist. Eine offene Sitzung erzeugt keine neue Anmeldung
+          — ohne diese Zeile sieht es aus, als wäre niemand unterwegs. */}
+      {(() => {
+        const jetzt = Date.now();
+        const aktiv = Object.entries(zuletztAktiv)
+          .filter(([, zeit]) => istGeradeAktiv(zeit, jetzt))
+          .sort((a, b) => String(b[1]).localeCompare(String(a[1])));
+        const heuteDa = Object.entries(zuletztAktiv)
+          .filter(([, zeit]) => !istGeradeAktiv(zeit, jetzt))
+          .sort((a, b) => String(b[1]).localeCompare(String(a[1])))
+          .slice(0, 8);
+        return (
+          <div className="card mb-4">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-sm font-semibold text-textMain">
+                {aktiv.length > 0 ? `${aktiv.length} gerade in der Academy` : "Gerade ist niemand da"}
+              </span>
+              <span className="text-[11px] text-textMuted">letzte {Math.round(AKTIV_FENSTER_MS / 60000)} Minuten</span>
+              <button onClick={() => load()} className="btn-ghost text-xs ml-auto">Aktualisieren</button>
+              {stand && <span className="text-[11px] text-textMuted">Stand: {nurUhrzeit(stand, DEUTSCHE_ZONE)} Uhr</span>}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {aktiv.map(([id, zeit]) => (
+                <button key={id} onClick={() => openProfile(id)} className="flex items-center gap-1.5 text-xs text-textMain hover:underline">
+                  <Avatar name={profileMap[id]?.full_name || "?"} src={profileMap[id]?.avatar_url} size={20} />
+                  {profileMap[id]?.full_name || "Unbenannt"}
+                  <span className="text-textMuted">{vorWieLange(zeit)}</span>
+                </button>
+              ))}
+            </div>
+            {heuteDa.length > 0 && (
+              <div className="text-[11px] text-textMuted mt-2">
+                Zuletzt da: {heuteDa.map(([id, zeit]) => `${profileMap[id]?.full_name || "Unbenannt"} (${vorWieLange(zeit)})`).join(" · ")}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         {kopfzahlen.map((k) => (
