@@ -4,6 +4,7 @@ import Avatar from "../components/Avatar";
 import AvatarCropper from "../components/AvatarCropper";
 import { supabase } from "../lib/supabaseClient";
 import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht";
+import { aendereGeprueft } from "../lib/loeschen";
 
 // Der Stern kommt aus PFLICHTFELDER und nicht aus der Hand: sonst steht er
 // eines Tages an einem Feld, das längst freiwillig ist — oder fehlt an einem,
@@ -48,8 +49,16 @@ export default function Profile() {
 
   function pickFile(e) {
     const file = e.target.files[0];
-    if (file) setPendingFile(file);
     e.target.value = "";
+    if (!file) return;
+    // Sehr grosse Bilder bringen den Zuschnitt auf schwächeren Handys zum
+    // Absturz, und der Upload läuft in die Grössengrenze des Speichers.
+    if (file.size > 15 * 1024 * 1024) {
+      setError("Das Bild ist grösser als 15 MB. Bitte ein kleineres wählen — ein normales Handyfoto reicht völlig.");
+      return;
+    }
+    setError("");
+    setPendingFile(file);
   }
 
   async function handleCropped(blob) {
@@ -64,8 +73,14 @@ export default function Profile() {
     if (upErr) { setError(upErr.message); setUploading(false); return; }
     const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
     const url = pub.publicUrl;
-    const { error: dbErr } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", session.user.id);
-    if (dbErr) { setError(dbErr.message); setUploading(false); return; }
+    // Geprüft speichern: eine von der Datenbank abgelehnte Änderung meldet
+    // keinen Fehler, sie trifft null Zeilen. Ohne das sah der Upload aus wie
+    // geglückt — bis zum nächsten Laden der Seite (siehe lib/loeschen.js).
+    const dbFehler = await aendereGeprueft(
+      supabase.from("profiles").update({ avatar_url: url }).eq("id", session.user.id),
+      "Das Profilbild konnte nicht gespeichert werden."
+    );
+    if (dbFehler) { setError(dbFehler); setUploading(false); return; }
     setProfile((p) => ({ ...p, avatar_url: url }));
     patchCachedProfile({ avatar_url: url });
     setUploading(false);

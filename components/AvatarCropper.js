@@ -11,6 +11,11 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
   const dragRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [src, setSrc] = useState(null);
+  // Ohne diese Meldung blieb "Übernehmen" einfach für immer grau: der Kreis
+  // war leer, das Bild ungeladen, und niemand konnte sehen, warum. Das
+  // passiert vor allem bei HEIC-Fotos vom iPhone, die andere Browser nicht
+  // öffnen können.
+  const [fehler, setFehler] = useState("");
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -18,7 +23,15 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  function onImgFehler() {
+    const endung = (file?.name || "").split(".").pop()?.toLowerCase();
+    setFehler(endung === "heic" || endung === "heif"
+      ? "HEIC-Fotos vom iPhone kann dieser Browser nicht öffnen. Speichere das Bild als JPG oder PNG — auf dem iPhone: Foto öffnen, teilen, „In Dateien sichern“, dort als JPG."
+      : "Dieses Bild konnte nicht geöffnet werden. Bitte ein JPG oder PNG wählen.");
+  }
+
   function onImgLoad(e) {
+    setFehler("");
     const natW = e.target.naturalWidth;
     const natH = e.target.naturalHeight;
     const baseScale = BOX / Math.min(natW, natH);
@@ -63,6 +76,8 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
     canvas.toBlob((blob) => {
       setSaving(false);
       if (blob) onCropped(blob);
+      // Sonst passiert beim Klick auf "Übernehmen" sichtbar gar nichts.
+      else setFehler("Das zugeschnittene Bild konnte nicht erzeugt werden. Bitte ein anderes Bild versuchen.");
     }, "image/jpeg", 0.92);
   }
 
@@ -87,6 +102,7 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
               src={src}
               alt=""
               onLoad={onImgLoad}
+              onError={onImgFehler}
               draggable={false}
               style={imgSize ? {
                 position: "absolute", top: "50%", left: "50%",
@@ -99,6 +115,8 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
             />
           )}
         </div>
+
+        {fehler && <p className="text-coral text-xs mt-3">{fehler}</p>}
 
         <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))}
           className="w-full mt-4" disabled={!imgSize} />

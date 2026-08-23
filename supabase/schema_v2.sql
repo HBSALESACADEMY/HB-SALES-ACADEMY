@@ -2060,10 +2060,33 @@ alter publication supabase_realtime add table public.conversation_reads;
 -- 9. STORAGE
 -- =============================================================================
 -- Hinweis: schema_v2.sql wurde rein aus den Postgres-Tabellen introspektiert
--- und bildet die ÜBRIGEN, älteren Storage-Buckets (avatars, course-videos,
+-- und bildet die ÜBRIGEN, älteren Storage-Buckets (course-videos,
 -- dm-uploads, community-uploads) bislang NICHT ab — die existieren nur in
--- supabase/archive/migration_9/7/11 usw. Nur der neue org-logos-Bucket ist
--- hier vollständig, weil er Teil dieser Änderung ist.
+-- supabase/archive/migration_9/7/11 usw. avatars ist seit migration_117
+-- hier vollständig, org-logos war es von Anfang an.
+
+-- Profilbilder (migration_117): öffentlich lesbar, schreiben nur im eigenen
+-- Ordner. Bis dahin standen diese Regeln nur in archive/migration_9.
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "avatars_public_read" on storage.objects;
+create policy "avatars_public_read" on storage.objects for select
+  using (bucket_id = 'avatars');
+
+drop policy if exists "avatars_own_upload" on storage.objects;
+create policy "avatars_own_upload" on storage.objects for insert
+  with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+
+drop policy if exists "avatars_own_update" on storage.objects;
+create policy "avatars_own_update" on storage.objects for update
+  using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1])
+  with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+
+drop policy if exists "avatars_own_delete" on storage.objects;
+create policy "avatars_own_delete" on storage.objects for delete
+  using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
 
 insert into storage.buckets (id, name, public) values ('org-logos', 'org-logos', true)
 on conflict (id) do nothing;
