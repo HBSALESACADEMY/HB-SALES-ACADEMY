@@ -9,7 +9,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { openProfile } from "../lib/profileModalBus";
 import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel } from "../lib/dateRange";
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
-import { nurUhrzeit, DEUTSCHE_ZONE } from "../lib/terminzeit";
+import { nurUhrzeit, deutscherTag, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { terminAnzeige } from "../lib/zeit";
 import { ladeIcsHerunter } from "../lib/ics";
 import { zeitpunktInBerlin } from "../lib/woche";
@@ -246,7 +246,7 @@ export default function Kalender() {
       eintraege: daten.eintraege.filter((e) => schluessel >= e.von && schluessel <= (e.bis || e.von)),
       // Nach deutscher Zeit einsortiert — sonst rutscht ein Abendtermin für
       // jemanden im Ausland auf den falschen Tag.
-      termine: (daten.termine || []).filter((t) => tagInDeutschland(t.appointment_at) === schluessel),
+      termine: (daten.termine || []).filter((t) => deutscherTag(t.appointment_at) === schluessel),
       geburtstage: daten.geburtstage.filter((g) => g.tag === schluessel),
       abwesend: daten.abwesenheiten.filter((a) => schluessel >= a.von && schluessel <= a.bis),
     };
@@ -483,16 +483,6 @@ function zeilenFuerTag(inhalt, meinStatus) {
     ...inhalt.geburtstage.map((g) => ({ symbol: "🎂", titel: g.name })),
     ...inhalt.abwesend.map((a) => ({ symbol: "🌴", titel: `${a.name} abwesend` })),
   ];
-}
-
-// Nach welchem deutschen Kalendertag ein Zeitpunkt gehört. Ohne das wandert
-// ein Abendtermin für jemanden in einer anderen Zeitzone auf den Vortag.
-function tagInDeutschland(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const [tag, monat, jahr] = d.toLocaleDateString("de-DE", { timeZone: DEUTSCHE_ZONE, day: "2-digit", month: "2-digit", year: "numeric" }).split(".");
-  return `${jahr}-${monat}-${tag}`;
 }
 
 // Der Inhalt eines Tages — in der Wochenansicht kompakt, in der Tagesansicht

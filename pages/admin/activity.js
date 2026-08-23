@@ -7,6 +7,19 @@ import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { ABSTAND } from "../../lib/autoRefresh";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { deutscherTag, nurUhrzeit, DEUTSCHE_ZONE } from "../../lib/terminzeit";
+import { berlinHeute, tagPlus } from "../../lib/woche";
+
+// Zeiträume: eine ungefilterte Liste aus Monaten beantwortet keine Frage.
+const ZEITRAEUME = [
+  ["heute", "Heute", 0],
+  ["woche", "7 Tage", 6],
+  ["monat", "30 Tage", 29],
+  ["alles", "Alles", null],
+];
+
+// Womit die Kopfzeile rechnet — nicht jede Aktivität ist gleich viel wert.
+const LERNEN = ["quiz", "exam", "roleplay"];
 
 const TYPE_META = {
   registered: { label: "Registriert", icon: "flame", color: "#F0B23E" },
@@ -29,6 +42,9 @@ export default function AdminActivity() {
   const [profileMap, setProfileMap] = useState({});
   const [filterUser, setFilterUser] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [zeitraum, setZeitraum] = useState("woche");
+  const [suche, setSuche] = useState("");
+  const [anzahlSichtbar, setAnzahlSichtbar] = useState(60);
 
   async function load(silent) {
     if (!silent) setLoading(true);
@@ -116,48 +132,143 @@ export default function AdminActivity() {
   }
 
   const uniqueUsers = Object.values(profileMap).filter((p) => events.some((e) => e.user_id === p.id));
-  const filtered = events.filter((e) => (!filterUser || e.user_id === filterUser) && (!filterType || e.type === filterType));
+
+  // Tagesgrenzen in DEUTSCHER Zeit: sonst zählt ein Gerät im Ausland die
+  // Ereignisse des Abends schon zum nächsten Tag (siehe lib/terminzeit.js).
+  const heuteTag = berlinHeute();
+  const abTag = (() => {
+    const tage = ZEITRAEUME.find((z) => z[0] === zeitraum)?.[2];
+    return tage === null || tage === undefined ? null : tagPlus(heuteTag, -tage);
+  })();
+
+  const begriff = suche.trim().toLowerCase();
+  const filtered = events.filter((e) => {
+    if (filterUser && e.user_id !== filterUser) return false;
+    if (filterType && e.type !== filterType) return false;
+    if (abTag && (deutscherTag(e.created_at) || "") < abTag) return false;
+    if (!begriff) return true;
+    const name = profileMap[e.user_id]?.full_name || "";
+    return `${name} ${e.detail || ""} ${TYPE_META[e.type]?.label || ""}`.toLowerCase().includes(begriff);
+  });
+
+  // Zahlen zuerst: "wie viel war los" beantwortet eine Liste aus 200 Zeilen
+  // nicht, auch wenn alles darin steht.
+  const kopfzahlen = [
+    { label: "Aktive Personen", wert: new Set(filtered.map((e) => e.user_id)).size },
+    { label: "Anmeldungen", wert: filtered.filter((e) => e.type === "login").length },
+    { label: "Termine", wert: filtered.filter((e) => e.type === "lead").length },
+    { label: "Gelernt", wert: filtered.filter((e) => LERNEN.includes(e.type)).length },
+  ];
+
+  // Nach Tagen gruppieren — eine Überschrift je Tag gibt der Liste den Halt,
+  // den ein kleines Datum am rechten Rand nie hatte.
+  const gruppen = [];
+  filtered.slice(0, anzahlSichtbar).forEach((e) => {
+    const tag = deutscherTag(e.created_at) || "unbekannt";
+    const letzte = gruppen[gruppen.length - 1];
+    if (letzte && letzte.tag === tag) letzte.eintraege.push(e);
+    else gruppen.push({ tag, eintraege: [e] });
+  });
+
+  function tagUeberschrift(tag) {
+    if (tag === heuteTag) return "Heute";
+    if (tag === tagPlus(heuteTag, -1)) return "Gestern";
+    const d = new Date(`${tag}T12:00:00Z`);
+    return d.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
+  }
 
   return (
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Aktivitäten</h1>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
-      <p className="text-textMuted text-sm mb-6">Logins, Lernfortschritt und Community-Aktivität {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
+      <p className="text-textMuted text-sm mb-5">
+        Wer war da, wer hat gelernt, wer hat Termine erfasst — {isPlatformAdmin ? "in der Organisation, in der du gerade bist" : "in deiner Organisation"}.
+        Zeiten in deutscher Uhrzeit.
+      </p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        {kopfzahlen.map((k) => (
+          <div key={k.label} className="card !py-3">
+            <div className="text-xl font-display font-semibold text-textMain">{k.wert}</div>
+            <div className="text-[11px] text-textMuted">{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {ZEITRAEUME.map(([key, label]) => (
+          <button key={key} onClick={() => { setZeitraum(key); setAnzahlSichtbar(60); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="card flex items-center gap-2 !py-2 flex-1 min-w-[200px]">
+          <Icon name="search" size={14} />
+          <input className="bg-transparent border-none outline-none text-sm flex-1 text-textMain"
+            placeholder="Nach Name oder Inhalt suchen..." value={suche} onChange={(e) => setSuche(e.target.value)} />
+        </div>
         <select className="input !w-auto" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
-          <option value="">Alle Nutzer</option>
+          <option value="">Alle Personen</option>
           {uniqueUsers.map((p) => <option key={p.id} value={p.id}>{p.full_name || "Unbenannt"}</option>)}
         </select>
         <select className="input !w-auto" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
           <option value="">Alle Aktivitäten</option>
           {Object.entries(TYPE_META).map(([key, m]) => <option key={key} value={key}>{m.label}</option>)}
         </select>
+        {(suche || filterUser || filterType || zeitraum !== "woche") && (
+          <button onClick={() => { setSuche(""); setFilterUser(""); setFilterType(""); setZeitraum("woche"); }} className="btn-ghost text-xs">
+            Filter zurücksetzen
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-col gap-2">
-        {filtered.slice(0, 200).map((e, i) => {
-          const p = profileMap[e.user_id];
-          const meta = TYPE_META[e.type];
-          const d = new Date(e.created_at);
-          return (
-            <div key={i} className="card flex items-center gap-3 !py-2.5">
-              <button onClick={() => openProfile(p?.id)}><Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} /></button>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-textMain">{p?.full_name || "Unbekannt"}</span>
-                  <Icon name={meta.icon} size={12} color={meta.color} />
-                  <span className="text-xs" style={{ color: meta.color }}>{meta.label}</span>
+      {gruppen.length === 0 && (
+        <p className="text-textMuted text-sm">
+          In diesem Zeitraum ist nichts passiert. Über die Knöpfe oben kannst du weiter zurückschauen.
+        </p>
+      )}
+
+      {gruppen.map((gruppe) => (
+        <div key={gruppe.tag} className="mb-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[11px] uppercase tracking-wide text-textMuted">{tagUeberschrift(gruppe.tag)}</span>
+            <span className="text-[11px] text-textMuted">· {gruppe.eintraege.length}</span>
+            <span className="h-px bg-line flex-1" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {gruppe.eintraege.map((e, i) => {
+              const p = profileMap[e.user_id];
+              const meta = TYPE_META[e.type];
+              return (
+                <div key={`${gruppe.tag}-${i}`} className="card flex items-start gap-3 !py-2.5">
+                  <button onClick={() => openProfile(p?.id)} className="flex-shrink-0 mt-0.5">
+                    <Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm text-textMain">{p?.full_name || "Unbekannt"}</span>
+                      <Icon name={meta.icon} size={12} color={meta.color} />
+                      <span className="text-xs" style={{ color: meta.color }}>{meta.label}</span>
+                    </div>
+                    {e.detail && <div className="text-xs text-textMuted break-words">{e.detail}</div>}
+                  </div>
+                  <span className="text-xs text-textMuted font-mono flex-shrink-0">{nurUhrzeit(e.created_at, DEUTSCHE_ZONE)}</span>
                 </div>
-                {e.detail && <div className="text-xs text-textMuted truncate">{e.detail}</div>}
-              </div>
-              <span className="text-xs text-textMuted font-mono flex-shrink-0">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <p className="text-textMuted text-sm">Noch keine Aktivitäten aufgezeichnet.</p>}
-      </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {filtered.length > anzahlSichtbar && (
+        <button onClick={() => setAnzahlSichtbar((n) => n + 60)} className="btn-ghost text-xs">
+          Weitere anzeigen ({filtered.length - anzahlSichtbar})
+        </button>
+      )}
     </Layout>
   );
 }

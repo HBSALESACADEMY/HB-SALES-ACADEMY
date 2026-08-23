@@ -21,6 +21,7 @@ import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
 import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js";
 import { baueIcs, icsDateiname } from "../lib/ics.js";
 import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
+import { deutscherTag } from "../lib/terminzeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -563,4 +564,17 @@ test("Störungsmeldungen werden zusammengefasst und gefiltert", () => {
   assert.equal(istMeldenswert("Failed to fetch"), false);
   assert.equal(istMeldenswert(""), false);
   assert.equal(istMeldenswert("Cannot read properties of undefined (reading 'id')"), true);
+});
+
+// Aktivitäten und Kalender gruppieren nach TAGEN. Zählt das Gerät in seiner
+// eigenen Zeitzone, rutscht ein Abendereignis auf den Vortag.
+test("Tagesgrenze richtet sich nach deutscher Zeit", () => {
+  // 22:30 Uhr deutscher Sommerzeit = 20:30 UTC — bleibt derselbe Tag.
+  assert.equal(deutscherTag("2026-08-22T20:30:00.000Z"), "2026-08-22");
+  // 00:30 Uhr deutscher Zeit = 22:30 UTC am Vortag — gehört zum 23.
+  assert.equal(deutscherTag("2026-08-22T22:30:00.000Z"), "2026-08-23");
+  // Winterzeit: 23:30 UTC ist in Berlin bereits 00:30 des Folgetags.
+  assert.equal(deutscherTag("2026-01-15T23:30:00.000Z"), "2026-01-16");
+  assert.equal(deutscherTag(null), null);
+  assert.equal(deutscherTag("kein Datum"), null);
 });
