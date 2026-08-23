@@ -36,6 +36,14 @@ const TYPE_META = {
   // Nicht dasselbe wie "Anmeldung": wer schon angemeldet war, erzeugt keinen
   // Login-Eintrag mehr, hinterlässt aber weiter Seitenaufrufe.
   besuch: { label: "War in der Academy", icon: "users", color: "#8D90A6" },
+  avatar: { label: "Profilbild hochgeladen", icon: "users", color: "#00E5C7" },
+  profil: { label: "Profil bearbeitet", icon: "users", color: "#8D90A6" },
+  skript: { label: "Skript hochgeladen", icon: "download", color: "var(--org-color-1, #4C5DC9)" },
+  aufnahme: { label: "Aufnahme hochgeladen", icon: "mic", color: "var(--org-color-1, #4C5DC9)" },
+  challenge: { label: "Tages-Challenge", icon: "flame", color: "#F0B23E" },
+  kalender: { label: "Kalendereintrag", icon: "calendar", color: "#00E5C7" },
+  leitfaden: { label: "Leitfaden erstellt", icon: "book", color: "var(--org-color-1, #4C5DC9)" },
+  einladung: { label: "Termin beantwortet", icon: "calendar", color: "#F0B23E" },
 };
 
 export default function AdminActivity() {
@@ -75,7 +83,8 @@ export default function AdminActivity() {
       : { data: null };
     setOrgName(orgRow?.name || "");
     const { data: profiles } = await supabase.from("profiles")
-      .select("id, full_name, avatar_url, created_at").eq("organization_id", activeOrgId);
+      .select("id, full_name, avatar_url, created_at, profil_geaendert_at, avatar_geaendert_at")
+      .eq("organization_id", activeOrgId);
     const orgUserIds = (profiles || []).map((p) => p.id);
     const scoped = (q, col = "user_id") => q.in(col, orgUserIds.length ? orgUserIds : ["00000000-0000-0000-0000-000000000000"]);
 
@@ -83,6 +92,8 @@ export default function AdminActivity() {
       { data: logins }, { data: quizzes }, { data: exams },
       { data: roleplays }, { data: posts }, { data: comments },
       { data: leadRows }, { data: leadComments }, { data: leadTasks },
+      { data: skripte }, { data: aufnahmen }, { data: challenges },
+      { data: kalenderEintraege }, { data: leitfaeden }, { data: einladungen },
     ] = await Promise.all([
       scoped(supabase.from("login_events").select("*").order("created_at", { ascending: false }).limit(150)),
       scoped(supabase.from("quiz_results").select("*").order("created_at", { ascending: false }).limit(150)),
@@ -93,6 +104,14 @@ export default function AdminActivity() {
       scoped(supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(100), "created_by"),
       scoped(supabase.from("lead_comments").select("*").order("created_at", { ascending: false }).limit(100)),
       scoped(supabase.from("lead_tasks").select("*").order("created_at", { ascending: false }).limit(100), "assigned_by"),
+      // Weitere Spuren, die es längst gibt und die bisher niemand ansah.
+      scoped(supabase.from("scripts").select("id, title, created_at, created_by").order("created_at", { ascending: false }).limit(100), "created_by"),
+      scoped(supabase.from("call_recordings").select("id, title, created_at, created_by").order("created_at", { ascending: false }).limit(100), "created_by"),
+      scoped(supabase.from("daily_challenge_completions").select("user_id, correct, created_at").order("created_at", { ascending: false }).limit(100)),
+      scoped(supabase.from("org_events").select("id, titel, created_at, created_by").order("created_at", { ascending: false }).limit(100), "created_by"),
+      scoped(supabase.from("guides").select("id, title, created_at, created_by").order("created_at", { ascending: false }).limit(100), "created_by"),
+      scoped(supabase.from("termin_einladungen").select("id, status, beantwortet_am, person_id").not("beantwortet_am", "is", null)
+        .order("beantwortet_am", { ascending: false }).limit(100), "person_id"),
     ]);
 
     const map = {};
@@ -156,6 +175,21 @@ export default function AdminActivity() {
       ...(leadComments || []).map((c) => ({ type: "lead_comment", user_id: c.user_id, created_at: c.created_at, detail: `${leadNameById[c.lead_id] || "Termin"}: ${c.content?.slice(0, 60)}` })),
       ...(leadTasks || []).map((t) => ({ type: "lead_task", user_id: t.assigned_by, created_at: t.created_at, detail: `${t.title} → ${map[t.assigned_to]?.full_name || "Unbenannt"} (${leadNameById[t.lead_id] || "Termin"})` })),
       ...besuche,
+      // Aus dem Profil selbst: ohne Zeitstempel gäbe es diese Ereignisse
+      // nirgends (migration_118). Leer heisst "nicht bekannt".
+      ...(profiles || []).filter((p) => p.avatar_geaendert_at)
+        .map((p) => ({ type: "avatar", user_id: p.id, created_at: p.avatar_geaendert_at, detail: null })),
+      ...(profiles || []).filter((p) => p.profil_geaendert_at)
+        .map((p) => ({ type: "profil", user_id: p.id, created_at: p.profil_geaendert_at, detail: null })),
+      ...(skripte || []).map((e) => ({ type: "skript", user_id: e.created_by, created_at: e.created_at, detail: e.title })),
+      ...(aufnahmen || []).map((e) => ({ type: "aufnahme", user_id: e.created_by, created_at: e.created_at, detail: e.title })),
+      ...(challenges || []).map((e) => ({ type: "challenge", user_id: e.user_id, created_at: e.created_at, detail: e.correct ? "richtig" : "falsch" })),
+      ...(kalenderEintraege || []).map((e) => ({ type: "kalender", user_id: e.created_by, created_at: e.created_at, detail: e.titel })),
+      ...(leitfaeden || []).map((e) => ({ type: "leitfaden", user_id: e.created_by, created_at: e.created_at, detail: e.title })),
+      ...(einladungen || []).map((e) => ({
+        type: "einladung", user_id: e.person_id, created_at: e.beantwortet_am,
+        detail: e.status === "zugesagt" ? "zugesagt" : "abgesagt",
+      })),
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     setEvents(combined);

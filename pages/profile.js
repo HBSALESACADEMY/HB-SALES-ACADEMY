@@ -78,7 +78,9 @@ export default function Profile() {
     // keinen Fehler, sie trifft null Zeilen. Ohne das sah der Upload aus wie
     // geglückt — bis zum nächsten Laden der Seite (siehe lib/loeschen.js).
     const dbFehler = await aendereGeprueft(
-      supabase.from("profiles").update({ avatar_url: url }).eq("id", session.user.id),
+      // Zeitpunkt mitschreiben, sonst taucht das Bild in keiner
+      // Aktivitätenliste auf (migration_118).
+      supabase.from("profiles").update({ avatar_url: url, avatar_geaendert_at: new Date().toISOString() }).eq("id", session.user.id),
       "Das Profilbild konnte nicht gespeichert werden."
     );
     if (dbFehler) { setError(dbFehler); meldeFehler("Profilbild speichern", dbFehler); setUploading(false); return; }
@@ -102,6 +104,7 @@ export default function Profile() {
     // Beim Speichern mitführen, ob das Profil jetzt vollständig ist — daran
     // hängt die Aufforderung nach der Registrierung (migration_109).
     payload.profil_vollstaendig = profilVollstaendig({ ...payload, avatar_url: profile?.avatar_url });
+    payload.profil_geaendert_at = new Date().toISOString();
     const { error: err } = await supabase.from("profiles").update(payload).eq("id", session.user.id);
     if (err) setError(err.message);
     else { setSaved(true); patchCachedProfile(payload); }

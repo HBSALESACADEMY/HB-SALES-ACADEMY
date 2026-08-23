@@ -96,6 +96,11 @@ create table if not exists profiles (
   theme_pref text check (theme_pref in ('light', 'dark', 'system')),
   is_platform_admin boolean not null default false,
   agb_accepted_at timestamptz
+  -- Wann Profil und Profilbild zuletzt geändert wurden (migration_118).
+  -- Ohne Zeitstempel taucht "hat ein Profilbild hochgeladen" in keiner
+  -- Aktivitätenliste auf: ein Profil trägt nur seinen jetzigen Stand.
+  profil_geaendert_at timestamptz,
+  avatar_geaendert_at timestamptz
 );
 
 -- Auto-create a profile row whenever a new auth user signs up. Verlangt einen
