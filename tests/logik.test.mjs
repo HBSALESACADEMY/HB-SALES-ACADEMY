@@ -23,6 +23,7 @@ import { baueIcs, icsDateiname } from "../lib/ics.js";
 import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
 import { deutscherTag } from "../lib/terminzeit.js";
 import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
+import { abgleichAktiveOrg } from "../lib/activeOrg.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -595,4 +596,30 @@ test("Relative Zeitangaben", () => {
   assert.equal(istGeradeAktiv("2026-08-22T11:50:00.000Z", jetzt), true);
   assert.equal(istGeradeAktiv("2026-08-22T11:40:00.000Z", jetzt), false);
   assert.equal(istGeradeAktiv(null, jetzt), false);
+});
+
+// Browser (sessionStorage, pro Tab) und Server (active_org, pro Konto)
+// müssen dieselbe Organisation meinen. Wichen sie ab, sah ein Plattform-
+// Admin nur noch seine EIGENEN Einträge — und je nach Tab mal so, mal so.
+test("Aktive Organisation: Browser und Server werden abgeglichen", () => {
+  // Frisch mit Firmencode angemeldet: der Tab gewinnt, der Server zieht nach.
+  assert.deepEqual(abgleichAktiveOrg({ gespeichert: "volk", server: "hb", heimat: "hb" }),
+    { aktiv: "volk", serverSchreiben: "volk", sessionSchreiben: null });
+
+  // Beide einig: nichts zu schreiben.
+  assert.deepEqual(abgleichAktiveOrg({ gespeichert: "volk", server: "volk", heimat: "hb" }),
+    { aktiv: "volk", serverSchreiben: null, sessionSchreiben: null });
+
+  // Neuer Tab: der Server gilt — NICHT die Heimat-Organisation. Genau hier
+  // entstand der Fehler.
+  assert.deepEqual(abgleichAktiveOrg({ gespeichert: null, server: "volk", heimat: "hb" }),
+    { aktiv: "volk", serverSchreiben: null, sessionSchreiben: "volk" });
+
+  // Nie etwas gewählt: die eigene Organisation, und beide Seiten lernen sie.
+  assert.deepEqual(abgleichAktiveOrg({ gespeichert: null, server: null, heimat: "hb" }),
+    { aktiv: "hb", serverSchreiben: "hb", sessionSchreiben: "hb" });
+
+  // Konto ohne Organisation: nichts erfinden.
+  assert.deepEqual(abgleichAktiveOrg({ gespeichert: null, server: null, heimat: null }),
+    { aktiv: null, serverSchreiben: null, sessionSchreiben: null });
 });

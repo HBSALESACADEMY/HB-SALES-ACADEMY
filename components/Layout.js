@@ -11,7 +11,7 @@ import { istFuehrungsrolle } from "../lib/rollen";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
-import { getActiveOrgId } from "../lib/activeOrg";
+import { getActiveOrgId, synchronisiereAktiveOrg } from "../lib/activeOrg";
 import { ABSTAND } from "../lib/autoRefresh";
 import Icon from "./Icon";
 import IconPicker from "./IconPicker";
@@ -276,7 +276,7 @@ export default function Layout({ children, fullBleed }) {
         router.replace("/profile");
       }
 
-      const activeOrgId = getActiveOrgId(data);
+      let activeOrgId = getActiveOrgId(data);
       // Zeitzone der Person für die Anzeige verfügbar machen (lib/zeit.js).
       // Ohne das gälte auf jeder Seite wieder die des Geräts.
       if (data) merkeZeitzone(data.zeitzone || "");
@@ -289,9 +289,17 @@ export default function Layout({ children, fullBleed }) {
       // wurden abgelehnt, ohne dass irgendwo ein Grund stand.
       //
       // Deshalb hier bei jedem Sitzungsstart abgleichen statt nur beim Login.
-      if (!aktiveOrgAbgeglichen && data?.is_platform_admin && activeOrgId) {
+      //
+      // Und in BEIDE Richtungen: der Tab kannte die Wahl nur, wenn in ihm
+      // selbst der Firmencode eingegeben wurde (sessionStorage gilt pro Tab).
+      // In einem neuen Tab fiel die Oberfläche auf die Heimat-Organisation
+      // zurück, während die Datenbank weiter die zuletzt gewählte annahm.
+      // Dann filterte die Seite auf die eine und die Zugriffsregeln liessen
+      // die andere durch — übrig blieb, was einem selbst gehört. Je nachdem,
+      // welcher Tab zuletzt geladen hatte, klappte es mal und mal nicht.
+      if (!aktiveOrgAbgeglichen && data?.is_platform_admin) {
         aktiveOrgAbgeglichen = true;
-        merkeAktiveOrg(supabase, data.id, activeOrgId);
+        activeOrgId = await synchronisiereAktiveOrg(supabase, data);
       }
 
       // Diese drei Abfragen hängen nur vom bereits geladenen Profil ab, nicht
@@ -880,6 +888,14 @@ export default function Layout({ children, fullBleed }) {
         <div className="flex items-center justify-between px-2 pb-4 pt-1">
           <img src={org?.logo_url || defaultLogo} alt={org?.name || "HB Sales Academy"} className="h-[68px] w-auto" />
         </div>
+        {/* Plattform-Admins arbeiten mal in der einen, mal in der anderen
+            Organisation. Steht nirgends, in welcher man gerade ist, sucht man
+            Daten in der falschen — und hält es für einen Fehler. */}
+        {profile?.is_platform_admin && org?.name && (
+          <div className="px-2.5 pb-2 text-[10.5px] text-textMuted">
+            Aktive Organisation: <span className="text-textMain">{org.name}</span>
+          </div>
+        )}
         <div className="px-2.5 pb-4">
           <p className="text-[11.5px] italic text-textMuted leading-snug">„{quoteOfTheDay().text}"</p>
           {quoteOfTheDay().author && <p className="text-[10px] text-textMuted mt-0.5">— {quoteOfTheDay().author}</p>}
