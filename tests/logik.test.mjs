@@ -20,6 +20,7 @@ import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib
 import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
 import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js";
 import { baueIcs, icsDateiname } from "../lib/ics.js";
+import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -539,4 +540,27 @@ test("Organigramm: volle Aufstellung nur für Führungsrollen", () => {
   assert.ok(/if \(darf\) \{\s*$/m.test(davor.split("\n").slice(-3).join("\n")),
     "Die volle Antwort muss hinter der Prüfung auf die Führungsrolle stehen.");
   assert.ok(quelle.includes("nurEigeneLinie: true"), "Für alle anderen bleibt nur die eigene Linie.");
+});
+
+// Ein Störungsmelder ohne Bremse ist nach einer Woche wertlos: derselbe
+// Fehler bei zehn Leuten, zwanzig Nachrichten, und niemand schaut mehr hin.
+test("Störungsmeldungen werden zusammengefasst und gefiltert", () => {
+  const speicher = new Map();
+  const s = meldungsSchluessel("/profile", "Upload fehlgeschlagen");
+  assert.equal(sollMelden(s, speicher, 0), true, "Die erste Meldung geht raus.");
+  assert.equal(sollMelden(s, speicher, 60_000), false, "Die Wiederholung nicht.");
+  assert.equal(sollMelden(s, speicher, FENSTER_MS + 1), true, "Nach dem Fenster wieder.");
+
+  // Kennungen und Zeitstempel machen aus derselben Störung sonst jedes Mal
+  // eine neue.
+  assert.equal(
+    meldungsSchluessel("/termine", "Lead 8f3c1a2b-99 nicht gefunden"),
+    meldungsSchluessel("/termine", "Lead 0000abcd-12 nicht gefunden")
+  );
+
+  // Erwartete Absagen sind keine Störung.
+  assert.equal(istMeldenswert("Deine Sitzung ist abgelaufen. Bitte neu anmelden."), false);
+  assert.equal(istMeldenswert("Failed to fetch"), false);
+  assert.equal(istMeldenswert(""), false);
+  assert.equal(istMeldenswert("Cannot read properties of undefined (reading 'id')"), true);
 });
