@@ -6,6 +6,10 @@ import { supabase } from "../../lib/supabaseClient";
 import { openProfile } from "../../lib/profileModalBus";
 import { ABSTAND } from "../../lib/autoRefresh";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { apiGet } from "../../lib/apiClient";
+import { vorWieLange } from "../../lib/relativeZeit";
+import { deutscherTag, nurUhrzeit, DEUTSCHE_ZONE } from "../../lib/terminzeit";
+import { berlinHeute } from "../../lib/woche";
 
 export default function AdminLogins() {
   const [isManager, setIsManager] = useState(true);
@@ -13,6 +17,7 @@ export default function AdminLogins() {
   const [events, setEvents] = useState([]);
   const [profileMap, setProfileMap] = useState({});
   const [filterUser, setFilterUser] = useState("");
+  const [uebersicht, setUebersicht] = useState(null);
 
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
@@ -40,6 +45,16 @@ export default function AdminLogins() {
     (profiles || []).forEach((p) => { map[p.id] = p; });
     setProfileMap(map);
     setEvents(ev || []);
+
+    // Zusätzlich die Übersicht vom Server: sie kennt ALLE Mitglieder dieser
+    // Organisation, auch die ohne einen einzigen Eintrag. Fehlt jemand in der
+    // Liste unten, steht hier, ob er überhaupt zu dieser Organisation gehört
+    // und ob es Anmeldungen von ihm gibt.
+    try {
+      setUebersicht(await apiGet("/api/admin/login-uebersicht"));
+    } catch (e) {
+      setUebersicht(null);
+    }
     if (!silent) setLoading(false);
   }
 
@@ -72,7 +87,54 @@ export default function AdminLogins() {
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Login-Verlauf</h1>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
-      <p className="text-textMuted text-sm mb-6">Wer sich wann angemeldet hat — die letzten 300 Anmeldungen {isPlatformAdmin ? "organisationsübergreifend" : "deiner Organisation"}.</p>
+      <p className="text-textMuted text-sm mb-5">
+        Wer sich wann angemeldet hat — in <strong className="text-textMain">{uebersicht?.organisation || "deiner Organisation"}</strong>.
+        Eine Anmeldung entsteht nur bei einer NEUEN Anmeldung; wer schon angemeldet war, erzeugt keine.
+      </p>
+
+      {/* Wer fehlt und warum — die Frage kann die Liste unten nicht
+          beantworten, weil dort nur steht, was es gibt. */}
+      {uebersicht && (
+        <div className="card mb-5">
+          <div className="font-semibold text-textMain text-sm mb-2">Alle Mitglieder dieser Organisation</div>
+          <div className="flex flex-col gap-1">
+            {uebersicht.personen.map((p) => {
+              const heute = p.zuletzt && deutscherTag(p.zuletzt) === berlinHeute();
+              return (
+                <div key={p.id} className="flex items-center gap-2.5 py-1 flex-wrap">
+                  <button onClick={() => openProfile(p.id)} className="flex items-center gap-2 min-w-0">
+                    <Avatar name={p.name} src={p.avatar_url} size={22} />
+                    <span className="text-sm text-textMain truncate">{p.name}</span>
+                  </button>
+                  {p.status && p.status !== "approved" && (
+                    <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">
+                      {p.status === "pending" ? "wartet auf Freigabe" : p.status}
+                    </span>
+                  )}
+                  <span className="text-xs text-textMuted ml-auto">
+                    {p.zuletzt
+                      ? `${heute ? "heute" : vorWieLange(p.zuletzt)} · ${nurUhrzeit(p.zuletzt, DEUTSCHE_ZONE)} Uhr · ${p.anzahl}×`
+                      : "noch nie angemeldet"}
+                  </span>
+                </div>
+              );
+            })}
+            {uebersicht.personen.length === 0 && (
+              <p className="text-xs text-textMuted">In dieser Organisation ist niemand eingetragen.</p>
+            )}
+          </div>
+          {uebersicht.ohneOrganisation?.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-line">
+              <div className="text-xs text-coral mb-1">
+                {uebersicht.ohneOrganisation.length} Konto/Konten ohne Organisation — sie erscheinen in keiner Liste, bis sie zugeordnet sind:
+              </div>
+              <div className="text-xs text-textMuted">
+                {uebersicht.ohneOrganisation.map((p) => p.name).join(", ")}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <select className="input !w-auto mb-4" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
         <option value="">Alle Nutzer</option>
