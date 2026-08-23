@@ -33,6 +33,9 @@ const TYPE_META = {
   lead: { label: "Termin erfasst", icon: "calendar", color: "#00E5C7" },
   lead_comment: { label: "Termin-Kommentar", icon: "chat", color: "var(--org-color-1, #4C5DC9)" },
   lead_task: { label: "Aufgabe zugewiesen", icon: "target", color: "var(--org-accent, #CE3A5C)" },
+  // Nicht dasselbe wie "Anmeldung": wer schon angemeldet war, erzeugt keinen
+  // Login-Eintrag mehr, hinterlässt aber weiter Seitenaufrufe.
+  besuch: { label: "War in der Academy", icon: "users", color: "#8D90A6" },
 };
 
 export default function AdminActivity() {
@@ -51,6 +54,7 @@ export default function AdminActivity() {
   // eine Spur (page_views, siehe components/Layout.js).
   const [zuletztAktiv, setZuletztAktiv] = useState({});
   const [stand, setStand] = useState(null);
+  const [orgName, setOrgName] = useState("");
 
   async function load(silent) {
     if (!silent) setLoading(true);
@@ -64,6 +68,12 @@ export default function AdminActivity() {
     // Früher entfiel der Filter für sie ganz und die Aktivitäten aller
     // Organisationen liefen in einer Liste zusammen.
     const activeOrgId = getActiveOrgId(me);
+    // Welche Organisation hier gezeigt wird, gehört sichtbar auf die Seite:
+    // sonst sucht man Anmeldungen, die es in einer anderen gab.
+    const { data: orgRow } = activeOrgId
+      ? await supabase.from("organizations").select("name").eq("id", activeOrgId).maybeSingle()
+      : { data: null };
+    setOrgName(orgRow?.name || "");
     const { data: profiles } = await supabase.from("profiles")
       .select("id, full_name, avatar_url, created_at").eq("organization_id", activeOrgId);
     const orgUserIds = (profiles || []).map((p) => p.id);
@@ -99,6 +109,41 @@ export default function AdminActivity() {
     const leadNameById = {};
     (referencedLeads || []).forEach((l) => { leadNameById[l.id] = l.name; });
 
+    // Seitenaufrufe: daraus "wer ist gerade da" UND "wer war an welchem Tag
+    // überhaupt in der Academy". Ohne das fehlt jede Person, die schon
+    // angemeldet war — eine offene Sitzung erzeugt keinen Login-Eintrag.
+    // 30 Tage, weil länger ohnehin nichts aufbewahrt wird (cleanup-logs).
+    const seit = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: aufrufe } = await scoped(
+      supabase.from("page_views").select("user_id, created_at").gt("created_at", seit)
+        .order("created_at", { ascending: false }).limit(5000)
+    );
+    const letzte = {};
+    (aufrufe || []).forEach((a) => { if (!letzte[a.user_id]) letzte[a.user_id] = a.created_at; });
+    setZuletztAktiv(letzte);
+
+    // Ein Eintrag je Person und Tag statt eines je Seitenaufruf: sonst
+    // ersäuft die Liste in "hat eine Seite geöffnet".
+    const besucheProTag = new Map();
+    (aufrufe || []).forEach((a) => {
+      const tag = deutscherTag(a.created_at);
+      if (!tag) return;
+      const schluessel = `${a.user_id}|${tag}`;
+      const bisher = besucheProTag.get(schluessel);
+      if (!bisher) besucheProTag.set(schluessel, { user_id: a.user_id, zuletzt: a.created_at, zuerst: a.created_at, anzahl: 1 });
+      else {
+        bisher.anzahl += 1;
+        // Absteigend geladen: das zuletzt Gesehene ist das früheste.
+        bisher.zuerst = a.created_at;
+      }
+    });
+    const besuche = [...besucheProTag.values()].map((b) => ({
+      type: "besuch",
+      user_id: b.user_id,
+      created_at: b.zuletzt,
+      detail: `${b.anzahl} Seiten · ${nurUhrzeit(b.zuerst, DEUTSCHE_ZONE)}–${nurUhrzeit(b.zuletzt, DEUTSCHE_ZONE)} Uhr`,
+    }));
+
     const combined = [
       ...(profiles || []).map((p) => ({ type: "registered", user_id: p.id, created_at: p.created_at, detail: null })),
       ...(logins || []).map((e) => ({ type: "login", user_id: e.user_id, created_at: e.created_at, detail: null })),
@@ -110,17 +155,8 @@ export default function AdminActivity() {
       ...(leadRows || []).map((l) => ({ type: "lead", user_id: l.created_by, created_at: l.created_at, detail: `${l.name}${l.company ? ` · ${l.company}` : ""}` })),
       ...(leadComments || []).map((c) => ({ type: "lead_comment", user_id: c.user_id, created_at: c.created_at, detail: `${leadNameById[c.lead_id] || "Termin"}: ${c.content?.slice(0, 60)}` })),
       ...(leadTasks || []).map((t) => ({ type: "lead_task", user_id: t.assigned_by, created_at: t.created_at, detail: `${t.title} → ${map[t.assigned_to]?.full_name || "Unbenannt"} (${leadNameById[t.lead_id] || "Termin"})` })),
+      ...besuche,
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    // Seitenaufrufe des letzten Tages — daraus "wer ist gerade da".
-    const seit = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: aufrufe } = await scoped(
-      supabase.from("page_views").select("user_id, created_at").gt("created_at", seit)
-        .order("created_at", { ascending: false }).limit(2000)
-    );
-    const letzte = {};
-    (aufrufe || []).forEach((a) => { if (!letzte[a.user_id]) letzte[a.user_id] = a.created_at; });
-    setZuletztAktiv(letzte);
 
     setEvents(combined);
     setStand(new Date().toISOString());
@@ -200,9 +236,9 @@ export default function AdminActivity() {
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
       <p className="text-textMuted text-sm mb-5">
-        Wer war da, wer hat gelernt, wer hat Termine erfasst — {isPlatformAdmin ? "in der Organisation, in der du gerade bist" : "in deiner Organisation"}.
-        Zeiten in deutscher Uhrzeit. „Anmeldung“ heisst: jemand hat sich neu angemeldet —
-        wer die Academy offen hatte, erscheint oben unter „gerade in der Academy“.
+        Wer war da, wer hat gelernt, wer hat Termine erfasst — in <strong className="text-textMain">{orgName || "deiner Organisation"}</strong>.
+        Zeiten in deutscher Uhrzeit. „Anmeldung“ heisst: jemand hat sich neu angemeldet.
+        Wer schon angemeldet war, erscheint als „War in der Academy“ — einmal pro Tag, mit Uhrzeitspanne.
       </p>
 
       {/* Wer gerade da ist. Eine offene Sitzung erzeugt keine neue Anmeldung
