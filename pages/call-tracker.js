@@ -7,6 +7,7 @@ import { apiPost } from "../lib/apiClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
+import { istFuehrungsrolle } from "../lib/rollen";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
   FIELDS, storagePrefix, dayKey, dateKeyOf, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -170,21 +171,38 @@ export default function CallTracker() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
-      // Zugriff nur für Team-Leitungen — Zugehörigkeit über teams/team_members
-      // (wie in pages/manager.js), nicht über das veraltete profiles.manager_id.
-      const { data: myTeams } = await supabase.from("teams").select("id").eq("created_by", session.user.id);
-      const leadTeamIds = (myTeams || []).map((t) => t.id);
-      if (!leadTeamIds.length) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
+      // Wer diese Auswertung sieht, folgt derselben Regel wie überall sonst:
+      // eine Führungsrolle sieht ihre ganze Organisation, eine Teamleitung
+      // ihr Team (siehe lib/rollen.js und call_log_days in der Datenbank).
+      // Vorher hing es allein daran, wer das Team ANGELEGT hat — ein Manager,
+      // der ein bestehendes Team übernimmt, stand vor einer leeren Seite.
+      const { data: profil } = await supabase.from("profiles")
+        .select("id, role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
 
-      const { data: memberships } = await supabase
-        .from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", leadTeamIds);
       const nameById = { [session.user.id]: "Ich" };
-      const memberIds = [];
-      (memberships || []).forEach((m) => {
-        if (m.user_id === session.user.id || nameById[m.user_id]) return;
-        memberIds.push(m.user_id);
-        nameById[m.user_id] = m.profiles?.full_name || "Unbenannt";
-      });
+      let memberIds = [];
+
+      if (istFuehrungsrolle(profil)) {
+        const orgId = getActiveOrgId(profil);
+        const { data: alle } = await supabase.from("profiles")
+          .select("id, full_name").eq("organization_id", orgId);
+        (alle || []).forEach((p) => {
+          if (p.id === session.user.id) return;
+          memberIds.push(p.id);
+          nameById[p.id] = p.full_name || "Unbenannt";
+        });
+      } else {
+        const { data: myTeams } = await supabase.from("teams").select("id").eq("created_by", session.user.id);
+        const leadTeamIds = (myTeams || []).map((t) => t.id);
+        if (!leadTeamIds.length) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
+        const { data: memberships } = await supabase
+          .from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", leadTeamIds);
+        (memberships || []).forEach((m) => {
+          if (m.user_id === session.user.id || nameById[m.user_id]) return;
+          memberIds.push(m.user_id);
+          nameById[m.user_id] = m.profiles?.full_name || "Unbenannt";
+        });
+      }
       const allIds = [session.user.id, ...memberIds];
 
       const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -571,7 +589,10 @@ function TeamPanel({ state }) {
     return (
       <div className="card">
         <div className="font-semibold text-textMain text-sm mb-1">Team-Übersicht</div>
-        <p className="text-textMuted text-sm">Diese Ansicht ist nur sichtbar, wenn du mindestens ein Team leitest (siehe „Team (Manager)" in der Sidebar).</p>
+        <p className="text-textMuted text-sm">
+          Diese Auswertung sehen Manager ihrer Organisation und alle, die ein Team leiten.
+          Gehörst du zu einem Team, ohne es zu leiten, findest du deine eigenen Zahlen unter „Heute“, „Woche“ und „Monat“.
+        </p>
       </div>
     );
   }

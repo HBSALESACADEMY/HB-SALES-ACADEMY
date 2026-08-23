@@ -5,7 +5,7 @@ import AvatarCropper from "../components/AvatarCropper";
 import { supabase } from "../lib/supabaseClient";
 import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht";
 import { aendereGeprueft } from "../lib/loeschen";
-import { meldeFehler } from "../lib/fehlerMelden";
+import { meldeStoerung } from "../lib/fehlerMelden";
 
 // Der Stern kommt aus PFLICHTFELDER und nicht aus der Hand: sonst steht er
 // eines Tages an einem Feld, das längst freiwillig ist — oder fehlt an einem,
@@ -71,7 +71,7 @@ export default function Profile() {
     // Überschreiben alter Dateien und sorgt dafür, dass Änderungen immer sichtbar werden.
     const path = `${session.user.id}/${Date.now()}.jpg`;
     const { error: upErr } = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg" });
-    if (upErr) { setError(upErr.message); meldeFehler("Profilbild hochladen", upErr.message); setUploading(false); return; }
+    if (upErr) { setError(upErr.message); meldeStoerung("Profilbild hochladen", upErr.message); setUploading(false); return; }
     const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
     const url = pub.publicUrl;
     // Geprüft speichern: eine von der Datenbank abgelehnte Änderung meldet
@@ -83,7 +83,7 @@ export default function Profile() {
       supabase.from("profiles").update({ avatar_url: url, avatar_geaendert_at: new Date().toISOString() }).eq("id", session.user.id),
       "Das Profilbild konnte nicht gespeichert werden."
     );
-    if (dbFehler) { setError(dbFehler); meldeFehler("Profilbild speichern", dbFehler); setUploading(false); return; }
+    if (dbFehler) { setError(dbFehler); meldeStoerung("Profilbild speichern", dbFehler); setUploading(false); return; }
     setProfile((p) => ({ ...p, avatar_url: url }));
     patchCachedProfile({ avatar_url: url });
     setUploading(false);

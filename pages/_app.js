@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Work_Sans, Fraunces, JetBrains_Mono } from "next/font/google";
 import "../styles/globals.css";
-import { meldeFehler } from "../lib/fehlerMelden";
+import { meldeStoerung } from "../lib/fehlerMelden";
 
 // Schriften selbst hosten statt live von fonts.googleapis.com zu laden —
 // verhindert, dass die IP-Adresse jedes Besuchers ohne Einwilligung an
@@ -16,8 +16,8 @@ export default function App({ Component, pageProps }) {
   // Bildschirm EINER Person, und ob sie sich meldet, ist Zufall. Die
   // tägliche Systemprüfung sieht nur die Technik dahinter.
   useEffect(() => {
-    const beiFehler = (e) => meldeFehler(window.location.pathname, e?.error?.message || e?.message);
-    const beiVersprechen = (e) => meldeFehler(window.location.pathname, e?.reason?.message || e?.reason);
+    const beiFehler = (e) => meldeStoerung(window.location.pathname, e?.error?.message || e?.message);
+    const beiVersprechen = (e) => meldeStoerung(window.location.pathname, e?.reason?.message || e?.reason);
     window.addEventListener("error", beiFehler);
     window.addEventListener("unhandledrejection", beiVersprechen);
     return () => {
