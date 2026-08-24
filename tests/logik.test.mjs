@@ -24,6 +24,7 @@ import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../l
 import { deutscherTag } from "../lib/terminzeit.js";
 import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
 import { abgleichAktiveOrg } from "../lib/activeOrg.js";
+import { kreisSegmente, prozent } from "../lib/kreisdiagramm.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -622,4 +623,30 @@ test("Aktive Organisation: Browser und Server werden abgeglichen", () => {
   // Konto ohne Organisation: nichts erfinden.
   assert.deepEqual(abgleichAktiveOrg({ gespeichert: null, server: null, heimat: null }),
     { aktiv: null, serverSchreiben: null, sessionSchreiben: null });
+});
+
+// Ein Kreisdiagramm mit einem einzigen Wert zeichnet keinen Bogen: Anfang
+// und Ende liegen aufeinander, das Stück verschwindet. Und Nullwerte dürfen
+// die Farbreihenfolge nicht verschieben.
+test("Kreisdiagramm rechnet Anteile und Bögen richtig", () => {
+  const { summe, segmente, vollkreis } = kreisSegmente([
+    { label: "A", value: 30 }, { label: "B", value: 10 }, { label: "C", value: 0 },
+  ]);
+  assert.equal(summe, 40);
+  assert.equal(vollkreis, null);
+  assert.equal(segmente.length, 2, "Der Nullwert bekommt kein Stück.");
+  assert.equal(Math.round(segmente[0].anteil * 100), 75);
+  assert.equal(Math.round(segmente[1].anteil * 100), 25);
+  // Das grössere Stück braucht das Kennzeichen für den grossen Bogen.
+  assert.match(segmente[0].pfad, / 1 1 /);
+  assert.match(segmente[1].pfad, / 0 1 /);
+
+  const einer = kreisSegmente([{ label: "Nur A", value: 5 }, { label: "B", value: 0 }]);
+  assert.equal(einer.segmente.length, 0);
+  assert.deepEqual(einer.vollkreis, { label: "Nur A", value: 5, anteil: 1 });
+
+  const leer = kreisSegmente([{ label: "A", value: 0 }]);
+  assert.equal(leer.summe, 0);
+  assert.deepEqual(leer.segmente, []);
+  assert.equal(prozent(0.333), "33 %");
 });

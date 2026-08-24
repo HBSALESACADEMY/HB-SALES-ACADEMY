@@ -8,6 +8,8 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
+import { berlinHeute, tagPlus } from "../lib/woche";
+import Kreisdiagramm from "../components/Kreisdiagramm";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
   FIELDS, storagePrefix, dayKey, dateKeyOf, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -26,11 +28,6 @@ const DEFAULT_BOOKING_STEPS = [
 // Farben für die Team-Auswertung: erst der Marken-Verlauf der Organisation,
 // dann neutrale Zusatztöne. Als CSS-Variablen, damit sie dem Branding und
 // beiden Themes folgen.
-const BAR_COLORS = [
-  "var(--org-color-1, #4C5DC9)", "var(--org-accent, #CE3A5C)", "var(--org-color-3, #B2314F)",
-  "#3FBFA6", "#F0B23E", "#5FB8E8", "#8D90A6", "#9C3E6E",
-];
-
 export default function CallTracker() {
   const [view, setView] = useState("today");
   const [org, setOrg] = useState(getCachedOrg());
@@ -53,6 +50,7 @@ export default function CallTracker() {
   const leadFileRef = useRef(null);
 
   const [teamState, setTeamState] = useState({ status: "idle", members: [], reasons: [] });
+  const [teamZeitraum, setTeamZeitraum] = useState("woche");
 
   const reasons = useMemo(() => resolveObjectionCategories(org), [org]);
   const leadFields = useMemo(() => resolveLeadFields(org), [org]);
@@ -166,7 +164,12 @@ export default function CallTracker() {
     setRangeData(aggregateRange(prefix, from, to, reasons));
   }
 
-  async function loadTeam() {
+  // Wie weit die Team-Auswertung zurückschaut.
+  function tageFuerZeitraum(z) {
+    return z === "heute" ? 0 : z === "monat" ? 30 : 7;
+  }
+
+  async function loadTeam(zeitraum = teamZeitraum) {
     setTeamState({ status: "loading", members: [], reasons: [] });
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -205,19 +208,37 @@ export default function CallTracker() {
       }
       const allIds = [session.user.id, ...memberIds];
 
-      const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-      const { data: logs } = await supabase.from("call_log_days").select("*").in("user_id", allIds).gte("log_date", since);
+      // Zeitraum in DEUTSCHER Rechnung statt "vor 7×24 Stunden in UTC":
+      // sonst fällt je nach Uhrzeit ein Tag heraus oder einer zu viel hinein.
+      const tage = tageFuerZeitraum(zeitraum);
+      const von = tage === 0 ? berlinHeute() : tagPlus(berlinHeute(), -(tage - 1));
+      const { data: logs } = await supabase.from("call_log_days").select("*").in("user_id", allIds).gte("log_date", von);
 
-      const callsByUser = {};
+      // Bisher wurde nur "Anwahlen" ausgewertet — die übrigen Zähler standen
+      // in derselben Zeile und wurden weggeworfen.
+      const proPerson = {};
+      const gesamt = {};
+      FIELDS.forEach((f) => { gesamt[f.key] = 0; });
       const reasonTotals = zeroReasons(reasons);
       (logs || []).forEach((l) => {
-        callsByUser[l.user_id] = (callsByUser[l.user_id] || 0) + (l.counts?.anwahlen || 0);
+        const p = proPerson[l.user_id] || (proPerson[l.user_id] = {});
+        FIELDS.forEach((f) => {
+          const wert = l.counts?.[f.key] || 0;
+          p[f.key] = (p[f.key] || 0) + wert;
+          gesamt[f.key] += wert;
+        });
         reasons.forEach((r) => { reasonTotals[r.key] += l.reasons?.[r.key] || 0; });
       });
 
       setTeamState({
         status: "ok",
-        members: allIds.map((id) => ({ id, name: nameById[id] || "Unbenannt", value: callsByUser[id] || 0 })),
+        members: allIds.map((id) => ({
+          id,
+          name: nameById[id] || "Unbenannt",
+          value: proPerson[id]?.anwahlen || 0,
+          zahlen: FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: proPerson[id]?.[f.key] || 0 }), {}),
+        })).sort((a, b) => b.value - a.value),
+        gesamt,
         reasons: reasons.map((r) => ({ key: r.key, label: r.label, value: reasonTotals[r.key] || 0 })),
       });
     } catch (e) {
@@ -344,7 +365,7 @@ export default function CallTracker() {
       </div>
 
       {view === "team" ? (
-        <TeamPanel state={teamState} />
+        <TeamPanel state={teamState} zeitraum={teamZeitraum} onZeitraum={(z) => { setTeamZeitraum(z); loadTeam(z); }} />
       ) : (
         <>
           {isToday && (
@@ -563,27 +584,7 @@ export default function CallTracker() {
   );
 }
 
-function BarList({ rows, emptyText }) {
-  const max = Math.max(1, ...rows.map((r) => r.value));
-  if (!rows.some((r) => r.value > 0)) return <p className="text-textMuted text-sm">{emptyText}</p>;
-  return (
-    <div className="flex flex-col gap-2.5">
-      {rows.map((row, i) => (
-        <div key={row.key || row.id}>
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-textMain">{row.name || row.label}</span>
-            <span className="text-textMuted">{row.value}</span>
-          </div>
-          <div className="h-2 rounded-full bg-surfaceRaised overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${Math.round((row.value / max) * 100)}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TeamPanel({ state }) {
+function TeamPanel({ state, zeitraum, onZeitraum }) {
   if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
   if (state.status === "denied") {
     return (
@@ -599,17 +600,89 @@ function TeamPanel({ state }) {
   if (state.status === "error") {
     return <div className="card border border-coral/40 text-coral text-sm">Team-Ansicht konnte nicht geladen werden.</div>;
   }
+
+  const gesamt = state.gesamt || {};
+  // Was aus den Anwahlen wurde. "Anwahlen" selbst ist die Summe darüber und
+  // gehört nicht ins Kreisdiagramm — sonst wäre die Hälfte des Kreises die
+  // Gesamtzahl und der Rest ihre Bestandteile.
+  const ergebnisse = FIELDS.filter((f) => f.key !== "anwahlen")
+    .map((f) => ({ label: f.label, value: gesamt[f.key] || 0 }));
+
   return (
     <>
-      <div className="card mb-4">
-        <div className="font-semibold text-textMain text-sm mb-1">Anwahlen pro Teammitglied</div>
-        <p className="text-xs text-textMuted mb-3">Letzte 7 Tage</p>
-        <BarList rows={state.members} emptyText="In den letzten 7 Tagen wurden keine Anwahlen erfasst." />
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {[["heute", "Heute"], ["woche", "7 Tage"], ["monat", "30 Tage"]].map(([key, label]) => (
+          <button key={key} onClick={() => onZeitraum(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {label}
+          </button>
+        ))}
       </div>
-      <div className="card">
+
+      {/* Erst die Zahlen, dann ihre Verteilung: "wie viele" beantwortet ein
+          Kreisdiagramm nicht, "woran liegt es" eine Zahlenreihe nicht. */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+        {FIELDS.map((f) => (
+          <div key={f.key} className="card !py-3">
+            <div className={`text-xl font-display font-semibold ${f.kind === "positive" ? "text-teal" : f.kind === "negative" ? "text-coral" : "text-textMain"}`}>
+              {gesamt[f.key] || 0}
+            </div>
+            <div className="text-[11px] text-textMuted leading-tight">{f.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div className="card">
+          <div className="font-semibold text-textMain text-sm mb-1">Anwahlen pro Person</div>
+          <p className="text-xs text-textMuted mb-3">Wer wie viel telefoniert hat</p>
+          <Kreisdiagramm
+            daten={state.members.map((m) => ({ label: m.name, value: m.value }))}
+            leerText="In diesem Zeitraum wurden keine Anwahlen erfasst."
+          />
+        </div>
+        <div className="card">
+          <div className="font-semibold text-textMain text-sm mb-1">Was aus den Anwahlen wurde</div>
+          <p className="text-xs text-textMuted mb-3">Erreicht, terminiert, negativ</p>
+          <Kreisdiagramm daten={ergebnisse} leerText="Noch keine Ergebnisse erfasst." />
+        </div>
+      </div>
+
+      <div className="card mb-4">
         <div className="font-semibold text-textMain text-sm mb-1">Warum negative Anrufe?</div>
-        <p className="text-xs text-textMuted mb-3">Team, letzte 7 Tage</p>
-        <BarList rows={state.reasons} emptyText="Noch keine negativen Anrufe mit Grund erfasst." />
+        <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum</p>
+        <Kreisdiagramm daten={state.reasons} leerText="Noch keine negativen Anrufe mit Grund erfasst." />
+      </div>
+
+      {/* Die Tabelle bleibt: ein Kreisdiagramm zeigt Anteile, nicht die
+          einzelnen Zahlen pro Person. */}
+      <div className="card">
+        <div className="font-semibold text-textMain text-sm mb-3">Alle Zahlen pro Person</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-textMuted text-left">
+                <th className="font-normal pb-2 pr-3">Person</th>
+                {FIELDS.map((f) => <th key={f.key} className="font-normal pb-2 px-2 text-right whitespace-nowrap">{f.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {state.members.map((m) => (
+                <tr key={m.id} className="border-t border-line">
+                  <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{m.name}</td>
+                  {FIELDS.map((f) => (
+                    <td key={f.key} className={`py-1.5 px-2 text-right font-mono ${f.kind === "positive" ? "text-teal" : f.kind === "negative" ? "text-coral" : "text-textMuted"}`}>
+                      {m.zahlen?.[f.key] || 0}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {state.members.length === 0 && (
+                <tr><td colSpan={FIELDS.length + 1} className="py-2 text-textMuted">Niemand im Team.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
