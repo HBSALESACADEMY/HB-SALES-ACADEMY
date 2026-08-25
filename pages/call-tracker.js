@@ -8,6 +8,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
+import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
@@ -274,7 +275,7 @@ export default function CallTracker() {
           // Früher nur in der Konsole: der Termin wurde ohne Aufnahme
           // gespeichert, es entstanden keine Notizen — und niemand erfuhr
           // warum. Genau das sah dann aus wie "die Notizen funktionieren nicht".
-          meldeFehler("Die Aufnahme konnte nicht hochgeladen werden — der Termin wurde ohne sie gespeichert: " + upErr.message, upErr);
+          meldeFehler("Die Aufnahme konnte nicht hochgeladen werden — der Termin wurde ohne sie gespeichert. " + verstaendlicherSpeicherFehler(upErr), upErr);
         } else recordingPath = path;
       }
 
@@ -480,7 +481,7 @@ export default function CallTracker() {
                     </div>
                   ))}
                   <label className="block text-xs text-textMuted mb-1.5">Aufnahme hochladen (optional)</label>
-                  <input ref={leadFileRef} type="file" accept="audio/*" onChange={(e) => setLeadFile(e.target.files[0] || null)}
+                  <input ref={leadFileRef} type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.amr,.3gp,.caf,.webm,.flac" onChange={(e) => setLeadFile(e.target.files[0] || null)}
                     className="text-xs text-textMuted mb-4 block w-full" />
                   <div className="flex items-center gap-3 flex-wrap">
                     <button disabled={leadSaving} onClick={submitLead} className="btn disabled:opacity-40">{leadSaving ? "Speichert..." : "Speichern"}</button>

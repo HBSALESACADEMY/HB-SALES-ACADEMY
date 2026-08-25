@@ -25,6 +25,8 @@ import { deutscherTag } from "../lib/terminzeit.js";
 import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
 import { abgleichAktiveOrg } from "../lib/activeOrg.js";
 import { kreisSegmente, prozent } from "../lib/kreisdiagramm.js";
+import { validateRecordingUpload } from "../lib/uploadValidation.js";
+import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -649,4 +651,34 @@ test("Kreisdiagramm rechnet Anteile und Bögen richtig", () => {
   assert.equal(leer.summe, 0);
   assert.deepEqual(leer.segmente, []);
   assert.equal(prozent(0.333), "33 %");
+});
+
+// Auf dem Handy kommt eine Sprachaufnahme oft ohne Dateityp an. Die Prüfung
+// auf "audio/..." lehnte sie dann ab — am Rechner fiel das nie auf.
+test("Aufnahmen vom Handy werden als Audio erkannt", () => {
+  assert.equal(validateRecordingUpload({ name: "call.mp3", type: "audio/mpeg", size: 1000 }), null);
+  // iCloud/Dateien-App: kein Typ, nur die Endung.
+  assert.equal(validateRecordingUpload({ name: "Sprachmemo.m4a", type: "", size: 1000 }), null);
+  assert.equal(validateRecordingUpload({ name: "audio.opus", type: "application/octet-stream", size: 1000 }), null);
+  // iPhone verpackt Sprachaufnahmen zum Teil als video/mp4.
+  assert.equal(validateRecordingUpload({ name: "aufnahme.mp4", type: "video/mp4", size: 1000 }), null);
+  // Kein Audio bleibt kein Audio.
+  assert.match(validateRecordingUpload({ name: "angebot.pdf", type: "application/pdf", size: 1000 }) || "", /Audio-Datei/);
+  assert.match(validateRecordingUpload({ name: "foto.jpg", type: "image/jpeg", size: 1000 }) || "", /Audio-Datei/);
+  // Zu gross: die Meldung nennt die tatsächliche Grösse.
+  assert.match(validateRecordingUpload({ name: "lang.m4a", type: "audio/mp4", size: 40 * 1024 * 1024 }) || "", /40 MB/);
+});
+
+// Die Meldungen des Dateispeichers kommen englisch und technisch. Wer eine
+// Aufnahme hochladen wollte, kann daraus nichts ablesen.
+test("Speicher-Fehler werden übersetzt", () => {
+  assert.match(verstaendlicherSpeicherFehler(new Error("new row violates row-level security policy")), /abgelehnt/);
+  assert.match(verstaendlicherSpeicherFehler(new Error("Payload too large")), /zu groß/);
+  assert.match(verstaendlicherSpeicherFehler(new Error("Bucket not found")), /Speicherort/);
+  assert.match(verstaendlicherSpeicherFehler(new Error("Failed to fetch")), /Verbindung/);
+  // Die technische Ursache bleibt für die Fehlersuche erhalten.
+  assert.match(verstaendlicherSpeicherFehler(new Error("Bucket not found")), /Bucket not found/);
+  // Unbekannte Meldungen werden durchgereicht statt verschluckt.
+  assert.equal(verstaendlicherSpeicherFehler(new Error("Irgendwas Neues")), "Irgendwas Neues");
+  assert.equal(verstaendlicherSpeicherFehler(null), "Hochladen fehlgeschlagen.");
 });

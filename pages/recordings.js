@@ -7,6 +7,8 @@ import AIBadge from "../components/AIBadge";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost, apiGet } from "../lib/apiClient";
 import { validateRecordingUpload } from "../lib/uploadValidation";
+import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
+import { meldeStoerung } from "../lib/fehlerMelden";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
@@ -119,7 +121,9 @@ export default function Recordings() {
         .then(() => load())
         .catch((e) => console.error("call-recording-evaluate failed:", e.message));
     } catch (e) {
-      setError(e.message || "Hochladen fehlgeschlagen.");
+      setError(verstaendlicherSpeicherFehler(e));
+      // Der Betreiber soll davon erfahren — sonst bleibt es beim "geht nicht".
+      meldeStoerung("Aufnahme hochladen", e?.message || String(e));
     } finally {
       setUploading(false);
     }
@@ -207,7 +211,11 @@ export default function Recordings() {
           <input className="input" placeholder="Kontext (optional, z.B. Kaltakquise, Bestandskunde)" value={label} onChange={(e) => setLabel(e.target.value)} />
           <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 w-fit">
             <Icon name="mic" size={12} /> {file ? file.name : "Audio-Datei wählen (max. 15 MB)"}
-            <input type="file" accept="audio/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
+            {/* Die Endungen stehen mit dabei, weil iPhones bei "audio/*"
+                allein oft nur die Musik-Mediathek anbieten — Sprachnotizen
+                und Dateien aus dem Datei-Manager tauchen dann gar nicht auf. */}
+            <input type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.amr,.3gp,.caf,.webm,.flac"
+              className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
           </label>
           <select className="input" value={leadId} onChange={(e) => setLeadId(e.target.value)}>
             <option value="">Keinem Kunden zuordnen (optional)</option>
