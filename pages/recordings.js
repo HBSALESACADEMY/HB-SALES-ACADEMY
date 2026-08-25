@@ -86,7 +86,13 @@ export default function Recordings() {
     if (!file) return;
     if (!outcome) { setError("Bitte wähle, ob der Anruf positiv oder negativ verlaufen ist."); return; }
     const validationError = validateRecordingUpload(file);
-    if (validationError) { setError(validationError); return; }
+    if (validationError) {
+      setError(validationError);
+      // Auch die Vorprüfung melden: gerade auf dem Handy scheitert es oft
+      // schon hier, und dann sieht der Betreiber sonst nie, WARUM.
+      meldeStoerung("Aufnahme abgelehnt (Vorprüfung)", `${validationError} [${file.name} · ${file.type || "ohne Typ"} · ${Math.round(file.size / 1024)} KB]`);
+      return;
+    }
     setUploading(true);
     setError("");
     try {
@@ -221,6 +227,14 @@ export default function Recordings() {
         <div className="font-semibold text-textMain text-sm mb-3">Neue Aufnahme hochladen</div>
         <div className="flex flex-col gap-2.5">
           <input className="input" placeholder="Kontext (optional, z.B. Kaltakquise, Bestandskunde)" value={label} onChange={(e) => setLabel(e.target.value)} />
+          {/* Was tatsächlich angekommen ist. Auf dem Handy ist das der
+              Unterschied zwischen "die Datei ist da" und "der Dateiwähler
+              hat nichts übergeben" — von aussen sieht beides gleich aus. */}
+          {file && (
+            <div className="text-[11px] text-textMuted -mb-1">
+              Gewählt: {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB · {file.type || "ohne Typangabe"}
+            </div>
+          )}
           <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 w-fit">
             <Icon name="mic" size={12} /> {file ? file.name : "Audio-Datei wählen (max. 15 MB)"}
             {/* Die Endungen stehen mit dabei, weil iPhones bei "audio/*"

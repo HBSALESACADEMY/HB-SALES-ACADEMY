@@ -137,8 +137,19 @@ export default function AdminActivity() {
       supabase.from("page_views").select("user_id, created_at").gt("created_at", seit)
         .order("created_at", { ascending: false }).limit(5000)
     );
+    // Anwahlen zählen ist Arbeit, die keine Seite wechselt: call_log_days
+    // wird bei jedem Tippen neu geschrieben und ist damit das verlässlichste
+    // Lebenszeichen für alle, die gerade telefonieren.
+    const { data: tippen } = await scoped(
+      supabase.from("call_log_days").select("user_id, updated_at").gt("updated_at", seit)
+        .order("updated_at", { ascending: false }).limit(500)
+    );
+
     const letzte = {};
     (aufrufe || []).forEach((a) => { if (!letzte[a.user_id]) letzte[a.user_id] = a.created_at; });
+    (tippen || []).forEach((t) => {
+      if (!letzte[t.user_id] || t.updated_at > letzte[t.user_id]) letzte[t.user_id] = t.updated_at;
+    });
     // Das Lebenszeichen zählt mehr als der letzte Seitenaufruf: es entsteht
     // auch, während jemand auf DERSELBEN Seite arbeitet (migration_119).
     // Seitenaufrufe bleiben als Rückfall für Konten, die die neue Fassung
@@ -298,9 +309,12 @@ export default function AdminActivity() {
           <div className="card mb-4">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-sm font-semibold text-textMain">
-                {aktiv.length > 0 ? `${aktiv.length} gerade in der Academy` : "Gerade ist niemand da"}
+                {aktiv.length > 0 ? `${aktiv.length} gerade in der Academy` : "Gerade meldet sich niemand"}
               </span>
-              <span className="text-[11px] text-textMuted">letzte {Math.round(AKTIV_FENSTER_MS / 60000)} Minuten</span>
+              <span className="text-[11px] text-textMuted">
+                letzte {Math.round(AKTIV_FENSTER_MS / 60000)} Minuten — gezählt wird eine geöffnete Academy,
+                ein Seitenwechsel oder ein Tippen im Call Tracker
+              </span>
               <button onClick={() => load()} className="btn-ghost text-xs ml-auto">Aktualisieren</button>
               {stand && <span className="text-[11px] text-textMuted">Stand: {nurUhrzeit(stand, DEUTSCHE_ZONE)} Uhr</span>}
             </div>
