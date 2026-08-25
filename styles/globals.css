@@ -410,24 +410,36 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
    Flüge quer durchs Bild sind genau das, was dort Beschwerden auslöst. */
 .rakete {
   position: fixed;
-  left: -100px;
-  bottom: 4%;
-  font-size: 64px;
-  line-height: 1;
+  left: 0;
+  bottom: 8%;
   z-index: 400;
   pointer-events: none;
-  animation: rakete-flug 2.2s cubic-bezier(.25, .55, .35, 1) forwards;
+  /* Die Reise: von links unten quer hinauf und über den oberen Rand hinaus,
+     dabei immer grösser werdend. */
+  animation: rakete-reise 2.6s cubic-bezier(.3, .5, .4, 1) forwards;
 }
 
-/* Vier volle Umdrehungen, auf mehr als das Doppelte anwachsend, und am Ende
-   weit über den oberen Bildrand hinaus: die Rakete soll nicht quer über den
-   Bildschirm huschen, sondern abheben. */
-@keyframes rakete-flug {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(.5); opacity: 0; }
+/* Und die Schleifen: die Rakete dreht sich nicht um sich selbst, sie fliegt
+   Kreise. Das erste rotate() führt sie um einen Punkt herum, translateX
+   setzt den Radius, das zweite rotate() dreht sie wieder gerade — sonst
+   würde sie sich zusätzlich um die eigene Achse drehen. */
+.rakete span {
+  display: inline-block;
+  font-size: 64px;
+  line-height: 1;
+  animation: rakete-schleife .85s linear infinite;
+}
+
+@keyframes rakete-reise {
+  0%   { transform: translate(-12vw, 0) scale(.6); opacity: 0; }
   10%  { opacity: 1; }
-  35%  { transform: translate(28vw, -20vh) rotate(360deg) scale(1.1); }
-  65%  { transform: translate(58vw, -52vh) rotate(900deg) scale(1.7); opacity: 1; }
-  100% { transform: translate(95vw, -125vh) rotate(1440deg) scale(2.2); opacity: 0; }
+  80%  { opacity: 1; }
+  100% { transform: translate(100vw, -110vh) scale(2.1); opacity: 0; }
+}
+
+@keyframes rakete-schleife {
+  from { transform: rotate(0deg) translateX(46px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(46px) rotate(-360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {

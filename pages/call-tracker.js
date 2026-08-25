@@ -355,7 +355,7 @@ export default function CallTracker() {
     setRakete(false);
     setTimeout(() => {
       setRakete(true);
-      setTimeout(() => setRakete(false), 2300);
+      setTimeout(() => setRakete(false), 2700);
     }, 20);
   }
 
@@ -673,7 +673,7 @@ export default function CallTracker() {
         </>
       )}
 
-      {rakete && <div className="rakete" aria-hidden="true">🚀</div>}
+      {rakete && <div className="rakete" aria-hidden="true"><span>🚀</span></div>}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] px-4 py-2.5 rounded-lg bg-surfaceRaised border border-line text-sm text-textMain shadow-lg">
