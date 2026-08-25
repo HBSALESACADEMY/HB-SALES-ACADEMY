@@ -27,6 +27,7 @@ import { abgleichAktiveOrg } from "../lib/activeOrg.js";
 import { kreisSegmente, prozent } from "../lib/kreisdiagramm.js";
 import { validateRecordingUpload } from "../lib/uploadValidation.js";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler.js";
+import { PALETTE, feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -681,4 +682,27 @@ test("Speicher-Fehler werden übersetzt", () => {
   // Unbekannte Meldungen werden durchgereicht statt verschluckt.
   assert.equal(verstaendlicherSpeicherFehler(new Error("Irgendwas Neues")), "Irgendwas Neues");
   assert.equal(verstaendlicherSpeicherFehler(null), "Hochladen fehlgeschlagen.");
+});
+
+// Dieselbe Sache muss in jedem Diagramm dieselbe Farbe haben. Sonst ist
+// "Terminiert" im einen Kreis grün und im anderen violett, und die Legende
+// muss jedes Mal neu gelesen werden.
+test("Diagramm-Farben bleiben je Sache gleich", () => {
+  assert.equal(feldFarbe("termin"), feldFarbe("termin"));
+  assert.notEqual(feldFarbe("termin"), feldFarbe("negativ"));
+  assert.notEqual(feldFarbe("erreicht"), feldFarbe("nicht"));
+  // Unbekannte Schlüssel bekommen eine Farbe statt undefined.
+  assert.ok(feldFarbe("gibtsnicht"));
+
+  // Einwandgründe: die Farbe hängt an der Reihenfolge der hinterlegten
+  // Gründe, nicht an der Sortierung der jeweiligen Ansicht.
+  const gruende = [{ key: "preis" }, { key: "zeit" }, { key: "kein_bedarf" }];
+  const sortiertAnders = [{ key: "kein_bedarf" }, { key: "preis" }, { key: "zeit" }];
+  assert.equal(grundFarbe(gruende, "zeit"), grundFarbe(gruende, "zeit"));
+  assert.notEqual(grundFarbe(gruende, "preis"), grundFarbe(gruende, "zeit"));
+  assert.notEqual(grundFarbe(gruende, "zeit"), grundFarbe(sortiertAnders, "zeit"),
+    "Andere Reihenfolge der Gründe = andere Farbe — deshalb wird IMMER dieselbe Liste übergeben.");
+
+  // Palette wiederholt sich statt ins Leere zu laufen.
+  assert.equal(paletteFarbe(0), paletteFarbe(PALETTE.length));
 });

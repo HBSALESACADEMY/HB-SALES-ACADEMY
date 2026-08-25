@@ -11,6 +11,7 @@ import { istFuehrungsrolle } from "../lib/rollen";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import Kreisdiagramm from "../components/Kreisdiagramm";
+import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
   FIELDS, storagePrefix, dayKey, dateKeyOf, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -515,10 +516,15 @@ export default function CallTracker() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
             {FIELDS.map((f) => (
-              <div key={f.key} className={`card ${f.kind === "positive" ? "border-teal/40" : f.kind === "negative" ? "border-coral/40" : ""}`}>
-                <div className="text-xs text-textMuted mb-1">{f.label}</div>
+              // Dieselbe Farbe wie im Diagramm: wer die Kachel gesehen hat,
+              // findet den Wert im Kreis ohne Legende wieder.
+              <div key={f.key} className="card" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} 40%, transparent)` }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
+                  <span className="text-xs text-textMuted">{f.label}</span>
+                </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-3xl font-display font-semibold ${f.kind === "positive" ? "text-teal" : f.kind === "negative" ? "text-coral" : "text-textMain"}`}>
+                  <span className="text-3xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
                     {counts[f.key] || 0}
                   </span>
                   {isToday && (
@@ -560,7 +566,9 @@ export default function CallTracker() {
                         <span className="text-textMuted">{n} · {pct}%</span>
                       </div>
                       <div className="h-2 rounded-full bg-surfaceRaised overflow-hidden">
-                        <div className="h-full brand-gradient rounded-full" style={{ width: `${pct}%` }} />
+                        {/* Jeder Grund in seiner Farbe — dieselbe wie im
+                            Kreisdiagramm der Team-Auswertung. */}
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: grundFarbe(reasons, r.key) }} />
                       </div>
                     </div>
                   );
@@ -619,17 +627,19 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
   const termin = gesamt.termin || 0;
   const negativ = gesamt.negativ || 0;
 
+  // Farben kommen aus lib/diagrammFarben.js: "Terminiert" ist überall grün,
+  // "Negativ" überall rot — in der Kachel, im Kreis und in der Tabelle.
   const verteilung = [
-    { label: "Ans Telefon gegangen", value: erreicht },
-    { label: "Nicht erreicht", value: nicht },
+    { label: "Ans Telefon gegangen", value: erreicht, color: feldFarbe("erreicht") },
+    { label: "Nicht erreicht", value: nicht, color: feldFarbe("nicht") },
     // Wer nur "Anwahl" tippt, ohne danach erreicht/nicht erreicht: sonst
     // stimmte die Mitte des Kreises nicht mit der Gesamtzahl überein.
-    { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht) },
+    { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht), color: "#5B6079" },
   ];
   const ergebnisse = [
-    { label: "Terminiert", value: termin },
-    { label: "Negativ verlaufen", value: negativ },
-    { label: "Ohne Ergebnis", value: Math.max(0, erreicht - termin - negativ) },
+    { label: "Terminiert", value: termin, color: feldFarbe("termin") },
+    { label: "Negativ verlaufen", value: negativ, color: feldFarbe("negativ") },
+    { label: "Ohne Ergebnis", value: Math.max(0, erreicht - termin - negativ), color: "#5B6079" },
   ];
 
   return (
@@ -649,13 +659,16 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
           bereits gezählter Gespräche, keine zusätzlichen Anrufe. */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
         {FIELDS.map((f) => (
-          <div key={f.key} className="card !py-3">
-            <div className={`text-xl font-display font-semibold ${f.kind === "positive" ? "text-teal" : f.kind === "negative" ? "text-coral" : "text-textMain"}`}>
+          <div key={f.key} className="card !py-3" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} 40%, transparent)` }}>
+            <div className="text-xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
               {gesamt[f.key] || 0}
             </div>
-            <div className="text-[11px] text-textMuted leading-tight">
-              {f.key === "termin" || f.key === "negativ" ? <span className="text-textMuted">davon </span> : null}
-              {f.label}
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
+              <span className="text-[11px] text-textMuted leading-tight">
+                {f.key === "termin" || f.key === "negativ" ? <span className="text-textMuted">davon </span> : null}
+                {f.label}
+              </span>
             </div>
           </div>
         ))}
@@ -666,7 +679,7 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
           <div className="font-semibold text-textMain text-sm mb-1">Anwahlen pro Person</div>
           <p className="text-xs text-textMuted mb-3">Wer wie viel telefoniert hat</p>
           <Kreisdiagramm
-            daten={state.members.map((m) => ({ label: m.name, value: m.value }))}
+            daten={state.members.map((m, i) => ({ label: m.name, value: m.value, color: paletteFarbe(i) }))}
             leerText="In diesem Zeitraum wurden keine Anwahlen erfasst."
           />
         </div>
@@ -688,7 +701,9 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
       <div className="card mb-4">
         <div className="font-semibold text-textMain text-sm mb-1">Warum negative Anrufe?</div>
         <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum</p>
-        <Kreisdiagramm daten={state.reasons} leerText="Noch keine negativen Anrufe mit Grund erfasst." />
+        <Kreisdiagramm
+          daten={state.reasons.map((r) => ({ ...r, color: grundFarbe(state.reasons, r.key) }))}
+          leerText="Noch keine negativen Anrufe mit Grund erfasst." />
       </div>
 
       {/* Die Tabelle bleibt: ein Kreisdiagramm zeigt Anteile, nicht die
@@ -700,7 +715,12 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
             <thead>
               <tr className="text-textMuted text-left">
                 <th className="font-normal pb-2 pr-3">Person</th>
-                {FIELDS.map((f) => <th key={f.key} className="font-normal pb-2 px-2 text-right whitespace-nowrap">{f.label}</th>)}
+                {FIELDS.map((f) => (
+                  <th key={f.key} className="font-normal pb-2 px-2 text-right whitespace-nowrap">
+                    <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: feldFarbe(f.key) }} />
+                    {f.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -708,7 +728,8 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
                 <tr key={m.id} className="border-t border-line">
                   <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{m.name}</td>
                   {FIELDS.map((f) => (
-                    <td key={f.key} className={`py-1.5 px-2 text-right font-mono ${f.kind === "positive" ? "text-teal" : f.kind === "negative" ? "text-coral" : "text-textMuted"}`}>
+                    <td key={f.key} className="py-1.5 px-2 text-right font-mono"
+                      style={{ color: (m.zahlen?.[f.key] || 0) > 0 ? feldFarbe(f.key) : undefined }}>
                       {m.zahlen?.[f.key] || 0}
                     </td>
                   ))}
