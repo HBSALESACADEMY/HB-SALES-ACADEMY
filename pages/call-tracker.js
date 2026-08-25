@@ -10,6 +10,7 @@ import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { berlinHeute, tagPlus } from "../lib/woche";
+import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import Aufklapper from "../components/Aufklapper";
@@ -59,6 +60,7 @@ export default function CallTracker() {
 
   const [teamState, setTeamState] = useState({ status: "idle", members: [], reasons: [] });
   const [teamZeitraum, setTeamZeitraum] = useState("woche");
+  const [eigenerZeitraum, setEigenerZeitraum] = useState({ von: "", bis: "" });
 
   const reasons = useMemo(() => resolveObjectionCategories(org), [org]);
   const leadFields = useMemo(() => resolveLeadFields(org), [org]);
@@ -179,37 +181,40 @@ export default function CallTracker() {
     return z === "heute" ? 0 : z === "monat" ? 30 : 7;
   }
 
-  async function loadTeam(zeitraum = teamZeitraum) {
+  async function loadTeam(art = teamZeitraum, eigen = eigenerZeitraum) {
     setTeamState({ status: "loading", members: [], reasons: [] });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
+
       // Wer diese Auswertung sieht, folgt derselben Regel wie überall sonst:
       // eine Führungsrolle sieht ihre ganze Organisation, eine Teamleitung
       // ihr Team (siehe lib/rollen.js und call_log_days in der Datenbank).
-      // Vorher hing es allein daran, wer das Team ANGELEGT hat — ein Manager,
-      // der ein bestehendes Team übernimmt, stand vor einer leeren Seite.
       const { data: profil } = await supabase.from("profiles")
         .select("id, role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
 
       const nameById = { [session.user.id]: "Ich" };
       let memberIds = [];
+      let teams = [];
 
       if (istFuehrungsrolle(profil)) {
         const orgId = getActiveOrgId(profil);
-        const { data: alle } = await supabase.from("profiles")
-          .select("id, full_name").eq("organization_id", orgId);
+        const [{ data: alle }, { data: orgTeams }] = await Promise.all([
+          supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
+          supabase.from("teams").select("id, name, created_by").eq("organization_id", orgId).order("name"),
+        ]);
         (alle || []).forEach((p) => {
           if (p.id === session.user.id) return;
           memberIds.push(p.id);
           nameById[p.id] = p.full_name || "Unbenannt";
         });
+        teams = orgTeams || [];
       } else {
-        const { data: myTeams } = await supabase.from("teams").select("id").eq("created_by", session.user.id);
-        const leadTeamIds = (myTeams || []).map((t) => t.id);
-        if (!leadTeamIds.length) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
+        const { data: myTeams } = await supabase.from("teams").select("id, name, created_by").eq("created_by", session.user.id);
+        if (!myTeams?.length) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
+        teams = myTeams;
         const { data: memberships } = await supabase
-          .from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", leadTeamIds);
+          .from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", teams.map((t) => t.id));
         (memberships || []).forEach((m) => {
           if (m.user_id === session.user.id || nameById[m.user_id]) return;
           memberIds.push(m.user_id);
@@ -218,38 +223,37 @@ export default function CallTracker() {
       }
       const allIds = [session.user.id, ...memberIds];
 
-      // Zeitraum in DEUTSCHER Rechnung statt "vor 7×24 Stunden in UTC":
-      // sonst fällt je nach Uhrzeit ein Tag heraus oder einer zu viel hinein.
-      const tage = tageFuerZeitraum(zeitraum);
-      const von = tage === 0 ? berlinHeute() : tagPlus(berlinHeute(), -(tage - 1));
-      const { data: logs } = await supabase.from("call_log_days").select("*").in("user_id", allIds).gte("log_date", von);
-
-      // Bisher wurde nur "Anwahlen" ausgewertet — die übrigen Zähler standen
-      // in derselben Zeile und wurden weggeworfen.
-      const proPerson = {};
-      const gesamt = {};
-      FIELDS.forEach((f) => { gesamt[f.key] = 0; });
-      const reasonTotals = zeroReasons(reasons);
-      (logs || []).forEach((l) => {
-        const p = proPerson[l.user_id] || (proPerson[l.user_id] = {});
-        FIELDS.forEach((f) => {
-          const wert = l.counts?.[f.key] || 0;
-          p[f.key] = (p[f.key] || 0) + wert;
-          gesamt[f.key] += wert;
-        });
-        reasons.forEach((r) => { reasonTotals[r.key] += l.reasons?.[r.key] || 0; });
+      // Welche Person in welchem Team steckt — für den Team-Filter.
+      const { data: zuordnung } = teams.length
+        ? await supabase.from("team_members").select("team_id, user_id").in("team_id", teams.map((t) => t.id))
+        : { data: [] };
+      const teamsVonPerson = {};
+      (zuordnung || []).forEach((z) => {
+        (teamsVonPerson[z.user_id] = teamsVonPerson[z.user_id] || []).push(z.team_id);
       });
+      // Die leitende Person gehört zu ihrem Team, auch ohne eigenen Eintrag
+      // in team_members — sonst fiele sie beim Filtern heraus.
+      teams.forEach((t) => {
+        if (!t.created_by) return;
+        (teamsVonPerson[t.created_by] = teamsVonPerson[t.created_by] || []).push(t.id);
+      });
+
+      // Zeitraum in deutschen Kalendertagen (siehe lib/zeitraum.js).
+      const { von, bis } = zeitraumGrenzen(art, { von: eigen?.von, bis: eigen?.bis });
+      const { data: logs } = await supabase.from("call_log_days")
+        .select("user_id, log_date, counts, reasons")
+        .in("user_id", allIds).gte("log_date", von).lte("log_date", bis);
 
       setTeamState({
         status: "ok",
-        members: allIds.map((id) => ({
-          id,
-          name: nameById[id] || "Unbenannt",
-          value: proPerson[id]?.anwahlen || 0,
-          zahlen: FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: proPerson[id]?.[f.key] || 0 }), {}),
-        })).sort((a, b) => b.value - a.value),
-        gesamt,
-        reasons: reasons.map((r) => ({ key: r.key, label: r.label, value: reasonTotals[r.key] || 0 })),
+        // Roh statt vorverdichtet: die Filter nach Team, Person und die
+        // Aufschlüsselung nach Tagen rechnen daraus alles selbst, ohne bei
+        // jeder Auswahl neu beim Server nachzufragen.
+        logs: logs || [],
+        members: allIds.map((id) => ({ id, name: nameById[id] || "Unbenannt", teams: teamsVonPerson[id] || [] })),
+        teams,
+        reasons,
+        zeitraum: { von, bis },
       });
     } catch (e) {
       setTeamState({ status: "error", members: [], reasons: [] });
@@ -391,7 +395,13 @@ export default function CallTracker() {
       </div>
 
       {view === "team" ? (
-        <TeamPanel state={teamState} zeitraum={teamZeitraum} onZeitraum={(z) => { setTeamZeitraum(z); loadTeam(z); }} />
+        <TeamPanel
+          state={teamState}
+          zeitraum={teamZeitraum}
+          eigener={eigenerZeitraum}
+          onZeitraum={(z) => { setTeamZeitraum(z); loadTeam(z, eigenerZeitraum); }}
+          onEigener={(e) => { setEigenerZeitraum(e); if (e.von && e.bis) loadTeam("eigen", e); }}
+        />
       ) : (
         <>
           {isToday && (
@@ -669,10 +679,13 @@ export default function CallTracker() {
   );
 }
 
-function TeamPanel({ state, zeitraum, onZeitraum }) {
+function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   // Welche Kachel aufgeklappt ist. Immer nur eine: zwei offene Listen
   // untereinander vergleicht man ohnehin nicht.
   const [offeneKachel, setOffeneKachel] = useState(null);
+  const [teamFilter, setTeamFilter] = useState("alle");
+  const [personFilter, setPersonFilter] = useState("alle");
+
   if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
   if (state.status === "denied") {
     return (
@@ -689,37 +702,53 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
     return <div className="card border border-coral/40 text-coral text-sm">Team-Ansicht konnte nicht geladen werden.</div>;
   }
 
-  const gesamt = state.gesamt || {};
+  const alleMitglieder = state.members || [];
+  const teams = state.teams || [];
+  const reasons = state.reasons || [];
 
-  // Excel öffnet CSV mit Semikolon und BOM direkt richtig (siehe lib/csv.js)
-  // — kein Zusatzprogramm, keine Fremdbibliothek, keine Import-Assistenten.
-  function exportiereTeam() {
-    const kopf = ["Person", ...FIELDS.map((f) => f.label), ...state.reasons.map((r) => `Einwand: ${r.label}`)];
-    const zeilen = state.members.map((m) => [
-      m.name,
-      ...FIELDS.map((f) => m.zahlen?.[f.key] || 0),
-      // Einwandgründe liegen nur als Team-Summe vor, nicht je Person — die
-      // Spalten bleiben deshalb leer statt eine Zahl vorzutäuschen.
-      ...state.reasons.map(() => ""),
-    ]);
-    zeilen.push([
-      "Gesamt",
-      ...FIELDS.map((f) => gesamt[f.key] || 0),
-      ...state.reasons.map((r) => r.value || 0),
-    ]);
-    const heute = new Date().toISOString().slice(0, 10);
-    downloadCsv(`call-tracker-team-${zeitraum}-${heute}.csv`, kopf, zeilen);
-  }
+  // Team zuerst, Person darin: die Personenliste zeigt nur, wer im gewählten
+  // Team ist — sonst wählt man jemanden aus und die Auswertung bleibt leer.
+  const imTeam = teamFilter === "alle"
+    ? alleMitglieder
+    : alleMitglieder.filter((m) => (m.teams || []).includes(teamFilter));
+  const sichtbare = personFilter === "alle" ? imTeam : imTeam.filter((m) => m.id === personFilter);
+  const sichtbareIds = new Set(sichtbare.map((m) => m.id));
+  const zeilen = (state.logs || []).filter((l) => sichtbareIds.has(l.user_id));
+  const einePerson = personFilter !== "alle" ? sichtbare[0] : null;
 
-  // Die Zähler bauen aufeinander auf, sie stehen NICHT nebeneinander:
-  //
-  //   Anwahlen = erreicht + nicht erreicht
-  //   davon erreicht: terminiert, negativ, und der Rest ohne Ergebnis
-  //
-  // Vorher lagen alle vier in einem Kreis — bei 10 erreicht, 10 nicht
-  // erreicht, 5 negativ und 15 terminiert kam ein Kreis mit 40 heraus,
-  // obwohl es 20 Anwahlen waren. Ein negativer Anruf ist keine zusätzliche
-  // Anwahl, sondern das Ergebnis einer schon gezählten.
+  // Summen, Zahlen je Person, Einwandgründe und der Verlauf nach Tagen —
+  // alles aus denselben Rohdaten, damit Kacheln, Diagramme und Tabelle nie
+  // auseinanderlaufen können.
+  const gesamt = {};
+  FIELDS.forEach((f) => { gesamt[f.key] = 0; });
+  const gruendeGesamt = {};
+  reasons.forEach((r) => { gruendeGesamt[r.key] = 0; });
+  const proPerson = {};
+  const proTag = {};
+  zeilen.forEach((l) => {
+    const p = proPerson[l.user_id] || (proPerson[l.user_id] = { zahlen: {}, gruende: {} });
+    FIELDS.forEach((f) => {
+      const wert = l.counts?.[f.key] || 0;
+      gesamt[f.key] += wert;
+      p.zahlen[f.key] = (p.zahlen[f.key] || 0) + wert;
+      if (f.key === "anwahlen") proTag[l.log_date] = (proTag[l.log_date] || 0) + wert;
+    });
+    reasons.forEach((r) => {
+      const wert = l.reasons?.[r.key] || 0;
+      gruendeGesamt[r.key] += wert;
+      p.gruende[r.key] = (p.gruende[r.key] || 0) + wert;
+    });
+  });
+
+  const mitglieder = sichtbare
+    .map((m) => ({
+      ...m,
+      value: proPerson[m.id]?.zahlen?.anwahlen || 0,
+      zahlen: FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: proPerson[m.id]?.zahlen?.[f.key] || 0 }), {}),
+      gruende: reasons.reduce((acc, r) => ({ ...acc, [r.key]: proPerson[m.id]?.gruende?.[r.key] || 0 }), {}),
+    }))
+    .sort((a, b) => b.value - a.value);
+
   const anwahlen = gesamt.anwahlen || 0;
   const erreicht = gesamt.erreicht || 0;
   const nicht = gesamt.nicht || 0;
@@ -731,8 +760,6 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
   const verteilung = [
     { label: "Ans Telefon gegangen", value: erreicht, color: feldFarbe("erreicht") },
     { label: "Nicht erreicht", value: nicht, color: feldFarbe("nicht") },
-    // Wer nur "Anwahl" tippt, ohne danach erreicht/nicht erreicht: sonst
-    // stimmte die Mitte des Kreises nicht mit der Gesamtzahl überein.
     { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht), color: "#5B6079" },
   ];
   const ergebnisse = [
@@ -740,20 +767,92 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
     { label: "Negativ verlaufen", value: negativ, color: feldFarbe("negativ") },
     { label: "Ohne Ergebnis", value: Math.max(0, erreicht - termin - negativ), color: "#5B6079" },
   ];
+  const gruendeDaten = reasons.map((r) => ({
+    key: r.key, label: r.label, value: gruendeGesamt[r.key] || 0, color: grundFarbe(reasons, r.key),
+  }));
+
+  // Bei einer einzelnen Person sagt "Anwahlen pro Person" nichts mehr — ein
+  // Kreis mit 100 %. Dann zählt der Verlauf: an welchen Tagen wurde
+  // telefoniert.
+  const tage = Object.entries(proTag).sort((a, b) => a[0].localeCompare(b[0]));
+
+  const zeitraumText = state.zeitraum
+    ? `${new Date(`${state.zeitraum.von}T12:00:00`).toLocaleDateString("de-DE")} – ${new Date(`${state.zeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}`
+    : "";
+
+  // Excel öffnet CSV mit Semikolon und BOM direkt richtig (siehe lib/csv.js)
+  // — kein Zusatzprogramm, keine Fremdbibliothek, keine Import-Assistenten.
+  // Ausgegeben wird genau das, was gerade gefiltert auf dem Bildschirm steht.
+  function exportiereTeam() {
+    const kopf = ["Person", ...FIELDS.map((f) => f.label), ...reasons.map((r) => `Einwand: ${r.label}`)];
+    const datenZeilen = mitglieder.map((m) => [
+      m.name,
+      ...FIELDS.map((f) => m.zahlen[f.key] || 0),
+      ...reasons.map((r) => m.gruende[r.key] || 0),
+    ]);
+    datenZeilen.push([
+      "Gesamt",
+      ...FIELDS.map((f) => gesamt[f.key] || 0),
+      ...reasons.map((r) => gruendeGesamt[r.key] || 0),
+    ]);
+    const teil = [
+      teamFilter === "alle" ? null : teams.find((t) => t.id === teamFilter)?.name,
+      einePerson?.name,
+    ].filter(Boolean).join("-") || "alle";
+    downloadCsv(`call-tracker-${teil}-${state.zeitraum?.von}-bis-${state.zeitraum?.bis}.csv`.replace(/[^\w.-]+/g, "-"), kopf, datenZeilen);
+  }
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {[["heute", "Heute"], ["woche", "7 Tage"], ["monat", "30 Tage"]].map(([key, label]) => (
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {ZEITRAEUME.map(([key, label]) => (
           <button key={key} onClick={() => onZeitraum(key)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {label}
+            {key === "quartal" ? quartalsName(berlinHeute()) : label}
           </button>
         ))}
       </div>
 
-      {/* Erst die Zahlen, dann ihre Verteilung: "wie viele" beantwortet ein
-          Kreisdiagramm nicht, "woran liegt es" eine Zahlenreihe nicht. */}
+      {zeitraum === "eigen" && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigener?.von || ""}
+            onChange={(e) => onEigener({ ...eigener, von: e.target.value })} />
+          <span className="text-xs text-textMuted">bis</span>
+          <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigener?.bis || ""}
+            onChange={(e) => onEigener({ ...eigener, bis: e.target.value })} />
+          {(!eigener?.von || !eigener?.bis) && (
+            <span className="text-[11px] text-textMuted">Beide Daten wählen — dann wird ausgewertet.</span>
+          )}
+        </div>
+      )}
+
+      {/* Team und Person: der Team-Filter engt zuerst ein, die Personenliste
+          zeigt danach nur noch, wer dort drin ist. */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {teams.length > 0 && (
+          <select className="input !w-auto !py-1.5 text-xs" value={teamFilter}
+            onChange={(e) => { setTeamFilter(e.target.value); setPersonFilter("alle"); setOffeneKachel(null); }}>
+            <option value="alle">Alle Teams ({alleMitglieder.length})</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({alleMitglieder.filter((m) => (m.teams || []).includes(t.id)).length})
+              </option>
+            ))}
+          </select>
+        )}
+        <select className="input !w-auto !py-1.5 text-xs" value={personFilter}
+          onChange={(e) => { setPersonFilter(e.target.value); setOffeneKachel(null); }}>
+          <option value="alle">Alle Personen ({imTeam.length})</option>
+          {imTeam.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        {(teamFilter !== "alle" || personFilter !== "alle") && (
+          <button onClick={() => { setTeamFilter("alle"); setPersonFilter("alle"); }} className="btn-ghost text-xs">
+            Filter zurücksetzen
+          </button>
+        )}
+        {zeitraumText && <span className="text-[11px] text-textMuted ml-auto">{zeitraumText}</span>}
+      </div>
+
       {/* "davon" steht bewusst dabei: terminiert und negativ sind Ergebnisse
           bereits gezählter Gespräche, keine zusätzlichen Anrufe. */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2">
@@ -786,11 +885,11 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
       <Aufklapper offen={!!offeneKachel}>
         {offeneKachel && (() => {
           const feld = FIELDS.find((f) => f.key === offeneKachel);
-          const zeilen = state.members
-            .map((m) => ({ id: m.id, name: m.name, wert: m.zahlen?.[offeneKachel] || 0 }))
+          const liste = mitglieder
+            .map((m) => ({ id: m.id, name: m.name, wert: m.zahlen[offeneKachel] || 0 }))
             .sort((a, b) => b.wert - a.wert);
-          const summe = zeilen.reduce((s, z) => s + z.wert, 0);
-          const groesster = Math.max(1, ...zeilen.map((z) => z.wert));
+          const summe = liste.reduce((s, z) => s + z.wert, 0);
+          const groesster = Math.max(1, ...liste.map((z) => z.wert));
           return (
             <div className="card mb-4" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(offeneKachel)} 45%, transparent)` }}>
               <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -802,7 +901,7 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
                 <p className="text-textMuted text-xs">Für „{feld?.label}“ ist in diesem Zeitraum nichts erfasst.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {zeilen.filter((z) => z.wert > 0).map((z) => (
+                  {liste.filter((z) => z.wert > 0).map((z) => (
                     <div key={z.id}>
                       <div className="flex items-center justify-between text-xs mb-1 gap-2">
                         <span className="text-textMain truncate">{z.name}</span>
@@ -814,9 +913,9 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
                       </div>
                     </div>
                   ))}
-                  {zeilen.some((z) => z.wert === 0) && (
+                  {liste.some((z) => z.wert === 0) && (
                     <p className="text-[11px] text-textMuted mt-1">
-                      Ohne Eintrag: {zeilen.filter((z) => z.wert === 0).map((z) => z.name).join(", ")}
+                      Ohne Eintrag: {liste.filter((z) => z.wert === 0).map((z) => z.name).join(", ")}
                     </p>
                   )}
                 </div>
@@ -828,12 +927,39 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card">
-          <div className="font-semibold text-textMain text-sm mb-1">Anwahlen pro Person</div>
-          <p className="text-xs text-textMuted mb-3">Wer wie viel telefoniert hat</p>
-          <Kreisdiagramm
-            daten={state.members.map((m, i) => ({ label: m.name, value: m.value, color: paletteFarbe(i) }))}
-            leerText="In diesem Zeitraum wurden keine Anwahlen erfasst."
-          />
+          {einePerson ? (
+            <>
+              <div className="font-semibold text-textMain text-sm mb-1">Verlauf nach Tagen</div>
+              <p className="text-xs text-textMuted mb-3">Anwahlen von {einePerson.name}</p>
+              {tage.length === 0 ? (
+                <p className="text-textMuted text-xs">In diesem Zeitraum wurden keine Anwahlen erfasst.</p>
+              ) : (
+                <div className="flex items-end gap-1.5 h-28">
+                  {tage.map(([tag, wert]) => {
+                    const groesster = Math.max(1, ...tage.map(([, w]) => w));
+                    return (
+                      <div key={tag} className="flex flex-col items-center gap-1 flex-1 min-w-0" title={`${wert} Anwahlen`}>
+                        <span className="text-[10px] text-textMuted">{wert || ""}</span>
+                        <div className="w-full rounded-t transition-all duration-300"
+                          style={{ height: `${Math.max(2, Math.round((wert / groesster) * 70))}px`, background: feldFarbe("anwahlen") }} />
+                        <span className="text-[9px] text-textMuted truncate w-full text-center">{tag.slice(8)}.{tag.slice(5, 7)}.</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="font-semibold text-textMain text-sm mb-1">Anwahlen pro Person</div>
+              <p className="text-xs text-textMuted mb-3">Wer wie viel telefoniert hat</p>
+              <Kreisdiagramm
+                daten={mitglieder.map((m, i) => ({ label: m.name, value: m.value, color: paletteFarbe(i) }))}
+                mitteText="Anwahlen"
+                leerText="In diesem Zeitraum wurden keine Anwahlen erfasst."
+              />
+            </>
+          )}
         </div>
         <div className="card">
           <div className="font-semibold text-textMain text-sm mb-1">Was aus den Anwahlen wurde</div>
@@ -853,9 +979,7 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
       <div className="card mb-4">
         <div className="font-semibold text-textMain text-sm mb-1">Warum negative Anrufe?</div>
         <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum</p>
-        <Kreisdiagramm
-          daten={state.reasons.map((r) => ({ ...r, color: grundFarbe(state.reasons, r.key) }))}
-          leerText="Noch keine negativen Anrufe mit Grund erfasst." />
+        <Kreisdiagramm daten={gruendeDaten} mitteText="Gründe" leerText="Noch keine negativen Anrufe mit Grund erfasst." />
       </div>
 
       {/* Die Tabelle bleibt: ein Kreisdiagramm zeigt Anteile, nicht die
@@ -878,22 +1002,33 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
                     {f.label}
                   </th>
                 ))}
+                {reasons.map((r) => (
+                  <th key={r.key} className="font-normal pb-2 px-2 text-right whitespace-nowrap">
+                    <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: grundFarbe(reasons, r.key) }} />
+                    {r.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {state.members.map((m) => (
+              {mitglieder.map((m) => (
                 <tr key={m.id} className="border-t border-line">
                   <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{m.name}</td>
                   {FIELDS.map((f) => (
                     <td key={f.key} className="py-1.5 px-2 text-right font-mono"
-                      style={{ color: (m.zahlen?.[f.key] || 0) > 0 ? feldFarbe(f.key) : undefined }}>
-                      {m.zahlen?.[f.key] || 0}
+                      style={{ color: (m.zahlen[f.key] || 0) > 0 ? feldFarbe(f.key) : undefined }}>
+                      {m.zahlen[f.key] || 0}
+                    </td>
+                  ))}
+                  {reasons.map((r) => (
+                    <td key={r.key} className="py-1.5 px-2 text-right font-mono text-textMuted">
+                      {m.gruende[r.key] || 0}
                     </td>
                   ))}
                 </tr>
               ))}
-              {state.members.length === 0 && (
-                <tr><td colSpan={FIELDS.length + 1} className="py-2 text-textMuted">Niemand im Team.</td></tr>
+              {mitglieder.length === 0 && (
+                <tr><td colSpan={FIELDS.length + reasons.length + 1} className="py-2 text-textMuted">Niemand in dieser Auswahl.</td></tr>
               )}
             </tbody>
           </table>

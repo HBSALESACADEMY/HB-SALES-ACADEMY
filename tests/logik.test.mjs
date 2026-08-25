@@ -30,6 +30,7 @@ import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler.js";
 import { PALETTE, feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben.js";
 import { sicheresZiel } from "../lib/weiterleitung.js";
 import { sollLebenszeichenSenden, SENDE_ABSTAND_MS, RUHE_MS } from "../lib/anwesenheit.js";
+import { quartalsStart, quartalsName, zeitraumGrenzen } from "../lib/zeitraum.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -770,4 +771,26 @@ test("Lebenszeichen: nur bei sichtbarem Tab und frischer Berührung", () => {
   assert.equal(sollLebenszeichenSenden({ ...basis, letzteInteraktion: jetzt - (RUHE_MS + 1) }), false);
   // Frisch geöffnet, noch nichts berührt: einmal melden.
   assert.equal(sollLebenszeichenSenden({ ...basis, letzteInteraktion: 0 }), true);
+});
+
+// Zeiträume der Auswertungen. "Quartal" muss überall dasselbe heissen, und
+// ein eigener Zeitraum darf nie zu einer leeren Auswertung führen, ohne dass
+// jemand versteht warum.
+test("Zeiträume: Quartal, 30 Tage und eigene Grenzen", () => {
+  assert.equal(quartalsStart("2026-08-22"), "2026-07-01");
+  assert.equal(quartalsStart("2026-01-01"), "2026-01-01");
+  assert.equal(quartalsStart("2026-12-31"), "2026-10-01");
+  assert.equal(quartalsName("2026-08-22"), "Q3 2026");
+
+  const heute = "2026-08-22";
+  assert.deepEqual(zeitraumGrenzen("heute", { heute }), { von: "2026-08-22", bis: "2026-08-22" });
+  assert.deepEqual(zeitraumGrenzen("woche", { heute }), { von: "2026-08-16", bis: "2026-08-22" });
+  assert.deepEqual(zeitraumGrenzen("monat", { heute }), { von: "2026-07-24", bis: "2026-08-22" });
+  assert.deepEqual(zeitraumGrenzen("quartal", { heute }), { von: "2026-07-01", bis: "2026-08-22" });
+
+  // Eigener Zeitraum: vertauschte Grenzen werden gedreht, fehlende ergänzt.
+  assert.deepEqual(zeitraumGrenzen("eigen", { heute, von: "2026-08-01", bis: "2026-08-10" }), { von: "2026-08-01", bis: "2026-08-10" });
+  assert.deepEqual(zeitraumGrenzen("eigen", { heute, von: "2026-08-10", bis: "2026-08-01" }), { von: "2026-08-01", bis: "2026-08-10" });
+  assert.deepEqual(zeitraumGrenzen("eigen", { heute, von: "2026-08-05" }), { von: "2026-08-05", bis: "2026-08-05" });
+  assert.deepEqual(zeitraumGrenzen("eigen", { heute }), { von: heute, bis: heute });
 });
