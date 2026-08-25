@@ -410,20 +410,24 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
    Flüge quer durchs Bild sind genau das, was dort Beschwerden auslöst. */
 .rakete {
   position: fixed;
-  left: -80px;
-  bottom: 12%;
-  font-size: 54px;
+  left: -100px;
+  bottom: 4%;
+  font-size: 64px;
   line-height: 1;
   z-index: 400;
   pointer-events: none;
-  animation: rakete-flug 1.5s cubic-bezier(.3, .1, .5, 1) forwards;
+  animation: rakete-flug 2.2s cubic-bezier(.25, .55, .35, 1) forwards;
 }
 
+/* Vier volle Umdrehungen, auf mehr als das Doppelte anwachsend, und am Ende
+   weit über den oberen Bildrand hinaus: die Rakete soll nicht quer über den
+   Bildschirm huschen, sondern abheben. */
 @keyframes rakete-flug {
-  0%   { transform: translate(0, 0) rotate(8deg) scale(.7); opacity: 0; }
-  12%  { opacity: 1; }
-  70%  { transform: translate(70vw, -32vh) rotate(8deg) scale(1); opacity: 1; }
-  100% { transform: translate(115vw, -62vh) rotate(8deg) scale(.85); opacity: 0; }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(.5); opacity: 0; }
+  10%  { opacity: 1; }
+  35%  { transform: translate(28vw, -20vh) rotate(360deg) scale(1.1); }
+  65%  { transform: translate(58vw, -52vh) rotate(900deg) scale(1.7); opacity: 1; }
+  100% { transform: translate(95vw, -125vh) rotate(1440deg) scale(2.2); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
