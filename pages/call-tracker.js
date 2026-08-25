@@ -12,11 +12,13 @@ import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
+import Aufklapper from "../components/Aufklapper";
+import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
   FIELDS, storagePrefix, dayKey, dateKeyOf, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   zeroCounts, zeroReasons, todayFullLabel, weekLabel, monthLabel,
-  loadDay, saveDay, aggregateRange, buildReport,
+  loadDay, saveDay, aggregateRange, tageImZeitraum, buildReport,
 } from "../lib/callTracker";
 
 const VIEWS = [["today", "Heute"], ["week", "Woche"], ["month", "Monat"], ["team", "Team"]];
@@ -41,6 +43,10 @@ export default function CallTracker() {
   const [todayCounts, setTodayCounts] = useState(zeroCounts());
   const [todayReasons, setTodayReasons] = useState({});
   const [rangeData, setRangeData] = useState(null);
+  // Aufgeklappte Kachel in der eigenen Ansicht (Woche/Monat): dort ist die
+  // Frage nicht "wer", sondern "an welchem Tag".
+  const [offeneKachel, setOffeneKachel] = useState(null);
+  const [tageDaten, setTageDaten] = useState([]);
 
   const [step, setStep] = useState("lead");
   const [toast, setToast] = useState("");
@@ -164,6 +170,8 @@ export default function CallTracker() {
     const now = new Date();
     const [from, to] = next === "week" ? [startOfWeek(now), endOfWeek(now)] : [startOfMonth(now), endOfMonth(now)];
     setRangeData(aggregateRange(prefix, from, to, reasons));
+    setTageDaten(tageImZeitraum(prefix, from, to, reasons));
+    setOffeneKachel(null);
   }
 
   // Wie weit die Team-Auswertung zurückschaut.
@@ -333,6 +341,22 @@ export default function CallTracker() {
     persist(counts0, reasons0);
     setStep("lead");
     showToast("Tag zurückgesetzt");
+  }
+
+  // Ein Tag je Zeile, alle Zähler als Spalten — so lässt sich in Excel
+  // sofort filtern und summieren, ohne die Datei umzubauen.
+  function exportiereEigene() {
+    const kopf = ["Datum", ...FIELDS.map((f) => f.label), ...reasons.map((r) => `Einwand: ${r.label}`)];
+    const zeilen = [...tageDaten]
+      .sort((a, b) => a.tag.localeCompare(b.tag))
+      .map((t) => [
+        // Deutsches Datumsformat: Excel erkennt es hier als Datum.
+        new Date(`${t.tag}T12:00:00`).toLocaleDateString("de-DE"),
+        ...FIELDS.map((f) => t.counts[f.key] || 0),
+        ...reasons.map((r) => t.reasons[r.key] || 0),
+      ]);
+    const heute = new Date().toISOString().slice(0, 10);
+    downloadCsv(`call-tracker-${view}-${heute}.csv`, kopf, zeilen);
   }
 
   const isToday = view === "today";
@@ -518,10 +542,18 @@ export default function CallTracker() {
             {FIELDS.map((f) => (
               // Dieselbe Farbe wie im Diagramm: wer die Kachel gesehen hat,
               // findet den Wert im Kreis ohne Legende wieder.
-              <div key={f.key} className="card" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} 40%, transparent)` }}>
+              <div key={f.key} className="card" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} ${offeneKachel === f.key ? 90 : 40}%, transparent)` }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
-                  <span className="text-xs text-textMuted">{f.label}</span>
+                  <span className="text-xs text-textMuted flex-1">{f.label}</span>
+                  {/* Im Reiter "Heute" gibt es nichts aufzuschlüsseln — es
+                      IST ein einzelner Tag. */}
+                  {!isToday && (
+                    <button onClick={() => setOffeneKachel(offeneKachel === f.key ? null : f.key)}
+                      aria-expanded={offeneKachel === f.key}
+                      title="Nach Tagen aufschlüsseln"
+                      className={`text-textMuted text-xs transition-transform ${offeneKachel === f.key ? "rotate-90" : ""}`}>›</button>
+                  )}
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-3xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
@@ -539,8 +571,52 @@ export default function CallTracker() {
             ))}
           </div>
 
+          <Aufklapper offen={!isToday && !!offeneKachel}>
+            {!isToday && offeneKachel && (() => {
+              const feld = FIELDS.find((f) => f.key === offeneKachel);
+              const zeilen = tageDaten.filter((t) => (t.counts[offeneKachel] || 0) > 0);
+              const groesster = Math.max(1, ...zeilen.map((t) => t.counts[offeneKachel] || 0));
+              return (
+                <div className="card mb-5" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(offeneKachel)} 45%, transparent)` }}>
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: feldFarbe(offeneKachel) }} />
+                    <span className="font-semibold text-textMain text-sm">{feld?.label} — nach Tagen</span>
+                    <button onClick={() => setOffeneKachel(null)} className="btn-ghost text-xs ml-auto">Schliessen</button>
+                  </div>
+                  {zeilen.length === 0 ? (
+                    <p className="text-textMuted text-xs">In diesem Zeitraum ist dafür nichts erfasst.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {zeilen.map((t) => (
+                        <div key={t.tag}>
+                          <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                            <span className="text-textMain">
+                              {new Date(`${t.tag}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
+                            </span>
+                            <span className="text-textMuted flex-shrink-0">{t.counts[offeneKachel]}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-surfaceRaised overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-300"
+                              style={{ width: `${Math.round(((t.counts[offeneKachel] || 0) / groesster) * 100)}%`, background: feldFarbe(offeneKachel) }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </Aufklapper>
+
           <div className="card mb-5">
-            <div className="font-semibold text-textMain text-sm mb-3">Zusammenfassung</div>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="font-semibold text-textMain text-sm">Zusammenfassung</span>
+              {!isToday && tageDaten.length > 0 && (
+                <button onClick={exportiereEigene} className="btn-ghost text-xs ml-auto">
+                  <Icon name="download" size={12} /> Für Excel herunterladen
+                </button>
+              )}
+            </div>
             <div className="flex items-center justify-between text-sm py-1.5 border-b border-line">
               <span className="text-textMuted">Erreichbarkeitsquote</span><span className="text-textMain font-semibold">{reachRate}%</span>
             </div>
@@ -594,6 +670,9 @@ export default function CallTracker() {
 }
 
 function TeamPanel({ state, zeitraum, onZeitraum }) {
+  // Welche Kachel aufgeklappt ist. Immer nur eine: zwei offene Listen
+  // untereinander vergleicht man ohnehin nicht.
+  const [offeneKachel, setOffeneKachel] = useState(null);
   if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
   if (state.status === "denied") {
     return (
@@ -611,6 +690,26 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
   }
 
   const gesamt = state.gesamt || {};
+
+  // Excel öffnet CSV mit Semikolon und BOM direkt richtig (siehe lib/csv.js)
+  // — kein Zusatzprogramm, keine Fremdbibliothek, keine Import-Assistenten.
+  function exportiereTeam() {
+    const kopf = ["Person", ...FIELDS.map((f) => f.label), ...state.reasons.map((r) => `Einwand: ${r.label}`)];
+    const zeilen = state.members.map((m) => [
+      m.name,
+      ...FIELDS.map((f) => m.zahlen?.[f.key] || 0),
+      // Einwandgründe liegen nur als Team-Summe vor, nicht je Person — die
+      // Spalten bleiben deshalb leer statt eine Zahl vorzutäuschen.
+      ...state.reasons.map(() => ""),
+    ]);
+    zeilen.push([
+      "Gesamt",
+      ...FIELDS.map((f) => gesamt[f.key] || 0),
+      ...state.reasons.map((r) => r.value || 0),
+    ]);
+    const heute = new Date().toISOString().slice(0, 10);
+    downloadCsv(`call-tracker-team-${zeitraum}-${heute}.csv`, kopf, zeilen);
+  }
 
   // Die Zähler bauen aufeinander auf, sie stehen NICHT nebeneinander:
   //
@@ -657,22 +756,75 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
           Kreisdiagramm nicht, "woran liegt es" eine Zahlenreihe nicht. */}
       {/* "davon" steht bewusst dabei: terminiert und negativ sind Ergebnisse
           bereits gezählter Gespräche, keine zusätzlichen Anrufe. */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
-        {FIELDS.map((f) => (
-          <div key={f.key} className="card !py-3" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} 40%, transparent)` }}>
-            <div className="text-xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
-              {gesamt[f.key] || 0}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
-              <span className="text-[11px] text-textMuted leading-tight">
-                {f.key === "termin" || f.key === "negativ" ? <span className="text-textMuted">davon </span> : null}
-                {f.label}
-              </span>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2">
+        {FIELDS.map((f) => {
+          const offen = offeneKachel === f.key;
+          return (
+            <button key={f.key} onClick={() => setOffeneKachel(offen ? null : f.key)}
+              aria-expanded={offen}
+              className="card !py-3 text-left transition-transform hover:-translate-y-0.5"
+              style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} ${offen ? 90 : 40}%, transparent)` }}>
+              <div className="text-xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
+                {gesamt[f.key] || 0}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
+                <span className="text-[11px] text-textMuted leading-tight flex-1">
+                  {f.key === "termin" || f.key === "negativ" ? <span className="text-textMuted">davon </span> : null}
+                  {f.label}
+                </span>
+                <span className={`text-textMuted text-[11px] transition-transform ${offen ? "rotate-90" : ""}`}>›</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      {/* Aufgeklappt: woher diese Zahl kommt. Unter den Kacheln statt in
+          ihnen — in einer schmalen Kachel wären Namen und Zahlen nicht
+          lesbar, und das Raster würde bei jedem Klick zerspringen. */}
+      <Aufklapper offen={!!offeneKachel}>
+        {offeneKachel && (() => {
+          const feld = FIELDS.find((f) => f.key === offeneKachel);
+          const zeilen = state.members
+            .map((m) => ({ id: m.id, name: m.name, wert: m.zahlen?.[offeneKachel] || 0 }))
+            .sort((a, b) => b.wert - a.wert);
+          const summe = zeilen.reduce((s, z) => s + z.wert, 0);
+          const groesster = Math.max(1, ...zeilen.map((z) => z.wert));
+          return (
+            <div className="card mb-4" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(offeneKachel)} 45%, transparent)` }}>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: feldFarbe(offeneKachel) }} />
+                <span className="font-semibold text-textMain text-sm">{feld?.label} — wer wie viel</span>
+                <button onClick={() => setOffeneKachel(null)} className="btn-ghost text-xs ml-auto">Schliessen</button>
+              </div>
+              {summe === 0 ? (
+                <p className="text-textMuted text-xs">Für „{feld?.label}“ ist in diesem Zeitraum nichts erfasst.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {zeilen.filter((z) => z.wert > 0).map((z) => (
+                    <div key={z.id}>
+                      <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                        <span className="text-textMain truncate">{z.name}</span>
+                        <span className="text-textMuted flex-shrink-0">{z.wert} · {Math.round((z.wert / summe) * 100)} %</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-surfaceRaised overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.round((z.wert / groesster) * 100)}%`, background: feldFarbe(offeneKachel) }} />
+                      </div>
+                    </div>
+                  ))}
+                  {zeilen.some((z) => z.wert === 0) && (
+                    <p className="text-[11px] text-textMuted mt-1">
+                      Ohne Eintrag: {zeilen.filter((z) => z.wert === 0).map((z) => z.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Aufklapper>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card">
@@ -709,7 +861,12 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
       {/* Die Tabelle bleibt: ein Kreisdiagramm zeigt Anteile, nicht die
           einzelnen Zahlen pro Person. */}
       <div className="card">
-        <div className="font-semibold text-textMain text-sm mb-3">Alle Zahlen pro Person</div>
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="font-semibold text-textMain text-sm">Alle Zahlen pro Person</span>
+          <button onClick={exportiereTeam} className="btn-ghost text-xs ml-auto">
+            <Icon name="download" size={12} /> Für Excel herunterladen
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>

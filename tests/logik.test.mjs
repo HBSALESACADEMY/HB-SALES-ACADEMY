@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, buildReport, FIELDS } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, tageImZeitraum, buildReport, FIELDS } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
@@ -705,4 +705,32 @@ test("Diagramm-Farben bleiben je Sache gleich", () => {
 
   // Palette wiederholt sich statt ins Leere zu laufen.
   assert.equal(paletteFarbe(0), paletteFarbe(PALETTE.length));
+});
+
+// Die Aufschlüsselung hinter einer Kachel liest dieselben Tage wie die
+// Summe — sie darf nicht anders rechnen als die Zahl darüber.
+test("Tage im Zeitraum: einzeln, neueste zuerst, gleiche Summe", () => {
+  const daten = localStorageNachbilden();
+  const meins = storagePrefix("nutzer-1");
+  const heute = new Date();
+  const gestern = new Date(Date.now() - 86400000);
+  saveDay(meins, dayKey(heute), { anwahlen: 12, erreicht: 5, nicht: 7, termin: 2, negativ: 3 }, { preis: 2, sonstiges: 1 });
+  saveDay(meins, dayKey(gestern), { anwahlen: 8, erreicht: 3, nicht: 5, termin: 1, negativ: 2 }, { preis: 1, sonstiges: 1 });
+
+  const von = new Date(Date.now() - 3 * 86400000);
+  const bis = new Date(Date.now() + 86400000);
+  const tage = tageImZeitraum(meins, von, bis, REASONS);
+  assert.equal(tage.length, 2);
+  assert.ok(tage[0].tag > tage[1].tag, "Neuester Tag zuerst.");
+
+  // Summe der Einzeltage = Summe der Gesamtansicht.
+  const summe = aggregateRange(meins, von, bis, REASONS);
+  const einzeln = tage.reduce((s, t) => s + t.counts.anwahlen, 0);
+  assert.equal(einzeln, summe.counts.anwahlen);
+  assert.equal(einzeln, 20);
+  assert.equal(tage.reduce((s, t) => s + t.reasons.preis, 0), summe.reasons.preis);
+
+  // Ausserhalb des Zeitraums bleibt draussen.
+  assert.equal(tageImZeitraum(meins, new Date(Date.now() + 5 * 86400000), new Date(Date.now() + 6 * 86400000), REASONS).length, 0);
+  assert.ok(Object.keys(daten).length > 0);
 });
