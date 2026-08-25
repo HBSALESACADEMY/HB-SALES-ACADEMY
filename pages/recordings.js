@@ -30,6 +30,7 @@ export default function Recordings() {
   const [playingUrl, setPlayingUrl] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [outcomeFilter, setOutcomeFilter] = useState("all");
+  const [personFilter, setPersonFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [myLeads, setMyLeads] = useState([]);
   const [leadId, setLeadId] = useState("");
@@ -183,9 +184,20 @@ export default function Recordings() {
   const leadMap = {};
   myLeads.forEach((l) => { leadMap[l.id] = l; });
 
+  // Nur Personen anbieten, von denen hier auch etwas liegt: eine Auswahl mit
+  // dreissig Namen, hinter denen 28-mal nichts steckt, hilft niemandem.
+  const hochgeladenVon = [...new Map(
+    recordings.map((r) => [r.created_by, {
+      id: r.created_by,
+      name: r.created_by === selfId ? "Ich" : (profileMap[r.created_by]?.full_name || "Unbenannt"),
+      anzahl: recordings.filter((x) => x.created_by === r.created_by).length,
+    }])
+  ).values()].sort((a, b) => (a.name === "Ich" ? -1 : b.name === "Ich" ? 1 : a.name.localeCompare(b.name, "de")));
+
   const q = searchQuery.trim().toLowerCase();
   const filteredRecordings = recordings.filter((r) => {
     if (outcomeFilter !== "all" && r.outcome !== outcomeFilter) return false;
+    if (personFilter !== "all" && r.created_by !== personFilter) return false;
     if (!q) return true;
     const owner = profileMap[r.created_by];
     const assignedLead = r.lead_id ? leadMap[r.lead_id] : null;
@@ -258,13 +270,28 @@ export default function Recordings() {
         />
       </div>
 
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         {[["all", "Alle"], ["positiv", "Positiv"], ["negativ", "Negativ"]].map(([key, l]) => (
           <button key={key} onClick={() => setOutcomeFilter(key)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${outcomeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
             {l}
           </button>
         ))}
+        {/* Wer hat hochgeladen — erst ab zwei Personen, davor wäre die
+            Auswahl eine Schaltfläche ohne Wahl. */}
+        {hochgeladenVon.length > 1 && (
+          <select className="input !w-auto !py-1.5 text-xs" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)}>
+            <option value="all">Alle Mitglieder ({recordings.length})</option>
+            {hochgeladenVon.map((p) => (
+              <option key={p.id} value={p.id}>{p.name} ({p.anzahl})</option>
+            ))}
+          </select>
+        )}
+        {(outcomeFilter !== "all" || personFilter !== "all" || searchQuery) && (
+          <button onClick={() => { setOutcomeFilter("all"); setPersonFilter("all"); setSearchQuery(""); }} className="btn-ghost text-xs">
+            Filter zurücksetzen
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
@@ -481,7 +508,13 @@ export default function Recordings() {
         })}
         {filteredRecordings.length === 0 && (
           <p className="text-textMuted text-sm">
-            {recordings.length === 0 ? "Noch keine Aufnahmen hochgeladen." : q ? "Keine Aufnahmen gefunden." : "Keine Aufnahmen mit diesem Ergebnis."}
+            {recordings.length === 0
+              ? "Noch keine Aufnahmen hochgeladen."
+              : q
+                ? "Keine Aufnahmen gefunden."
+                : personFilter !== "all"
+                  ? "Von dieser Person liegt hier nichts mit diesem Ergebnis."
+                  : "Keine Aufnahmen mit diesem Ergebnis."}
           </p>
         )}
       </div>

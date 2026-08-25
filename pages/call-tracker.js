@@ -603,11 +603,34 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
   }
 
   const gesamt = state.gesamt || {};
-  // Was aus den Anwahlen wurde. "Anwahlen" selbst ist die Summe darüber und
-  // gehört nicht ins Kreisdiagramm — sonst wäre die Hälfte des Kreises die
-  // Gesamtzahl und der Rest ihre Bestandteile.
-  const ergebnisse = FIELDS.filter((f) => f.key !== "anwahlen")
-    .map((f) => ({ label: f.label, value: gesamt[f.key] || 0 }));
+
+  // Die Zähler bauen aufeinander auf, sie stehen NICHT nebeneinander:
+  //
+  //   Anwahlen = erreicht + nicht erreicht
+  //   davon erreicht: terminiert, negativ, und der Rest ohne Ergebnis
+  //
+  // Vorher lagen alle vier in einem Kreis — bei 10 erreicht, 10 nicht
+  // erreicht, 5 negativ und 15 terminiert kam ein Kreis mit 40 heraus,
+  // obwohl es 20 Anwahlen waren. Ein negativer Anruf ist keine zusätzliche
+  // Anwahl, sondern das Ergebnis einer schon gezählten.
+  const anwahlen = gesamt.anwahlen || 0;
+  const erreicht = gesamt.erreicht || 0;
+  const nicht = gesamt.nicht || 0;
+  const termin = gesamt.termin || 0;
+  const negativ = gesamt.negativ || 0;
+
+  const verteilung = [
+    { label: "Ans Telefon gegangen", value: erreicht },
+    { label: "Nicht erreicht", value: nicht },
+    // Wer nur "Anwahl" tippt, ohne danach erreicht/nicht erreicht: sonst
+    // stimmte die Mitte des Kreises nicht mit der Gesamtzahl überein.
+    { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht) },
+  ];
+  const ergebnisse = [
+    { label: "Terminiert", value: termin },
+    { label: "Negativ verlaufen", value: negativ },
+    { label: "Ohne Ergebnis", value: Math.max(0, erreicht - termin - negativ) },
+  ];
 
   return (
     <>
@@ -622,13 +645,18 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
 
       {/* Erst die Zahlen, dann ihre Verteilung: "wie viele" beantwortet ein
           Kreisdiagramm nicht, "woran liegt es" eine Zahlenreihe nicht. */}
+      {/* "davon" steht bewusst dabei: terminiert und negativ sind Ergebnisse
+          bereits gezählter Gespräche, keine zusätzlichen Anrufe. */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
         {FIELDS.map((f) => (
           <div key={f.key} className="card !py-3">
             <div className={`text-xl font-display font-semibold ${f.kind === "positive" ? "text-teal" : f.kind === "negative" ? "text-coral" : "text-textMain"}`}>
               {gesamt[f.key] || 0}
             </div>
-            <div className="text-[11px] text-textMuted leading-tight">{f.label}</div>
+            <div className="text-[11px] text-textMuted leading-tight">
+              {f.key === "termin" || f.key === "negativ" ? <span className="text-textMuted">davon </span> : null}
+              {f.label}
+            </div>
           </div>
         ))}
       </div>
@@ -644,9 +672,17 @@ function TeamPanel({ state, zeitraum, onZeitraum }) {
         </div>
         <div className="card">
           <div className="font-semibold text-textMain text-sm mb-1">Was aus den Anwahlen wurde</div>
-          <p className="text-xs text-textMuted mb-3">Erreicht, terminiert, negativ</p>
-          <Kreisdiagramm daten={ergebnisse} leerText="Noch keine Ergebnisse erfasst." />
+          <p className="text-xs text-textMuted mb-3">Alle {anwahlen} Anwahlen — erreicht oder nicht</p>
+          <Kreisdiagramm daten={verteilung} mitteText="Anwahlen" leerText="Noch keine Anwahlen erfasst." />
         </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="font-semibold text-textMain text-sm mb-1">Von den erreichten Gesprächen</div>
+        <p className="text-xs text-textMuted mb-3">
+          Terminiert und negativ sind Ergebnisse dieser {erreicht} Gespräche — keine zusätzlichen Anrufe.
+        </p>
+        <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
       </div>
 
       <div className="card mb-4">

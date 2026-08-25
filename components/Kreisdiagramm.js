@@ -10,7 +10,7 @@ const FARBEN = [
 // Ein Kreisdiagramm sagt "wie verteilt sich das", nicht "wie viel ist es".
 // Deshalb steht neben jedem Stück auch die Zahl selbst — sonst muss man
 // Prozente zurückrechnen, um eine Frage zu beantworten.
-export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst.", groesse = 150 }) {
+export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst.", groesse = 150, mitteText = "gesamt" }) {
   const { summe, segmente, vollkreis } = kreisSegmente(daten, 100);
   if (!summe) return <p className="text-textMuted text-xs">{leerText}</p>;
 
@@ -29,7 +29,7 @@ export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst."
             kleinen Grössen deutlich besser lesen lässt. */}
         <circle cx="100" cy="100" r="52" fill="rgb(var(--org-surface-rgb, var(--theme-surface-rgb, 26 29 41)))" />
         <text x="100" y="96" textAnchor="middle" className="fill-textMain" style={{ fontSize: 26, fontWeight: 600 }}>{summe}</text>
-        <text x="100" y="118" textAnchor="middle" className="fill-textMuted" style={{ fontSize: 14 }}>gesamt</text>
+        <text x="100" y="118" textAnchor="middle" className="fill-textMuted" style={{ fontSize: 14 }}>{mitteText}</text>
       </svg>
       <div className="flex flex-col gap-1 min-w-0">
         {legende.map((s, i) => (
