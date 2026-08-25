@@ -31,6 +31,8 @@ export default function Recordings() {
   const [expandedId, setExpandedId] = useState(null);
   const [outcomeFilter, setOutcomeFilter] = useState("all");
   const [personFilter, setPersonFilter] = useState("all");
+  // "neueste" oder "person": nach Datum oder nach Vertriebler gruppiert.
+  const [sortierung, setSortierung] = useState("neueste");
   const [searchQuery, setSearchQuery] = useState("");
   const [myLeads, setMyLeads] = useState([]);
   const [leadId, setLeadId] = useState("");
@@ -215,6 +217,28 @@ export default function Recordings() {
     return haystack.includes(q);
   });
 
+  // Nach Person gruppiert, innerhalb jeder Gruppe das Neueste zuerst.
+  // "Ich" steht oben: die eigenen Aufnahmen sucht man am häufigsten.
+  const gruppenNachPerson = (() => {
+    const nach = new Map();
+    filteredRecordings.forEach((r) => {
+      if (!nach.has(r.created_by)) {
+        nach.set(r.created_by, {
+          id: r.created_by,
+          name: r.created_by === selfId ? "Ich" : (profileMap[r.created_by]?.full_name || "Unbenannt"),
+          avatar_url: r.created_by === selfId ? null : profileMap[r.created_by]?.avatar_url,
+          aufnahmen: [],
+        });
+      }
+      nach.get(r.created_by).aufnahmen.push(r);
+    });
+    return [...nach.values()].sort((a, b) => {
+      if (a.id === selfId) return -1;
+      if (b.id === selfId) return 1;
+      return a.name.localeCompare(b.name, "de");
+    });
+  })();
+
   return (
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Recordings</h1>
@@ -309,6 +333,18 @@ export default function Recordings() {
             „Teamlead/Manager“ oder „Ganzes Unternehmen“ freigegeben wurden.
           </span>
         )}
+        {/* Sortierung: nach Datum oder nach Vertriebler. Erst ab zwei
+            Personen — bei einer gäbe es nichts zu gruppieren. */}
+        {hochgeladenVon.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            {[["neueste", "Neueste zuerst"], ["person", "Nach Vertriebler"]].map(([key, l]) => (
+              <button key={key} onClick={() => setSortierung(key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${sortierung === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
         {(outcomeFilter !== "all" || personFilter !== "all" || searchQuery) && (
           <button onClick={() => { setOutcomeFilter("all"); setPersonFilter("all"); setSearchQuery(""); }} className="btn-ghost text-xs">
             Filter zurücksetzen
@@ -317,7 +353,37 @@ export default function Recordings() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {filteredRecordings.map((r) => {
+        {sortierung === "person" ? gruppenNachPerson.map((g) => (
+          <div key={g.id} className="flex flex-col gap-3">
+            {/* Überschrift je Person: ohne sie sähe die Gruppierung wie eine
+                zufällige Reihenfolge aus. */}
+            <div className="flex items-center gap-2 mt-1">
+              <Avatar name={g.name} src={g.avatar_url} size={22} />
+              <span className="text-sm font-semibold text-textMain">{g.name}</span>
+              <span className="text-[11px] text-textMuted">{g.aufnahmen.length}</span>
+              <span className="h-px bg-line flex-1" />
+            </div>
+            {g.aufnahmen.map(aufnahmeKarte)}
+          </div>
+        )) : filteredRecordings.map(aufnahmeKarte)}
+        {filteredRecordings.length === 0 && (
+          <p className="text-textMuted text-sm">
+            {recordings.length === 0
+              ? "Noch keine Aufnahmen hochgeladen."
+              : q
+                ? "Keine Aufnahmen gefunden."
+                : personFilter !== "all"
+                  ? "Von dieser Person liegt hier nichts mit diesem Ergebnis."
+                  : "Keine Aufnahmen mit diesem Ergebnis."}
+          </p>
+        )}
+      </div>
+    </Layout>
+  );
+
+  // Eine Aufnahme als Karte. Als Funktion, weil sie jetzt an zwei Stellen
+  // gebraucht wird: in der flachen Liste und in den Gruppen je Person.
+  function aufnahmeKarte(r) {
           const owner = profileMap[r.created_by];
           const isOwn = r.created_by === selfId;
           const expanded = expandedId === r.id;
@@ -527,19 +593,5 @@ export default function Recordings() {
               )}
             </div>
           );
-        })}
-        {filteredRecordings.length === 0 && (
-          <p className="text-textMuted text-sm">
-            {recordings.length === 0
-              ? "Noch keine Aufnahmen hochgeladen."
-              : q
-                ? "Keine Aufnahmen gefunden."
-                : personFilter !== "all"
-                  ? "Von dieser Person liegt hier nichts mit diesem Ergebnis."
-                  : "Keine Aufnahmen mit diesem Ergebnis."}
-          </p>
-        )}
-      </div>
-    </Layout>
-  );
+  }
 }
