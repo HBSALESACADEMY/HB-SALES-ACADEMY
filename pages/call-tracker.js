@@ -17,12 +17,16 @@ import Aufklapper from "../components/Aufklapper";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
-  FIELDS, storagePrefix, dayKey, dateKeyOf, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
-  zeroCounts, zeroReasons, todayFullLabel, weekLabel, monthLabel,
-  loadDay, saveDay, aggregateRange, tageImZeitraum, buildReport,
+  FIELDS, storagePrefix, dayKey, dateKeyOf,
+  zeroCounts, zeroReasons, todayFullLabel,
+  loadDay, saveDay, buildReport,
 } from "../lib/callTracker";
 
-const VIEWS = [["today", "Heute"], ["week", "Woche"], ["month", "Monat"], ["team", "Team"]];
+// Zwei Reiter: zählen und auswerten. "Woche"/"Monat" sind entfallen — sie
+// rechneten nur mit dem, was auf DIESEM Gerät lag, und boten weder Quartal
+// noch eigenen Zeitraum noch Diagramme. Die Statistiken können all das und
+// lesen vom Server, sind also auf jedem Gerät gleich.
+const VIEWS = [["today", "Heute"], ["statistik", "Statistiken"]];
 
 const DEFAULT_BOOKING_STEPS = [
   "Terminoptionen im eigenen Buchungssystem raussuchen (idealerweise 2 Optionen)",
@@ -43,11 +47,6 @@ export default function CallTracker() {
   // reine Auswertungen aus den lokal gespeicherten Tagen.
   const [todayCounts, setTodayCounts] = useState(zeroCounts());
   const [todayReasons, setTodayReasons] = useState({});
-  const [rangeData, setRangeData] = useState(null);
-  // Aufgeklappte Kachel in der eigenen Ansicht (Woche/Monat): dort ist die
-  // Frage nicht "wer", sondern "an welchem Tag".
-  const [offeneKachel, setOffeneKachel] = useState(null);
-  const [tageDaten, setTageDaten] = useState([]);
 
   const [step, setStep] = useState("lead");
   const [toast, setToast] = useState("");
@@ -167,13 +166,8 @@ export default function CallTracker() {
 
   async function switchView(next) {
     setView(next);
-    if (next === "team") { loadTeam(); return; }
-    if (next === "today") { setRangeData(null); setStep("lead"); return; }
-    const now = new Date();
-    const [from, to] = next === "week" ? [startOfWeek(now), endOfWeek(now)] : [startOfMonth(now), endOfMonth(now)];
-    setRangeData(aggregateRange(prefix, from, to, reasons));
-    setTageDaten(tageImZeitraum(prefix, from, to, reasons));
-    setOffeneKachel(null);
+    if (next === "statistik") { loadTeam(); return; }
+    setStep("lead");
   }
 
   // Wie weit die Team-Auswertung zurückschaut.
@@ -185,7 +179,7 @@ export default function CallTracker() {
     setTeamState({ status: "loading", members: [], reasons: [] });
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
+      if (!session) { setTeamState({ status: "error", members: [], reasons: [] }); return; }
 
       // Wer diese Auswertung sieht, folgt derselben Regel wie überall sonst:
       // eine Führungsrolle sieht ihre ganze Organisation, eine Teamleitung
@@ -210,11 +204,14 @@ export default function CallTracker() {
         });
         teams = orgTeams || [];
       } else {
+        // Wer kein Team leitet, sieht seine eigenen Zahlen — früher stand hier
+        // eine Absage, und die eigenen Zahlen lagen in "Woche"/"Monat", also
+        // nur auf einem Gerät.
         const { data: myTeams } = await supabase.from("teams").select("id, name, created_by").eq("created_by", session.user.id);
-        if (!myTeams?.length) { setTeamState({ status: "denied", members: [], reasons: [] }); return; }
-        teams = myTeams;
-        const { data: memberships } = await supabase
-          .from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", teams.map((t) => t.id));
+        teams = myTeams || [];
+        const { data: memberships } = teams.length
+          ? await supabase.from("team_members").select("user_id, profiles:user_id(full_name)").in("team_id", teams.map((t) => t.id))
+          : { data: [] };
         (memberships || []).forEach((m) => {
           if (m.user_id === session.user.id || nameById[m.user_id]) return;
           memberIds.push(m.user_id);
@@ -328,7 +325,7 @@ export default function CallTracker() {
   }
 
   async function copyReport() {
-    const rangeLabel = view === "today" ? todayFullLabel() : view === "week" ? weekLabel() : monthLabel();
+    const rangeLabel = todayFullLabel();
     const text = buildReport({ orgName: org?.name, rangeLabel, counts, reasonCounts, reasons });
     try {
       await navigator.clipboard.writeText(text);
@@ -347,29 +344,13 @@ export default function CallTracker() {
     showToast("Tag zurückgesetzt");
   }
 
-  // Ein Tag je Zeile, alle Zähler als Spalten — so lässt sich in Excel
-  // sofort filtern und summieren, ohne die Datei umzubauen.
-  function exportiereEigene() {
-    const kopf = ["Datum", ...FIELDS.map((f) => f.label), ...reasons.map((r) => `Einwand: ${r.label}`)];
-    const zeilen = [...tageDaten]
-      .sort((a, b) => a.tag.localeCompare(b.tag))
-      .map((t) => [
-        // Deutsches Datumsformat: Excel erkennt es hier als Datum.
-        new Date(`${t.tag}T12:00:00`).toLocaleDateString("de-DE"),
-        ...FIELDS.map((f) => t.counts[f.key] || 0),
-        ...reasons.map((r) => t.reasons[r.key] || 0),
-      ]);
-    const heute = new Date().toISOString().slice(0, 10);
-    downloadCsv(`call-tracker-${view}-${heute}.csv`, kopf, zeilen);
-  }
-
   const isToday = view === "today";
-  const counts = isToday ? todayCounts : (rangeData?.counts || zeroCounts());
-  const reasonCounts = isToday ? todayReasons : (rangeData?.reasons || zeroReasons(reasons));
+  const counts = todayCounts;
+  const reasonCounts = todayReasons;
   const reasonTotal = reasons.reduce((sum, r) => sum + (reasonCounts[r.key] || 0), 0);
   const reachRate = counts.anwahlen > 0 ? Math.round((counts.erreicht / counts.anwahlen) * 100) : 0;
   const closeRate = counts.anwahlen > 0 ? Math.round((counts.termin / counts.anwahlen) * 100) : 0;
-  const dateLabel = isToday ? todayFullLabel() : view === "week" ? weekLabel() : monthLabel();
+  const dateLabel = todayFullLabel();
 
   if (!ready) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
@@ -381,8 +362,8 @@ export default function CallTracker() {
       <InfoCard>
         Der Assistent führt dich Anruf für Anruf durch: <strong>Anwahl starten</strong> → erreicht oder nicht → Termin vereinbart oder
         nicht. Alles wird automatisch mitgezählt, du musst nichts selbst eintragen. Wird ein Termin vereinbart, landen die Kundendaten
-        direkt unter <strong>Termine</strong>. Unter <strong>Woche</strong> und <strong>Monat</strong> siehst du deine eigenen Zahlen,
-        unter <strong>Team</strong> die deines Teams (nur für Team-Leitungen).
+        direkt unter <strong>Termine</strong>. Unter <strong>Statistiken</strong> siehst du deine eigenen Zahlen über jeden Zeitraum —
+        wer ein Team leitet, kann dort zusätzlich nach Team und Personen filtern und vergleichen.
       </InfoCard>
 
       <div className="flex items-center gap-2 mb-5 flex-wrap">
@@ -394,8 +375,8 @@ export default function CallTracker() {
         ))}
       </div>
 
-      {view === "team" ? (
-        <TeamPanel
+      {view === "statistik" ? (
+        <StatistikPanel
           state={teamState}
           zeitraum={teamZeitraum}
           eigener={eigenerZeitraum}
@@ -541,92 +522,37 @@ export default function CallTracker() {
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <span className="text-sm text-textMuted">{dateLabel}</span>
             <span className="text-sm text-textMuted">
-              {isToday ? "Anwahlen heute: " : "Anwahlen gesamt: "}<strong className="text-textMain">{counts.anwahlen}</strong>
+              Anwahlen heute: <strong className="text-textMain">{counts.anwahlen}</strong>
             </span>
           </div>
-          {!isToday && (
-            <p className="text-xs text-textMuted mb-3">Nur-Ansicht — gezählt wird über den Assistenten im Reiter „Heute".</p>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
             {FIELDS.map((f) => (
               // Dieselbe Farbe wie im Diagramm: wer die Kachel gesehen hat,
               // findet den Wert im Kreis ohne Legende wieder.
-              <div key={f.key} className="card" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} ${offeneKachel === f.key ? 90 : 40}%, transparent)` }}>
+              // Im Reiter "Heute" gibt es nichts aufzuschlüsseln — es IST ein
+              // einzelner Tag. Die Aufschlüsselung steht in den Statistiken.
+              <div key={f.key} className="card" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} 40%, transparent)` }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
                   <span className="text-xs text-textMuted flex-1">{f.label}</span>
-                  {/* Im Reiter "Heute" gibt es nichts aufzuschlüsseln — es
-                      IST ein einzelner Tag. */}
-                  {!isToday && (
-                    <button onClick={() => setOffeneKachel(offeneKachel === f.key ? null : f.key)}
-                      aria-expanded={offeneKachel === f.key}
-                      title="Nach Tagen aufschlüsseln"
-                      className={`text-textMuted text-xs transition-transform ${offeneKachel === f.key ? "rotate-90" : ""}`}>›</button>
-                  )}
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-3xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
                     {counts[f.key] || 0}
                   </span>
-                  {isToday && (
-                    <button onClick={() => bump(f.key, -1)} title="Zähler korrigieren"
-                      className="w-8 h-8 rounded-lg border border-line text-textMuted hover:text-textMain hover:border-amber flex items-center justify-center flex-shrink-0">
-                      –
-                    </button>
-                  )}
+                  <button onClick={() => bump(f.key, -1)} title="Zähler korrigieren"
+                    className="w-8 h-8 rounded-lg border border-line text-textMuted hover:text-textMain hover:border-amber flex items-center justify-center flex-shrink-0">
+                    –
+                  </button>
                 </div>
-                {isToday && <div className="text-[10.5px] text-textMuted mt-1">Bei Fehlern: − zum Korrigieren</div>}
+                <div className="text-[10.5px] text-textMuted mt-1">Bei Fehlern: − zum Korrigieren</div>
               </div>
             ))}
           </div>
 
-          <Aufklapper offen={!isToday && !!offeneKachel}>
-            {!isToday && offeneKachel && (() => {
-              const feld = FIELDS.find((f) => f.key === offeneKachel);
-              const zeilen = tageDaten.filter((t) => (t.counts[offeneKachel] || 0) > 0);
-              const groesster = Math.max(1, ...zeilen.map((t) => t.counts[offeneKachel] || 0));
-              return (
-                <div className="card mb-5" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(offeneKachel)} 45%, transparent)` }}>
-                  <div className="flex items-center gap-2 mb-3 flex-wrap">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: feldFarbe(offeneKachel) }} />
-                    <span className="font-semibold text-textMain text-sm">{feld?.label} — nach Tagen</span>
-                    <button onClick={() => setOffeneKachel(null)} className="btn-ghost text-xs ml-auto">Schliessen</button>
-                  </div>
-                  {zeilen.length === 0 ? (
-                    <p className="text-textMuted text-xs">In diesem Zeitraum ist dafür nichts erfasst.</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {zeilen.map((t) => (
-                        <div key={t.tag}>
-                          <div className="flex items-center justify-between text-xs mb-1 gap-2">
-                            <span className="text-textMain">
-                              {new Date(`${t.tag}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
-                            </span>
-                            <span className="text-textMuted flex-shrink-0">{t.counts[offeneKachel]}</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-surfaceRaised overflow-hidden">
-                            <div className="h-full rounded-full transition-all duration-300"
-                              style={{ width: `${Math.round(((t.counts[offeneKachel] || 0) / groesster) * 100)}%`, background: feldFarbe(offeneKachel) }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </Aufklapper>
-
           <div className="card mb-5">
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <span className="font-semibold text-textMain text-sm">Zusammenfassung</span>
-              {!isToday && tageDaten.length > 0 && (
-                <button onClick={exportiereEigene} className="btn-ghost text-xs ml-auto">
-                  <Icon name="download" size={12} /> Für Excel herunterladen
-                </button>
-              )}
-            </div>
+            <div className="font-semibold text-textMain text-sm mb-3">Zusammenfassung</div>
             <div className="flex items-center justify-between text-sm py-1.5 border-b border-line">
               <span className="text-textMuted">Erreichbarkeitsquote</span><span className="text-textMain font-semibold">{reachRate}%</span>
             </div>
@@ -679,7 +605,7 @@ export default function CallTracker() {
   );
 }
 
-function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
+function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   // Welche Kachel aufgeklappt ist. Immer nur eine: zwei offene Listen
   // untereinander vergleicht man ohnehin nicht.
   const [offeneKachel, setOffeneKachel] = useState(null);
@@ -690,19 +616,8 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   const [auswahl, setAuswahl] = useState([]);
 
   if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
-  if (state.status === "denied") {
-    return (
-      <div className="card">
-        <div className="font-semibold text-textMain text-sm mb-1">Team-Übersicht</div>
-        <p className="text-textMuted text-sm">
-          Diese Auswertung sehen Manager ihrer Organisation und alle, die ein Team leiten.
-          Gehörst du zu einem Team, ohne es zu leiten, findest du deine eigenen Zahlen unter „Heute“, „Woche“ und „Monat“.
-        </p>
-      </div>
-    );
-  }
   if (state.status === "error") {
-    return <div className="card border border-coral/40 text-coral text-sm">Team-Ansicht konnte nicht geladen werden.</div>;
+    return <div className="card border border-coral/40 text-coral text-sm">Die Statistiken konnten nicht geladen werden.</div>;
   }
 
   const alleMitglieder = state.members || [];
@@ -834,9 +749,10 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       )}
 
       {/* Team und Person: der Team-Filter engt zuerst ein, die Personenliste
-          zeigt danach nur noch, wer dort drin ist. */}
+          zeigt danach nur noch, wer dort drin ist. Wer niemanden führt, sieht
+          nur sich selbst — dann wäre jeder Filter ein Knopf ohne Wahl. */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {teams.length > 0 && (
+        {teams.length > 0 && alleMitglieder.length > 1 && (
           <select className="input !w-auto !py-1.5 text-xs" value={teamFilter}
             onChange={(e) => { setTeamFilter(e.target.value); setAuswahl([]); setOffeneKachel(null); }}>
             <option value="alle">Alle Teams ({alleMitglieder.length})</option>
@@ -856,7 +772,7 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       </div>
 
       {/* Personen zum Vergleichen: mehrere anwählbar, leer heisst alle. */}
-      <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+      <div className={`flex items-center gap-1.5 mb-4 flex-wrap ${alleMitglieder.length > 1 ? "" : "hidden"}`}>
         <button onClick={() => { setAuswahl([]); setOffeneKachel(null); }}
           className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${gewaehlt.length === 0 ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
           Alle ({imTeam.length})
@@ -1012,6 +928,20 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
           Terminiert und negativ sind Ergebnisse dieser {erreicht} Gespräche — keine zusätzlichen Anrufe.
         </p>
         <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
+      </div>
+
+      {/* Die beiden Quoten standen bisher in "Woche/Monat" — sie gehören zu
+          jeder Auswertung, nicht nur zur eigenen. */}
+      <div className="card mb-4">
+        <div className="font-semibold text-textMain text-sm mb-3">Zusammenfassung</div>
+        <div className="flex items-center justify-between text-sm py-1.5 border-b border-line">
+          <span className="text-textMuted">Erreichbarkeitsquote</span>
+          <span className="text-textMain font-semibold">{anwahlen > 0 ? Math.round((erreicht / anwahlen) * 100) : 0}%</span>
+        </div>
+        <div className="flex items-center justify-between text-sm py-1.5">
+          <span className="text-textMuted">Abschlussquote (von Anrufen)</span>
+          <span className="text-textMain font-semibold">{anwahlen > 0 ? Math.round((termin / anwahlen) * 100) : 0}%</span>
+        </div>
       </div>
 
       <div className="card mb-4">
