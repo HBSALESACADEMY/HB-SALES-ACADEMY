@@ -90,6 +90,9 @@ let cachedBadges = null;
 // Einmal je Sitzung: die aktive Organisation auch serverseitig nachziehen.
 let aktiveOrgAbgeglichen = false;
 let cachedOrg = null;
+// Wann zuletzt "ich bin da" geschrieben wurde. Modulweit, damit ein
+// Seitenwechsel nicht jedes Mal eine neue Meldung auslöst.
+let letztesLebenszeichen = 0;
 // Wer auf das Logo der Organisation wartet, meldet sich hier an: die Daten
 // treffen erst nach dem ersten Zeichnen ein (siehe components/LogoHintergrund.js).
 const orgHoerer = new Set();
@@ -206,6 +209,33 @@ export default function Layout({ children, fullBleed }) {
       if (session) supabase.from("page_views").insert({ user_id: session.user.id, path: router.asPath.split("?")[0] });
     })();
   }, [router.asPath]);
+
+  // Lebenszeichen: "diese Person ist gerade in der Academy" (migration_119).
+  //
+  // Nötig, weil Seitenaufrufe nur beim WECHSEL einer Seite entstehen. Wer
+  // eine halbe Stunde im Call Tracker sitzt und tippt, wechselt keine Seite
+  // und galt bisher als abwesend — ausgerechnet beim Arbeiten.
+  //
+  // Höchstens alle vier Minuten und nur bei sichtbarem Tab: ein im
+  // Hintergrund vergessener Tab soll niemanden als anwesend melden.
+  useEffect(() => {
+    let laeuft = true;
+    async function lebenszeichen() {
+      if (typeof document !== "undefined" && document.hidden) return;
+      const jetzt = Date.now();
+      if (jetzt - letztesLebenszeichen < 4 * 60 * 1000) return;
+      letztesLebenszeichen = jetzt;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || !laeuft) return;
+      // Fehler bewusst ohne Meldung: fehlt die Spalte noch, soll deshalb
+      // nichts auf dem Bildschirm stehen.
+      supabase.from("profiles").update({ zuletzt_aktiv_at: new Date().toISOString() }).eq("id", session.user.id);
+    }
+    lebenszeichen();
+    const takt = setInterval(lebenszeichen, 60 * 1000);
+    document.addEventListener("visibilitychange", lebenszeichen);
+    return () => { laeuft = false; clearInterval(takt); document.removeEventListener("visibilitychange", lebenszeichen); };
+  }, []);
 
   const [org, setOrg] = useState(cachedOrg);
   const [activeOrgId, setActiveOrgId] = useState(null);

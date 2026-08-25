@@ -100,7 +100,11 @@ create table if not exists profiles (
   -- Ohne Zeitstempel taucht "hat ein Profilbild hochgeladen" in keiner
   -- Aktivitätenliste auf: ein Profil trägt nur seinen jetzigen Stand.
   profil_geaendert_at timestamptz,
-  avatar_geaendert_at timestamptz
+  avatar_geaendert_at timestamptz,
+  -- Lebenszeichen der geöffneten Academy (migration_119): "wer ist gerade
+  -- da". Seitenaufrufe entstehen nur beim Wechsel einer Seite und taugen
+  -- dafür nicht — wer auf einer Seite arbeitet, galt sonst als abwesend.
+  zuletzt_aktiv_at timestamptz
 );
 
 -- Auto-create a profile row whenever a new auth user signs up. Verlangt einen

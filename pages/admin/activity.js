@@ -83,7 +83,7 @@ export default function AdminActivity() {
       : { data: null };
     setOrgName(orgRow?.name || "");
     const { data: profiles } = await supabase.from("profiles")
-      .select("id, full_name, avatar_url, created_at, profil_geaendert_at, avatar_geaendert_at")
+      .select("id, full_name, avatar_url, created_at, profil_geaendert_at, avatar_geaendert_at, zuletzt_aktiv_at")
       .eq("organization_id", activeOrgId);
     const orgUserIds = (profiles || []).map((p) => p.id);
     const scoped = (q, col = "user_id") => q.in(col, orgUserIds.length ? orgUserIds : ["00000000-0000-0000-0000-000000000000"]);
@@ -139,6 +139,14 @@ export default function AdminActivity() {
     );
     const letzte = {};
     (aufrufe || []).forEach((a) => { if (!letzte[a.user_id]) letzte[a.user_id] = a.created_at; });
+    // Das Lebenszeichen zählt mehr als der letzte Seitenaufruf: es entsteht
+    // auch, während jemand auf DERSELBEN Seite arbeitet (migration_119).
+    // Seitenaufrufe bleiben als Rückfall für Konten, die die neue Fassung
+    // noch nicht geladen haben.
+    (profiles || []).forEach((p) => {
+      if (!p.zuletzt_aktiv_at) return;
+      if (!letzte[p.id] || p.zuletzt_aktiv_at > letzte[p.id]) letzte[p.id] = p.zuletzt_aktiv_at;
+    });
     setZuletztAktiv(letzte);
 
     // Ein Eintrag je Person und Tag statt eines je Seitenaufruf: sonst
