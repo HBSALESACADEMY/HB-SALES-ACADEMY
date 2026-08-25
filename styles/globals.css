@@ -411,35 +411,41 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 .rakete {
   position: fixed;
   left: 0;
-  bottom: 8%;
+  bottom: 6%;
   z-index: 400;
   pointer-events: none;
-  /* Die Reise: von links unten quer hinauf und über den oberen Rand hinaus,
-     dabei immer grösser werdend. */
-  animation: rakete-reise 2.6s cubic-bezier(.3, .5, .4, 1) forwards;
+  /* Waagerecht: gleichmässig von links aus dem Bild heraus nach rechts.
+     Die Höhe steckt in der zweiten Bewegung — getrennt, weil sich sonst
+     keine Kurve beschreiben lässt, sondern nur eine Gerade. */
+  animation: rakete-strecke 2.6s cubic-bezier(.35, .05, .6, .95) forwards;
 }
 
-/* Und die Schleifen: die Rakete dreht sich nicht um sich selbst, sie fliegt
-   Kreise. Das erste rotate() führt sie um einen Punkt herum, translateX
-   setzt den Radius, das zweite rotate() dreht sie wieder gerade — sonst
-   würde sie sich zusätzlich um die eigene Achse drehen. */
+/* Die Flugbahn: hoch, runter, wieder höher — wie eine Achterbahn, mit jedem
+   Bogen ein Stück weiter oben, am Ende steil davon. Die Drehung folgt der
+   Bahn: beim Steigen zeigt die Nase nach oben, beim Fallen nach vorn-unten.
+   Ohne das läge die Rakete quer in der Kurve. */
 .rakete span {
   display: inline-block;
   font-size: 64px;
   line-height: 1;
-  animation: rakete-schleife .85s linear infinite;
+  animation: rakete-bahn 2.6s ease-in-out forwards;
 }
 
-@keyframes rakete-reise {
-  0%   { transform: translate(-12vw, 0) scale(.6); opacity: 0; }
-  10%  { opacity: 1; }
-  80%  { opacity: 1; }
-  100% { transform: translate(100vw, -110vh) scale(2.1); opacity: 0; }
+@keyframes rakete-strecke {
+  0%   { transform: translateX(-14vw); opacity: 0; }
+  8%   { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(102vw); opacity: 0; }
 }
 
-@keyframes rakete-schleife {
-  from { transform: rotate(0deg) translateX(46px) rotate(0deg); }
-  to   { transform: rotate(360deg) translateX(46px) rotate(-360deg); }
+@keyframes rakete-bahn {
+  0%   { transform: translateY(0) rotate(-18deg) scale(.65); }
+  18%  { transform: translateY(-26vh) rotate(-22deg) scale(1); }
+  32%  { transform: translateY(-10vh) rotate(30deg) scale(1.15); }
+  50%  { transform: translateY(-42vh) rotate(-24deg) scale(1.4); }
+  64%  { transform: translateY(-24vh) rotate(32deg) scale(1.55); }
+  80%  { transform: translateY(-62vh) rotate(-28deg) scale(1.85); }
+  100% { transform: translateY(-125vh) rotate(-30deg) scale(2.2); }
 }
 
 @media (prefers-reduced-motion: reduce) {
