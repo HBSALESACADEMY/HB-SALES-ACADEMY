@@ -1385,7 +1385,7 @@ create policy "duels_select_participant" on duels for select using (auth.uid() =
 drop policy if exists "duels_insert_challenger" on duels;
 create policy "duels_insert_challenger" on duels for insert with check (
   auth.uid() = challenger_id
-  and same_org(challenger_id, opponent_id)
+  and sieht_person(opponent_id)
 );
 drop policy if exists "duels_update_participant" on duels;
 create policy "duels_update_participant" on duels for update using (auth.uid() = challenger_id or auth.uid() = opponent_id);
@@ -1599,7 +1599,7 @@ create policy "blocks_select_own" on blocks for select using (auth.uid() = block
 drop policy if exists "blocks_insert_own" on blocks;
 create policy "blocks_insert_own" on blocks for insert with check (
   auth.uid() = blocker_id
-  and same_org(blocker_id, blocked_id)
+  and sieht_person(blocked_id)
 );
 drop policy if exists "blocks_delete_own" on blocks;
 create policy "blocks_delete_own" on blocks for delete using (auth.uid() = blocker_id);
@@ -1646,7 +1646,7 @@ create policy "dm_insert_friends" on direct_messages for insert with check (
     or (
       group_id is null and recipient_id is not null
       and (
-        same_org(sender_id, recipient_id)
+        sieht_person(recipient_id)
         or exists (
           select 1 from friendships f
           where f.status = 'accepted'
@@ -1893,10 +1893,8 @@ create policy "lead_tasks_select_all" on lead_tasks for select using (
 drop policy if exists "lead_tasks_insert_own" on lead_tasks;
 create policy "lead_tasks_insert_own" on lead_tasks for insert with check (
   auth.uid() = assigned_by
-  and exists (
-    select 1 from leads l where l.id = lead_tasks.lead_id
-    and same_org(l.created_by, assigned_to)
-  )
+  and sieht_person(assigned_to)
+  and exists (select 1 from leads l where l.id = lead_tasks.lead_id)
 );
 drop policy if exists "lead_tasks_update_involved_or_manager" on lead_tasks;
 create policy "lead_tasks_update_involved_or_manager" on lead_tasks for update using (

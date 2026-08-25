@@ -5,6 +5,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { resolveCourse } from "../../lib/resolveCourse";
 import { hexToRgb, blend, textColorForColors } from "../../lib/colorMath";
+import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 
 function hexToPdfColor(hex) {
   const c = hexToRgb(hex) || { r: 255, g: 255, b: 255 };
@@ -35,20 +36,29 @@ export default async function handler(req, res) {
     const { data: profile } = await auth.client.from("profiles").select("full_name, organization_id, is_platform_admin").eq("id", auth.user.id).maybeSingle();
     const name = (profile && profile.full_name) || auth.user.email || "Teilnehmer";
 
-    // Für Plattform-Admins, die per Firmencode "als" eine andere Organisation
-    // unterwegs sind: profile.organization_id ist nur deren eigene Heimat-
-    // Organisation, nicht die gerade aktive — die kommt vom Client (kennt nur
-    // er via sessionStorage) und wird hier nur akzeptiert, wenn der Aufrufer
-    // wirklich Plattform-Admin ist oder es ohnehin die eigene Organisation ist.
+    // Welche Organisation auf dem Zertifikat steht, entscheidet der SERVER.
+    //
+    // Vorher musste die aufrufende Seite die aktive Organisation mitschicken.
+    // Die Kursansicht tat das, die Zertifikate-Übersicht nicht — dort trug
+    // dasselbe Zertifikat plötzlich wieder das Standard-Branding. Solche
+    // Unterschiede fallen niemandem auf, bis sich jemand über sein Zertifikat
+    // wundert. Jetzt wird die aktive Organisation dort gelesen, wo sie
+    // verlässlich steht: in der Tabelle active_org (lib/aktiveOrgServer.js).
+    const admin = getAdminSupabase();
+    let effectiveOrgId = await aktiveOrgId(admin, profile, auth.user.id);
+    // Ein ausdrücklich mitgegebener Wert gilt weiterhin — aber nur für
+    // Plattform-Admins oder die eigene Organisation.
     const { orgId } = req.query;
-    let effectiveOrgId = profile?.organization_id || null;
     if (orgId && (profile?.is_platform_admin || orgId === profile?.organization_id)) {
       effectiveOrgId = orgId;
     }
 
     let org = null;
     if (effectiveOrgId) {
-      const { data } = await auth.client.from("organizations")
+      // Über den Admin-Zugang: die Organisation steht hier bereits fest, und
+      // die Leseregel von organizations vergleicht gegen die HEIMAT des
+      // Kontos — genau daran scheiterte es bisher.
+      const { data } = await admin.from("organizations")
         .select("name, logo_url, primary_color, background_color, text_color, muted_color")
         .eq("id", effectiveOrgId).maybeSingle();
       org = data;
