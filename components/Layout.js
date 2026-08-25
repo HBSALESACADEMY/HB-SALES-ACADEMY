@@ -236,7 +236,12 @@ export default function Layout({ children, fullBleed }) {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        router.replace("/login");
+        // Mit der aktuellen Adresse im Gepäck: nach dem Anmelden geht es
+        // dorthin zurück, statt auf der Startseite zu landen. Beim Neuladen
+        // einer Unterseite war das der Unterschied zwischen "kurz neu
+        // anmelden" und "alles nochmal suchen" (siehe lib/weiterleitung.js).
+        const weiter = router.asPath && router.asPath !== "/" ? `?weiter=${encodeURIComponent(router.asPath)}` : "";
+        router.replace(`/login${weiter}`);
         return;
       }
       let { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
@@ -371,8 +376,12 @@ export default function Layout({ children, fullBleed }) {
       }
     }
     load();
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) router.replace("/login");
+    // Nur beim echten Abmelden zur Anmeldung schicken. Vorher genügte ein
+    // leeres session-Feld — das kommt beim Neuladen aber auch vor, solange
+    // die Sitzung noch wiederhergestellt wird, und warf einen mitten aus der
+    // Seite heraus.
+    const { data: sub } = supabase.auth.onAuthStateChange((ereignis) => {
+      if (ereignis === "SIGNED_OUT") router.replace("/login");
     });
     return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, [router]);

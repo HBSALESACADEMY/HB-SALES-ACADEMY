@@ -28,6 +28,7 @@ import { kreisSegmente, prozent } from "../lib/kreisdiagramm.js";
 import { validateRecordingUpload } from "../lib/uploadValidation.js";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler.js";
 import { PALETTE, feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben.js";
+import { sicheresZiel } from "../lib/weiterleitung.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -733,4 +734,22 @@ test("Tage im Zeitraum: einzeln, neueste zuerst, gleiche Summe", () => {
   // Ausserhalb des Zeitraums bleibt draussen.
   assert.equal(tageImZeitraum(meins, new Date(Date.now() + 5 * 86400000), new Date(Date.now() + 6 * 86400000), REASONS).length, 0);
   assert.ok(Object.keys(daten).length > 0);
+});
+
+// Nach dem Anmelden zurück auf die Seite, auf der man war. Das Ziel steht in
+// der Adresszeile — deshalb darf es nur INNERHALB der Academy liegen.
+test("Ziel nach dem Anmelden bleibt in der Academy", () => {
+  assert.equal(sicheresZiel("/termine?leadId=7", "/"), "/termine?leadId=7");
+  assert.equal(sicheresZiel("/call-tracker", "/"), "/call-tracker");
+  // Ohne Ziel gilt die eingestellte Startseite.
+  assert.equal(sicheresZiel(null, "/call-tracker"), "/call-tracker");
+  assert.equal(sicheresZiel("", "/call-tracker"), "/call-tracker");
+  // Fremde Adressen sind der Grund für die Prüfung.
+  assert.equal(sicheresZiel("https://fremde.de", "/"), "/");
+  assert.equal(sicheresZiel("//fremde.de", "/"), "/");
+  assert.equal(sicheresZiel("/\\fremde.de", "/"), "/");
+  assert.equal(sicheresZiel("javascript:alert(1)", "/"), "/");
+  // Keine Schleife zurück auf die Anmeldung.
+  assert.equal(sicheresZiel("/login", "/"), "/");
+  assert.equal(sicheresZiel("/login?weiter=/x", "/"), "/");
 });

@@ -8,6 +8,7 @@ import { playLoginChime } from "../lib/sounds";
 import { quoteOfTheDay } from "../lib/quotes";
 import { getResolvedTheme, defaultLogoSrc } from "../lib/theme";
 import { merkeAktiveOrg } from "../lib/activeOrg";
+import { sicheresZiel } from "../lib/weiterleitung";
 
 export default function Login() {
   // Das HB-Standard-Logo (vor Eingabe des Firmencodes bzw. ohne eigenes
@@ -143,15 +144,18 @@ export default function Login() {
       }
       // Startseite aus den Einstellungen (migration_108) — wer den ganzen
       // Tag telefoniert, will den Call Tracker sehen, nicht das Dashboard.
-      let ziel = "/";
+      let startseite = "/";
       try {
         const { data: { session: s2 } } = await supabase.auth.getSession();
         if (s2) {
           const { data: p2 } = await supabase.from("profiles").select("startseite").eq("id", s2.user.id).maybeSingle();
-          if (p2?.startseite) ziel = p2.startseite;
+          if (p2?.startseite) startseite = p2.startseite;
         }
       } catch (e) { /* fehlt die Spalte, bleibt es beim Dashboard */ }
-      router.push(ziel);
+      // Kam jemand von einer Unterseite (Neuladen ohne gültige Sitzung), geht
+      // es genau dorthin zurück. Geprüft, damit die Adresszeile nicht zum
+      // Umleiter auf fremde Seiten wird (lib/weiterleitung.js).
+      router.push(sicheresZiel(router.query.weiter, startseite));
     } catch (err) {
       setError(err.message || "Etwas ist schiefgelaufen.");
     } finally {
