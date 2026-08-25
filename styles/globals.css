@@ -399,3 +399,33 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
     transition: opacity .18s ease !important;
   }
 }
+
+/* --- Rakete beim vereinbarten Termin ---------------------------------------
+   Ein Termin ist das Ziel des ganzen Anrufs. Der kurze Flug quer über den
+   Bildschirm macht daraus einen Moment, statt einer weiteren Meldung in
+   Grau. Rein dekorativ: er liegt über allem, fängt keine Klicks ab und ist
+   nach anderthalb Sekunden vorbei.
+
+   Wer "Bewegung reduzieren" eingestellt hat, sieht nichts davon — solche
+   Flüge quer durchs Bild sind genau das, was dort Beschwerden auslöst. */
+.rakete {
+  position: fixed;
+  left: -80px;
+  bottom: 12%;
+  font-size: 54px;
+  line-height: 1;
+  z-index: 400;
+  pointer-events: none;
+  animation: rakete-flug 1.5s cubic-bezier(.3, .1, .5, 1) forwards;
+}
+
+@keyframes rakete-flug {
+  0%   { transform: translate(0, 0) rotate(8deg) scale(.7); opacity: 0; }
+  12%  { opacity: 1; }
+  70%  { transform: translate(70vw, -32vh) rotate(8deg) scale(1); opacity: 1; }
+  100% { transform: translate(115vw, -62vh) rotate(8deg) scale(.85); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rakete { display: none; }
+}

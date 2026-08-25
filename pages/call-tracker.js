@@ -61,6 +61,10 @@ export default function CallTracker() {
   const [teamZeitraum, setTeamZeitraum] = useState("woche");
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
+  // Der Raketenflug beim vereinbarten Termin. Als Zustand statt als
+  // CSS-Klasse am Knopf: er soll auch dann fliegen, wenn der Termin unten im
+  // Formular gespeichert wird, nicht nur beim Antippen.
+  const [rakete, setRakete] = useState(false);
   const [eigenerZeitraum, setEigenerZeitraum] = useState({ von: "", bis: "" });
 
   const reasons = useMemo(() => resolveObjectionCategories(org), [org]);
@@ -315,6 +319,7 @@ export default function CallTracker() {
 
       bump("termin");
       resetLeadDraft();
+      starteRakete();
       showToast(recordingPath ? "Gespeichert — Notizen aus der Aufnahme werden erstellt" : "Termin & Kundendaten gespeichert");
       setStep("breathe");
 
@@ -338,6 +343,20 @@ export default function CallTracker() {
       await navigator.clipboard.writeText(text);
       showToast("Bericht kopiert");
     } catch (e) { showToast("Kopieren nicht möglich"); }
+  }
+
+  // Startet den Flug. Der Zeitgeber räumt ihn wieder weg — bliebe das
+  // Element stehen, käme beim nächsten Termin keine zweite Rakete.
+  function starteRakete() {
+    // Kurz abschalten, damit ein zweiter Termin die Bewegung neu startet,
+    // statt am bereits gelaufenen Element hängen zu bleiben. Über einen
+    // Zeitgeber statt requestAnimationFrame: der ruht in einem Tab, der
+    // gerade nicht gezeichnet wird, und die Rakete käme dort nie.
+    setRakete(false);
+    setTimeout(() => {
+      setRakete(true);
+      setTimeout(() => setRakete(false), 1600);
+    }, 20);
   }
 
   function resetDay() {
@@ -409,8 +428,33 @@ export default function CallTracker() {
                   <div className="font-display font-semibold text-textMain text-lg mb-4">Wurde die Person erreicht?</div>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button onClick={() => { bump("nicht"); showToast("Erfasst: Nicht erreicht"); setStep("lead"); }} className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
-                    <button onClick={() => { bump("erreicht"); setStep("callResult"); }} className="btn">Erreicht</button>
+                    <button onClick={() => { bump("erreicht"); setStep("wen"); }} className="btn">Erreicht</button>
                   </div>
+                </>
+              )}
+
+              {/* Wen hatte man am Telefon? Steht zwischen "erreicht" und der
+                  Termin-Frage: die Antwort ändert nichts am weiteren Ablauf,
+                  aber ohne sie fehlt in der Auswertung, wie oft man
+                  überhaupt bis zur Entscheidung durchkommt. */}
+              {step === "wen" && (
+                <>
+                  <div className="text-3xl mb-1">🚪</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wen hast du erreicht?</div>
+                  <p className="text-textMuted text-xs mb-4">Einmal antippen, zählt automatisch mit</p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => { bump("gatekeeper"); setStep("callResult"); }}
+                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("gatekeeper"), color: feldFarbe("gatekeeper") }}>
+                      Gatekeeper
+                    </button>
+                    <button onClick={() => { bump("entscheider"); setStep("callResult"); }}
+                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("entscheider"), color: feldFarbe("entscheider") }}>
+                      Geschäftsführer
+                    </button>
+                  </div>
+                  {/* Wer nicht einordnen will oder kann, soll nicht stecken
+                      bleiben — der Anruf ist ja trotzdem gelaufen. */}
+                  <button onClick={() => setStep("callResult")} className="text-textMuted text-xs underline mt-3">Weiter ohne Angabe</button>
                 </>
               )}
 
@@ -517,7 +561,7 @@ export default function CallTracker() {
                     className="text-xs text-textMuted mb-4 block w-full" />
                   <div className="flex items-center gap-3 flex-wrap">
                     <button disabled={leadSaving} onClick={submitLead} className="btn disabled:opacity-40">{leadSaving ? "Speichert..." : "Speichern"}</button>
-                    <button onClick={() => { bump("termin"); resetLeadDraft(); showToast("Termin gezählt"); setStep("breathe"); }} className="text-textMuted text-xs underline">
+                    <button onClick={() => { bump("termin"); resetLeadDraft(); starteRakete(); showToast("Termin gezählt"); setStep("breathe"); }} className="text-textMuted text-xs underline">
                       Nur zählen, ohne Daten zu erfassen
                     </button>
                   </div>
@@ -612,6 +656,8 @@ export default function CallTracker() {
         </>
       )}
 
+      {rakete && <div className="rakete" aria-hidden="true">🚀</div>}
+
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] px-4 py-2.5 rounded-lg bg-surfaceRaised border border-line text-sm text-textMain shadow-lg">
           {toast}
@@ -699,6 +745,12 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
     { label: "Ans Telefon gegangen", value: erreicht, color: feldFarbe("erreicht") },
     { label: "Nicht erreicht", value: nicht, color: feldFarbe("nicht") },
     { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht), color: "#5B6079" },
+  ];
+  // Wen man am Telefon hatte — eine Aufteilung der erreichten Gespräche.
+  const wenErreicht = [
+    { label: "Gatekeeper", value: gesamt.gatekeeper || 0, color: feldFarbe("gatekeeper") },
+    { label: "Geschäftsführer", value: gesamt.entscheider || 0, color: feldFarbe("entscheider") },
+    { label: "Ohne Angabe", value: Math.max(0, erreicht - (gesamt.gatekeeper || 0) - (gesamt.entscheider || 0)), color: "#5B6079" },
   ];
   const ergebnisse = [
     { label: "Terminiert", value: termin, color: feldFarbe("termin") },
@@ -938,12 +990,19 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
         </div>
       </div>
 
-      <div className="card mb-4">
-        <div className="font-semibold text-textMain text-sm mb-1">Von den erreichten Gesprächen</div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div className="card">
+          <div className="font-semibold text-textMain text-sm mb-1">Wen hast du erreicht?</div>
+          <p className="text-xs text-textMuted mb-3">Gatekeeper oder direkt die Entscheidung</p>
+          <Kreisdiagramm daten={wenErreicht} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
+        </div>
+        <div className="card">
+          <div className="font-semibold text-textMain text-sm mb-1">Von den erreichten Gesprächen</div>
         <p className="text-xs text-textMuted mb-3">
           Terminiert und negativ sind Ergebnisse dieser {erreicht} Gespräche — keine zusätzlichen Anrufe.
         </p>
-        <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
+          <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
+        </div>
       </div>
 
       {/* Die beiden Quoten standen bisher in "Woche/Monat" — sie gehören zu
