@@ -261,6 +261,70 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   .text-xs {
     font-size: 13px;
   }
+
+  /* ---------------------------------------------------------------------
+     Eingabefelder auf dem Handy
+
+     Safari auf dem iPhone ZOOMT beim Antippen in jedes Feld hinein, dessen
+     Schrift kleiner als 16px ist — und bleibt danach herangezoomt. Die Seite
+     wirkt dadurch verrutscht, und man muss von Hand wieder herauswischen.
+     Deshalb hier durchgehend 16px, auch wenn am Feld eine kleinere
+     Tailwind-Klasse steht (text-xs/text-sm setzen sonst 13px durch).
+     --------------------------------------------------------------------- */
+  input,
+  select,
+  textarea,
+  .input,
+  input.text-xs, select.text-xs, textarea.text-xs,
+  input.text-sm, select.text-sm, textarea.text-sm,
+  input.text-\[13px\], input.text-\[12px\] {
+    font-size: 16px;
+  }
+
+  /* Innenabstand mitwachsen lassen: mit 16px Schrift wurde es in den flachen
+     Varianten (!py-1.5) sonst eng und die Schrift klebte am Rand. */
+  .input {
+    padding: 11px 14px;
+  }
+
+  /* iOS setzt Auswahl- und Datumsfeldern eigene Rahmen, Farbverläufe und
+     Pfeile auf — daneben sehen die eigenen Felder wie Fremdkörper aus.
+     appearance:none nimmt das weg, der Pfeil kommt als Hintergrundbild
+     zurück (data: ist in der Sicherheitsregel für Bilder erlaubt). */
+  select.input {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%238D90A6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+
+  input[type="date"].input,
+  input[type="datetime-local"].input,
+  input[type="time"].input {
+    -webkit-appearance: none;
+    appearance: none;
+    /* Ohne feste Höhe fallen diese Felder in Safari flacher aus als der Rest. */
+    min-height: 44px;
+  }
+
+  /* Ein Feld, das schmaler ist als der Daumen, lässt sich nicht bedienen.
+     Die absichtlich schmalen Felder (Uhrzeit, Zahlen) behalten ihre Breite,
+     bekommen aber eine Untergrenze. */
+  .input {
+    min-width: 84px;
+  }
+
+  /* Zahlenfelder: die winzigen Pfeile von Safari trifft niemand. */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 /* --- Organigramm als Kästchen-Diagramm ------------------------------------
