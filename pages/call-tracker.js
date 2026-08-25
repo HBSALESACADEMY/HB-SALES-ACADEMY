@@ -684,7 +684,10 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   // untereinander vergleicht man ohnehin nicht.
   const [offeneKachel, setOffeneKachel] = useState(null);
   const [teamFilter, setTeamFilter] = useState("alle");
-  const [personFilter, setPersonFilter] = useState("alle");
+  // Mehrere Personen gleichzeitig: leer heisst "alle". Als Liste statt als
+  // Klappliste, weil Vergleichen ein Nebeneinander ist — man will sehen, wer
+  // gewählt ist, ohne ein Menü zu öffnen.
+  const [auswahl, setAuswahl] = useState([]);
 
   if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
   if (state.status === "denied") {
@@ -711,10 +714,14 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   const imTeam = teamFilter === "alle"
     ? alleMitglieder
     : alleMitglieder.filter((m) => (m.teams || []).includes(teamFilter));
-  const sichtbare = personFilter === "alle" ? imTeam : imTeam.filter((m) => m.id === personFilter);
+  const gewaehlt = auswahl.filter((id) => imTeam.some((m) => m.id === id));
+  const sichtbare = gewaehlt.length ? imTeam.filter((m) => gewaehlt.includes(m.id)) : imTeam;
   const sichtbareIds = new Set(sichtbare.map((m) => m.id));
   const zeilen = (state.logs || []).filter((l) => sichtbareIds.has(l.user_id));
-  const einePerson = personFilter !== "alle" ? sichtbare[0] : null;
+  // Genau eine Person: dann ist der Verlauf nach Tagen die interessante
+  // Frage. Ab zwei geht es ums Vergleichen, und dafür sagt der Kreis mehr.
+  const einePerson = sichtbare.length === 1 && gewaehlt.length === 1 ? sichtbare[0] : null;
+  const vergleich = gewaehlt.length > 1;
 
   // Summen, Zahlen je Person, Einwandgründe und der Verlauf nach Tagen —
   // alles aus denselben Rohdaten, damit Kacheln, Diagramme und Tabelle nie
@@ -797,7 +804,7 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
     ]);
     const teil = [
       teamFilter === "alle" ? null : teams.find((t) => t.id === teamFilter)?.name,
-      einePerson?.name,
+      gewaehlt.length === 1 ? sichtbare[0]?.name : gewaehlt.length > 1 ? `vergleich-${gewaehlt.length}` : null,
     ].filter(Boolean).join("-") || "alle";
     downloadCsv(`call-tracker-${teil}-${state.zeitraum?.von}-bis-${state.zeitraum?.bis}.csv`.replace(/[^\w.-]+/g, "-"), kopf, datenZeilen);
   }
@@ -831,7 +838,7 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {teams.length > 0 && (
           <select className="input !w-auto !py-1.5 text-xs" value={teamFilter}
-            onChange={(e) => { setTeamFilter(e.target.value); setPersonFilter("alle"); setOffeneKachel(null); }}>
+            onChange={(e) => { setTeamFilter(e.target.value); setAuswahl([]); setOffeneKachel(null); }}>
             <option value="alle">Alle Teams ({alleMitglieder.length})</option>
             {teams.map((t) => (
               <option key={t.id} value={t.id}>
@@ -840,18 +847,43 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
             ))}
           </select>
         )}
-        <select className="input !w-auto !py-1.5 text-xs" value={personFilter}
-          onChange={(e) => { setPersonFilter(e.target.value); setOffeneKachel(null); }}>
-          <option value="alle">Alle Personen ({imTeam.length})</option>
-          {imTeam.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        {(teamFilter !== "alle" || personFilter !== "alle") && (
-          <button onClick={() => { setTeamFilter("alle"); setPersonFilter("alle"); }} className="btn-ghost text-xs">
+        {(teamFilter !== "alle" || gewaehlt.length > 0) && (
+          <button onClick={() => { setTeamFilter("alle"); setAuswahl([]); setOffeneKachel(null); }} className="btn-ghost text-xs">
             Filter zurücksetzen
           </button>
         )}
         {zeitraumText && <span className="text-[11px] text-textMuted ml-auto">{zeitraumText}</span>}
       </div>
+
+      {/* Personen zum Vergleichen: mehrere anwählbar, leer heisst alle. */}
+      <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+        <button onClick={() => { setAuswahl([]); setOffeneKachel(null); }}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${gewaehlt.length === 0 ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+          Alle ({imTeam.length})
+        </button>
+        {imTeam.map((m, i) => {
+          const an = gewaehlt.includes(m.id);
+          return (
+            <button key={m.id}
+              onClick={() => {
+                setOffeneKachel(null);
+                setAuswahl((prev) => (prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id]));
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${an ? "text-textMain" : "border-line text-textMuted hover:text-textMain"}`}
+              style={an ? { borderColor: paletteFarbe(i), background: `color-mix(in srgb, ${paletteFarbe(i)} 18%, transparent)` } : undefined}>
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: paletteFarbe(i) }} />
+              {m.name}
+            </button>
+          );
+        })}
+      </div>
+
+      {vergleich && (
+        <p className="text-[11px] text-textMuted mb-3">
+          Vergleich von {sichtbare.length} Personen: {sichtbare.map((m) => m.name).join(", ")}. Alle Zahlen und
+          Diagramme unten zeigen ausschliesslich diese Auswahl.
+        </p>
+      )}
 
       {/* "davon" steht bewusst dabei: terminiert und negativ sind Ergebnisse
           bereits gezählter Gespräche, keine zusätzlichen Anrufe. */}
@@ -954,7 +986,13 @@ function TeamPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
               <div className="font-semibold text-textMain text-sm mb-1">Anwahlen pro Person</div>
               <p className="text-xs text-textMuted mb-3">Wer wie viel telefoniert hat</p>
               <Kreisdiagramm
-                daten={mitglieder.map((m, i) => ({ label: m.name, value: m.value, color: paletteFarbe(i) }))}
+                daten={mitglieder.map((m) => ({
+                  label: m.name,
+                  value: m.value,
+                  // Dieselbe Farbe wie am Knopf oben — sonst müsste man die
+                  // Zuordnung im Kopf neu herstellen.
+                  color: paletteFarbe(imTeam.findIndex((x) => x.id === m.id)),
+                }))}
                 mitteText="Anwahlen"
                 leerText="In diesem Zeitraum wurden keine Anwahlen erfasst."
               />
