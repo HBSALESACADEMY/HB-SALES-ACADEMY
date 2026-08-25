@@ -411,41 +411,58 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 .rakete {
   position: fixed;
   left: 0;
-  bottom: 6%;
+  bottom: 8%;
   z-index: 400;
   pointer-events: none;
-  /* Waagerecht: gleichmässig von links aus dem Bild heraus nach rechts.
-     Die Höhe steckt in der zweiten Bewegung — getrennt, weil sich sonst
-     keine Kurve beschreiben lässt, sondern nur eine Gerade. */
-  animation: rakete-strecke 2.6s cubic-bezier(.35, .05, .6, .95) forwards;
+  /* Waagerecht. Gleichmässig (linear), weil der Looping sonst schief wird:
+     seine linke und rechte Hälfte müssen gleich lang dauern. */
+  animation: rakete-strecke 3s linear forwards;
 }
 
-/* Die Flugbahn: hoch, runter, wieder höher — wie eine Achterbahn, mit jedem
-   Bogen ein Stück weiter oben, am Ende steil davon. Die Drehung folgt der
-   Bahn: beim Steigen zeigt die Nase nach oben, beim Fallen nach vorn-unten.
-   Ohne das läge die Rakete quer in der Kurve. */
+/* Höhe, Neigung und Grösse. Getrennt von der Waagerechten, weil sich in CSS
+   sonst keine Kurve beschreiben lässt — nur eine Gerade.
+   Der Ablauf: erst ein gerader Anflug, dann EIN Looping, dann rechts hinauf
+   und aus dem Bild. Im Looping dreht sich die Rakete einmal ganz um sich
+   selbst; danach steht sie wieder richtig herum (-378° sind optisch -18°). */
 .rakete span {
   display: inline-block;
   font-size: 64px;
   line-height: 1;
-  animation: rakete-bahn 2.6s ease-in-out forwards;
+  animation: rakete-bahn 3s linear forwards;
 }
 
 @keyframes rakete-strecke {
-  0%   { transform: translateX(-14vw); opacity: 0; }
-  8%   { opacity: 1; }
-  85%  { opacity: 1; }
-  100% { transform: translateX(102vw); opacity: 0; }
+  0%    { transform: translateX(-14vw); opacity: 0; }
+  8%    { opacity: 1; }
+  /* Anflug bis zum Einstieg in den Looping. */
+  35%   { transform: translateX(38vw); }
+  /* Der Kreis: rechts, oben, links, wieder unten. Die Zwischenschritte auf
+     halbem Weg machen aus dem Viereck einen runden Looping — ohne sie
+     fliegt die Rakete eine Raute. */
+  38.75% { transform: translateX(44.4vw); }
+  42.5% { transform: translateX(47vw); }
+  46.25% { transform: translateX(44.4vw); }
+  50%   { transform: translateX(38vw); }
+  53.75% { transform: translateX(31.6vw); }
+  57.5% { transform: translateX(29vw); }
+  61.25% { transform: translateX(31.6vw); }
+  65%   { transform: translateX(38vw); }
+  90%   { opacity: 1; }
+  100%  { transform: translateX(102vw); opacity: 0; }
 }
 
 @keyframes rakete-bahn {
-  0%   { transform: translateY(0) rotate(-18deg) scale(.65); }
-  18%  { transform: translateY(-26vh) rotate(-22deg) scale(1); }
-  32%  { transform: translateY(-10vh) rotate(30deg) scale(1.15); }
-  50%  { transform: translateY(-42vh) rotate(-24deg) scale(1.4); }
-  64%  { transform: translateY(-24vh) rotate(32deg) scale(1.55); }
-  80%  { transform: translateY(-62vh) rotate(-28deg) scale(1.85); }
-  100% { transform: translateY(-125vh) rotate(-30deg) scale(2.2); }
+  0%    { transform: translateY(0) rotate(-18deg) scale(.7); }
+  35%   { transform: translateY(-16vh) rotate(-18deg) scale(1.2); }
+  38.75% { transform: translateY(-20.1vh) rotate(-63deg) scale(1.25); }
+  42.5% { transform: translateY(-30vh) rotate(-108deg) scale(1.3); }
+  46.25% { transform: translateY(-39.9vh) rotate(-153deg) scale(1.33); }
+  50%   { transform: translateY(-44vh) rotate(-198deg) scale(1.35); }
+  53.75% { transform: translateY(-39.9vh) rotate(-243deg) scale(1.33); }
+  57.5% { transform: translateY(-30vh) rotate(-288deg) scale(1.3); }
+  61.25% { transform: translateY(-20.1vh) rotate(-333deg) scale(1.27); }
+  65%   { transform: translateY(-16vh) rotate(-378deg) scale(1.25); }
+  100%  { transform: translateY(-125vh) rotate(-396deg) scale(2.2); }
 }
 
 @media (prefers-reduced-motion: reduce) {

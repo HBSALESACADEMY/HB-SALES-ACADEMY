@@ -355,7 +355,7 @@ export default function CallTracker() {
     setRakete(false);
     setTimeout(() => {
       setRakete(true);
-      setTimeout(() => setRakete(false), 2700);
+      setTimeout(() => setRakete(false), 3100);
     }, 20);
   }
 
