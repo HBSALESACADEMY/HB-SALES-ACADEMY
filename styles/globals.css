@@ -387,3 +387,15 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   /* gap ist hier 12px — die Überlappung muss mitwandern. */
   .org-kind::before { left: -6px; right: -6px; }
 }
+
+/* Bewegung in Diagrammen: wer im Betriebssystem "Bewegung reduzieren"
+   eingestellt hat, bekommt keine — das kann Übelkeit und Schwindel auslösen.
+   Die Hervorhebung selbst (Helligkeit) bleibt, nur das Herauswachsen des
+   Stücks entfällt. Eng auf die Diagramm-Stücke begrenzt, damit keine anderen
+   Zeichnungen mitbetroffen sind. */
+@media (prefers-reduced-motion: reduce) {
+  .diagramm-stueck {
+    transform: none !important;
+    transition: opacity .18s ease !important;
+  }
+}
