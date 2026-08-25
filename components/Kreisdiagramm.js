@@ -2,9 +2,22 @@ import { kreisSegmente, prozent } from "../lib/kreisdiagramm";
 
 // Farben aus der Organisation, mit festen Rückfallwerten: ein Diagramm, das
 // in einer Firma mit eigenem Farbschema plötzlich grau wäre, hilft niemandem.
+// Erst die beiden Marken-Töne der Organisation, dann ein deutlich
+// unterscheidbarer Reigen. Bewusst nicht drei Rot-Töne hintereinander wie
+// vorher: nebeneinanderliegende Stücke, die sich nur in der Sättigung
+// unterscheiden, kann man im Diagramm nicht auseinanderhalten. Kein Grau
+// mehr — es sieht aus, als wäre der Wert deaktiviert.
 const FARBEN = [
-  "var(--org-color-1, #4C5DC9)", "var(--org-accent, #CE3A5C)", "var(--org-color-3, #B2314F)",
-  "#3FBFA6", "#F0B23E", "#5FB8E8", "#8D90A6", "#9C3E6E",
+  "var(--org-accent, #CE3A5C)",   // Marke
+  "var(--org-color-1, #4C5DC9)",  // Marke
+  "#00C2A8",                       // Türkis
+  "#F0B23E",                       // Bernstein
+  "#9E8CF0",                       // Violett
+  "#3FA7D6",                       // Himmelblau
+  "#5FCF6B",                       // Grün
+  "#F2795B",                       // Orange
+  "#E0669B",                       // Pink
+  "#C9A227",                       // Gold
 ];
 
 // Ein Kreisdiagramm sagt "wie verteilt sich das", nicht "wie viel ist es".
@@ -24,7 +37,12 @@ export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst."
         className="flex-shrink-0">
         {vollkreis
           ? <circle cx="100" cy="100" r="100" fill={farbe(0)} />
-          : segmente.map((s, i) => <path key={s.label} d={s.pfad} fill={farbe(i)} />)}
+          : segmente.map((s, i) => (
+            // Dünne Trennlinie in der Flächenfarbe: ohne sie verschwimmen
+            // zwei benachbarte Stücke zu einem.
+            <path key={s.label} d={s.pfad} fill={farbe(i)}
+              stroke="rgb(var(--org-surface-rgb, var(--theme-surface-rgb, 26 29 41)))" strokeWidth="2" />
+          ))}
         {/* Loch in der Mitte: aus dem Kreis wird ein Ring, der sich in
             kleinen Grössen deutlich besser lesen lässt. */}
         <circle cx="100" cy="100" r="52" fill="rgb(var(--org-surface-rgb, var(--theme-surface-rgb, 26 29 41)))" />

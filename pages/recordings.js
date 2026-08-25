@@ -287,6 +287,14 @@ export default function Recordings() {
             ))}
           </select>
         )}
+        {/* Steht hier nur die eigene Person, liegt das fast immer an der
+            Freigabe beim Hochladen — nicht daran, dass niemand aufnimmt. */}
+        {hochgeladenVon.length <= 1 && recordings.length > 0 && (
+          <span className="text-[11px] text-textMuted">
+            Von anderen liegt hier nichts: Aufnahmen sieht man nur, wenn sie beim Hochladen für
+            „Teamlead/Manager“ oder „Ganzes Unternehmen“ freigegeben wurden.
+          </span>
+        )}
         {(outcomeFilter !== "all" || personFilter !== "all" || searchQuery) && (
           <button onClick={() => { setOutcomeFilter("all"); setPersonFilter("all"); setSearchQuery(""); }} className="btn-ghost text-xs">
             Filter zurücksetzen
