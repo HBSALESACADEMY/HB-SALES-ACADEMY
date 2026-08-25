@@ -11,6 +11,8 @@ import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet } from "../lib/apiClient";
 import { aendereGeprueft } from "../lib/loeschen";
 import { deutscheZeit } from "../lib/terminzeit";
+import { berlinHeute, tagPlus } from "../lib/woche";
+import { feldFarbe } from "../lib/diagrammFarben";
 import LogoHintergrund from "../components/LogoHintergrund";
 import { goalMetricLabel } from "../lib/goalMetrics";
 import { tagesSchluessel } from "../lib/dateRange";
@@ -40,6 +42,10 @@ export default function Dashboard() {
   // nach oben zu dem, was heute zu tun ist (migration_112).
   const [einladungen, setEinladungen] = useState([]);
   const [einladungBusy, setEinladungBusy] = useState(null);
+  // Eigene Anruf-Leistung. Aus call_log_days, nicht aus dem lokalen Speicher
+  // des Call Trackers: der liegt auf EINEM Gerät, das Dashboard schaut man
+  // auch mal vom Handy an.
+  const [leistung, setLeistung] = useState(null);
   const [teamZiele, setTeamZiele] = useState([]);
   const [showCourseList, setShowCourseList] = useState(false);
 
@@ -65,6 +71,31 @@ export default function Dashboard() {
     );
     if (fehler) await ladeEinladungen();
     setEinladungBusy(null);
+  }
+
+  // Die letzten sieben Tage, in deutschen Kalendertagen gerechnet — sonst
+  // fiele je nach Uhrzeit ein Tag heraus (siehe lib/woche.js).
+  async function ladeLeistung(uid) {
+    const heute = berlinHeute();
+    const von = tagPlus(heute, -6);
+    const { data } = await supabase.from("call_log_days")
+      .select("log_date, counts").eq("user_id", uid).gte("log_date", von);
+    const zeilen = data || [];
+    const summe = (schluessel, nurHeute) => zeilen
+      .filter((z) => (nurHeute ? z.log_date === heute : true))
+      .reduce((s, z) => s + (z.counts?.[schluessel] || 0), 0);
+
+    setLeistung({
+      heute: summe("anwahlen", true),
+      woche: summe("anwahlen", false),
+      erreicht: summe("erreicht", false),
+      termin: summe("termin", false),
+      // Ein Balken je Tag, älteste links: die Woche auf einen Blick.
+      tage: Array.from({ length: 7 }, (_, i) => {
+        const tag = tagPlus(heute, -(6 - i));
+        return { tag, wert: zeilen.filter((z) => z.log_date === tag).reduce((s, z) => s + (z.counts?.anwahlen || 0), 0) };
+      }),
+    });
   }
 
   async function loadPendingFriendRequests(uid) {
@@ -144,6 +175,7 @@ export default function Dashboard() {
         supabase.from("exam_results").select("course_id, passed").eq("user_id", uid),
         supabase.from("roleplay_sessions").select("id").eq("user_id", uid),
       ]);
+      ladeLeistung(uid);
       setQuizResults(qr || []);
       setExamResults(er || []);
       setRpSessions(rp || []);
@@ -358,6 +390,68 @@ export default function Dashboard() {
               <p className="text-textMuted text-sm">Dein Überblick über Fortschritt und nächste Schritte.</p>
             </div>
           </div>
+
+          {/* Die eigene Leistung ganz oben: jede Person sieht ihre Zahlen,
+              ohne erst in den Call Tracker zu wechseln. Nur die EIGENEN —
+              wer die des Teams sehen darf, findet sie dort. */}
+          {leistung && leistung.woche === 0 && leistung.heute === 0 && (
+            <div className="card mb-5 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/call-tracker")}>
+              <Icon name="phone" color={feldFarbe("anwahlen")} size={18} />
+              <span className="text-sm text-textMuted flex-1">
+                Noch keine Anwahlen erfasst. Im Call Tracker zählst du sie mit einem Tipp — dann steht deine Leistung hier.
+              </span>
+              <span className="text-[11px] text-textMuted">Öffnen →</span>
+            </div>
+          )}
+
+          {leistung && (leistung.woche > 0 || leistung.heute > 0) && (
+            <div className="card mb-5 cursor-pointer" onClick={() => router.push("/call-tracker")}>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="text-[11px] uppercase tracking-wide text-textMuted">Deine Anwahlen</span>
+                <span className="text-[11px] text-textMuted">· letzte 7 Tage</span>
+                <span className="text-[11px] text-textMuted ml-auto">Zum Call Tracker →</span>
+              </div>
+              <div className="flex items-end gap-5 flex-wrap">
+                <div>
+                  <div className="text-3xl font-display font-semibold" style={{ color: feldFarbe("anwahlen") }}>{leistung.heute}</div>
+                  <div className="text-[11px] text-textMuted">heute</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-display font-semibold text-textMain">{leistung.woche}</div>
+                  <div className="text-[11px] text-textMuted">in 7 Tagen</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-display font-semibold" style={{ color: feldFarbe("erreicht") }}>{leistung.erreicht}</div>
+                  <div className="text-[11px] text-textMuted">erreicht</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-display font-semibold" style={{ color: feldFarbe("termin") }}>{leistung.termin}</div>
+                  <div className="text-[11px] text-textMuted">terminiert</div>
+                </div>
+
+                {/* Ein Balken je Tag, ältester links. Zeigt den Verlauf, ohne
+                    ein zweites Diagramm zu brauchen. */}
+                <div className="flex items-end gap-1 h-12 ml-auto">
+                  {leistung.tage.map((t) => {
+                    const groesster = Math.max(1, ...leistung.tage.map((x) => x.wert));
+                    const heute = t.tag === berlinHeute();
+                    return (
+                      <div key={t.tag} className="flex flex-col items-center gap-1" title={`${t.wert} Anwahlen`}>
+                        <div className="w-3 rounded-t transition-all duration-300"
+                          style={{
+                            height: `${Math.max(2, Math.round((t.wert / groesster) * 38))}px`,
+                            background: heute ? feldFarbe("anwahlen") : `color-mix(in srgb, ${feldFarbe("anwahlen")} 45%, transparent)`,
+                          }} />
+                        <span className="text-[9px] text-textMuted">
+                          {new Date(`${t.tag}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short" }).slice(0, 2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {profile?.streak_count > 0 && profile?.last_challenge_date !== tagesSchluessel() && (
             <div className="card mb-5 border border-amber/30 flex items-center gap-3 cursor-pointer" onClick={() => router.push("/daily-challenge")}>
