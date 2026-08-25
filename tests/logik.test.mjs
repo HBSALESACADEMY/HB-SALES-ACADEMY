@@ -29,6 +29,7 @@ import { validateRecordingUpload } from "../lib/uploadValidation.js";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler.js";
 import { PALETTE, feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben.js";
 import { sicheresZiel } from "../lib/weiterleitung.js";
+import { sollLebenszeichenSenden, SENDE_ABSTAND_MS, RUHE_MS } from "../lib/anwesenheit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -752,4 +753,21 @@ test("Ziel nach dem Anmelden bleibt in der Academy", () => {
   // Keine Schleife zurück auf die Anmeldung.
   assert.equal(sicheresZiel("/login", "/"), "/");
   assert.equal(sicheresZiel("/login?weiter=/x", "/"), "/");
+});
+
+// Anwesenheit heisst "tut gerade etwas", nicht "hat einen Tab offen".
+test("Lebenszeichen: nur bei sichtbarem Tab und frischer Berührung", () => {
+  const jetzt = 10_000_000;
+  const basis = { sichtbar: true, jetzt, letztesSenden: 0, letzteInteraktion: jetzt - 1000 };
+
+  assert.equal(sollLebenszeichenSenden(basis), true);
+  // Unsichtbarer Tab meldet nie — auch nicht direkt nach einer Berührung.
+  assert.equal(sollLebenszeichenSenden({ ...basis, sichtbar: false }), false);
+  // Zu kurz nach dem letzten Senden: nicht bei jedem Klick schreiben.
+  assert.equal(sollLebenszeichenSenden({ ...basis, letztesSenden: jetzt - 30_000 }), false);
+  assert.equal(sollLebenszeichenSenden({ ...basis, letztesSenden: jetzt - (SENDE_ABSTAND_MS + 1) }), true);
+  // Lange nichts getan: fällt still heraus, statt ewig als anwesend zu gelten.
+  assert.equal(sollLebenszeichenSenden({ ...basis, letzteInteraktion: jetzt - (RUHE_MS + 1) }), false);
+  // Frisch geöffnet, noch nichts berührt: einmal melden.
+  assert.equal(sollLebenszeichenSenden({ ...basis, letzteInteraktion: 0 }), true);
 });

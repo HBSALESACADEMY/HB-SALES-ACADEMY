@@ -8,6 +8,7 @@ import { merkeAktiveOrg } from "../lib/activeOrg";
 import { merkeZeitzone } from "../lib/zeit";
 import { fehlendeProfilangaben } from "../lib/profilPflicht";
 import { istFuehrungsrolle } from "../lib/rollen";
+import { sollLebenszeichenSenden } from "../lib/anwesenheit";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { watchSystemTheme, getResolvedTheme, defaultLogoSrc, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { isStreakExpired, streakLossPenalty } from "../lib/streak";
@@ -90,9 +91,11 @@ let cachedBadges = null;
 // Einmal je Sitzung: die aktive Organisation auch serverseitig nachziehen.
 let aktiveOrgAbgeglichen = false;
 let cachedOrg = null;
-// Wann zuletzt "ich bin da" geschrieben wurde. Modulweit, damit ein
-// Seitenwechsel nicht jedes Mal eine neue Meldung auslöst.
+// Wann zuletzt "ich bin da" geschrieben wurde und wann zuletzt jemand etwas
+// berührt hat. Modulweit, damit ein Seitenwechsel weder eine neue Meldung
+// auslöst noch die Berührung vergisst.
 let letztesLebenszeichen = 0;
+let letzteInteraktion = 0;
 // Wer auf das Logo der Organisation wartet, meldet sich hier an: die Daten
 // treffen erst nach dem ersten Zeichnen ein (siehe components/LogoHintergrund.js).
 const orgHoerer = new Set();
@@ -212,18 +215,22 @@ export default function Layout({ children, fullBleed }) {
 
   // Lebenszeichen: "diese Person ist gerade in der Academy" (migration_119).
   //
-  // Nötig, weil Seitenaufrufe nur beim WECHSEL einer Seite entstehen. Wer
-  // eine halbe Stunde im Call Tracker sitzt und tippt, wechselt keine Seite
-  // und galt bisher als abwesend — ausgerechnet beim Arbeiten.
+  // Anwesenheit heisst: jemand TUT gerade etwas. Deshalb zählt jede
+  // Berührung — tippen, klicken, wischen, Tastatur —, und wer eine Weile
+  // nichts mehr macht, fällt still heraus. Ein Tab, der seit heute Morgen
+  // offen liegt, ist keine Anwesenheit; sonst stünde dauerhaft die halbe
+  // Firma in der Liste (Regel und Test in lib/anwesenheit.js).
   //
-  // Höchstens alle vier Minuten und nur bei sichtbarem Tab: ein im
-  // Hintergrund vergessener Tab soll niemanden als anwesend melden.
+  // Seitenaufrufe allein taugen dafür nicht: wer eine halbe Stunde im Call
+  // Tracker Anwahlen tippt, wechselt keine einzige Seite.
   useEffect(() => {
     let laeuft = true;
+
     async function lebenszeichen() {
-      if (typeof document !== "undefined" && document.hidden) return;
+      if (!laeuft) return;
+      const sichtbar = typeof document === "undefined" || !document.hidden;
       const jetzt = Date.now();
-      if (jetzt - letztesLebenszeichen < 4 * 60 * 1000) return;
+      if (!sollLebenszeichenSenden({ sichtbar, jetzt, letztesSenden: letztesLebenszeichen, letzteInteraktion })) return;
       letztesLebenszeichen = jetzt;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session || !laeuft) return;
@@ -231,10 +238,29 @@ export default function Layout({ children, fullBleed }) {
       // nichts auf dem Bildschirm stehen.
       supabase.from("profiles").update({ zuletzt_aktiv_at: new Date().toISOString() }).eq("id", session.user.id);
     }
+
+    function beiBeruehrung() {
+      letzteInteraktion = Date.now();
+      lebenszeichen();
+    }
+
     lebenszeichen();
-    const takt = setInterval(lebenszeichen, 60 * 1000);
+    // pointerdown deckt Maus, Finger und Stift zugleich ab; keydown die
+    // Tastatur. passive: das Melden darf das Scrollen nie bremsen.
+    window.addEventListener("pointerdown", beiBeruehrung, { passive: true });
+    window.addEventListener("keydown", beiBeruehrung);
+    window.addEventListener("touchstart", beiBeruehrung, { passive: true });
     document.addEventListener("visibilitychange", lebenszeichen);
-    return () => { laeuft = false; clearInterval(takt); document.removeEventListener("visibilitychange", lebenszeichen); };
+    const takt = setInterval(lebenszeichen, 60 * 1000);
+
+    return () => {
+      laeuft = false;
+      clearInterval(takt);
+      window.removeEventListener("pointerdown", beiBeruehrung);
+      window.removeEventListener("keydown", beiBeruehrung);
+      window.removeEventListener("touchstart", beiBeruehrung);
+      document.removeEventListener("visibilitychange", lebenszeichen);
+    };
   }, []);
 
   const [org, setOrg] = useState(cachedOrg);
