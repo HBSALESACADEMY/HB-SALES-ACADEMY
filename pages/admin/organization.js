@@ -4,6 +4,7 @@ import AdminTabs from "../../components/AdminTabs";
 import OrgEditor from "../../components/OrgEditor";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Einstellungen der EIGENEN — bzw. der per Firmencode aktiven — Organisation.
 //
@@ -22,8 +23,11 @@ export default function AdminOrganization() {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      const { data: me } = await supabase.from("profiles").select("is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
-      if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
+      const { data: me } = await supabase.from("profiles").select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
+      // Leitung heisst Leitung: wer die Organisation führt, stellt sie auch
+      // ein — bisher hing das allein an is_admin, und ein Manager kam nicht
+      // an die eigenen Ablehnungsgründe (migration_120, lib/rollen.js).
+      if (!istFuehrungsrolle(me)) { setIsAdmin(false); setLoading(false); return; }
       // Für Plattform-Admins, die per Firmencode "als" eine andere
       // Organisation unterwegs sind: me.organization_id ist nur deren eigene
       // Heimat-Organisation — ohne getActiveOrgId würde man hier immer die
@@ -42,7 +46,7 @@ export default function AdminOrganization() {
     return (
       <Layout>
         <h1 className="text-2xl font-display text-textMain mb-1">Organisation</h1>
-        <p className="text-textMuted text-sm">Diese Ansicht ist Administratoren vorbehalten.</p>
+        <p className="text-textMuted text-sm">Diese Ansicht ist der Leitung deiner Organisation vorbehalten.</p>
       </Layout>
     );
   }

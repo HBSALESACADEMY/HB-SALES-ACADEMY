@@ -59,6 +59,8 @@ export default function CallTracker() {
 
   const [teamState, setTeamState] = useState({ status: "idle", members: [], reasons: [] });
   const [teamZeitraum, setTeamZeitraum] = useState("woche");
+  // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
+  const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
   const [eigenerZeitraum, setEigenerZeitraum] = useState({ von: "", bis: "" });
 
   const reasons = useMemo(() => resolveObjectionCategories(org), [org]);
@@ -82,6 +84,11 @@ export default function CallTracker() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session || !mounted) return;
       setUserId(session.user.id);
+
+      // Für den Hinweis auf eigene Ablehnungsgründe (nur Leitung).
+      const { data: meineRolle } = await supabase.from("profiles")
+        .select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+      setDarfOrgVerwalten(istFuehrungsrolle(meineRolle));
 
       let orgRow = getCachedOrg();
       if (!orgRow) {
@@ -434,6 +441,15 @@ export default function CallTracker() {
                   </div>
                   {/* Ohne Angabe: zählt auf die letzte Kategorie (Sammelpunkt). */}
                   <button onClick={() => countReason(reasons[reasons.length - 1].key)} className="text-textMuted text-xs underline">Ohne Angabe zählen</button>
+                  {/* Der Weg zu eigenen Gründen gehört dorthin, wo die Gründe
+                      stehen — sonst weiss niemand, dass es ihn gibt. */}
+                  {darfOrgVerwalten && (
+                    <div className="mt-3">
+                      <a href="/admin/organization" className="text-[11px] text-textMuted underline">
+                        Eigene Ablehnungsgründe festlegen (z. B. „Kein Interesse")
+                      </a>
+                    </div>
+                  )}
                 </>
               )}
 

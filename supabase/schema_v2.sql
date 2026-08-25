@@ -1070,10 +1070,8 @@ create policy "organizations_select_own" on organizations for select using (
 );
 drop policy if exists "organizations_update_admin" on organizations;
 create policy "organizations_update_admin" on organizations for update using (
-  (
-    id = (select organization_id from profiles where id = auth.uid())
-    and exists (select 1 from profiles where id = auth.uid() and is_admin = true)
-  )
+  -- Leitung der AKTIVEN Organisation (migration_120), nicht nur is_admin.
+  (id is not distinct from aktive_org(auth.uid()) and ist_fuehrungsrolle(auth.uid()))
   or exists (select 1 from profiles where id = auth.uid() and is_platform_admin = true)
 );
 drop policy if exists "organizations_insert_platform_admin" on organizations;
