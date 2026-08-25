@@ -443,7 +443,7 @@ export default function CallTracker() {
                   <div className="font-display font-semibold text-textMain text-lg mb-1">Wen hast du erreicht?</div>
                   <p className="text-textMuted text-xs mb-4">Einmal antippen, zählt automatisch mit</p>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => { bump("gatekeeper"); setStep("callResult"); }}
+                    <button onClick={() => { bump("gatekeeper"); setStep("durchgestellt"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("gatekeeper"), color: feldFarbe("gatekeeper") }}>
                       Gatekeeper
                     </button>
@@ -455,6 +455,23 @@ export default function CallTracker() {
                   {/* Wer nicht einordnen will oder kann, soll nicht stecken
                       bleiben — der Anruf ist ja trotzdem gelaufen. */}
                   <button onClick={() => setStep("callResult")} className="text-textMuted text-xs underline mt-3">Weiter ohne Angabe</button>
+                </>
+              )}
+
+              {/* Nur nach einem Gatekeeper-Gespräch: kam man zur
+                  Entscheidung durch? Bei "nein" gibt es keinen Termin — dann
+                  direkt zur Grund-Auswahl statt eines überflüssigen Klicks. */}
+              {step === "durchgestellt" && (
+                <>
+                  <div className="text-3xl mb-1">➡️</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-4">Wurdest du zum Entscheider durchgestellt?</div>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Nein</button>
+                    <button onClick={() => { bump("weitergeleitet"); setStep("callResult"); }}
+                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("weitergeleitet"), color: feldFarbe("weitergeleitet") }}>
+                      Ja, durchgestellt
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -752,6 +769,13 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
     { label: "Geschäftsführer", value: gesamt.entscheider || 0, color: feldFarbe("entscheider") },
     { label: "Ohne Angabe", value: Math.max(0, erreicht - (gesamt.gatekeeper || 0) - (gesamt.entscheider || 0)), color: "#5B6079" },
   ];
+  // Am Vorzimmer vorbei — gemessen an allen Gatekeeper-Gesprächen.
+  const gatekeeper = gesamt.gatekeeper || 0;
+  const durchgestellt = gesamt.weitergeleitet || 0;
+  const amGatekeeper = [
+    { label: "Durchgestellt", value: durchgestellt, color: feldFarbe("weitergeleitet") },
+    { label: "Nicht durchgekommen", value: Math.max(0, gatekeeper - durchgestellt), color: feldFarbe("gatekeeper") },
+  ];
   const ergebnisse = [
     { label: "Terminiert", value: termin, color: feldFarbe("termin") },
     { label: "Negativ verlaufen", value: negativ, color: feldFarbe("negativ") },
@@ -1017,6 +1041,14 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
           <span className="text-textMuted">Abschlussquote (von Anrufen)</span>
           <span className="text-textMain font-semibold">{anwahlen > 0 ? Math.round((termin / anwahlen) * 100) : 0}%</span>
         </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="font-semibold text-textMain text-sm mb-1">Am Gatekeeper vorbei?</div>
+        <p className="text-xs text-textMuted mb-3">
+          Von {gatekeeper} Gesprächen mit dem Vorzimmer — wie oft ging es weiter zur Entscheidung
+        </p>
+        <Kreisdiagramm daten={amGatekeeper} mitteText="Gatekeeper" leerText="Noch keine Gatekeeper-Gespräche erfasst." />
       </div>
 
       <div className="card mb-4">
