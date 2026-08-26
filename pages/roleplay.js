@@ -21,6 +21,15 @@ export default function Roleplay() {
   const [feedback, setFeedback] = useState(null);
   const [error, setError] = useState("");
   const chatRef = useRef(null);
+  // Sprache: aufnehmen, hinschicken, Antwort hören. Bewusst "sprechen und
+  // loslassen" statt Dauerverbindung — das läuft in jedem Browser und auf
+  // jedem Handy (siehe pages/api/roleplay-voice.js).
+  const [nimmtAuf, setNimmtAuf] = useState(false);
+  const [einwilligung, setEinwilligung] = useState(false);
+  const [tonAn, setTonAn] = useState(true);
+  const rekorderRef = useRef(null);
+  const stueckeRef = useRef([]);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     async function load() {
@@ -35,6 +44,16 @@ export default function Roleplay() {
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
+
+  // Einmal zugestimmt, bleibt es zugestimmt — aber nur auf diesem Gerät.
+  useEffect(() => {
+    try { setEinwilligung(localStorage.getItem("hb_sprach_einwilligung") === "ja"); } catch (e) { /* privates Fenster */ }
+  }, []);
+
+  function stimmeZu() {
+    setEinwilligung(true);
+    try { localStorage.setItem("hb_sprach_einwilligung", "ja"); } catch (e) { /* egal */ }
+  }
 
   function courseUnlockedFor(scenId) {
     const idx = COURSES.findIndex((c) => c.id === scenId);
@@ -78,6 +97,102 @@ export default function Roleplay() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // --- Sprache ------------------------------------------------------------
+
+  async function starteAufnahme() {
+    setError("");
+    try {
+      const strom = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Derselbe Weg wie bei den Sprachnachrichten: das Handy kann nicht
+      // jedes Format, deshalb wird genommen, was der Browser anbietet.
+      const bevorzugt = ["audio/webm", "audio/mp4", "audio/ogg"];
+      const typ = bevorzugt.find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
+      const rekorder = typ ? new MediaRecorder(strom, { mimeType: typ }) : new MediaRecorder(strom);
+      stueckeRef.current = [];
+      rekorder.ondataavailable = (e) => { if (e.data.size > 0) stueckeRef.current.push(e.data); };
+      rekorder.onstop = async () => {
+        const echterTyp = rekorder.mimeType || typ || "audio/webm";
+        const paket = new Blob(stueckeRef.current, { type: echterTyp });
+        strom.getTracks().forEach((t) => t.stop());
+        if (paket.size > 0) await schickeAufnahme(paket, echterTyp);
+      };
+      rekorder.start();
+      rekorderRef.current = rekorder;
+      setNimmtAuf(true);
+      // Sicherheitsnetz: eine vergessene Aufnahme soll nicht minutenlang
+      // mitlaufen und dann als riesige Datei losgeschickt werden.
+      setTimeout(() => { if (rekorderRef.current?.state === "recording") beendeAufnahme(); }, 45000);
+    } catch (e) {
+      setError("Kein Zugriff aufs Mikrofon. Bitte im Browser erlauben — auf dem iPhone unter Einstellungen › Safari › Mikrofon.");
+    }
+  }
+
+  function beendeAufnahme() {
+    rekorderRef.current?.stop();
+    setNimmtAuf(false);
+  }
+
+  async function schickeAufnahme(paket, typ) {
+    setLoading(true);
+    setError("");
+    try {
+      const datenUrl = await new Promise((auf, ab) => {
+        const leser = new FileReader();
+        leser.onload = () => auf(leser.result);
+        leser.onerror = () => ab(new Error("Die Aufnahme konnte nicht gelesen werden."));
+        leser.readAsDataURL(paket);
+      });
+      const verlauf = messages.filter((m) => !m.system).map((m) => ({ role: m.role, content: m.content }));
+      const daten = await apiPost("/api/roleplay-voice", {
+        personaId: persona.id, scenarioId, difficulty, history: verlauf,
+        audio: String(datenUrl).split(",")[1],
+        mimeType: typ,
+      });
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: daten.transkript || "🎤 (gesprochen)" },
+        { role: "assistant", content: daten.reply },
+      ]);
+      setDetected((prev) => {
+        const zusammen = new Set(prev);
+        (daten.detected || []).forEach((d) => zusammen.add(d));
+        return Array.from(zusammen);
+      });
+      if (tonAn) spieleAntwort(daten.stimme, daten.reply);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Zuerst die echte Stimme vom Server. Kommt keine (Kontingent, Ausfall),
+  // liest der Browser den Text selbst vor — blechern, aber nicht stumm.
+  function spieleAntwort(stimme, text) {
+    try {
+      if (stimme) {
+        if (audioRef.current) audioRef.current.pause();
+        const ton = new Audio(stimme);
+        audioRef.current = ton;
+        ton.play().catch(() => vorlesen(text));
+        return;
+      }
+      vorlesen(text);
+    } catch (e) {
+      vorlesen(text);
+    }
+  }
+
+  function vorlesen(text) {
+    try {
+      if (typeof window === "undefined" || !window.speechSynthesis || !text) return;
+      window.speechSynthesis.cancel();
+      const spruch = new window.SpeechSynthesisUtterance(text);
+      spruch.lang = "de-DE";
+      window.speechSynthesis.speak(spruch);
+    } catch (e) { /* ohne Stimme weiter */ }
   }
 
   async function evaluateConversation() {
@@ -170,10 +285,37 @@ export default function Roleplay() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          disabled={loading}
+          disabled={loading || nimmtAuf}
         />
-        <button className="btn" onClick={sendMessage} disabled={loading}><Icon name="send" size={14} /></button>
+        <button className="btn" onClick={sendMessage} disabled={loading || nimmtAuf}><Icon name="send" size={14} /></button>
       </div>
+
+      {/* Sprechen statt tippen. Vor der ersten Aufnahme steht, was mit der
+          Stimme passiert — danach nicht mehr bei jedem Zug. */}
+      {!einwilligung ? (
+        <div className="card mt-3 border-amber/40">
+          <div className="text-sm font-semibold text-amber mb-1">Mit dem Kunden sprechen</div>
+          <p className="text-xs text-textMuted mb-3">
+            Du kannst dieses Rollenspiel wie ein Telefonat führen. Deine Aufnahme wird dafür an unseren
+            KI-Dienst übertragen, dort verstanden und beantwortet — und <strong>nicht gespeichert</strong>.
+            Im Gesprächsverlauf bleibt nur der Text, genau wie beim Tippen.
+          </p>
+          <button onClick={stimmeZu} className="btn text-xs">Verstanden, Mikrofon nutzen</button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <button
+            onClick={nimmtAuf ? beendeAufnahme : starteAufnahme}
+            disabled={loading}
+            className={`btn text-sm disabled:opacity-40 ${nimmtAuf ? "!bg-none !bg-coral" : ""}`}>
+            <Icon name="mic" size={14} /> {nimmtAuf ? "Fertig — abschicken" : "Sprechen"}
+          </button>
+          {nimmtAuf && <span className="text-xs text-coral">● Aufnahme läuft — höchstens 45 Sekunden</span>}
+          <button onClick={() => setTonAn((v) => !v)} className="btn-ghost text-xs ml-auto">
+            {tonAn ? "🔊 Antwort wird vorgelesen" : "🔇 Antwort stumm"}
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 mb-1.5"><strong className="text-[12.5px] text-textMuted">Erkannte Prinzipien:</strong></div>
       {detected.length ? (

@@ -66,6 +66,14 @@ export default function Datenschutz() {
               und ggf. konkretisieren, welche Garantie tatsächlich vorliegt].
             </p>
             <p className="mt-2">
+              Im Rollenspiel kann das Gespräch wahlweise <strong>gesprochen</strong> geführt werden. Die Sprachaufnahme
+              wird dafür an denselben KI-Dienst übermittelt, dort in Text umgewandelt und beantwortet. Sie wird
+              <strong> nicht gespeichert</strong> — weder bei uns noch in der Academy-Datenbank; erhalten bleibt nur der
+              Gesprächstext, genau wie beim Tippen. Die Aufnahme beginnt ausschliesslich auf ausdrückliches Antippen
+              und nach einmaliger Bestätigung (Art. 6 Abs. 1 lit. a DSGVO); die Bestätigung lässt sich widerrufen,
+              indem die Sprachfunktion nicht weiter genutzt wird.
+            </p>
+            <p className="mt-2">
               Die daraus resultierenden Scores (z.B. Prüfungsergebnis, Bestehen/Nichtbestehen) wirken sich auf den
               sichtbaren Lernfortschritt und die Zertifikatsvergabe aus. Es handelt sich dabei nicht um eine
               Entscheidung mit rechtlicher oder ähnlich erheblicher Wirkung im Sinne von Art. 22 DSGVO (kein

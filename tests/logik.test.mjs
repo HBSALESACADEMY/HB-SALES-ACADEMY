@@ -31,6 +31,7 @@ import { PALETTE, feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFar
 import { sicheresZiel } from "../lib/weiterleitung.js";
 import { sollLebenszeichenSenden, SENDE_ABSTAND_MS, RUHE_MS } from "../lib/anwesenheit.js";
 import { quartalsStart, quartalsName, zeitraumGrenzen } from "../lib/zeitraum.js";
+import { pcmZuWav, rateAusMime } from "../lib/wav.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -788,4 +789,26 @@ test("Zeiträume: Quartal, 30 Tage und eigene Grenzen", () => {
   assert.deepEqual(zeitraumGrenzen("eigen", { heute, von: "2026-08-10", bis: "2026-08-01" }), { von: "2026-08-01", bis: "2026-08-10" });
   assert.deepEqual(zeitraumGrenzen("eigen", { heute, von: "2026-08-05" }), { von: "2026-08-05", bis: "2026-08-05" });
   assert.deepEqual(zeitraumGrenzen("eigen", { heute }), { von: heute, bis: heute });
+});
+
+// Die Sprachausgabe kommt als nacktes PCM zurück. Ohne korrekten WAV-Kopf
+// spielt kein Browser sie ab — und der Fehler wäre "es passiert nichts".
+test("PCM wird zu abspielbarem WAV verpackt", () => {
+  const pcm = Buffer.alloc(100, 7);
+  const wav = pcmZuWav(pcm, 24000);
+  assert.equal(wav.length, 144, "44 Byte Kopf plus Daten.");
+  assert.equal(wav.subarray(0, 4).toString(), "RIFF");
+  assert.equal(wav.subarray(8, 12).toString(), "WAVE");
+  assert.equal(wav.subarray(36, 40).toString(), "data");
+  assert.equal(wav.readUInt32LE(4), 36 + 100, "Grössenangabe zählt ab Byte 8.");
+  assert.equal(wav.readUInt32LE(40), 100, "Länge der Nutzdaten.");
+  assert.equal(wav.readUInt16LE(20), 1, "Unkomprimiertes PCM.");
+  assert.equal(wav.readUInt32LE(24), 24000, "Abtastrate.");
+  assert.equal(wav.readUInt32LE(28), 48000, "Byte pro Sekunde: Rate mal Blockgrösse.");
+
+  // Die Rate steht im MIME-Typ — falsch gelesen klingt die Stimme zu tief
+  // oder zu hoch.
+  assert.equal(rateAusMime("audio/L16;codec=pcm;rate=16000"), 16000);
+  assert.equal(rateAusMime("audio/L16"), 24000);
+  assert.equal(rateAusMime(null), 24000);
 });
