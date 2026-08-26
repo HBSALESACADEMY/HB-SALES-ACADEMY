@@ -9,6 +9,7 @@ import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
+import { meldeStoerung } from "../lib/fehlerMelden";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
@@ -126,33 +127,68 @@ export default function CallTracker() {
   }, [reasons, ready]);
 
   const syncTimer = useRef(null);
+  const letzterStand = useRef(null);
+  const ersteAenderung = useRef(0);
+
+  // Zahlen zum Server schicken. Getrennt vom Zählen, weil sie auch dann
+  // hinaus müssen, wenn gerade nicht getippt wird: beim Verlassen der Seite.
+  async function sendeZahlen() {
+    const stand = letzterStand.current;
+    if (!userId || !stand) return;
+    clearTimeout(syncTimer.current);
+    ersteAenderung.current = 0;
+    // Supabase WIRFT bei einer abgelehnten Anfrage nicht, es gibt sie als
+    // Feld zurück. Nur try/catch hätte den Fehler nie gesehen — die Zahlen
+    // blieben lokal richtig und tauchten in keiner Auswertung auf, ohne
+    // dass irgendwo etwas stand.
+    try {
+      const { error } = await supabase.from("call_log_days").upsert({
+        user_id: userId,
+        // Derselbe Tagesschlüssel wie lokal (siehe lib/callTracker.js).
+        // Mit UTC landeten die ersten Anrufe nach Mitternacht in der Zeile
+        // des VORTAGS und überschrieben dessen Zahlen mit den frisch bei
+        // null begonnenen Zählern.
+        log_date: dateKeyOf(new Date()),
+        counts: stand.counts,
+        reasons: stand.reasons,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    } catch (e) {
+      meldeFehler("Deine Anrufzahlen konnten gerade nicht mit dem Team geteilt werden. Lokal sind sie gespeichert.", e);
+      meldeStoerung("Call Tracker teilen", e?.message || String(e));
+    }
+  }
+
   function persist(counts, reasonCounts) {
     if (!userId) return;
     saveDay(prefix, dayKey(), counts, reasonCounts);
-    // Zentrale Team-Statistik — verzögert, damit nicht jeder Klick eine
-    // eigene Anfrage auslöst. Schlägt der Sync fehl, zählt das Tool lokal
-    // trotzdem normal weiter.
+    letzterStand.current = { counts, reasons: reasonCounts };
+
+    // Verzögert, damit nicht jeder Klick eine eigene Anfrage auslöst — aber
+    // höchstens fünf Sekunden. Ohne diese Obergrenze schob jeder weitere
+    // Klick den Versand erneut nach hinten: wer eine Stunde am Stück
+    // telefoniert und dann den Tab schliesst, hatte nie etwas geschickt.
+    const jetzt = Date.now();
+    if (!ersteAenderung.current) ersteAenderung.current = jetzt;
     clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(async () => {
-      try {
-        await supabase.from("call_log_days").upsert({
-          user_id: userId,
-          // Derselbe Tagesschlüssel wie lokal (siehe lib/callTracker.js).
-          // Mit UTC landeten die ersten Anrufe nach Mitternacht in der Zeile
-          // des VORTAGS und überschrieben dessen Zahlen mit den frisch bei
-          // null begonnenen Zählern.
-          log_date: dateKeyOf(new Date()),
-          counts,
-          reasons: reasonCounts,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (e) {
-        // Früher stumm verworfen: die Zahlen blieben lokal richtig, tauchten
-        // aber nie in der Team-Auswertung auf — ohne jeden Hinweis.
-        meldeFehler("Deine Anrufzahlen konnten gerade nicht mit dem Team geteilt werden. Lokal sind sie gespeichert.", e);
-      }
-    }, 900);
+    if (jetzt - ersteAenderung.current >= 5000) { sendeZahlen(); return; }
+    syncTimer.current = setTimeout(sendeZahlen, 900);
   }
+
+  // Beim Verlassen oder Wegschalten der Seite alles Ausstehende noch
+  // hinausschicken. Genau hier gingen Tage verloren: gezählt, Tab zu, weg.
+  useEffect(() => {
+    const beiVerlassen = () => { if (letzterStand.current) sendeZahlen(); };
+    const beiWechsel = () => { if (document.hidden) beiVerlassen(); };
+    window.addEventListener("pagehide", beiVerlassen);
+    document.addEventListener("visibilitychange", beiWechsel);
+    return () => {
+      window.removeEventListener("pagehide", beiVerlassen);
+      document.removeEventListener("visibilitychange", beiWechsel);
+      beiVerlassen();
+    };
+  }, [userId]);
 
   function bump(key, by = 1) {
     setTodayCounts((prev) => {
