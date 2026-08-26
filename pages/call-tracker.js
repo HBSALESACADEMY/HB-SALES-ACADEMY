@@ -20,7 +20,7 @@ import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from ".
 import {
   FIELDS, storagePrefix, dayKey, dateKeyOf,
   zeroCounts, zeroReasons, todayFullLabel,
-  loadDay, saveDay, buildReport,
+  loadDay, saveDay, buildReport, alleGespeichertenTage, zaehlerZusammenfuehren,
 } from "../lib/callTracker";
 
 // Zwei Reiter: zählen und auswerten. "Woche"/"Monat" sind entfallen — sie
@@ -62,6 +62,7 @@ export default function CallTracker() {
   const [teamZeitraum, setTeamZeitraum] = useState("woche");
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
+  const [nachtragen, setNachtragen] = useState(null);
   // Der Raketenflug beim vereinbarten Termin. Als Zustand statt als
   // CSS-Klasse am Knopf: er soll auch dann fliegen, wenn der Termin unten im
   // Formular gespeichert wird, nicht nur beim Antippen.
@@ -209,6 +210,46 @@ export default function CallTracker() {
       return nextReasons;
     });
     setStep("lead");
+  }
+
+  // Lokal gezählte Tage nachträglich zum Server schicken.
+  //
+  // Nötig, weil der Versand früher aufgeschoben werden konnte, bis der Tab
+  // zu war — dann standen die Zahlen richtig auf dem Gerät und fehlten in
+  // jeder Auswertung. Zusammengeführt wird nach dem höheren Wert, damit
+  // nichts überschrieben wird, was anderswo schon weiter gezählt war.
+  async function trageNach() {
+    if (!userId) return;
+    setNachtragen("laeuft");
+    try {
+      const tage = alleGespeichertenTage(prefix, reasons);
+      if (!tage.length) { setNachtragen("nichts"); return; }
+
+      const { data: vorhanden } = await supabase.from("call_log_days")
+        .select("log_date, counts, reasons").eq("user_id", userId)
+        .in("log_date", tage.map((t) => t.tag));
+      const serverNach = new Map((vorhanden || []).map((z) => [z.log_date, z]));
+
+      const zeilen = tage.map((t) => {
+        const alt = serverNach.get(t.tag);
+        return {
+          user_id: userId,
+          log_date: t.tag,
+          counts: zaehlerZusammenfuehren(t.counts, alt?.counts || {}),
+          reasons: zaehlerZusammenfuehren(t.reasons, alt?.reasons || {}),
+          updated_at: new Date().toISOString(),
+        };
+      });
+
+      const { error } = await supabase.from("call_log_days").upsert(zeilen);
+      if (error) throw error;
+      setNachtragen(`fertig:${zeilen.length}`);
+      if (view === "statistik") loadTeam();
+    } catch (e) {
+      setNachtragen("fehler");
+      meldeFehler("Die lokalen Zähler konnten nicht nachgetragen werden.", e);
+      meldeStoerung("Call Tracker nachtragen", e?.message || String(e));
+    }
   }
 
   async function switchView(next) {
@@ -705,6 +746,15 @@ export default function CallTracker() {
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={copyReport} className="btn-ghost text-xs"><Icon name="chat" size={12} /> Bericht kopieren</button>
             {isToday && <button onClick={resetDay} className="btn-ghost text-xs text-coral">Tag zurücksetzen</button>}
+            {/* Rettungsanker: was auf diesem Gerät gezählt wurde, aber nie
+                beim Server ankam, lässt sich hier nachschicken. */}
+            <button onClick={trageNach} disabled={nachtragen === "laeuft"} className="btn-ghost text-xs disabled:opacity-40">
+              {nachtragen === "laeuft" ? "Trägt nach…"
+                : nachtragen === "nichts" ? "Nichts nachzutragen"
+                : nachtragen === "fehler" ? "Nachtragen fehlgeschlagen"
+                : nachtragen?.startsWith("fertig") ? `${nachtragen.split(":")[1]} Tage nachgetragen ✓`
+                : "Zahlen dieses Geräts nachtragen"}
+            </button>
           </div>
         </>
       )}

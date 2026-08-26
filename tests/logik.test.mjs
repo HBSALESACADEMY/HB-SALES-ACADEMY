@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, buildReport, FIELDS } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, buildReport, FIELDS } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
@@ -811,4 +811,19 @@ test("PCM wird zu abspielbarem WAV verpackt", () => {
   assert.equal(rateAusMime("audio/L16;codec=pcm;rate=16000"), 16000);
   assert.equal(rateAusMime("audio/L16"), 24000);
   assert.equal(rateAusMime(null), 24000);
+});
+
+// Beim Nachtragen lokaler Tage darf nichts verloren gehen, was auf dem
+// Server schon höher steht — sonst löscht das Nachtragen fremde Arbeit.
+test("Zähler zusammenführen: der höhere Wert gewinnt", () => {
+  const lokal = { anwahlen: 12, erreicht: 3, termin: 0 };
+  const server = { anwahlen: 8, erreicht: 9, negativ: 2 };
+  assert.deepEqual(zaehlerZusammenfuehren(lokal, server),
+    { anwahlen: 12, erreicht: 9, termin: 0, negativ: 2 });
+
+  // Fehlt eine Seite ganz, bleibt die andere unverändert.
+  assert.deepEqual(zaehlerZusammenfuehren({ anwahlen: 5 }, {}), { anwahlen: 5 });
+  assert.deepEqual(zaehlerZusammenfuehren({}, { anwahlen: 7 }), { anwahlen: 7 });
+  // Unsinnige Werte zählen als 0 statt die Rechnung zu vergiften.
+  assert.deepEqual(zaehlerZusammenfuehren({ anwahlen: null }, { anwahlen: 4 }), { anwahlen: 4 });
 });
