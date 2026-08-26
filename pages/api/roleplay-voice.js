@@ -1,7 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { callAIWithAudio, spracheErzeugen } from "../../lib/aiClient";
 import { pcmZuWav, rateAusMime } from "../../lib/wav";
-import { PERSONAS, SCENARIOS, DIFFICULTY, PRINCIPLE_LIST } from "../../lib/personas";
+import { PERSONAS, SCENARIOS, DIFFICULTY, PRINCIPLE_LIST, stimmeFuer } from "../../lib/personas";
 
 // Ein Gesprächszug per Sprache: aufgenommenes Audio rein, Antwort des Kunden
 // als Text UND als Stimme zurück.
@@ -26,6 +26,8 @@ function systemPromptFor(persona, scenarioId, difficulty) {
     persona.base + " " + sc.context + diff.suffix +
     " Du führst ein TELEFONAT. Antworte als der Kunde, kurz und gesprochen, ein bis zwei Sätze, auf Deutsch." +
     " Schreibe so, wie man spricht — keine Aufzählungen, keine Sternchen, keine Emojis, denn deine Antwort wird vorgelesen." +
+    " Sprich wie am Telefon: unvollständige Sätze sind erlaubt, ein 'Hm', 'Ja gut', 'Moment mal' auch. Keine Floskeln aus Textbausteinen, kein 'Gerne helfe ich Ihnen'." +
+    " Halte dich kurz — höchstens zwei Sätze, oft reicht einer." +
     " Bleibe konsequent in der Rolle, du bist NICHT der Assistent, sondern der Kunde. Gib niemals zu erkennen, dass du eine KI bist." +
     " Die beigefügte Audiodatei ist das, was der Verkäufer gerade gesagt hat." +
     " Schreibe es zunächst wörtlich auf (transkript) und antworte dann darauf." +
@@ -78,7 +80,8 @@ export default async function handler(req, res) {
     // Stimme dazu — bewusst "best effort": klappt es nicht, spricht der
     // Browser den Text selbst (siehe pages/roleplay.js).
     let stimme = null;
-    const ton = await spracheErzeugen(reply);
+    const klang = stimmeFuer(persona.id);
+    const ton = await spracheErzeugen(reply, klang.stimme, klang.art);
     if (ton?.base64) {
       const wav = pcmZuWav(ton.base64, rateAusMime(ton.mime));
       stimme = `data:audio/wav;base64,${wav.toString("base64")}`;

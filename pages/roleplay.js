@@ -30,6 +30,12 @@ export default function Roleplay() {
   const rekorderRef = useRef(null);
   const stueckeRef = useRef([]);
   const audioRef = useRef(null);
+  // Freisprechen: nach der Antwort öffnet sich das Mikrofon von allein, und
+  // die Aufnahme endet, wenn man aufhört zu sprechen. Erst damit fühlt es
+  // sich nach Telefonat an statt nach Sprachnachrichten hin und her.
+  const [freisprechen, setFreisprechen] = useState(false);
+  const freisprechenRef = useRef(false);
+  const stilleRef = useRef(null);
 
   useEffect(() => {
     async function load() {
@@ -70,6 +76,9 @@ export default function Roleplay() {
   }
 
   function resetPersona() {
+    freisprechenRef.current = false;
+    setFreisprechen(false);
+    beendeAufnahme();
     setPersona(null); setMessages([]); setDetected([]); setFeedback(null); setError("");
   }
 
@@ -105,6 +114,7 @@ export default function Roleplay() {
     setError("");
     try {
       const strom = await navigator.mediaDevices.getUserMedia({ audio: true });
+      hoereAufStille(strom);
       // Derselbe Weg wie bei den Sprachnachrichten: das Handy kann nicht
       // jedes Format, deshalb wird genommen, was der Browser anbietet.
       const bevorzugt = ["audio/webm", "audio/mp4", "audio/ogg"];
@@ -130,8 +140,58 @@ export default function Roleplay() {
   }
 
   function beendeAufnahme() {
-    rekorderRef.current?.stop();
+    stilleRef.current?.();
+    stilleRef.current = null;
+    if (rekorderRef.current?.state === "recording") rekorderRef.current.stop();
     setNimmtAuf(false);
+  }
+
+  // Erkennt, wann jemand aufgehört hat zu sprechen.
+  //
+  // Ohne das muss man nach jedem Satz einen Knopf drücken — und genau das
+  // macht aus einem Gespräch ein Formular. Gemessen wird die Lautstärke;
+  // eine Sekunde Ruhe nach dem ersten gesprochenen Wort beendet die
+  // Aufnahme. Vor dem ersten Wort passiert nichts, sonst bräche es schon
+  // beim Luftholen ab.
+  function hoereAufStille(strom) {
+    try {
+      const AudioKontext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioKontext) return;
+      const kontext = new AudioKontext();
+      const quelle = kontext.createMediaStreamSource(strom);
+      const messer = kontext.createAnalyser();
+      messer.fftSize = 512;
+      quelle.connect(messer);
+      const werte = new Uint8Array(messer.frequencyBinCount);
+
+      let hatGesprochen = false;
+      let stillSeit = 0;
+      let laeuft = true;
+
+      const pruefe = () => {
+        if (!laeuft) return;
+        messer.getByteTimeDomainData(werte);
+        // Abstand zur Ruhelage: 128 ist Stille, Ausschläge sind Sprache.
+        let summe = 0;
+        for (let i = 0; i < werte.length; i++) summe += Math.abs(werte[i] - 128);
+        const lautstaerke = summe / werte.length;
+
+        if (lautstaerke > 6) { hatGesprochen = true; stillSeit = 0; }
+        else if (hatGesprochen) {
+          if (!stillSeit) stillSeit = Date.now();
+          else if (Date.now() - stillSeit > 1000) { beendeAufnahme(); return; }
+        }
+        requestAnimationFrame(pruefe);
+      };
+      requestAnimationFrame(pruefe);
+
+      stilleRef.current = () => {
+        laeuft = false;
+        try { kontext.close(); } catch (e) { /* schon geschlossen */ }
+      };
+    } catch (e) {
+      // Ohne Stille-Erkennung bleibt der Knopf — kein Grund abzubrechen.
+    }
   }
 
   async function schickeAufnahme(paket, typ) {
@@ -161,6 +221,7 @@ export default function Roleplay() {
         return Array.from(zusammen);
       });
       if (tonAn) spieleAntwort(daten.stimme, daten.reply);
+      else if (freisprechenRef.current) starteAufnahme();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -176,6 +237,9 @@ export default function Roleplay() {
         if (audioRef.current) audioRef.current.pause();
         const ton = new Audio(stimme);
         audioRef.current = ton;
+        // Erst wenn der Kunde ausgeredet hat, wird wieder zugehört — sonst
+        // nimmt das Mikrofon die eigene Antwort mit auf.
+        ton.onended = () => { if (freisprechenRef.current) starteAufnahme(); };
         ton.play().catch(() => vorlesen(text));
         return;
       }
@@ -191,6 +255,7 @@ export default function Roleplay() {
       window.speechSynthesis.cancel();
       const spruch = new window.SpeechSynthesisUtterance(text);
       spruch.lang = "de-DE";
+      spruch.onend = () => { if (freisprechenRef.current) starteAufnahme(); };
       window.speechSynthesis.speak(spruch);
     } catch (e) { /* ohne Stimme weiter */ }
   }
@@ -222,8 +287,9 @@ export default function Roleplay() {
             laufenden Gespräch, und wer ihn dort nicht vermutet, sucht ihn
             auch nicht. */}
         <p className="text-textMuted text-sm mb-6">
-          🎤 <strong className="text-textMain">Neu:</strong> Das Gespräch lässt sich auch <strong className="text-textMain">sprechen</strong> statt tippen —
-          wie am Telefon. Der Knopf dafür steht im Gespräch unter dem Eingabefeld, sobald du einen Kundentyp gewählt hast.
+          🎤 <strong className="text-textMain">Neu:</strong> Das Gespräch lässt sich <strong className="text-textMain">führen wie ein Telefonat</strong> —
+          auf „Anrufen“ tippen, sprechen, kurz still sein, Antwort hören. Jeder Kundentyp hat dabei seine eigene Stimme.
+          Der Knopf steht im Gespräch unter dem Eingabefeld, sobald du einen Kundentyp gewählt hast.
         </p>
         <div className="flex flex-wrap gap-2 mb-4">
           {SCENARIOS.map((s) => {
@@ -311,15 +377,30 @@ export default function Roleplay() {
         </div>
       ) : (
         <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {/* Anrufen: einmal drücken, dann läuft das Gespräch von allein —
+              sprechen, kurz still sein, Antwort hören, weitersprechen. */}
           <button
-            onClick={nimmtAuf ? beendeAufnahme : starteAufnahme}
-            disabled={loading}
-            className={`btn text-sm disabled:opacity-40 ${nimmtAuf ? "!bg-none !bg-coral" : ""}`}>
-            <Icon name="mic" size={14} /> {nimmtAuf ? "Fertig — abschicken" : "Sprechen"}
+            onClick={() => {
+              if (freisprechen) { freisprechenRef.current = false; setFreisprechen(false); beendeAufnahme(); return; }
+              freisprechenRef.current = true; setFreisprechen(true); starteAufnahme();
+            }}
+            disabled={loading && !freisprechen}
+            className={`btn text-sm disabled:opacity-40 ${freisprechen ? "!bg-none !bg-coral" : ""}`}>
+            <Icon name="mic" size={14} /> {freisprechen ? "Auflegen" : "Anrufen"}
           </button>
-          {nimmtAuf && <span className="text-xs text-coral">● Aufnahme läuft — höchstens 45 Sekunden</span>}
+
+          {/* Für alle, die lieber selbst bestimmen, wann sie fertig sind. */}
+          {!freisprechen && (
+            <button onClick={nimmtAuf ? beendeAufnahme : starteAufnahme} disabled={loading} className="btn-ghost text-sm disabled:opacity-40">
+              {nimmtAuf ? "Fertig — abschicken" : "Einzeln sprechen"}
+            </button>
+          )}
+
+          {nimmtAuf && <span className="text-xs text-coral">● hört zu — hör einfach auf zu sprechen</span>}
+          {loading && freisprechen && <span className="text-xs text-textMuted">… überlegt</span>}
+
           <button onClick={() => setTonAn((v) => !v)} className="btn-ghost text-xs ml-auto">
-            {tonAn ? "🔊 Antwort wird vorgelesen" : "🔇 Antwort stumm"}
+            {tonAn ? "🔊 Stimme an" : "🔇 Stimme aus"}
           </button>
         </div>
       )}
