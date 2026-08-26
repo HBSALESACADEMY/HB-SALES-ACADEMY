@@ -217,7 +217,14 @@ export default function Roleplay() {
         <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Rollenspiel</h1>
         <div className="brand-stripe w-16 mb-4" />
         <BereichsTabs tabs={TRAINING} />
-        <p className="text-textMuted text-sm mb-6">Szenario, Schwierigkeit und Kundentyp wählen — freies Gespräch mit einer KI. Neu hier? Der <a href="/simulator" className="text-amber underline">Szenario-Simulator</a> ist ein guter erster Einstieg.</p>
+        <p className="text-textMuted text-sm mb-2">Szenario, Schwierigkeit und Kundentyp wählen — freies Gespräch mit einer KI. Neu hier? Der <a href="/simulator" className="text-amber underline">Szenario-Simulator</a> ist ein guter erster Einstieg.</p>
+        {/* Der Hinweis gehört hierher: der Sprechen-Knopf erscheint erst im
+            laufenden Gespräch, und wer ihn dort nicht vermutet, sucht ihn
+            auch nicht. */}
+        <p className="text-textMuted text-sm mb-6">
+          🎤 <strong className="text-textMain">Neu:</strong> Das Gespräch lässt sich auch <strong className="text-textMain">sprechen</strong> statt tippen —
+          wie am Telefon. Der Knopf dafür steht im Gespräch unter dem Eingabefeld, sobald du einen Kundentyp gewählt hast.
+        </p>
         <div className="flex flex-wrap gap-2 mb-4">
           {SCENARIOS.map((s) => {
             const unlocked = courseUnlockedFor(s.id);
