@@ -700,8 +700,12 @@ export default function CallTracker() {
                     className="text-xs text-textMuted mb-4 block w-full" />
                   <div className="flex items-center gap-3 flex-wrap">
                     <button disabled={leadSaving} onClick={submitLead} className="btn disabled:opacity-40">{leadSaving ? "Speichert..." : "Speichern"}</button>
-                    <button onClick={() => { bump("termin"); resetLeadDraft(); starteRakete(); showToast("Termin gezählt"); setStep("breathe"); }} className="text-textMuted text-xs underline">
-                      Nur zählen, ohne Daten zu erfassen
+                    {/* Als richtiger Knopf, nicht als kleiner Link: wer die
+                        Kundendaten nicht erfassen will, verliess bisher das
+                        Formular einfach — und dann fehlte der Termin in der
+                        Auswertung ("Abgebrochen"). */}
+                    <button onClick={() => { bump("termin"); resetLeadDraft(); starteRakete(); showToast("Termin gezählt"); setStep("breathe"); }} className="btn-ghost text-sm">
+                      Nur zählen, ohne Daten
                     </button>
                   </div>
                 </div>
@@ -911,10 +915,15 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
     { label: "Durchgestellt", value: durchgestellt, color: feldFarbe("weitergeleitet") },
     { label: "Nicht durchgekommen", value: Math.max(0, gatekeeper - durchgestellt), color: feldFarbe("gatekeeper") },
   ];
+  // Auch hier kein "ohne Angabe": der Assistent fragt immer nach dem
+  // Ergebnis. Übrig bleibt nur, wer mittendrin abbricht — Seite geschlossen,
+  // Reiter gewechselt, Formular verlassen. Das gehört benannt, nicht als
+  // fehlende Angabe getarnt.
+  const abgebrochen = Math.max(0, erreicht - termin - negativ);
   const ergebnisse = [
     { label: "Terminiert", value: termin, color: feldFarbe("termin") },
     { label: "Negativ verlaufen", value: negativ, color: feldFarbe("negativ") },
-    { label: "Ohne Ergebnis", value: Math.max(0, erreicht - termin - negativ), color: "#5B6079" },
+    { label: "Abgebrochen", value: abgebrochen, color: "#5B6079" },
   ];
   const gruendeDaten = reasons.map((r) => ({
     key: r.key, label: r.label, value: gruendeGesamt[r.key] || 0, color: grundFarbe(reasons, r.key),
@@ -1162,6 +1171,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
           <div className="font-semibold text-textMain text-sm mb-1">Von den erreichten Gesprächen</div>
         <p className="text-xs text-textMuted mb-3">
           Terminiert und negativ sind Ergebnisse dieser {erreicht} Gespräche — keine zusätzlichen Anrufe.
+          {abgebrochen > 0 && " „Abgebrochen“ heisst: der Assistent wurde nach „Erreicht“ nicht zu Ende geführt."}
         </p>
           <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
         </div>
