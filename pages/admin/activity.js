@@ -151,9 +151,14 @@ export default function AdminActivity() {
       if (!letzte[t.user_id] || t.updated_at > letzte[t.user_id]) letzte[t.user_id] = t.updated_at;
     });
     // Das Lebenszeichen zählt mehr als der letzte Seitenaufruf: es entsteht
-    // auch, während jemand auf DERSELBEN Seite arbeitet (migration_119).
-    // Seitenaufrufe bleiben als Rückfall für Konten, die die neue Fassung
-    // noch nicht geladen haben.
+    // auch, während jemand auf DERSELBEN Seite arbeitet (migration_119/124).
+    // Seitenaufrufe und Call-Tracker-Tippen bleiben als Rückfall.
+    const { data: anwesend } = await scoped(
+      supabase.from("anwesenheit").select("user_id, zuletzt_at").gt("zuletzt_at", seit)
+    );
+    (anwesend || []).forEach((a) => {
+      if (!letzte[a.user_id] || a.zuletzt_at > letzte[a.user_id]) letzte[a.user_id] = a.zuletzt_at;
+    });
     (profiles || []).forEach((p) => {
       if (!p.zuletzt_aktiv_at) return;
       if (!letzte[p.id] || p.zuletzt_aktiv_at > letzte[p.id]) letzte[p.id] = p.zuletzt_aktiv_at;

@@ -238,7 +238,15 @@ export default function Layout({ children, fullBleed }) {
       if (!session || !laeuft) return;
       // Fehler bewusst ohne Meldung: fehlt die Spalte noch, soll deshalb
       // nichts auf dem Bildschirm stehen.
-      supabase.from("profiles").update({ zuletzt_aktiv_at: new Date().toISOString() }).eq("id", session.user.id);
+      // Eigene Tabelle statt profiles: profiles wird per Echtzeit an alle
+      // offenen Browser gemeldet, und ein Lebenszeichen alle zwei Minuten
+      // löste bei jedem angemeldeten Menschen ein Neuladen aus
+      // (migration_124).
+      supabase.from("anwesenheit").upsert({
+        user_id: session.user.id,
+        organization_id: activeOrgIdRef.current || null,
+        zuletzt_at: new Date().toISOString(),
+      });
     }
 
     function beiBeruehrung() {
@@ -267,6 +275,9 @@ export default function Layout({ children, fullBleed }) {
 
   const [org, setOrg] = useState(cachedOrg);
   const [activeOrgId, setActiveOrgId] = useState(null);
+  // Für das Lebenszeichen: es läuft in einem eigenen Effekt und darf nicht
+  // bei jedem Wechsel der Organisation neu aufgesetzt werden.
+  const activeOrgIdRef = useRef(null);
 
   // Sofort aus dem Cache anwenden (kein Flackern beim Seitenwechsel), bevor
   // load() unten die Organisation ggf. neu vom Server nachlädt.
@@ -410,6 +421,7 @@ export default function Layout({ children, fullBleed }) {
           setDefaultLogo(defaultLogoSrc(getResolvedTheme()));
         }
         setActiveOrgId(activeOrgId);
+        activeOrgIdRef.current = activeOrgId;
         if (data && data.status === "approved" && !data.welcome_seen) setShowWelcome(true);
         if (effectiveNav.length) { setNavItems(effectiveNav); cachedNavItems = effectiveNav; }
         setLoadingAuth(false);
@@ -564,7 +576,6 @@ export default function Layout({ children, fullBleed }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, loadUnread)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_reads" }, loadUnread)
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, loadUnread)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, loadUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, loadUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, loadUnread)
       .subscribe();

@@ -353,7 +353,6 @@ export default function Dashboard() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, load)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_comments" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "lead_tasks" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "lead_mentions" }, load)
