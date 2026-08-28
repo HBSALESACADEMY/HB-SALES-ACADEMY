@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, buildReport, FIELDS } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, buildReport, FIELDS, istOffenerAnruf, merkeSchritt, offenerSchritt } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
@@ -891,4 +891,27 @@ test("Buchungslink: persönlich schlägt Organisation, Eingaben werden geprüft"
   assert.equal(normalisiere(""), null);
 
   assert.equal(kurzform("https://cal.com/houman/30min"), "cal.com/houman/30min");
+});
+
+// Ein angefangener Anruf darf nicht verloren gehen: "Erreicht" gezählt, das
+// Ergebnis nie — genau daraus entstand der graue Rest in der Auswertung.
+test("Angefangene Anrufe werden gemerkt und wieder aufgenommen", () => {
+  const daten = localStorageNachbilden();
+  const meins = storagePrefix("nutzer-1");
+
+  // Jeder Schritt zwischen "erreicht" und dem Abschluss gilt als offen.
+  ["outcome", "wen", "durchgestellt", "callResult", "reason", "booking", "leadForm"]
+    .forEach((schritt) => assert.equal(istOffenerAnruf(schritt), true, `${schritt} muss als offen gelten`));
+  // Der Ruhezustand und der Abschluss nicht.
+  assert.equal(istOffenerAnruf("lead"), false);
+  assert.equal(istOffenerAnruf("breathe"), false);
+  assert.equal(istOffenerAnruf(null), false);
+
+  merkeSchritt(meins, "wen");
+  assert.equal(offenerSchritt(meins), "wen", "Beim nächsten Öffnen wird dort weitergefragt.");
+
+  // Ist der Anruf fertig, bleibt nichts zurück.
+  merkeSchritt(meins, "lead");
+  assert.equal(offenerSchritt(meins), null);
+  assert.ok(Object.keys(daten).length >= 0);
 });

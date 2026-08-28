@@ -22,6 +22,7 @@ import {
   FIELDS, storagePrefix, dayKey, dateKeyOf,
   zeroCounts, zeroReasons, todayFullLabel,
   loadDay, saveDay, buildReport, alleGespeichertenTage, zaehlerZusammenfuehren,
+  merkeSchritt, offenerSchritt,
 } from "../lib/callTracker";
 
 // Zwei Reiter: zählen und auswerten. "Woche"/"Monat" sind entfallen — sie
@@ -63,6 +64,9 @@ export default function CallTracker() {
   const [teamZeitraum, setTeamZeitraum] = useState("woche");
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
+  // Wurde ein angefangener Anruf wieder aufgenommen? Dann steht ein Hinweis
+  // dabei, sonst wundert man sich, warum die Frage plötzlich da ist.
+  const [wiederaufgenommen, setWiederaufgenommen] = useState(false);
   const [nachtragen, setNachtragen] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
@@ -114,9 +118,17 @@ export default function CallTracker() {
       if (orgRow) setOrg(orgRow);
 
       const cats = resolveObjectionCategories(orgRow);
-      const loaded = loadDay(storagePrefix(session.user.id), dayKey(), cats);
+      const prefixJetzt = storagePrefix(session.user.id);
+      const loaded = loadDay(prefixJetzt, dayKey(), cats);
       setTodayCounts(loaded.counts);
       setTodayReasons(loaded.reasons);
+
+      // Angefangenen Anruf wieder aufnehmen. Ohne das blieb "Erreicht"
+      // gezählt und das Ergebnis für immer offen — der graue Rest in der
+      // Auswertung (siehe lib/callTracker.js).
+      const offen = offenerSchritt(prefixJetzt);
+      if (offen) { setStep(offen); setWiederaufgenommen(true); }
+
       setReady(true);
     })();
     return () => { mounted = false; };
@@ -350,6 +362,11 @@ export default function CallTracker() {
     }
   }
 
+  function zurueckZumStart() {
+    setWiederaufgenommen(false);
+    setStep("lead");
+  }
+
   function resetLeadDraft() {
     setLeadDraft({ name: "", phone: "", email: "", appointmentAt: "", fields: {} });
     setLeadFile(null);
@@ -452,6 +469,10 @@ export default function CallTracker() {
     showToast("Tag zurückgesetzt");
   }
 
+  // Der Schritt wird bei jeder Änderung festgehalten, damit ein
+  // geschlossener Reiter den Anruf nicht verschluckt.
+  useEffect(() => { if (userId) merkeSchritt(prefix, step); }, [step, userId, prefix]);
+
   const isToday = view === "today";
   const counts = todayCounts;
   const reasonCounts = todayReasons;
@@ -493,6 +514,12 @@ export default function CallTracker() {
         />
       ) : (
         <>
+          {isToday && wiederaufgenommen && step !== "lead" && (
+            <div className="card mb-3 border-amber/40 text-sm text-amber">
+              Hier war noch ein Anruf offen — bitte kurz zu Ende erfassen, dann stimmt die Auswertung.
+            </div>
+          )}
+
           {isToday && (
             <div className="card mb-5 text-center">
               {step === "lead" && (
@@ -509,7 +536,7 @@ export default function CallTracker() {
                   <div className="text-3xl mb-1">📞</div>
                   <div className="font-display font-semibold text-textMain text-lg mb-4">Wurde die Person erreicht?</div>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => { bump("nicht"); showToast("Erfasst: Nicht erreicht"); setStep("lead"); }} className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
+                    <button onClick={() => { bump("nicht"); showToast("Erfasst: Nicht erreicht"); zurueckZumStart(); }} className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
                     <button onClick={() => { bump("erreicht"); setStep("wen"); }} className="btn">Erreicht</button>
                   </div>
                 </>
@@ -716,7 +743,7 @@ export default function CallTracker() {
                   <div className="text-3xl mb-1">🌬️</div>
                   <div className="font-display font-semibold text-textMain text-lg mb-1">Kurz durchatmen</div>
                   <p className="text-textMuted text-sm mb-4">Kurz Luft holen, dann geht's weiter.</p>
-                  <button onClick={() => setStep("lead")} className="btn">Weiter zum nächsten Anruf</button>
+                  <button onClick={zurueckZumStart} className="btn">Weiter zum nächsten Anruf</button>
                 </>
               )}
             </div>
