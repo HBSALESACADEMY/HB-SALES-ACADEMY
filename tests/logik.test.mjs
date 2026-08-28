@@ -32,6 +32,7 @@ import { sicheresZiel } from "../lib/weiterleitung.js";
 import { sollLebenszeichenSenden, SENDE_ABSTAND_MS, RUHE_MS } from "../lib/anwesenheit.js";
 import { quartalsStart, quartalsName, zeitraumGrenzen } from "../lib/zeitraum.js";
 import { pcmZuWav, rateAusMime } from "../lib/wav.js";
+import { LINIEN, MITTE, hatBingo, gewinnFelder, zufallsWoerter, freiePlaetze } from "../lib/bingo.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -826,4 +827,45 @@ test("Zähler zusammenführen: der höhere Wert gewinnt", () => {
   assert.deepEqual(zaehlerZusammenfuehren({}, { anwahlen: 7 }), { anwahlen: 7 });
   // Unsinnige Werte zählen als 0 statt die Rechnung zu vergiften.
   assert.deepEqual(zaehlerZusammenfuehren({ anwahlen: null }, { anwahlen: 4 }), { anwahlen: 4 });
+});
+
+// Bingo: das Spiel darf nie einen Gewinn behaupten, den es nicht gibt — und
+// keinen übersehen. Die Mitte ist geschenkt und zählt immer mit.
+test("Bingo erkennt Reihen, Spalten und Diagonalen", () => {
+  assert.equal(LINIEN.length, 12, "5 Reihen, 5 Spalten, 2 Diagonalen.");
+  assert.equal(MITTE, 12);
+
+  // Leere Karte: die Mitte allein gewinnt nicht.
+  assert.equal(hatBingo([]), false);
+
+  // Oberste Reihe.
+  assert.equal(hatBingo([0, 1, 2, 3, 4]), true);
+  // Erste Spalte.
+  assert.equal(hatBingo([0, 5, 10, 15, 20]), true);
+  // Diagonale — die Mitte muss NICHT angeklickt sein, sie zählt von selbst.
+  assert.equal(hatBingo([0, 6, 18, 24]), true);
+  assert.equal(hatBingo([4, 8, 16, 20]), true);
+  // Vier in einer Reihe ist kein Bingo.
+  assert.equal(hatBingo([0, 1, 2, 3]), false);
+  // Verstreute Felder ebenso wenig.
+  assert.equal(hatBingo([0, 2, 7, 19, 23]), false);
+
+  // Die Felder einer Gewinnlinie werden hervorgehoben, andere nicht.
+  const treffer = gewinnFelder([0, 1, 2, 3, 4, 9]);
+  assert.equal(treffer.has(0) && treffer.has(4), true);
+  assert.equal(treffer.has(9), false);
+});
+
+test("Bingo: Zufallswörter und freie Plätze", () => {
+  // Keine Wiederholung dessen, was schon auf der Karte steht.
+  const woerter = zufallsWoerter(5, ["Zu teuer", "Keine Zeit"]);
+  assert.equal(woerter.length, 5);
+  assert.equal(new Set(woerter.map((w) => w.toLowerCase())).size, 5, "Keine Dubletten.");
+  assert.equal(woerter.some((w) => w === "Zu teuer" || w === "Keine Zeit"), false);
+
+  // Freie Plätze: die Mitte ist nie frei, belegte Plätze fallen heraus.
+  const frei = freiePlaetze([{ position: 0 }, { position: 1 }]);
+  assert.equal(frei.includes(12), false, "Die Mitte ist das Freifeld.");
+  assert.equal(frei.includes(0), false);
+  assert.equal(frei.length, 25 - 2 - 1);
 });
