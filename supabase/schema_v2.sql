@@ -56,7 +56,9 @@ create table if not exists organizations (
   -- Telegram-Chat der Organisation für Termin-Benachrichtigungen
   -- (migration_84). Leer = nur E-Mail.
   telegram_chat_id text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Gemeinsamer Buchungslink der Organisation (migration_123).
+  booking_url text
 );
 
 -- =============================================================================
@@ -104,7 +106,10 @@ create table if not exists profiles (
   -- Lebenszeichen der geöffneten Academy (migration_119): "wer ist gerade
   -- da". Seitenaufrufe entstehen nur beim Wechsel einer Seite und taugen
   -- dafür nicht — wer auf einer Seite arbeitet, galt sonst als abwesend.
-  zuletzt_aktiv_at timestamptz
+  zuletzt_aktiv_at timestamptz,
+  -- Eigener Buchungslink (z. B. cal.com), siehe migration_123. Schlägt den
+  -- Link der Organisation, falls beide gesetzt sind.
+  booking_url text
 );
 
 -- Auto-create a profile row whenever a new auth user signs up. Verlangt einen

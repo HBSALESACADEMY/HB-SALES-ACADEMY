@@ -150,6 +150,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [textColor, setTextColor] = useState(org.text_color || "#EDEDF4");
   const [useCustomSurface, setUseCustomSurface] = useState(!!(org.background_color || org.surface_color || org.text_color));
   const [bookingInstructions, setBookingInstructions] = useState(org.booking_instructions || "");
+  const [bookingUrl, setBookingUrl] = useState(org.booking_url || "");
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [rankingMetric, setRankingMetric] = useState(org.team_ranking_metric || "xp");
   const [bereich, setBereich] = useState("grunddaten");
@@ -253,6 +254,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       surface_color: useCustomSurface ? surfaceColor : null,
       text_color: useCustomSurface ? textColor : null,
       booking_instructions: bookingInstructions.trim() || null,
+      booking_url: bookingUrl.trim() || null,
       telegram_chat_id: telegramChatId.trim() || null,
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
@@ -357,6 +359,14 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       </Abschnitt>
 
       <Abschnitt id="calltracker" aktiv={bereich} titel="Call Tracker" hinweis="Anleitung beim Terminieren und die Kategorien für Einwände.">
+      <label className="block text-xs text-textMuted mb-1.5">Buchungslink der Organisation (optional)</label>
+      <p className="text-[11px] text-textMuted mb-2">
+        Erscheint im Call Tracker beim Terminieren als Knopf „Kalender öffnen" — z. B. euer cal.com-Link.
+        Wer unter „Mein Profil" einen eigenen Link hinterlegt, sieht stattdessen seinen.
+      </p>
+      <input className="input mb-5" value={bookingUrl} onChange={(e) => setBookingUrl(e.target.value)}
+        placeholder="cal.com/eure-firma/erstgespraech" />
+
       <label className="block text-xs text-textMuted mb-1.5">Termin-Anleitung im Call Tracker (optional)</label>
       <p className="text-[11px] text-textMuted mb-2">Wird im Call Tracker beim Schritt „Termin vereinbaren" angezeigt — eine Zeile pro Punkt. Leer lassen für eine allgemeine Standard-Anleitung ohne Tool-Namen.</p>
       <textarea

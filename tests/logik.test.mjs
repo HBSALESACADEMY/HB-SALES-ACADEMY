@@ -33,6 +33,7 @@ import { sollLebenszeichenSenden, SENDE_ABSTAND_MS, RUHE_MS } from "../lib/anwes
 import { quartalsStart, quartalsName, zeitraumGrenzen } from "../lib/zeitraum.js";
 import { pcmZuWav, rateAusMime } from "../lib/wav.js";
 import { LINIEN, MITTE, hatBingo, gewinnFelder, zufallsWoerter, freiePlaetze } from "../lib/bingo.js";
+import { buchungslink, normalisiere, kurzform } from "../lib/buchungslink.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -868,4 +869,26 @@ test("Bingo: Zufallswörter und freie Plätze", () => {
   assert.equal(frei.includes(12), false, "Die Mitte ist das Freifeld.");
   assert.equal(frei.includes(0), false);
   assert.equal(frei.length, 25 - 2 - 1);
+});
+
+// Der Buchungslink wird mitten im Telefonat angeklickt. Ein Tippfehler fällt
+// dann zum denkbar schlechtesten Zeitpunkt auf.
+test("Buchungslink: persönlich schlägt Organisation, Eingaben werden geprüft", () => {
+  // Der eigene Kalender gewinnt — gebucht wird beim Vertriebler.
+  assert.equal(
+    buchungslink({ booking_url: "cal.com/houman" }, { booking_url: "cal.com/firma" }),
+    "https://cal.com/houman"
+  );
+  assert.equal(buchungslink({}, { booking_url: "https://cal.com/firma" }), "https://cal.com/firma");
+  assert.equal(buchungslink(null, null), null);
+  assert.equal(buchungslink({ booking_url: "   " }, { booking_url: "cal.com/firma" }), "https://cal.com/firma");
+
+  // Ohne Protokoll deutet der Browser die Adresse als Unterseite der Academy.
+  assert.equal(normalisiere("cal.com/max"), "https://cal.com/max");
+  // Kein Unfug aus dem Eingabefeld.
+  assert.equal(normalisiere("javascript:alert(1)"), null);
+  assert.equal(normalisiere("nur-text"), null);
+  assert.equal(normalisiere(""), null);
+
+  assert.equal(kurzform("https://cal.com/houman/30min"), "cal.com/houman/30min");
 });

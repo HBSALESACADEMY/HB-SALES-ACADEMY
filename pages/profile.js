@@ -17,7 +17,7 @@ function Stern({ feld }) {
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
-  const [fields, setFields] = useState({ full_name: "", bio: "", company_name: "", role_title: "", website: "", instagram: "", linkedin: "", phone: "", geburtstag: "" });
+  const [fields, setFields] = useState({ full_name: "", bio: "", company_name: "", role_title: "", website: "", instagram: "", linkedin: "", phone: "", geburtstag: "", booking_url: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -42,6 +42,7 @@ export default function Profile() {
       website: data?.website || "", instagram: data?.instagram || "",
       linkedin: data?.linkedin || "", phone: data?.phone || "",
       geburtstag: data?.geburtstag || "",
+      booking_url: data?.booking_url || "",
     });
     setLoading(false);
   }
@@ -100,6 +101,7 @@ export default function Profile() {
       website: fields.website.trim(), instagram: fields.instagram.trim(),
       linkedin: fields.linkedin.trim(), phone: fields.phone.trim(),
       geburtstag: fields.geburtstag || null,
+      booking_url: fields.booking_url.trim() || null,
     };
     // Beim Speichern mitführen, ob das Profil jetzt vollständig ist — daran
     // hängt die Aufforderung nach der Registrierung (migration_109).
@@ -204,6 +206,14 @@ export default function Profile() {
               <div>
                 <label className="text-xs text-textMuted mb-1 block">Telefon<Stern feld="phone" /></label>
                 <input className="input" value={fields.phone} onChange={(e) => setField("phone", e.target.value)} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-textMuted mb-1 block">Buchungslink (z. B. cal.com)</label>
+                <input className="input" placeholder="cal.com/dein-name/erstgespraech"
+                  value={fields.booking_url} onChange={(e) => setField("booking_url", e.target.value)} />
+                <p className="text-[11px] text-textMuted mt-1">
+                  Erscheint im Call Tracker beim Terminieren als Knopf „Kalender öffnen".
+                </p>
               </div>
               <div>
                 {/* Nur Tag und Monat werden im Kalender gezeigt — das

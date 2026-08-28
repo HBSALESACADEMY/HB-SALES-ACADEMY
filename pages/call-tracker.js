@@ -9,6 +9,7 @@ import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
+import { buchungslink, kurzform } from "../lib/buchungslink";
 import { meldeStoerung } from "../lib/fehlerMelden";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
@@ -63,6 +64,9 @@ export default function CallTracker() {
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
   const [nachtragen, setNachtragen] = useState(null);
+  // Buchungslink: der eigene, sonst der der Organisation (migration_123).
+  const [meinProfil, setMeinProfil] = useState(null);
+  const [linkKopiert, setLinkKopiert] = useState(false);
   // Der Raketenflug beim vereinbarten Termin. Als Zustand statt als
   // CSS-Klasse am Knopf: er soll auch dann fliegen, wenn der Termin unten im
   // Formular gespeichert wird, nicht nur beim Antippen.
@@ -93,8 +97,9 @@ export default function CallTracker() {
 
       // Für den Hinweis auf eigene Ablehnungsgründe (nur Leitung).
       const { data: meineRolle } = await supabase.from("profiles")
-        .select("role, is_admin, is_platform_admin").eq("id", session.user.id).maybeSingle();
+        .select("role, is_admin, is_platform_admin, booking_url").eq("id", session.user.id).maybeSingle();
       setDarfOrgVerwalten(istFuehrungsrolle(meineRolle));
+      setMeinProfil(meineRolle);
 
       let orgRow = getCachedOrg();
       if (!orgRow) {
@@ -595,6 +600,49 @@ export default function CallTracker() {
                 <>
                   <div className="text-3xl mb-1">📅</div>
                   <div className="font-display font-semibold text-textMain text-lg mb-3">Termin vereinbaren</div>
+
+                  {/* Der Buchungslink steht VOR der Anleitung und vor dem
+                      Formular: mitten im Gespräch sucht man ihn sonst in
+                      einem anderen Tab, während die Kundin wartet. */}
+                  {(() => {
+                    const link = buchungslink(meinProfil, org);
+                    if (!link) {
+                      return darfOrgVerwalten ? (
+                        <p className="text-[11px] text-textMuted mb-4">
+                          Noch kein Buchungslink hinterlegt —{" "}
+                          <a href="/admin/organization" className="underline">unter Organisation → Call Tracker</a> eintragen,
+                          persönlich unter <a href="/profile" className="underline">Mein Profil</a>.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-textMuted mb-4">
+                          Eigenen Buchungslink hinterlegen: <a href="/profile" className="underline">Mein Profil</a>.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="card !py-3 mb-4 max-w-md mx-auto border-teal/40">
+                        <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-2">Dein Buchungslink</div>
+                        <div className="flex items-center gap-2 flex-wrap justify-center">
+                          <a href={link} target="_blank" rel="noopener noreferrer" className="btn text-sm">
+                            <Icon name="calendar" size={14} /> Kalender öffnen
+                          </a>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard?.writeText(link).then(
+                                () => { setLinkKopiert(true); setTimeout(() => setLinkKopiert(false), 2500); },
+                                () => showToast("Kopieren nicht möglich")
+                              );
+                            }}
+                            className="btn-ghost text-sm">
+                            <Icon name="copy" size={14} /> {linkKopiert ? "Kopiert ✓" : "Link kopieren"}
+                          </button>
+                        </div>
+                        <div className="text-[11px] text-textMuted mt-2 break-all">{kurzform(link)}</div>
+                        <p className="text-[11px] text-textMuted mt-1">Zum Vorlesen oder direkt in den Chat schicken.</p>
+                      </div>
+                    );
+                  })()}
+
                   <ul className="text-left text-sm text-textMain list-disc pl-6 mb-4 flex flex-col gap-1.5 max-w-md mx-auto">
                     {bookingSteps.map((line, i) => <li key={i}>{line}</li>)}
                   </ul>
