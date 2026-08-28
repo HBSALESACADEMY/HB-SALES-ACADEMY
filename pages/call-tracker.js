@@ -534,9 +534,6 @@ export default function CallTracker() {
                       Geschäftsführer
                     </button>
                   </div>
-                  {/* Wer nicht einordnen will oder kann, soll nicht stecken
-                      bleiben — der Anruf ist ja trotzdem gelaufen. */}
-                  <button onClick={() => setStep("callResult")} className="text-textMuted text-xs underline mt-3">Weiter ohne Angabe</button>
                 </>
               )}
 
@@ -898,10 +895,14 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
     { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht), color: "#5B6079" },
   ];
   // Wen man am Telefon hatte — eine Aufteilung der erreichten Gespräche.
+  // Der Rest ist kein "ohne Angabe": seit der Umstellung fragt der Assistent
+  // immer, wen man erreicht hat. Übrig bleiben nur Gespräche von VORHER, als
+  // es die Unterscheidung noch nicht gab — und die soll man auch so nennen.
+  const vorDerUmstellung = Math.max(0, erreicht - (gesamt.gatekeeper || 0) - (gesamt.entscheider || 0));
   const wenErreicht = [
     { label: "Gatekeeper", value: gesamt.gatekeeper || 0, color: feldFarbe("gatekeeper") },
     { label: "Geschäftsführer", value: gesamt.entscheider || 0, color: feldFarbe("entscheider") },
-    { label: "Ohne Angabe", value: Math.max(0, erreicht - (gesamt.gatekeeper || 0) - (gesamt.entscheider || 0)), color: "#5B6079" },
+    { label: "Früher erfasst", value: vorDerUmstellung, color: "#5B6079" },
   ];
   // Am Vorzimmer vorbei — gemessen an allen Gatekeeper-Gesprächen.
   const gatekeeper = gesamt.gatekeeper || 0;
@@ -1151,7 +1152,10 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card">
           <div className="font-semibold text-textMain text-sm mb-1">Wen hast du erreicht?</div>
-          <p className="text-xs text-textMuted mb-3">Gatekeeper oder direkt die Entscheidung</p>
+          <p className="text-xs text-textMuted mb-3">
+            Gatekeeper oder direkt die Entscheidung
+            {vorDerUmstellung > 0 && " · „Früher erfasst“ sind Gespräche von vor dieser Unterscheidung"}
+          </p>
           <Kreisdiagramm daten={wenErreicht} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
         </div>
         <div className="card">
