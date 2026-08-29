@@ -920,10 +920,19 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
 
   // Farben kommen aus lib/diagrammFarben.js: "Terminiert" ist überall grün,
   // "Negativ" überall rot — in der Kachel, im Kreis und in der Tabelle.
+  // Kreis und Kachel müssen dieselbe Zahl ergeben. Sie gehen auseinander,
+  // wenn Zähler nachträglich von Hand korrigiert wurden: der Minus-Knopf
+  // ändert "Anwahlen", ohne "erreicht" und "nicht erreicht" mitzuziehen.
+  // Dann ist die Summe der Stücke grösser als die Zahl in der Kachel.
+  //
+  // Das wird jetzt benannt statt still geschluckt — vorher stand links 564
+  // und im Kreis daneben 571, ohne dass irgendwo stand, warum.
+  const ohneAngabe = Math.max(0, anwahlen - erreicht - nicht);
+  const ueberhang = Math.max(0, erreicht + nicht - anwahlen);
   const verteilung = [
     { label: "Ans Telefon gegangen", value: erreicht, color: feldFarbe("erreicht") },
     { label: "Nicht erreicht", value: nicht, color: feldFarbe("nicht") },
-    { label: "Ohne Angabe", value: Math.max(0, anwahlen - erreicht - nicht), color: "#5B6079" },
+    { label: "Ohne Angabe", value: ohneAngabe, color: "#5B6079" },
   ];
   // Wen man am Telefon hatte — eine Aufteilung der erreichten Gespräche.
   // Der Rest ist kein "ohne Angabe": seit der Umstellung fragt der Assistent
@@ -1180,8 +1189,19 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
         </div>
         <div className="card">
           <div className="font-semibold text-textMain text-sm mb-1">Was aus den Anwahlen wurde</div>
-          <p className="text-xs text-textMuted mb-3">Alle {anwahlen} Anwahlen — erreicht oder nicht</p>
-          <Kreisdiagramm daten={verteilung} mitteText="Anwahlen" leerText="Noch keine Anwahlen erfasst." />
+          <p className="text-xs text-textMuted mb-3">
+            {ueberhang > 0
+              ? `${erreicht + nicht} Gespräche bei ${anwahlen} gezählten Anwahlen`
+              : `Alle ${anwahlen} Anwahlen — erreicht oder nicht`}
+          </p>
+          <Kreisdiagramm daten={verteilung} mitteText="Gespräche" leerText="Noch keine Anwahlen erfasst." />
+          {ueberhang > 0 && (
+            <p className="text-[11px] text-textMuted mt-2">
+              Das sind {ueberhang} mehr als die {anwahlen} gezählten Anwahlen. Das passiert, wenn der Zähler
+              „Anwahlen“ nachträglich mit dem Minus-Knopf verringert wurde — „erreicht“ und „nicht erreicht“
+              bleiben dabei stehen.
+            </p>
+          )}
         </div>
       </div>
 
