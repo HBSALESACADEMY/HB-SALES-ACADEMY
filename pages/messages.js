@@ -91,6 +91,29 @@ export default function Messages() {
     const contactById = new Map();
     (friendProfiles || []).forEach((p) => contactById.set(p.id, p));
     (orgColleagues || []).forEach((p) => contactById.set(p.id, p));
+    // Wer mir geschrieben hat, gehört in die Liste — auch wenn er weder
+    // befreundet noch (mehr) in meiner aktiven Organisation ist.
+    //
+    // Vorher entstand daraus ein Abzeichen, das sich nicht abbauen liess:
+    // die Nachricht zählte als ungelesen, aber es gab kein Gespräch zum
+    // Öffnen. Genau so kam "9+ ungelesen" zustande, obwohl scheinbar nichts
+    // offen war — typischerweise nach einem Wechsel der Organisation.
+    const partnerIds = [...new Set(
+      relevantMessages
+        .filter((m) => !m.group_id)
+        .map((m) => (m.sender_id === uid ? m.recipient_id : m.sender_id))
+        .filter((id) => id && id !== uid && !contactById.has(id))
+    )];
+    if (partnerIds.length) {
+      const { data: weitere } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", partnerIds);
+      (weitere || []).forEach((p) => contactById.set(p.id, p));
+      // Profile, die nicht mehr lesbar sind (andere Organisation, gelöschtes
+      // Konto): trotzdem aufnehmen, sonst bleibt das Abzeichen hängen.
+      partnerIds.filter((id) => !contactById.has(id)).forEach((id) => {
+        contactById.set(id, { id, full_name: "Ehemaliger Kontakt", avatar_url: null });
+      });
+    }
+
     const dmContacts = Array.from(contactById.values());
     setFriendsList(dmContacts);
 
@@ -151,6 +174,19 @@ export default function Messages() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selfId, selected]);
+
+  // Notausgang, wenn doch einmal etwas hängt: alles auf gelesen setzen.
+  // Steht bewusst nur da, wenn wirklich etwas ungelesen ist.
+  async function alleGelesen() {
+    const offen = conversations.filter((c) => c.unread > 0);
+    if (!offen.length || !selfId) return;
+    const jetzt = new Date().toISOString();
+    await supabase.from("conversation_reads").upsert(
+      offen.map((c) => ({ user_id: selfId, target_id: c.id, is_group: c.type === "group", last_read_at: jetzt })),
+      { onConflict: "user_id,target_id,is_group" }
+    );
+    setConversations((prev) => prev.map((c) => ({ ...c, unread: 0 })));
+  }
 
   async function markRead(contact, uid) {
     await supabase.from("conversation_reads").upsert({
@@ -323,9 +359,16 @@ export default function Messages() {
     <Layout fullBleed>
       <div className="flex h-full gap-3">
         <div className={`w-full md:w-72 flex-shrink-0 flex-col gap-0.5 overflow-y-auto ${showList ? "flex" : "hidden md:flex"}`}>
-          <div className="flex items-center justify-between px-2 mb-2">
+          <div className="flex items-center justify-between px-2 mb-2 gap-2 flex-wrap">
             <h1 className="text-lg font-display text-textMain">Nachrichten</h1>
-            <button onClick={() => setShowNewGroup(true)} className="btn-ghost text-xs px-2 py-1" title="Neue Gruppe">+ Gruppe</button>
+            <div className="flex items-center gap-1.5">
+              {conversations.some((c) => c.unread > 0) && (
+                <button onClick={alleGelesen} className="btn-ghost text-xs px-2 py-1" title="Alle Gespräche als gelesen markieren">
+                  Alles gelesen
+                </button>
+              )}
+              <button onClick={() => setShowNewGroup(true)} className="btn-ghost text-xs px-2 py-1" title="Neue Gruppe">+ Gruppe</button>
+            </div>
           </div>
 
           <div className="px-1 mb-2">
