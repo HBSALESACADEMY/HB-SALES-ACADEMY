@@ -16,6 +16,7 @@ import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
+import { korrigiere } from "../lib/anrufKorrektur";
 import Aufklapper from "../components/Aufklapper";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
@@ -23,6 +24,7 @@ import {
   FIELDS, storagePrefix, dayKey, dateKeyOf,
   zeroCounts, zeroReasons, todayFullLabel,
   loadDay, saveDay, buildReport, alleGespeichertenTage, zaehlerZusammenfuehren,
+  merkeBuchung, nimmLetztenAnruf, leereVerlauf,
   merkeSchritt, offenerSchritt,
 } from "../lib/callTracker";
 
@@ -260,14 +262,35 @@ export default function CallTracker() {
   }, [userId]);
 
   function bump(key, by = 1) {
+    if (by < 0) { korrigiereZaehler(key); return; }
+    merkeBuchung(prefix, dayKey(), key);
     setTodayCounts((prev) => {
-      const next = { ...prev, [key]: Math.max(0, (prev[key] || 0) + by) };
-      persist(next, todayReasons, { korrektur: by < 0 });
+      const next = { ...prev, [key]: (prev[key] || 0) + by };
+      persist(next, todayReasons);
       return next;
     });
   }
 
+  // Eine Korrektur betrifft nie nur eine Kachel.
+  //
+  // Wer eine ANWAHL zurücknimmt, sagt: dieser Anruf hat nicht
+  // stattgefunden. Dann muss auch alles weg, was er gebucht hat — sonst
+  // stehen erreicht, Vorzimmer, Termin und Ablehnungsgrund weiter da und
+  // die Tabelle widerspricht sich. Anschliessend wird eingeregelt: keine
+  // Zahl grösser als ihre Grundlage (siehe lib/anrufKorrektur.js).
+  function korrigiereZaehler(key) {
+    const anruf = key === "anwahlen" ? nimmLetztenAnruf(prefix, dayKey()) : null;
+    // Zähler und Gründe kommen aus EINER Rechnung — deshalb hier direkt aus
+    // dem aktuellen Stand und nicht über zwei ineinander verschachtelte
+    // Aktualisierungen, die sich gegenseitig nicht sehen.
+    const neu = korrigiere(todayCounts, todayReasons, key, anruf);
+    setTodayCounts(neu.counts);
+    setTodayReasons(neu.reasons);
+    persist(neu.counts, neu.reasons, { korrektur: true });
+  }
+
   function countReason(reasonKey) {
+    merkeBuchung(prefix, dayKey(), "negativ", reasonKey);
     setTodayReasons((prevReasons) => {
       const nextReasons = { ...prevReasons, [reasonKey]: (prevReasons[reasonKey] || 0) + 1 };
       setTodayCounts((prevCounts) => {
@@ -533,6 +556,7 @@ export default function CallTracker() {
     setTodayCounts(counts0);
     setTodayReasons(reasons0);
     saveDay(prefix, dayKey(), counts0, reasons0);
+    leereVerlauf(prefix, dayKey());
     letzterStand.current = { counts: counts0, reasons: reasons0 };
     setStep("lead");
     await sendeZahlen({ erzwingen: true });
@@ -857,7 +881,9 @@ export default function CallTracker() {
                     –
                   </button>
                 </div>
-                <div className="text-[10.5px] text-textMuted mt-1">Bei Fehlern: − zum Korrigieren</div>
+                <div className="text-[10.5px] text-textMuted mt-1">
+                  {f.key === "anwahlen" ? "− nimmt den letzten Anruf ganz zurück" : "Bei Fehlern: − zum Korrigieren"}
+                </div>
               </div>
             ))}
           </div>

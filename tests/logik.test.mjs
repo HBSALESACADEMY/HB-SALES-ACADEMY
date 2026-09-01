@@ -36,6 +36,7 @@ import { LINIEN, MITTE, hatBingo, gewinnFelder, zufallsWoerter, freiePlaetze } f
 import { buchungslink, normalisiere, kurzform } from "../lib/buchungslink.js";
 import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
 import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } from "../lib/quoten.js";
+import { korrigiere, regleEin, zieheAnrufAb, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -1030,4 +1031,75 @@ test("Call Tracker: ein zweites Gerät darf einen Tag nicht auf null setzen", ()
   assert.equal(zusammen.termin, 3);
   // Und andersherum darf der Server das Gerät nicht bremsen.
   assert.equal(zaehlerZusammenfuehren({ anwahlen: 205 }, server).anwahlen, 205);
+});
+
+// --- Korrekturen ziehen die ganze Tabelle mit -----------------------------
+
+test("Korrektur: eine zurückgenommene Anwahl nimmt den ganzen Anruf mit", () => {
+  // Ein vollständiger Anruf: angewählt, erreicht, Vorzimmer, durchgestellt,
+  // Termin. Wird die Anwahl zurückgenommen, darf davon nichts stehenbleiben.
+  const counts = { anwahlen: 10, erreicht: 6, nicht: 4, gatekeeper: 4, entscheider: 2, weitergeleitet: 3, termin: 2, negativ: 3 };
+  const gruende = { kein_interesse: 3 };
+  const anruf = { counts: { anwahlen: 1, erreicht: 1, gatekeeper: 1, weitergeleitet: 1, termin: 1 }, reasons: {} };
+  const neu = korrigiere(counts, gruende, "anwahlen", anruf);
+  assert.equal(neu.counts.anwahlen, 9);
+  assert.equal(neu.counts.erreicht, 5);
+  assert.equal(neu.counts.gatekeeper, 3);
+  assert.equal(neu.counts.weitergeleitet, 2);
+  assert.equal(neu.counts.termin, 1);
+  assert.equal(neu.counts.nicht, 4);   // unbeteiligt, bleibt stehen
+});
+
+test("Korrektur: der zurückgenommene negative Anruf nimmt seinen Grund mit", () => {
+  const anruf = { counts: { anwahlen: 1, erreicht: 1, entscheider: 1, negativ: 1 }, reasons: { kein_interesse: 1 } };
+  const neu = korrigiere(
+    { anwahlen: 5, erreicht: 5, entscheider: 5, negativ: 2 },
+    { kein_interesse: 2 },
+    "anwahlen", anruf
+  );
+  assert.equal(neu.counts.negativ, 1);
+  assert.equal(neu.reasons.kein_interesse, 1);
+});
+
+test("Korrektur: ohne bekannten Anruf regelt sich die Tabelle trotzdem ein", () => {
+  // Der Altbestand hat keine Anruf-Historie. Dann zählt nur die Regel:
+  // keine Zahl grösser als ihre Grundlage.
+  const neu = korrigiere({ anwahlen: 10, erreicht: 6, nicht: 4 }, {}, "anwahlen", null);
+  assert.equal(neu.counts.anwahlen, 9);
+  assert.equal(neu.counts.erreicht + neu.counts.nicht, 9); // nicht mehr 10
+});
+
+test("Einregeln: keine Zahl steht über ihrer Grundlage", () => {
+  const { counts, reasons } = regleEin(
+    { anwahlen: 5, erreicht: 9, nicht: 9, gatekeeper: 9, entscheider: 9, weitergeleitet: 9, termin: 9, negativ: 9 },
+    { kein_interesse: 9, kein_budget: 9 }
+  );
+  assert.ok(counts.erreicht + counts.nicht <= counts.anwahlen);
+  assert.ok(counts.gatekeeper + counts.entscheider <= counts.erreicht);
+  assert.ok(counts.weitergeleitet <= counts.gatekeeper);
+  assert.ok(counts.termin + counts.negativ <= counts.erreicht);
+  assert.ok(reasons.kein_interesse + reasons.kein_budget <= counts.negativ);
+});
+
+test("Einregeln: stimmige Zahlen bleiben unangetastet", () => {
+  const counts = { anwahlen: 100, erreicht: 40, nicht: 60, gatekeeper: 25, entscheider: 15, weitergeleitet: 10, termin: 5, negativ: 30 };
+  const gruende = { kein_interesse: 20, kein_budget: 10 };
+  const neu = regleEin(counts, gruende);
+  assert.deepEqual(neu.counts, counts);
+  assert.deepEqual(neu.reasons, gruende);
+});
+
+test("Einregeln: der grösste Posten gibt zuerst nach", () => {
+  // Vier Gespräche zu viel bei drei Anwahlen: abgebaut wird beim grösseren.
+  const { counts } = regleEin({ anwahlen: 3, erreicht: 2, nicht: 5 }, {});
+  assert.equal(counts.nicht, 2);
+  assert.equal(counts.erreicht, 1);
+});
+
+test("Korrektur: nichts wird negativ", () => {
+  const neu = korrigiere({ anwahlen: 0, erreicht: 0 }, {}, "anwahlen", { counts: { anwahlen: 1, erreicht: 1 }, reasons: {} });
+  assert.equal(neu.counts.anwahlen, 0);
+  assert.equal(neu.counts.erreicht, 0);
+  assert.equal(zieheAnrufAb({}, {}, { counts: { termin: 5 } }).counts.termin, 0);
+  assert.ok(GRUNDLAGEN.length >= 4);
 });
