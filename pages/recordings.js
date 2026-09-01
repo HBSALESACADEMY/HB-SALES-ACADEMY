@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiPost, apiGet } from "../lib/apiClient";
 import { validateRecordingUpload } from "../lib/uploadValidation";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
+import { deutscheZeit } from "../lib/terminzeit";
 import { meldeStoerung } from "../lib/fehlerMelden";
 import { openProfile } from "../lib/profileModalBus";
 import { ABSTAND } from "../lib/autoRefresh";
@@ -213,6 +214,8 @@ export default function Recordings() {
       r.label, r.file_name, r.evaluation_summary,
       assignedLead?.name, assignedLead?.company,
       owner?.full_name,
+      // Damit sich "22.08." als Suchbegriff eingeben lässt.
+      deutscheZeit(r.created_at),
     ].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(q);
   });
@@ -456,7 +459,13 @@ export default function Recordings() {
                     </button>
                   )}
                 </div>
-                <span className="text-[10.5px] text-textMuted flex-shrink-0">{STATUS_LABELS[r.status]}</span>
+                {/* Datum und Status zusammen: ohne Datum lässt sich eine
+                    Aufnahme keinem Gespräch zuordnen, sobald mehr als eine
+                    Handvoll da liegt. Deutsche Zeit, wie überall sonst. */}
+                <div className="flex flex-col items-end flex-shrink-0">
+                  <span className="text-[10.5px] text-textMuted">{STATUS_LABELS[r.status]}</span>
+                  <span className="text-[10.5px] text-textMuted">{deutscheZeit(r.created_at)} Uhr</span>
+                </div>
               </div>
 
               {r.status === "evaluated" && r.evaluation_summary && (
