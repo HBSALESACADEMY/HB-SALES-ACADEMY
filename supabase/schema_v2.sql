@@ -1894,7 +1894,8 @@ create policy "lead_comments_delete_own_or_manager" on lead_comments for delete 
 alter table lead_tasks enable row level security;
 drop policy if exists "lead_tasks_select_all" on lead_tasks;
 create policy "lead_tasks_select_all" on lead_tasks for select using (
-  ((assigned_to = auth.uid() or assigned_by = auth.uid()) and sieht_person(assigned_to))
+  assigned_to = auth.uid()
+  or assigned_by = auth.uid()
   or exists (select 1 from leads l where l.id = lead_tasks.lead_id)
 );
 drop policy if exists "lead_tasks_insert_own" on lead_tasks;
@@ -1905,13 +1906,14 @@ create policy "lead_tasks_insert_own" on lead_tasks for insert with check (
 );
 drop policy if exists "lead_tasks_update_involved_or_manager" on lead_tasks;
 create policy "lead_tasks_update_involved_or_manager" on lead_tasks for update using (
-  ((assigned_to = auth.uid() or assigned_by = auth.uid()) and sieht_person(assigned_to))
+  assigned_to = auth.uid()
+  or assigned_by = auth.uid()
   or (ist_fuehrungsrolle(auth.uid())
       and exists (select 1 from leads l where l.id = lead_tasks.lead_id))
 );
 drop policy if exists "lead_tasks_delete_own_or_manager" on lead_tasks;
 create policy "lead_tasks_delete_own_or_manager" on lead_tasks for delete using (
-  (assigned_by = auth.uid() and sieht_person(assigned_to))
+  assigned_by = auth.uid()
   or (ist_fuehrungsrolle(auth.uid())
       and exists (select 1 from leads l where l.id = lead_tasks.lead_id))
 );
@@ -1984,7 +1986,7 @@ create policy "custom_objections_delete" on custom_objections for delete using (
 -- --- call_recordings ---
 drop policy if exists "call_recordings_select" on call_recordings;
 create policy "call_recordings_select" on call_recordings for select using (
-  (created_by = auth.uid() and sieht_person(created_by))
+  created_by = auth.uid()
   or (visibility = 'org' and same_org(created_by, auth.uid()))
   or (
     visibility = 'team_lead'
@@ -2000,7 +2002,7 @@ drop policy if exists "call_recordings_update_own" on call_recordings;
 create policy "call_recordings_update_own" on call_recordings for update using (created_by = auth.uid());
 drop policy if exists "call_recordings_delete" on call_recordings;
 create policy "call_recordings_delete" on call_recordings for delete using (
-  (created_by = auth.uid() and sieht_person(created_by))
+  created_by = auth.uid()
   or (ist_fuehrungsrolle(auth.uid()) and same_org(created_by, auth.uid()))
 );
 
