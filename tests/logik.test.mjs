@@ -1353,3 +1353,22 @@ test("Tageszeit: ohne Ereignisse bleibt alles leer statt zu raten", () => {
   assert.equal(besteStunde([]), null);
   assert.deepEqual(spitzeJeGrund([], GRUENDE).map((s) => s.stunde), [null, null]);
 });
+
+test("Jedes Diagramm sagt, was es aussagt", () => {
+  // Ein Ring mit vier Farben ist schnell gezeichnet und ebenso schnell
+  // falsch verstanden. Deshalb trägt jedes Diagramm eine kleine Zeile
+  // darunter — nicht was drinsteht, sondern was man daraus schliessen darf.
+  const seiten = readdirSync(new URL("../pages", import.meta.url), { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js"));
+  const ohne = [];
+  for (const name of seiten) {
+    const quelle = readFileSync(new URL(`../pages/${name}`, import.meta.url), "utf8");
+    // Jeder Aufruf bis zu seinem schliessenden Zeichen.
+    const treffer = quelle.match(/<Kreisdiagramm[\s\S]*?\/>/g) || [];
+    treffer.forEach((aufruf, i) => {
+      if (!/erklaerung=/.test(aufruf)) ohne.push(`${name} (${i + 1}. Diagramm)`);
+    });
+  }
+  assert.deepEqual(ohne, [],
+    `Diese Diagramme stehen ohne Erklärung da: ${ohne.join(", ")}`);
+});

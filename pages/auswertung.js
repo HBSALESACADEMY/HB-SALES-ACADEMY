@@ -274,6 +274,11 @@ function Bericht({ daten, offen, setOffen }) {
             </div>
           ))}
         </div>
+        <p className="text-[11px] text-textMuted mt-3 leading-snug">
+          Zeigt, an welcher Stelle die meisten Kontakte verlorengehen. Der markierte Engpass ist der schwächste
+          ÜBERGANG, nicht der grösste absolute Verlust — absolut fällt immer die erste Stufe am stärksten ab,
+          die Frage ist aber, welcher Schritt schlechter läuft als er sollte.
+        </p>
         <div className="grid grid-cols-3 gap-2 mt-4">
           {[
             { label: "Termine angelegt", wert: termineGesamt },
@@ -345,7 +350,8 @@ function Bericht({ daten, offen, setOffen }) {
       <div className="card mb-4">
         <div className="font-semibold text-textMain text-sm mb-1">Einwand- & Engpass-Analyse</div>
         <p className="text-xs text-textMuted mb-3">Woran die Gespräche scheitern, die nicht zum Termin führen.</p>
-        <Kreisdiagramm daten={gruende} mitteText="Absagen" leerText="Keine negativen Anrufe mit Grund im Zeitraum." />
+        <Kreisdiagramm daten={gruende} mitteText="Absagen" leerText="Keine negativen Anrufe mit Grund im Zeitraum."
+          erklaerung="Zeigt, woran die Gespräche der ganzen Organisation scheitern. Sticht ein Grund heraus, lohnt sich ein gemeinsamer Skript-Baustein mehr als Einzelcoaching — die Verteilung nach Uhrzeit steht darunter." />
       </div>
 
       <TageszeitAnalyse

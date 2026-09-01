@@ -198,7 +198,8 @@ function ZielKarte({ ziel }) {
         {beitraege && beitraege.length > 0 && (
           <div className="mt-3 pt-3 border-t border-line">
             <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Wer trägt bei</div>
-            <Kreisdiagramm daten={beitraege} groesse={120} mitteText={m?.label || "gesamt"} leerText="Noch niemand." />
+            <Kreisdiagramm daten={beitraege} groesse={120} mitteText={m?.label || "gesamt"} leerText="Noch niemand."
+              erklaerung="Zeigt, wer wie viel zum Teamziel beigetragen hat. Ein sehr ungleicher Ring heisst nicht automatisch, dass jemand zu wenig tut — Teilzeit, Urlaub und Einarbeitung sehen hier gleich aus." />
             {ohneBeitrag.length > 0 && (
               <p className="text-[11px] text-textMuted mt-2">Noch ohne Beitrag: {ohneBeitrag.join(", ")}</p>
             )}

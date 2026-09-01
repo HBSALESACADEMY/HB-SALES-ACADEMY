@@ -1468,6 +1468,10 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
                   })}
                 </div>
               )}
+              <p className="text-[11px] text-textMuted mt-3 leading-snug">
+                Zeigt die Regelmässigkeit: gleichmässige Balken sind mehr wert als ein einzelner grosser Tag,
+                weil Termine über die Wochen aus stetiger Schlagzahl entstehen und nicht aus Ausreissern.
+              </p>
             </>
           ) : (
             <>
@@ -1483,6 +1487,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
                 }))}
                 mitteText="Anwahlen"
                 leerText="In diesem Zeitraum wurden keine Anwahlen erfasst."
+                erklaerung="Zeigt, wie sich die Schlagzahl auf die Personen verteilt — wer viel und wer wenig telefoniert hat. Über die Qualität der Gespräche sagt dieser Ring nichts."
               />
             </>
           )}
@@ -1494,7 +1499,8 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
               ? `${erreicht + nicht} Gespräche bei ${anwahlen} gezählten Anwahlen`
               : `Alle ${anwahlen} Anwahlen — erreicht oder nicht`}
           </p>
-          <Kreisdiagramm daten={verteilung} mitteText="Gespräche" leerText="Noch keine Anwahlen erfasst." />
+          <Kreisdiagramm daten={verteilung} mitteText="Gespräche" leerText="Noch keine Anwahlen erfasst."
+            erklaerung="Zeigt die Erreichbarkeit: wie viele Anwahlen überhaupt zu einem Gespräch geführt haben. Ein kleiner grüner Anteil heisst, dass viel Zeit ins Klingeln geht — das ist eine Frage der Anrufzeit, nicht der Gesprächsführung." />
           {ueberhang > 0 && (
             <p className="text-[11px] text-textMuted mt-2">
               Das sind {ueberhang} mehr als die {anwahlen} gezählten Anwahlen. Das passiert, wenn der Zähler
@@ -1512,7 +1518,8 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
             Jeder Anruf zählt einmal — wer nach einer Weiterleitung beim Chef landet, steht unten im Trichter
             {vorDerUmstellung > 0 && " · „Früher erfasst“ sind Gespräche von vor dieser Unterscheidung"}
           </p>
-          <Kreisdiagramm daten={wenErreicht} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
+          <Kreisdiagramm daten={wenErreicht} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen."
+            erklaerung="Zeigt, bei wem man ZUERST landet. Ein hoher Vorzimmer-Anteil ist normal — entscheidend ist, was danach passiert, und das steht im Trichter darunter." />
         </div>
         <div className="card">
           <div className="font-semibold text-textMain text-sm mb-1">Von den erreichten Gesprächen</div>
@@ -1520,7 +1527,8 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
           Terminiert und negativ sind Ergebnisse dieser {erreicht} Gespräche — keine zusätzlichen Anrufe.
           {abgebrochen > 0 && " „Abgebrochen“ heisst: der Assistent wurde nach „Erreicht“ nicht zu Ende geführt."}
         </p>
-          <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
+          <Kreisdiagramm daten={ergebnisse} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen."
+            erklaerung="Zeigt, was aus den Gesprächen wurde, die zustande kamen. Das ist die Gesprächsqualität: hier wirkt sich aus, wie jemand führt und mit Einwänden umgeht — anders als bei der Erreichbarkeit, die vor allem an der Uhrzeit hängt." />
         </div>
       </div>
 
@@ -1575,12 +1583,18 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
             </div>
           ))}
         </div>
+        <p className="text-[11px] text-textMuted mt-3 leading-snug">
+          Zeigt, wie weit man im Gespräch kommt. Die unterste Zahl ist die entscheidende: wie oft überhaupt
+          jemand mit Entscheidungsbefugnis am Telefon war. Wer dort niedrig liegt, verliert die Termine nicht
+          im Gespräch, sondern davor.
+        </p>
       </div>
 
       <div className="card mb-4">
         <div className="font-semibold text-textMain text-sm mb-1">Warum negative Anrufe?</div>
         <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum</p>
-        <Kreisdiagramm daten={gruendeDaten} mitteText="Gründe" leerText="Noch keine negativen Anrufe mit Grund erfasst." />
+        <Kreisdiagramm daten={gruendeDaten} mitteText="Gründe" leerText="Noch keine negativen Anrufe mit Grund erfasst."
+          erklaerung="Zeigt, woran die Gespräche scheitern. Ein Grund, der deutlich heraussticht, ist ein Trainingsthema — ein Skript-Baustein dagegen wirkt breiter als jede allgemeine Schulung." />
       </div>
 
       <TageszeitAnalyse

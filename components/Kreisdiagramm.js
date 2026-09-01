@@ -5,10 +5,22 @@ import { paletteFarbe } from "../lib/diagrammFarben";
 // Ein Kreisdiagramm sagt "wie verteilt sich das", nicht "wie viel ist es".
 // Deshalb steht neben jedem Stück auch die Zahl selbst — sonst muss man
 // Prozente zurückrechnen, um eine Frage zu beantworten.
-export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst.", groesse = 150, mitteText = "gesamt" }) {
+// "erklaerung" ist Pflicht und steht klein unter dem Diagramm: WAS es
+// aussagt, nicht was darin steht. Ein Ring mit vier Farben ist schnell
+// gezeichnet und ebenso schnell falsch verstanden — und eine falsch
+// verstandene Zahl ist schlimmer als keine. Ein Test hält fest, dass kein
+// Diagramm ohne diese Zeile ausgeliefert wird.
+export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst.", groesse = 150, mitteText = "gesamt", erklaerung = null }) {
   const [aktiv, setAktiv] = useState(null);
   const { summe, segmente, vollkreis } = kreisSegmente(daten, 100);
-  if (!summe) return <p className="text-textMuted text-xs">{leerText}</p>;
+  if (!summe) {
+    return (
+      <>
+        <p className="text-textMuted text-xs">{leerText}</p>
+        {erklaerung && <p className="text-[11px] text-textMuted mt-2 leading-snug">{erklaerung}</p>}
+      </>
+    );
+  }
 
   // Trägt ein Wert seine eigene Farbe, gilt sie: dieselbe Sache soll in
   // jedem Diagramm gleich aussehen (siehe lib/diagrammFarben.js).
@@ -23,7 +35,8 @@ export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst."
   const gewaehlt = aktiv !== null ? legende[aktiv] : null;
 
   return (
-    <div className="flex items-center gap-4 flex-wrap">
+    <>
+      <div className="flex items-center gap-4 flex-wrap">
       <svg viewBox="0 0 200 200" width={groesse} height={groesse} role="img"
         aria-label={legende.map((s, i) => `${s.label}: ${s.value}`).join(", ")}
         className="flex-shrink-0">
@@ -68,6 +81,8 @@ export default function Kreisdiagramm({ daten, leerText = "Noch nichts erfasst."
           </div>
         ))}
       </div>
-    </div>
+      </div>
+      {erklaerung && <p className="text-[11px] text-textMuted mt-3 leading-snug">{erklaerung}</p>}
+    </>
   );
 }

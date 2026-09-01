@@ -53,6 +53,11 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
             ))}
           </div>
 
+          <p className="text-[11px] text-textMuted mt-3 leading-snug">
+            Zeigt, wann sich Anrufen lohnt und welche Absage zu welcher Tageszeit droht. Lange Zeilen heissen
+            nur, dass zu dieser Stunde viel entschieden wurde — aussagekräftig ist der Grünanteil rechts.
+          </p>
+
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3">
             <span className="flex items-center gap-1.5 text-[11px] text-textMuted">
               <span className="w-2 h-2 rounded-full" style={{ background: feldFarbe("termin") }} /> Termin
