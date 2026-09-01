@@ -672,7 +672,9 @@ function eintragInEigenenKalender(e) {
 function terminInEigenenKalender(t) {
   ladeIcsHerunter({
     uid: `lead-${t.id}@hb-sales-academy.de`,
-    titel: `Termin: ${t.name}`,
+    // Wer den Termin gelegt hat, steht im Titel — im fremden Kalender sieht
+    // man oft nur diese eine Zeile.
+    titel: `Termin: ${t.name}${t.autor ? ` von ${t.autor}` : ""}`,
     beschreibung: t.company ? `Firma: ${t.company}` : "",
     start: t.appointment_at,
     dauerMinuten: 60,

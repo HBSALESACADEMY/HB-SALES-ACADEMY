@@ -676,9 +676,14 @@ export default function Termine() {
       lead.notes ? `\nNotiz: ${lead.notes}` : null,
     ].filter(Boolean);
     const appUrl = typeof window !== "undefined" ? window.location.origin : "";
+    // "von wem" gehört in den Titel, nicht in die Beschreibung: im fremden
+    // Kalender sieht man oft nur die Zeile, nicht die Einzelheiten.
+    const ersteller = profileMap[lead.created_by]?.full_name
+      || orgMembers.find((m) => m.id === lead.created_by)?.full_name
+      || null;
     const ok = ladeIcsHerunter({
       uid: `lead-${lead.id}@hb-sales-academy.de`,
-      titel: `Termin: ${lead.name}`,
+      titel: `Termin: ${lead.name}${ersteller ? ` von ${ersteller}` : ""}`,
       beschreibung: [...zeilen, appUrl ? `\n${appUrl}/termine?leadId=${lead.id}` : null].filter(Boolean).join("\n"),
       start: lead.appointment_at,
       dauerMinuten: 60,
