@@ -1016,3 +1016,18 @@ test("Quoten: Anzeige mit deutschem Komma und Strich statt Lücke", () => {
   assert.equal(quotenText(q, QUOTEN_SPALTEN[0]), "12,5");
   assert.equal(quotenText(q, QUOTEN_SPALTEN.find((s) => s.key === "durchstellQuote")), "—");
 });
+
+test("Call Tracker: ein zweites Gerät darf einen Tag nicht auf null setzen", () => {
+  // Der Fall, der einen ganzen Tag gekostet hat: am Laptop 200 Anwahlen
+  // gezählt, dann am Handy den Call Tracker geöffnet. Dort ist der lokale
+  // Speicher leer, der erste Klick steht auf 1 — und schrieb bisher diese 1
+  // über die 200. Zusammengeführt wird nach dem höheren Wert je Zähler.
+  const handy = { anwahlen: 1, erreicht: 0, termin: 0 };
+  const server = { anwahlen: 200, erreicht: 60, termin: 3 };
+  const zusammen = zaehlerZusammenfuehren(handy, server);
+  assert.equal(zusammen.anwahlen, 200);
+  assert.equal(zusammen.erreicht, 60);
+  assert.equal(zusammen.termin, 3);
+  // Und andersherum darf der Server das Gerät nicht bremsen.
+  assert.equal(zaehlerZusammenfuehren({ anwahlen: 205 }, server).anwahlen, 205);
+});

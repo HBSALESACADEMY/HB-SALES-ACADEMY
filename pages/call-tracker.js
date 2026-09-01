@@ -121,8 +121,37 @@ export default function CallTracker() {
       const cats = resolveObjectionCategories(orgRow);
       const prefixJetzt = storagePrefix(session.user.id);
       const loaded = loadDay(prefixJetzt, dayKey(), cats);
-      setTodayCounts(loaded.counts);
-      setTodayReasons(loaded.reasons);
+
+      // Der heutige Stand vom Server dazu — und zwar BEVOR hier irgendetwas
+      // gezählt wird.
+      //
+      // Vorher kam der Tag ausschliesslich aus dem Speicher dieses Geräts.
+      // Wer am Laptop 200 Anwahlen gezählt hatte und dann am Handy den Call
+      // Tracker öffnete, startete dort bei null — und der erste Klick schrieb
+      // diese Null über die 200. Genauso beim geleerten Browserspeicher oder
+      // im privaten Fenster. Die Zahlen waren damit weg, ohne Warnung.
+      //
+      // Zusammengeführt wird nach dem höheren Wert je Zähler: zwei Geräte
+      // können denselben Tag nicht doppelt zählen, aber auch nicht
+      // gegenseitig löschen.
+      let start = loaded;
+      try {
+        const { data: serverTag } = await supabase.from("call_log_days")
+          .select("counts, reasons").eq("user_id", session.user.id).eq("log_date", dayKey()).maybeSingle();
+        if (serverTag) {
+          start = {
+            counts: zaehlerZusammenfuehren(loaded.counts, serverTag.counts || {}),
+            reasons: zaehlerZusammenfuehren(loaded.reasons, serverTag.reasons || {}),
+          };
+          saveDay(prefixJetzt, dayKey(), start.counts, start.reasons);
+        }
+      } catch (e) {
+        // Kein Netz: mit dem lokalen Stand weiterarbeiten. Der Versand führt
+        // später ohnehin noch einmal zusammen.
+      }
+      if (!mounted) return;
+      setTodayCounts(start.counts);
+      setTodayReasons(start.reasons);
 
       // Angefangenen Anruf wieder aufnehmen. Ohne das blieb "Erreicht"
       // gezählt und das Ergebnis für immer offen — der graue Rest in der
@@ -151,7 +180,7 @@ export default function CallTracker() {
 
   // Zahlen zum Server schicken. Getrennt vom Zählen, weil sie auch dann
   // hinaus müssen, wenn gerade nicht getippt wird: beim Verlassen der Seite.
-  async function sendeZahlen() {
+  async function sendeZahlen({ erzwingen = false } = {}) {
     const stand = letzterStand.current;
     if (!userId || !stand) return;
     clearTimeout(syncTimer.current);
@@ -161,6 +190,22 @@ export default function CallTracker() {
     // blieben lokal richtig und tauchten in keiner Auswertung auf, ohne
     // dass irgendwo etwas stand.
     try {
+      // Der Serverstand zuerst, dann das Maximum je Zähler. Ein blindes
+      // Überschreiben hat schon einen ganzen Tag gekostet: das Gerät mit dem
+      // kleineren Stand gewann, weil es zuletzt geschrieben hat.
+      //
+      // "erzwingen" gibt es nur für "Tag zurücksetzen" — das ist der einzige
+      // Fall, in dem eine kleinere Zahl gewollt ist.
+      let counts = stand.counts;
+      let gruende = stand.reasons;
+      if (!erzwingen) {
+        const { data: serverTag } = await supabase.from("call_log_days")
+          .select("counts, reasons").eq("user_id", userId).eq("log_date", dateKeyOf(new Date())).maybeSingle();
+        if (serverTag) {
+          counts = zaehlerZusammenfuehren(stand.counts, serverTag.counts || {});
+          gruende = zaehlerZusammenfuehren(stand.reasons, serverTag.reasons || {});
+        }
+      }
       const { error } = await supabase.from("call_log_days").upsert({
         user_id: userId,
         // Derselbe Tagesschlüssel wie lokal (siehe lib/callTracker.js).
@@ -168,8 +213,8 @@ export default function CallTracker() {
         // des VORTAGS und überschrieben dessen Zahlen mit den frisch bei
         // null begonnenen Zählern.
         log_date: dateKeyOf(new Date()),
-        counts: stand.counts,
-        reasons: stand.reasons,
+        counts,
+        reasons: gruende,
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;
@@ -291,9 +336,13 @@ export default function CallTracker() {
       // eine Führungsrolle sieht ihre ganze Organisation, eine Teamleitung
       // ihr Team (siehe lib/rollen.js und call_log_days in der Datenbank).
       const { data: profil } = await supabase.from("profiles")
-        .select("id, role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
+        .select("id, full_name, role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
 
-      const nameById = { [session.user.id]: "Ich" };
+      // Der eigene Eintrag hiess "Ich". Wer mit einem zweiten Konto
+      // hineinschaut, sucht in der Liste aber seinen NAMEN — und findet ihn
+      // nicht, obwohl die Zahlen da sind. Deshalb steht überall der Name;
+      // dass man selbst gemeint ist, sagt ein "(Du)" dahinter.
+      const nameById = { [session.user.id]: profil?.full_name || "Ich" };
       let memberIds = [];
       let teams = [];
 
@@ -343,9 +392,14 @@ export default function CallTracker() {
 
       // Zeitraum in deutschen Kalendertagen (siehe lib/zeitraum.js).
       const { von, bis } = zeitraumGrenzen(art, { von: eigen?.von, bis: eigen?.bis });
+      // Die Obergrenze steht bewusst da: ohne sie gilt still die des
+      // Servers, und bei einem grossen Team über ein Quartal fehlten
+      // einfach Zeilen — ohne dass irgendwo stünde, dass etwas fehlt.
+      const ZEILEN_GRENZE = 20000;
       const { data: logs } = await supabase.from("call_log_days")
         .select("user_id, log_date, counts, reasons")
-        .in("user_id", allIds).gte("log_date", von).lte("log_date", bis);
+        .in("user_id", allIds).gte("log_date", von).lte("log_date", bis)
+        .limit(ZEILEN_GRENZE);
 
       setTeamState({
         status: "ok",
@@ -353,6 +407,10 @@ export default function CallTracker() {
         // Aufschlüsselung nach Tagen rechnen daraus alles selbst, ohne bei
         // jeder Auswahl neu beim Server nachzufragen.
         logs: logs || [],
+        // Angeschnitten? Dann sagt die Auswertung das, statt zu wenig zu
+        // zeigen und richtig auszusehen.
+        angeschnitten: (logs || []).length >= ZEILEN_GRENZE,
+        ichId: session.user.id,
         members: allIds.map((id) => ({ id, name: nameById[id] || "Unbenannt", teams: teamsVonPerson[id] || [] })),
         teams,
         reasons,
@@ -459,20 +517,34 @@ export default function CallTracker() {
     }, 20);
   }
 
-  function resetDay() {
-    if (!confirm("Wirklich alle heutigen Zähler und Einwand-Gründe auf 0 zurücksetzen?")) return;
+  // Der einzige Fall, in dem eine kleinere Zahl gewollt ist. Deshalb geht
+  // das Zurücksetzen direkt und erzwungen hinaus statt über den normalen,
+  // zusammenführenden Versand — der würde die alten Zahlen sofort
+  // zurückholen und das Zurücksetzen wirkungslos machen.
+  async function resetDay() {
+    if (!confirm("Wirklich alle heutigen Zähler und Einwand-Gründe auf 0 zurücksetzen? Das gilt für alle Geräte.")) return;
     const counts0 = zeroCounts();
     const reasons0 = zeroReasons(reasons);
     setTodayCounts(counts0);
     setTodayReasons(reasons0);
-    persist(counts0, reasons0);
+    saveDay(prefix, dayKey(), counts0, reasons0);
+    letzterStand.current = { counts: counts0, reasons: reasons0 };
     setStep("lead");
+    await sendeZahlen({ erzwingen: true });
     showToast("Tag zurückgesetzt");
   }
 
   // Der Schritt wird bei jeder Änderung festgehalten, damit ein
   // geschlossener Reiter den Anruf nicht verschluckt.
   useEffect(() => { if (userId) merkeSchritt(prefix, step); }, [step, userId, prefix]);
+
+  // Der Gerätestand wird nur neu gelesen, wenn es einen Grund gibt: beim
+  // Wechsel in die Statistik und nach einem Nachtragen. Bei jedem Render den
+  // lokalen Speicher zu durchsuchen macht die Seite ohne Not langsam.
+  const lokaleTage = useMemo(
+    () => (ready && view === "statistik" ? alleGespeichertenTage(prefix, reasons) : []),
+    [ready, view, prefix, reasons, nachtragen]
+  );
 
   const isToday = view === "today";
   const counts = todayCounts;
@@ -510,6 +582,9 @@ export default function CallTracker() {
           state={teamState}
           zeitraum={teamZeitraum}
           eigener={eigenerZeitraum}
+          lokaleTage={lokaleTage}
+          nachtragen={nachtragen}
+          onNachtragen={trageNach}
           onZeitraum={(z) => { setTeamZeitraum(z); loadTeam(z, eigenerZeitraum); }}
           onEigener={(e) => { setEigenerZeitraum(e); if (e.von && e.bis) loadTeam("eigen", e); }}
         />
@@ -847,7 +922,7 @@ export default function CallTracker() {
   );
 }
 
-function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
+function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokaleTage, nachtragen, onNachtragen }) {
   // Welche Kachel aufgeklappt ist. Immer nur eine: zwei offene Listen
   // untereinander vergleicht man ohnehin nicht.
   const [offeneKachel, setOffeneKachel] = useState(null);
@@ -903,6 +978,11 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       p.gruende[r.key] = (p.gruende[r.key] || 0) + wert;
     });
   });
+
+  // Der eigene Eintrag trägt seinen Namen und dahinter "(Du)". So findet
+  // man sich in der Liste wieder, auch wenn man mit einem zweiten Konto
+  // hineinschaut und nach dem eigenen Namen sucht.
+  const zeigeName = (m) => (m.id === state.ichId ? `${m.name} (Du)` : m.name);
 
   const mitglieder = sichtbare
     .map((m) => ({
@@ -978,6 +1058,22 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   // telefoniert.
   const tage = Object.entries(proTag).sort((a, b) => a[0].localeCompare(b[0]));
 
+  // Zählt dieses Gerät mehr, als beim Server angekommen ist?
+  //
+  // Die Auswertung zeigt ausschliesslich, was in der Datenbank steht. Wenn
+  // ein Versand fehlgeschlagen ist, stehen die Zahlen richtig auf dem Gerät
+  // und fehlen in jeder Auswertung — sichtbar war das bisher nirgends, man
+  // sah nur eine zu kleine Zahl. Der Vergleich läuft über die eigenen Tage
+  // im gewählten Zeitraum.
+  const meineServerTage = new Map(
+    (state.logs || []).filter((l) => l.user_id === state.ichId).map((l) => [l.log_date, l.counts || {}])
+  );
+  const nachzutragen = (lokaleTage || []).reduce((summe, t) => {
+    if (!state.zeitraum || t.tag < state.zeitraum.von || t.tag > state.zeitraum.bis) return summe;
+    const beimServer = meineServerTage.get(t.tag)?.anwahlen || 0;
+    return summe + Math.max(0, (t.counts?.anwahlen || 0) - beimServer);
+  }, 0);
+
   const zeitraumText = state.zeitraum
     ? `${new Date(`${state.zeitraum.von}T12:00:00`).toLocaleDateString("de-DE")} – ${new Date(`${state.zeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}`
     : "";
@@ -993,7 +1089,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       ...QUOTEN_SPALTEN.map((s) => s.label),
     ];
     const datenZeilen = mitglieder.map((m) => [
-      m.name,
+      zeigeName(m),
       ...FIELDS.map((f) => m.zahlen[f.key] || 0),
       ...reasons.map((r) => m.gruende[r.key] || 0),
       ...QUOTEN_SPALTEN.map((s) => quotenText(m.quoten, s)),
@@ -1058,6 +1154,33 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
         {zeitraumText && <span className="text-[11px] text-textMuted ml-auto">{zeitraumText}</span>}
       </div>
 
+      {/* Wenn Zahlen nur auf dem Gerät stehen, wird das gesagt — und zwar
+          bevor jemand die zu kleine Zahl für die Wahrheit hält. */}
+      {nachzutragen > 0 && (
+        <div className="card mb-4 border-amber/50">
+          <div className="text-sm text-textMain mb-1">
+            Auf diesem Gerät sind {nachzutragen} Anwahlen mehr gezählt, als beim Server angekommen sind.
+          </div>
+          <p className="text-xs text-textMuted mb-3">
+            Sie fehlen deshalb in dieser Auswertung und bei allen anderen. Nachtragen führt beide Stände
+            zusammen — der höhere Wert je Tag gewinnt, es geht nichts verloren.
+          </p>
+          <button onClick={onNachtragen} disabled={nachtragen === "laeuft"} className="btn-ghost text-xs disabled:opacity-40">
+            {nachtragen === "laeuft" ? "Trägt nach…"
+              : nachtragen === "fehler" ? "Nachtragen fehlgeschlagen — nochmal versuchen"
+              : nachtragen?.startsWith("fertig") ? `${nachtragen.split(":")[1]} Tage nachgetragen ✓`
+              : "Zahlen dieses Geräts nachtragen"}
+          </button>
+        </div>
+      )}
+
+      {state.angeschnitten && (
+        <div className="card mb-4 border-coral/50 text-xs text-coral">
+          Es wurden sehr viele Tageszeilen gefunden — die Auswertung zeigt möglicherweise nicht alle.
+          Bitte den Zeitraum verkleinern oder nach Team filtern.
+        </div>
+      )}
+
       {/* Personen zum Vergleichen: mehrere anwählbar, leer heisst alle. */}
       <div className={`flex items-center gap-1.5 mb-4 flex-wrap ${alleMitglieder.length > 1 ? "" : "hidden"}`}>
         <button onClick={() => { setAuswahl([]); setOffeneKachel(null); }}
@@ -1075,7 +1198,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${an ? "text-textMain" : "border-line text-textMuted hover:text-textMain"}`}
               style={an ? { borderColor: paletteFarbe(i), background: `color-mix(in srgb, ${paletteFarbe(i)} 18%, transparent)` } : undefined}>
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: paletteFarbe(i) }} />
-              {m.name}
+              {zeigeName(m)}
             </button>
           );
         })}
@@ -1083,7 +1206,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
 
       {vergleich && (
         <p className="text-[11px] text-textMuted mb-3">
-          Vergleich von {sichtbare.length} Personen: {sichtbare.map((m) => m.name).join(", ")}. Alle Zahlen und
+          Vergleich von {sichtbare.length} Personen: {sichtbare.map(zeigeName).join(", ")}. Alle Zahlen und
           Diagramme unten zeigen ausschliesslich diese Auswahl.
         </p>
       )}
@@ -1121,7 +1244,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
         {offeneKachel && (() => {
           const feld = FIELDS.find((f) => f.key === offeneKachel);
           const liste = mitglieder
-            .map((m) => ({ id: m.id, name: m.name, wert: m.zahlen[offeneKachel] || 0 }))
+            .map((m) => ({ id: m.id, name: zeigeName(m), wert: m.zahlen[offeneKachel] || 0 }))
             .sort((a, b) => b.wert - a.wert);
           const summe = liste.reduce((s, z) => s + z.wert, 0);
           const groesster = Math.max(1, ...liste.map((z) => z.wert));
@@ -1165,7 +1288,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
           {einePerson ? (
             <>
               <div className="font-semibold text-textMain text-sm mb-1">Verlauf nach Tagen</div>
-              <p className="text-xs text-textMuted mb-3">Anwahlen von {einePerson.name}</p>
+              <p className="text-xs text-textMuted mb-3">Anwahlen von {zeigeName(einePerson)}</p>
               {tage.length === 0 ? (
                 <p className="text-textMuted text-xs">In diesem Zeitraum wurden keine Anwahlen erfasst.</p>
               ) : (
@@ -1190,7 +1313,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
               <p className="text-xs text-textMuted mb-3">Wer wie viel telefoniert hat</p>
               <Kreisdiagramm
                 daten={mitglieder.map((m) => ({
-                  label: m.name,
+                  label: zeigeName(m),
                   value: m.value,
                   // Dieselbe Farbe wie am Knopf oben — sonst müsste man die
                   // Zuordnung im Kopf neu herstellen.
@@ -1337,7 +1460,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
             <tbody>
               {mitglieder.map((m) => (
                 <tr key={m.id} className="border-t border-line">
-                  <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{m.name}</td>
+                  <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{zeigeName(m)}</td>
                   {FIELDS.map((f) => (
                     <td key={f.key} className="py-1.5 px-2 text-right font-mono"
                       style={{ color: (m.zahlen[f.key] || 0) > 0 ? feldFarbe(f.key) : undefined }}>
