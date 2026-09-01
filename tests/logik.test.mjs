@@ -37,6 +37,7 @@ import { buchungslink, normalisiere, kurzform } from "../lib/buchungslink.js";
 import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
 import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } from "../lib/quoten.js";
 import { korrigiere, regleEin, zieheAnrufAb, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
+import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -1137,4 +1138,98 @@ test("Nachtragen: ein unlesbarer Eintrag stoppt nicht den Rest", () => {
   assert.equal(nimmLetztenAnruf(prefix, "callstats:2026-09-01"), null);
   leereVerlauf(prefix, "callstats:2026-09-01");
   delete globalThis.localStorage;
+});
+
+// --- Management-Auswertung -------------------------------------------------
+
+const TAG = (user_id, counts, reasons = {}) => ({ user_id, log_date: "2026-09-01", counts, reasons });
+
+test("Auswertung: der Trichter rechnet jede Stufe an der vorigen", () => {
+  const stufen = trichter({ anwahlen: 1000, erreicht: 400, entscheider: 100, weitergeleitet: 80, termin: 20 });
+  assert.deepEqual(stufen.map((s) => s.wert), [1000, 400, 180, 20]);
+  assert.equal(stufen[0].uebergang, null);      // die erste Stufe hat keine vorige
+  assert.equal(stufen[1].uebergang, 40);        // 400 von 1000
+  assert.equal(stufen[2].uebergang, 45);        // 180 von 400
+  assert.equal(stufen[2].wert, 180);            // direkt + durchgestellt
+});
+
+test("Auswertung: der Engpass ist der schwächste Übergang, nicht der grösste Verlust", () => {
+  // Absolut verliert die erste Stufe am meisten (600 Kontakte). Die Frage
+  // ist aber, welcher SCHRITT schlechter läuft als er sollte.
+  const stufen = trichter({ anwahlen: 1000, erreicht: 400, entscheider: 300, weitergeleitet: 0, termin: 15 });
+  const eng = engpass(stufen);
+  assert.equal(eng.key, "termin");
+  assert.equal(eng.uebergang, 5);
+});
+
+test("Auswertung: der Benchmark wird gewichtet, nicht gemittelt", () => {
+  // Ein winziges Team mit Traumquote darf den Vergleichswert nicht
+  // hochziehen — sonst steht die ganze Mannschaft grundlos schlecht da.
+  const gross = { counts: { anwahlen: 1000, erreicht: 400, termin: 20 } };
+  const klein = { counts: { anwahlen: 10, erreicht: 10, termin: 5 } };
+  const b = benchmark([gross, klein]);
+  assert.equal(b.counts.anwahlen, 1010);
+  assert.equal(b.quoten.terminJeGespraech, 6);   // 25 von 410, nicht (5+50)/2
+});
+
+test("Auswertung: der Impact-Vergleich verweigert sich bei zu dünner Grundlage", () => {
+  const wenige = [
+    { name: "A", training: 10, counts: { anwahlen: 100, erreicht: 40, termin: 4 } },
+    { name: "B", training: 0, counts: { anwahlen: 100, erreicht: 40, termin: 1 } },
+  ];
+  assert.equal(impactAnalyse(wenige).belastbar, false);
+  // Und wer im Zeitraum kaum telefoniert hat, zählt nicht mit: sonst misst
+  // man Abwesenheit statt Wirkung.
+  const mitKarteileichen = [
+    ...wenige,
+    { name: "C", training: 5, counts: { anwahlen: 2, erreicht: 1, termin: 0 } },
+    { name: "D", training: 1, counts: { anwahlen: 0 } },
+  ];
+  assert.equal(impactAnalyse(mitKarteileichen).belastbar, false);
+});
+
+test("Auswertung: der Impact-Vergleich stellt die Hälften gegenüber", () => {
+  const personen = [
+    { name: "A", training: 20, counts: { anwahlen: 100, erreicht: 50, termin: 10 } },
+    { name: "B", training: 15, counts: { anwahlen: 100, erreicht: 50, termin: 10 } },
+    { name: "C", training: 1, counts: { anwahlen: 100, erreicht: 50, termin: 2 } },
+    { name: "D", training: 0, counts: { anwahlen: 100, erreicht: 50, termin: 2 } },
+  ];
+  const i = impactAnalyse(personen);
+  assert.equal(i.belastbar, true);
+  assert.equal(i.aktiv.quoten.terminJeGespraech, 20);
+  assert.equal(i.wenig.quoten.terminJeGespraech, 4);
+  assert.equal(i.unterschied, 16);
+});
+
+test("Auswertung: jede Empfehlung hängt an einer Zahl", () => {
+  const gesamt = summiere([
+    TAG("a", { anwahlen: 600, erreicht: 240, gatekeeper: 200, entscheider: 40, weitergeleitet: 40, termin: 12, negativ: 120 }),
+    TAG("b", { anwahlen: 400, erreicht: 160, gatekeeper: 120, entscheider: 40, weitergeleitet: 20, termin: 3, negativ: 80 }),
+  ]);
+  const rat = empfehlungen({
+    teams: [
+      { name: "Team Nord", counts: { anwahlen: 600, erreicht: 240, termin: 12 } },
+      { name: "Team Süd", counts: { anwahlen: 400, erreicht: 160, termin: 3 } },
+    ],
+    personen: [
+      { name: "A", counts: { anwahlen: 600 } },
+      { name: "B", counts: { anwahlen: 400 } },
+      { name: "C", counts: { anwahlen: 20 } },
+    ],
+    gesamt,
+    gruende: [{ label: "Kein Interesse", wert: 160 }, { label: "Kein Budget", wert: 40 }],
+  });
+  assert.ok(rat.length >= 3 && rat.length <= 4);
+  // Jede Empfehlung nennt mindestens eine Zahl — sonst ist es eine Meinung.
+  rat.forEach((r) => assert.match(r.text, /\d/, r.titel));
+  // Das schwächere Team wird benannt, das stärkere nicht.
+  assert.ok(rat.some((r) => r.titel.includes("Team Süd")));
+  assert.ok(!rat.some((r) => r.titel.includes("Team Nord")));
+  // Die dünne Datenlage von C führt zu keiner Aussage über C's Qualität.
+  assert.ok(!rat.some((r) => r.titel.includes("C ")));
+});
+
+test("Auswertung: ohne Daten keine Empfehlungen", () => {
+  assert.deepEqual(empfehlungen({ teams: [], personen: [], gesamt: {}, gruende: [] }), []);
 });

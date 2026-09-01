@@ -106,3 +106,27 @@ test("keine Regel hebt die Mandanten-Grenze für Plattform-Admins auf", () => {
   assert.deepEqual(treffer, [],
     `Diese Regeln lassen einen Plattform-Admin an der Organisationsgrenze vorbei: ${treffer.join(", ")}`);
 });
+
+// Die Management-Auswertung ist die einzige Stelle, die Menschen einer
+// Organisation namentlich nebeneinanderstellt und benennt, wer zurückliegt.
+// Sie läuft mit erweiterten Rechten und umgeht damit sämtliche Regeln der
+// Datenbank — beide Schranken müssen deshalb im Code der Route stehen und
+// dürfen dort nicht still verschwinden.
+test("Die Auswertungs-Route prüft Rolle und Organisation selbst", () => {
+  const quelle = readFileSync(new URL("../pages/api/auswertung.js", import.meta.url), "utf8");
+
+  assert.match(quelle, /istFuehrungsrolle\(profil\)/,
+    "Ohne Rollenprüfung sieht jede Vertriebsperson die Leistungsvergleiche aller Kolleg:innen.");
+  assert.match(quelle, /aktiveOrgId\(admin, profil, user\.id\)/,
+    "Ohne die aktive Organisation vom Server mischen sich die Mandanten — die Route umgeht die Regeln der Datenbank.");
+
+  // Die Organisation darf NICHT aus der Anfrage kommen: sonst schreibt man
+  // sie in der Adresszeile einfach um und liest fremde Mandanten aus.
+  const ausDerAnfrage = /orgId\s*=\s*req\.(query|body)/;
+  assert.ok(!ausDerAnfrage.test(quelle),
+    "Die Organisation stammt aus der Anfrage und lässt sich damit von aussen umschreiben.");
+
+  // Jede Abfrage auf Personen und Termine muss die Organisation eingrenzen.
+  assert.match(quelle, /from\("profiles"\)[\s\S]{0,200}eq\("organization_id", orgId\)/);
+  assert.match(quelle, /from\("leads"\)[\s\S]{0,300}eq\("organization_id", orgId\)/);
+});
