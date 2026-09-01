@@ -71,6 +71,9 @@ export default function CallTracker() {
   // dabei, sonst wundert man sich, warum die Frage plötzlich da ist.
   const [wiederaufgenommen, setWiederaufgenommen] = useState(false);
   const [nachtragen, setNachtragen] = useState(null);
+  // Was an den Tagen VOR heute gezählt wurde. Nur für den Hinweis, dass die
+  // Zähler jeden Tag bei null anfangen und nichts verlorengegangen ist.
+  const [letzteTage, setLetzteTage] = useState([]);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
   const [linkKopiert, setLinkKopiert] = useState(false);
@@ -154,6 +157,24 @@ export default function CallTracker() {
       if (!mounted) return;
       setTodayCounts(start.counts);
       setTodayReasons(start.reasons);
+
+      // Die Zähler oben sind TAGESZÄHLER — um Mitternacht stehen sie wieder
+      // auf null. Für wen das neu ist, sieht aus wie ein Datenverlust: "meine
+      // Calls sind weg". Deshalb wird gleich mitgeladen, was an den Tagen
+      // davor steht, und unten hingeschrieben.
+      try {
+        const vorWoche = new Date();
+        vorWoche.setDate(vorWoche.getDate() - 7);
+        const { data: davor } = await supabase.from("call_log_days")
+          .select("log_date, counts").eq("user_id", session.user.id)
+          .gte("log_date", dateKeyOf(vorWoche)).lt("log_date", dateKeyOf(new Date()))
+          .order("log_date", { ascending: false });
+        if (mounted) {
+          setLetzteTage((davor || [])
+            .map((z) => ({ tag: z.log_date, anwahlen: z.counts?.anwahlen || 0 }))
+            .filter((z) => z.anwahlen > 0));
+        }
+      } catch (e) { /* nur ein Hinweis — ohne ihn läuft alles weiter */ }
 
       // Angefangenen Anruf wieder aufnehmen. Ohne das blieb "Erreicht"
       // gezählt und das Ergebnis für immer offen — der graue Rest in der
@@ -638,6 +659,23 @@ export default function CallTracker() {
           {isToday && wiederaufgenommen && step !== "lead" && (
             <div className="card mb-3 border-amber/40 text-sm text-amber">
               Hier war noch ein Anruf offen — bitte kurz zu Ende erfassen, dann stimmt die Auswertung.
+            </div>
+          )}
+
+          {/* Jeden Tag von vorn: das steht sonst nirgends, und die Frage
+              "wurden meine Calls zurückgesetzt?" kam schon mehrfach. */}
+          {isToday && (counts.anwahlen || 0) === 0 && letzteTage.length > 0 && (
+            <div className="card mb-3 border-amber/40">
+              <div className="text-sm text-textMain mb-1">
+                Die Zähler fangen jeden Tag bei null an — deine bisherigen Zahlen sind nicht weg.
+              </div>
+              <p className="text-xs text-textMuted mb-3">
+                Zuletzt gezählt: {letzteTage.slice(0, 3).map((t) => `${t.tag.slice(8)}.${t.tag.slice(5, 7)}. — ${t.anwahlen} Anwahlen`).join(" · ")}
+                {letzteTage.length > 3 ? " …" : ""}. Alles Erfasste bleibt gespeichert und steht unter „Statistiken“.
+              </p>
+              <button onClick={() => switchView("statistik")} className="btn-ghost text-xs">
+                Zu den Statistiken
+              </button>
             </div>
           )}
 
