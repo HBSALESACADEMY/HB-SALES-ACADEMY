@@ -224,10 +224,15 @@ export default function CallTracker() {
     }
   }
 
-  function persist(counts, reasonCounts) {
+  // "korrektur" heisst: eine Zahl soll KLEINER werden. Das muss sofort und
+  // erzwungen hinaus, sonst holt das Zusammenführen beim Versand (Maximum je
+  // Zähler) die alte, höhere Zahl direkt zurück — die Korrektur wäre auf dem
+  // Bildschirm sichtbar und in jeder Auswertung wirkungslos.
+  function persist(counts, reasonCounts, { korrektur = false } = {}) {
     if (!userId) return;
     saveDay(prefix, dayKey(), counts, reasonCounts);
     letzterStand.current = { counts, reasons: reasonCounts };
+    if (korrektur) { sendeZahlen({ erzwingen: true }); return; }
 
     // Verzögert, damit nicht jeder Klick eine eigene Anfrage auslöst — aber
     // höchstens fünf Sekunden. Ohne diese Obergrenze schob jeder weitere
@@ -257,7 +262,7 @@ export default function CallTracker() {
   function bump(key, by = 1) {
     setTodayCounts((prev) => {
       const next = { ...prev, [key]: Math.max(0, (prev[key] || 0) + by) };
-      persist(next, todayReasons);
+      persist(next, todayReasons, { korrektur: by < 0 });
       return next;
     });
   }
