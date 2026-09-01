@@ -35,6 +35,7 @@ import { pcmZuWav, rateAusMime } from "../lib/wav.js";
 import { LINIEN, MITTE, hatBingo, gewinnFelder, zufallsWoerter, freiePlaetze } from "../lib/bingo.js";
 import { buchungslink, normalisiere, kurzform } from "../lib/buchungslink.js";
 import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
+import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } from "../lib/quoten.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -972,4 +973,46 @@ test("Ziel-Bilanz zeigt, ob die Ziele realistisch gesetzt sind", () => {
   assert.equal(b.verfehlt, 2);
   assert.equal(b.quote, 0.5);
   assert.equal(Math.round(b.schnittErfuellung * 100), 75);
+});
+
+// --- Quoten rund um das Terminieren ---------------------------------------
+
+test("Quoten: die Rechnungen stimmen", () => {
+  const q = berechneQuoten({ anwahlen: 120, erreicht: 40, gatekeeper: 25, entscheider: 15, weitergeleitet: 10, termin: 2 });
+  assert.equal(q.anwahlenProTermin, 60);      // 120 Anrufe für 2 Termine
+  assert.equal(q.erreichbarkeit, 33);         // 40 von 120
+  assert.equal(q.terminJeAnwahl, 2);          // 2 von 120
+  assert.equal(q.terminJeGespraech, 5);       // 2 von 40
+  assert.equal(q.beiEntscheidung, 25);        // 15 direkt + 10 durchgestellt
+  assert.equal(q.terminJeEntscheider, 8);     // 2 von 25
+  assert.equal(q.durchstellQuote, 40);        // 10 von 25 Vorzimmern
+});
+
+test("Quoten: ohne Grundlage kommt null, nicht null Prozent", () => {
+  const leer = berechneQuoten({});
+  for (const spalte of QUOTEN_SPALTEN) assert.equal(leer[spalte.key], null, spalte.key);
+  // Telefoniert, aber noch kein Termin: "Anwahlen je Termin" hat keine Antwort.
+  const ohneTermin = berechneQuoten({ anwahlen: 50, erreicht: 10 });
+  assert.equal(ohneTermin.anwahlenProTermin, null);
+  assert.equal(ohneTermin.terminJeAnwahl, 0);
+  assert.equal(ohneTermin.erreichbarkeit, 20);
+});
+
+test("Quoten: Termine je Entscheider zählt Durchgestellte mit", () => {
+  // Zwei Wege zur Entscheidung, gleiche Termine: die Quote darf nicht davon
+  // abhängen, ob man direkt durchkam oder durchgestellt wurde.
+  const direkt = berechneQuoten({ entscheider: 10, weitergeleitet: 0, termin: 5 });
+  const durch = berechneQuoten({ entscheider: 0, gatekeeper: 10, weitergeleitet: 10, termin: 5 });
+  assert.equal(direkt.terminJeEntscheider, durch.terminJeEntscheider);
+});
+
+test("Quoten: Anzeige mit deutschem Komma und Strich statt Lücke", () => {
+  assert.equal(prozentText(42), "42 %");
+  assert.equal(prozentText(null), "—");
+  assert.equal(zahlText(60), "60");
+  assert.equal(zahlText(12.34), "12,3");
+  assert.equal(zahlText(null), "—");
+  const q = berechneQuoten({ anwahlen: 100, termin: 8 });
+  assert.equal(quotenText(q, QUOTEN_SPALTEN[0]), "12,5");
+  assert.equal(quotenText(q, QUOTEN_SPALTEN.find((s) => s.key === "durchstellQuote")), "—");
 });

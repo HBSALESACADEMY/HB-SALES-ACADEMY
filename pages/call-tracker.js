@@ -15,6 +15,7 @@ import { berlinHeute, tagPlus } from "../lib/woche";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
+import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import Aufklapper from "../components/Aufklapper";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
@@ -909,6 +910,9 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
       value: proPerson[m.id]?.zahlen?.anwahlen || 0,
       zahlen: FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: proPerson[m.id]?.zahlen?.[f.key] || 0 }), {}),
       gruende: reasons.reduce((acc, r) => ({ ...acc, [r.key]: proPerson[m.id]?.gruende?.[r.key] || 0 }), {}),
+      // Quoten je Person aus denselben Zahlen — nicht aus den Gesamtquoten
+      // heruntergebrochen, das ginge bei ungleicher Anrufmenge schief.
+      quoten: berechneQuoten(proPerson[m.id]?.zahlen || {}),
     }))
     .sort((a, b) => b.value - a.value);
 
@@ -953,7 +957,8 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   // Abgeleitet, nicht zusätzlich gebucht: sonst wäre die Summe der Zähler
   // grösser als "erreicht" und jedes Diagramm daneben falsch.
   const beiEntscheidung = entscheiderDirekt + durchgestellt;
-  const durchstellQuote = gatekeeperGesamt > 0 ? Math.round((durchgestellt / gatekeeperGesamt) * 100) : 0;
+  const quoten = berechneQuoten(gesamt);
+  const durchstellQuote = quoten.durchstellQuote || 0;
   // Auch hier kein "ohne Angabe": der Assistent fragt immer nach dem
   // Ergebnis. Übrig bleibt nur, wer mittendrin abbricht — Seite geschlossen,
   // Reiter gewechselt, Formular verlassen. Das gehört benannt, nicht als
@@ -981,16 +986,23 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
   // — kein Zusatzprogramm, keine Fremdbibliothek, keine Import-Assistenten.
   // Ausgegeben wird genau das, was gerade gefiltert auf dem Bildschirm steht.
   function exportiereTeam() {
-    const kopf = ["Person", ...FIELDS.map((f) => f.label), ...reasons.map((r) => `Einwand: ${r.label}`)];
+    const kopf = [
+      "Person",
+      ...FIELDS.map((f) => f.label),
+      ...reasons.map((r) => `Einwand: ${r.label}`),
+      ...QUOTEN_SPALTEN.map((s) => s.label),
+    ];
     const datenZeilen = mitglieder.map((m) => [
       m.name,
       ...FIELDS.map((f) => m.zahlen[f.key] || 0),
       ...reasons.map((r) => m.gruende[r.key] || 0),
+      ...QUOTEN_SPALTEN.map((s) => quotenText(m.quoten, s)),
     ]);
     datenZeilen.push([
       "Gesamt",
       ...FIELDS.map((f) => gesamt[f.key] || 0),
       ...reasons.map((r) => gruendeGesamt[r.key] || 0),
+      ...QUOTEN_SPALTEN.map((s) => quotenText(quoten, s)),
     ]);
     const teil = [
       teamFilter === "alle" ? null : teams.find((t) => t.id === teamFilter)?.name,
@@ -1227,17 +1239,24 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
         </div>
       </div>
 
-      {/* Die beiden Quoten standen bisher in "Woche/Monat" — sie gehören zu
-          jeder Auswertung, nicht nur zur eigenen. */}
+      {/* Die Quoten rund um das Terminieren. Absolute Zahlen sagen, wie viel
+          jemand gearbeitet hat — die Quoten sagen, wie gut. Ein Strich statt
+          einer Zahl heisst: dafür fehlt noch die Grundlage (siehe quoten.js). */}
       <div className="card mb-4">
-        <div className="font-semibold text-textMain text-sm mb-3">Zusammenfassung</div>
-        <div className="flex items-center justify-between text-sm py-1.5 border-b border-line">
-          <span className="text-textMuted">Erreichbarkeitsquote</span>
-          <span className="text-textMain font-semibold">{anwahlen > 0 ? Math.round((erreicht / anwahlen) * 100) : 0}%</span>
-        </div>
-        <div className="flex items-center justify-between text-sm py-1.5">
-          <span className="text-textMuted">Abschlussquote (von Anrufen)</span>
-          <span className="text-textMain font-semibold">{anwahlen > 0 ? Math.round((termin / anwahlen) * 100) : 0}%</span>
+        <div className="font-semibold text-textMain text-sm mb-1">Quoten rund um das Terminieren</div>
+        <p className="text-xs text-textMuted mb-3">
+          {termin > 0
+            ? `${termin} Termine aus ${anwahlen} Anwahlen — was das je Schritt bedeutet`
+            : "Sobald der erste Termin steht, füllen sich diese Zahlen."}
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {QUOTEN_SPALTEN.map((spalte) => (
+            <div key={spalte.key} className="rounded-xl border border-line px-3 py-2.5">
+              <div className="text-lg font-display font-semibold text-textMain">{quotenText(quoten, spalte)}</div>
+              <div className="text-[11px] text-textMain leading-tight">{spalte.label}</div>
+              <div className="text-[10px] text-textMuted leading-tight mt-0.5">{spalte.hinweis}</div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1305,6 +1324,14 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
                     {r.label}
                   </th>
                 ))}
+                {/* Quoten hinten, durch den Strich abgesetzt: links stehen
+                    gezählte Ereignisse, rechts daraus gerechnete Verhältnisse. */}
+                {QUOTEN_SPALTEN.map((spalte, i) => (
+                  <th key={spalte.key} title={spalte.hinweis}
+                    className={`font-normal pb-2 px-2 text-right whitespace-nowrap ${i === 0 ? "border-l border-line" : ""}`}>
+                    {spalte.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -1322,10 +1349,16 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
                       {m.gruende[r.key] || 0}
                     </td>
                   ))}
+                  {QUOTEN_SPALTEN.map((spalte, i) => (
+                    <td key={spalte.key}
+                      className={`py-1.5 px-2 text-right font-mono text-textMain ${i === 0 ? "border-l border-line" : ""}`}>
+                      {quotenText(m.quoten, spalte)}
+                    </td>
+                  ))}
                 </tr>
               ))}
               {mitglieder.length === 0 && (
-                <tr><td colSpan={FIELDS.length + reasons.length + 1} className="py-2 text-textMuted">Niemand in dieser Auswahl.</td></tr>
+                <tr><td colSpan={FIELDS.length + reasons.length + QUOTEN_SPALTEN.length + 1} className="py-2 text-textMuted">Niemand in dieser Auswahl.</td></tr>
               )}
             </tbody>
           </table>
