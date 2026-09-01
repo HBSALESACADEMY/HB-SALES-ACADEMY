@@ -89,33 +89,39 @@ export default function AuswertungSeite() {
 
   return (
     <Layout>
-      <LogoHintergrund>
-        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Auswertung</h1>
-        <div className="brand-stripe w-16 mb-4" />
-
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {ZEITRAEUME.map(([key, label]) => (
-            <button key={key} onClick={() => setZeitraum(key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-              {key === "quartal" ? quartalsName(berlinHeute()) : label}
-            </button>
-          ))}
+      {/* Das Logo liegt hinter der Kopfzeile, nicht um die Seite herum:
+          LogoHintergrund ist ein absolut gesetztes Bild und zeigt selbst
+          keinen Inhalt an. */}
+      <div className="relative overflow-hidden mb-4">
+        <LogoHintergrund breite="w-1/3" hoehe="max-h-[90%]" />
+        <div className="relative">
+          <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Auswertung</h1>
+          <div className="brand-stripe w-16" />
         </div>
+      </div>
 
-        {zeitraum === "eigen" && (
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigener.von}
-              onChange={(e) => setEigener({ ...eigener, von: e.target.value })} />
-            <span className="text-xs text-textMuted">bis</span>
-            <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigener.bis}
-              onChange={(e) => setEigener({ ...eigener, bis: e.target.value })} />
-          </div>
-        )}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {ZEITRAEUME.map(([key, label]) => (
+          <button key={key} onClick={() => setZeitraum(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+            {key === "quartal" ? quartalsName(berlinHeute()) : label}
+          </button>
+        ))}
+      </div>
 
-        {fehler && <div className="card border border-coral/40 text-coral text-sm mb-4">{fehler}</div>}
-        {!daten && !fehler && <p className="text-textMuted text-sm">Zahlen werden zusammengestellt...</p>}
-        {daten && <Bericht daten={daten} offen={offen} setOffen={setOffen} />}
-      </LogoHintergrund>
+      {zeitraum === "eigen" && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigener.von}
+            onChange={(e) => setEigener({ ...eigener, von: e.target.value })} />
+          <span className="text-xs text-textMuted">bis</span>
+          <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigener.bis}
+            onChange={(e) => setEigener({ ...eigener, bis: e.target.value })} />
+        </div>
+      )}
+
+      {fehler && <div className="card border border-coral/40 text-coral text-sm mb-4">{fehler}</div>}
+      {!daten && !fehler && <p className="text-textMuted text-sm">Zahlen werden zusammengestellt...</p>}
+      {daten && <Bericht daten={daten} offen={offen} setOffen={setOffen} />}
     </Layout>
   );
 }

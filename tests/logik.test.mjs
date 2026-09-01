@@ -1233,3 +1233,20 @@ test("Auswertung: jede Empfehlung hängt an einer Zahl", () => {
 test("Auswertung: ohne Daten keine Empfehlungen", () => {
   assert.deepEqual(empfehlungen({ teams: [], personen: [], gesamt: {}, gruende: [] }), []);
 });
+
+test("LogoHintergrund wird nie um Inhalt gelegt", () => {
+  // Die Komponente ist ein absolut gesetztes Hintergrundbild und gibt
+  // keinerlei Inhalt aus. Wer sie als Klammer benutzt, löscht damit die
+  // ganze Seite — genau so war der Reiter "Auswertung" leer, ohne einen
+  // einzigen Fehler in der Konsole.
+  const seiten = readdirSync(new URL("../pages", import.meta.url), { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js"));
+  const mitInhalt = [];
+  for (const name of seiten) {
+    const quelle = readFileSync(new URL(`../pages/${name}`, import.meta.url), "utf8");
+    // Ein schliessendes Tag gibt es nur, wenn etwas dazwischen steht.
+    if (/<LogoHintergrund[^/>]*>[\s\S]*?<\/LogoHintergrund>/.test(quelle)) mitInhalt.push(name);
+  }
+  assert.deepEqual(mitInhalt, [],
+    `Diese Seiten legen LogoHintergrund um ihren Inhalt — der verschwindet dadurch: ${mitInhalt.join(", ")}`);
+});
