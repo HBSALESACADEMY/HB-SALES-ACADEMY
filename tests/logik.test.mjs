@@ -1250,3 +1250,31 @@ test("LogoHintergrund wird nie um Inhalt gelegt", () => {
   assert.deepEqual(mitInhalt, [],
     `Diese Seiten legen LogoHintergrund um ihren Inhalt — der verschwindet dadurch: ${mitInhalt.join(", ")}`);
 });
+
+test("dayKey gehört in den Speicher, dateKeyOf in die Datenbank", () => {
+  // Zwei Schlüssel für denselben Tag, die sich zum Verwechseln ähneln:
+  // dayKey trägt ein Präfix für den Browser-Speicher, dateKeyOf ist das
+  // blanke Datum für die Spalte log_date. Eine Abfrage mit dayKey fragt die
+  // Datenbank nach "log_date = callstats:2026-09-01" — sie scheitert, und
+  // zwar bei jedem. Genau so standen die Zählerkacheln auf null, während
+  // die Statistik daneben die richtigen Zahlen zeigte.
+  assert.ok(dayKey().startsWith("callstats:"));
+  assert.match(dateKeyOf(new Date("2026-09-01T10:00:00")), /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(!dateKeyOf(new Date()).includes(":"));
+
+  const seiten = readdirSync(new URL("../pages", import.meta.url), { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js"));
+  const falsch = [];
+  for (const name of seiten) {
+    const quelle = readFileSync(new URL(`../pages/${name}`, import.meta.url), "utf8");
+    // dayKey() in derselben Zeile wie eine Datenbank-Spalte oder -Abfrage.
+    quelle.split("\n").forEach((zeile, i) => {
+      if (!zeile.includes("dayKey()")) return;
+      if (/log_date|\.eq\(|\.gte\(|\.lte\(|\.in\(|upsert|insert|update/.test(zeile)) {
+        falsch.push(`${name}:${i + 1}`);
+      }
+    });
+  }
+  assert.deepEqual(falsch, [],
+    `Hier wird der Speicher-Schlüssel an die Datenbank gegeben — die Abfrage scheitert lautlos: ${falsch.join(", ")}`);
+});

@@ -74,6 +74,8 @@ export default function CallTracker() {
   // Was an den Tagen VOR heute gezählt wurde. Nur für den Hinweis, dass die
   // Zähler jeden Tag bei null anfangen und nichts verlorengegangen ist.
   const [letzteTage, setLetzteTage] = useState([]);
+  // Warum die Kacheln unten möglicherweise zu wenig zeigen.
+  const [abgleichFehler, setAbgleichFehler] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
   const [linkKopiert, setLinkKopiert] = useState(false);
@@ -141,8 +143,17 @@ export default function CallTracker() {
       // gegenseitig löschen.
       let start = loaded;
       try {
-        const { data: serverTag } = await supabase.from("call_log_days")
-          .select("counts, reasons").eq("user_id", session.user.id).eq("log_date", dayKey()).maybeSingle();
+        // dateKeyOf, NICHT dayKey: dayKey ist der Schlüssel im Browser-
+        // Speicher und trägt ein Präfix ("callstats:2026-09-01"). In der
+        // Datenbank steht dort ein Datum. Genau diese Verwechslung stand
+        // hier und hat die Abfrage bei jedem scheitern lassen — der Fehler
+        // verschwand im catch, die Kacheln blieben auf null, und die
+        // Statistik daneben zeigte die richtigen Zahlen.
+        const { data: serverTag, error: abgleichFehler } = await supabase.from("call_log_days")
+          .select("counts, reasons").eq("user_id", session.user.id)
+          .eq("log_date", dateKeyOf(new Date())).maybeSingle();
+        // Supabase wirft nicht — ohne diese Zeile bleibt jeder Fehler stumm.
+        if (abgleichFehler) throw abgleichFehler;
         if (serverTag) {
           start = {
             counts: zaehlerZusammenfuehren(loaded.counts, serverTag.counts || {}),
@@ -151,8 +162,11 @@ export default function CallTracker() {
           saveDay(prefixJetzt, dayKey(), start.counts, start.reasons);
         }
       } catch (e) {
-        // Kein Netz: mit dem lokalen Stand weiterarbeiten. Der Versand führt
-        // später ohnehin noch einmal zusammen.
+        // Mit dem lokalen Stand weiterarbeiten — aber nicht so tun, als sei
+        // alles in Ordnung. Wer hier auf null schaut, obwohl er gezählt hat,
+        // muss wissen, dass die Zahl gerade nicht geholt werden konnte.
+        if (mounted) setAbgleichFehler(e?.message || String(e));
+        meldeStoerung("Call Tracker Tagesabgleich", e?.message || String(e));
       }
       if (!mounted) return;
       setTodayCounts(start.counts);
@@ -659,6 +673,18 @@ export default function CallTracker() {
           {isToday && wiederaufgenommen && step !== "lead" && (
             <div className="card mb-3 border-amber/40 text-sm text-amber">
               Hier war noch ein Anruf offen — bitte kurz zu Ende erfassen, dann stimmt die Auswertung.
+            </div>
+          )}
+
+          {isToday && abgleichFehler && (
+            <div className="card mb-3 border-coral/50">
+              <div className="text-sm text-coral mb-1">
+                Der heutige Stand konnte nicht vom Server geholt werden.
+              </div>
+              <p className="text-xs text-textMuted">
+                Die Kacheln unten zeigen deshalb nur, was auf diesem Gerät gezählt wurde — möglicherweise zu
+                wenig. Unter „Statistiken“ stehen die richtigen Zahlen. Meldung: {abgleichFehler}
+              </p>
             </div>
           )}
 
