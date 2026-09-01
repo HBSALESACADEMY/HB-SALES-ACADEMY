@@ -17,7 +17,10 @@ import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import { korrigiere } from "../lib/anrufKorrektur";
+import { merkeEreignis, nimmEreignisZurueck } from "../lib/callEreignis";
 import Aufklapper from "../components/Aufklapper";
+import TageszeitAnalyse from "../components/TageszeitAnalyse";
+import { stundenRaster, stundenText } from "../lib/tageszeit";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
 import {
@@ -78,6 +81,9 @@ export default function CallTracker() {
   const [abgleichFehler, setAbgleichFehler] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
+  // In WELCHER Organisation gerade telefoniert wird — die Ereignisse hängen
+  // an der aktiven Organisation, nicht an der Heimat des Kontos.
+  const [orgId, setOrgId] = useState(null);
   const [linkKopiert, setLinkKopiert] = useState(false);
   // Der Raketenflug beim vereinbarten Termin. Als Zustand statt als
   // CSS-Klasse am Knopf: er soll auch dann fliegen, wenn der Termin unten im
@@ -117,13 +123,14 @@ export default function CallTracker() {
       if (!orgRow) {
         const { data: me } = await supabase.from("profiles").select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
         const activeOrgId = getActiveOrgId(me);
+        setOrgId(activeOrgId);
         if (activeOrgId) {
           const { data } = await supabase.from("organizations").select("*").eq("id", activeOrgId).maybeSingle();
           orgRow = data;
         }
       }
       if (!mounted) return;
-      if (orgRow) setOrg(orgRow);
+      if (orgRow) { setOrg(orgRow); setOrgId((v) => v || orgRow.id); }
 
       const cats = resolveObjectionCategories(orgRow);
       const prefixJetzt = storagePrefix(session.user.id);
@@ -299,6 +306,9 @@ export default function CallTracker() {
   function bump(key, by = 1) {
     if (by < 0) { korrigiereZaehler(key); return; }
     merkeBuchung(prefix, dayKey(), key);
+    // Termine mit Uhrzeit festhalten — für die Frage, wann sich Anrufen
+    // lohnt (migration_128). Die Zählung selbst bleibt davon unberührt.
+    if (key === "termin") merkeEreignis({ userId, orgId, art: "termin" });
     setTodayCounts((prev) => {
       const next = { ...prev, [key]: (prev[key] || 0) + by };
       persist(next, todayReasons);
@@ -315,6 +325,15 @@ export default function CallTracker() {
   // Zahl grösser als ihre Grundlage (siehe lib/anrufKorrektur.js).
   function korrigiereZaehler(key) {
     const anruf = key === "anwahlen" ? nimmLetztenAnruf(prefix, dayKey()) : null;
+    // Was der Zähler verliert, verliert auch der Zeitstempel — sonst stünde
+    // in der Tageszeit-Auswertung ein Einwand, den es nie gab.
+    if (key === "negativ" || key === "termin") nimmEreignisZurueck({ userId, art: key });
+    if (anruf) {
+      Object.keys(anruf.counts || {}).forEach((k) => {
+        if (k === "termin") nimmEreignisZurueck({ userId, art: "termin" });
+      });
+      if (Object.keys(anruf.reasons || {}).length) nimmEreignisZurueck({ userId, art: "negativ" });
+    }
     // Zähler und Gründe kommen aus EINER Rechnung — deshalb hier direkt aus
     // dem aktuellen Stand und nicht über zwei ineinander verschachtelte
     // Aktualisierungen, die sich gegenseitig nicht sehen.
@@ -326,6 +345,7 @@ export default function CallTracker() {
 
   function countReason(reasonKey) {
     merkeBuchung(prefix, dayKey(), "negativ", reasonKey);
+    merkeEreignis({ userId, orgId, art: "negativ", grund: reasonKey });
     setTodayReasons((prevReasons) => {
       const nextReasons = { ...prevReasons, [reasonKey]: (prevReasons[reasonKey] || 0) + 1 };
       setTodayCounts((prevCounts) => {
@@ -480,12 +500,23 @@ export default function CallTracker() {
         .in("user_id", allIds).gte("log_date", von).lte("log_date", bis)
         .limit(ZEILEN_GRENZE);
 
+      // Einzelne Ereignisse mit Uhrzeit (migration_128). Getrennt von den
+      // Tagessummen: die bleiben die verbindliche Zahl, das hier ist die
+      // Zusatzinformation "wann". Fehlt die Tabelle noch, läuft die Seite
+      // ohne diesen Teil weiter statt gar nicht.
+      const { data: ereignisse } = await supabase.from("call_events")
+        .select("user_id, art, grund, erfasst_at")
+        .in("user_id", allIds)
+        .gte("erfasst_at", `${von}T00:00:00`).lte("erfasst_at", `${bis}T23:59:59.999`)
+        .limit(ZEILEN_GRENZE);
+
       setTeamState({
         status: "ok",
         // Roh statt vorverdichtet: die Filter nach Team, Person und die
         // Aufschlüsselung nach Tagen rechnen daraus alles selbst, ohne bei
         // jeder Auswahl neu beim Server nachzufragen.
         logs: logs || [],
+        ereignisse: ereignisse || [],
         // Angeschnitten? Dann sagt die Auswertung das, statt zu wenig zu
         // zeigen und richtig auszusehen.
         angeschnitten: (logs || []).length >= ZEILEN_GRENZE,
@@ -1221,6 +1252,20 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
     downloadCsv(`call-tracker-${teil}-${state.zeitraum?.von}-bis-${state.zeitraum?.bis}.csv`.replace(/[^\w.-]+/g, "-"), kopf, datenZeilen);
   }
 
+  // Die Tageszeiten gehen als eigene Datei hinaus: eine Zeile je Stunde
+  // passt nicht in eine Tabelle, deren Zeilen Personen sind.
+  function exportiereStunden() {
+    const eigene = (state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id));
+    const raster = stundenRaster(eigene, reasons);
+    const kopf = ["Stunde", "Termine", "Absagen", "Terminquote", ...reasons.map((r) => r.label)];
+    const zeilenCsv = raster.map((z) => [
+      stundenText(z.stunde), z.termin, z.negativ,
+      z.erfolgsquote === null ? "—" : `${z.erfolgsquote} %`,
+      ...reasons.map((r) => z.gruende[r.key] || 0),
+    ]);
+    downloadCsv(`call-tracker-tageszeit-${state.zeitraum?.von}-bis-${state.zeitraum?.bis}.csv`, kopf, zeilenCsv);
+  }
+
   return (
     <>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -1537,6 +1582,20 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum</p>
         <Kreisdiagramm daten={gruendeDaten} mitteText="Gründe" leerText="Noch keine negativen Anrufe mit Grund erfasst." />
       </div>
+
+      <TageszeitAnalyse
+        ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
+        gruende={reasons}
+        hinweis="Jede Zeile eine Stunde in deutscher Zeit. Rechts steht, wie viele Termine in dieser Stunde zustande kamen."
+      />
+
+      {(state.ereignisse || []).length > 0 && (
+        <div className="flex justify-end -mt-2 mb-4">
+          <button onClick={exportiereStunden} className="btn-ghost text-xs">
+            <Icon name="download" size={12} /> Tageszeiten für Excel
+          </button>
+        </div>
+      )}
 
       {/* Die Tabelle bleibt: ein Kreisdiagramm zeigt Anteile, nicht die
           einzelnen Zahlen pro Person. */}

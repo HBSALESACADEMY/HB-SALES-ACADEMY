@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     if (!ids.length) return res.status(200).json({ personen: [], teams: [], zeilen: [], kategorien: [] });
 
     const teamIds = (teams || []).map((t) => t.id);
-    const [{ data: mitglieder }, { data: zeilen }, { data: termine }] = await Promise.all([
+    const [{ data: mitglieder }, { data: zeilen }, { data: termine }, { data: ereignisse }] = await Promise.all([
       teamIds.length
         ? admin.from("team_members").select("team_id, user_id").in("team_id", teamIds)
         : Promise.resolve({ data: [] }),
@@ -64,6 +64,13 @@ export default async function handler(req, res) {
       // Termine sonst überallhin mit (migration_114).
       admin.from("leads").select("created_by, status, outcome, appointment_at, created_at")
         .eq("organization_id", orgId).gte("created_at", `${von}T00:00:00`).lte("created_at", `${bis}T23:59:59`),
+      // Einzelne Ereignisse mit Uhrzeit (migration_128) — die Grundlage für
+      // "welcher Einwand zu welcher Stunde". Über die Personen der
+      // Organisation eingegrenzt, nicht über organization_id allein: Zeilen
+      // aus der Zeit vor migration_128 tragen dort noch nichts.
+      admin.from("call_events").select("user_id, art, grund, erfasst_at")
+        .in("user_id", ids)
+        .gte("erfasst_at", `${von}T00:00:00`).lte("erfasst_at", `${bis}T23:59:59.999`),
     ]);
 
     // Trainingsaktivität im selben Zeitraum — die Grundlage der
@@ -113,6 +120,7 @@ export default async function handler(req, res) {
         termine: termineJePerson[p.id] || { gesamt: 0, wahrgenommen: 0, abgesagt: 0, kunden: 0 },
       })),
       zeilen: zeilen || [],
+      ereignisse: ereignisse || [],
     });
   } catch (e) {
     res.status(500).json({ error: e?.message || "Die Auswertung konnte nicht geladen werden." });

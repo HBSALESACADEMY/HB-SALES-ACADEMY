@@ -130,3 +130,21 @@ test("Die Auswertungs-Route prüft Rolle und Organisation selbst", () => {
   assert.match(quelle, /from\("profiles"\)[\s\S]{0,200}eq\("organization_id", orgId\)/);
   assert.match(quelle, /from\("leads"\)[\s\S]{0,300}eq\("organization_id", orgId\)/);
 });
+
+// Zweimal hat eine Regel Leute aus ihren EIGENEN Daten ausgesperrt: bei den
+// Duellen und bei den Aufnahmen. Beide Male stand neben "= auth.uid()"
+// zusätzlich eine Organisationsbedingung — und ein Plattform-Admin unter
+// fremdem Firmencode sah seine eigenen Einträge nicht mehr. Die neue
+// Ereignis-Tabelle wiederholt das nicht.
+test("call_events sperrt niemanden aus den eigenen Zeilen aus", () => {
+  const sql = readFileSync(new URL("../supabase/migration_128_call_events.sql", import.meta.url), "utf8");
+  const eigene = sql.match(/create policy "call_events_(select|insert|delete)_own"[\s\S]*?;/g) || [];
+  assert.equal(eigene.length, 3, "Eigene Zeilen brauchen Lesen, Schreiben und Löschen.");
+  eigene.forEach((regel) => {
+    assert.match(regel, /auth\.uid\(\) = user_id/);
+    assert.ok(!/sieht_person|aktive_org|organization_id/.test(regel),
+      `Diese Regel hängt eine Organisationsbedingung an die eigenen Zeilen: ${regel.slice(0, 80)}`);
+  });
+  // Und die Führungsrolle bleibt an die Mandanten-Grenze gebunden.
+  assert.match(sql, /call_events_select_managers[\s\S]*?sieht_person\(user_id\)/);
+});

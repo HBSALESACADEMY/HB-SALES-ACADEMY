@@ -38,6 +38,7 @@ import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
 import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } from "../lib/quoten.js";
 import { korrigiere, regleEin, zieheAnrufAb, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
 import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
+import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -1277,4 +1278,78 @@ test("dayKey gehört in den Speicher, dateKeyOf in die Datenbank", () => {
   }
   assert.deepEqual(falsch, [],
     `Hier wird der Speicher-Schlüssel an die Datenbank gegeben — die Abfrage scheitert lautlos: ${falsch.join(", ")}`);
+});
+
+// --- Einwände nach Uhrzeit -------------------------------------------------
+
+const GRUENDE = [{ key: "kein_interesse", label: "Kein Interesse" }, { key: "kein_budget", label: "Kein Budget" }];
+const EV = (art, grund, iso) => ({ art, grund, erfasst_at: iso });
+
+test("Tageszeit: gerechnet wird in deutscher Zeit, nicht in UTC", () => {
+  // Sommerzeit: 07:30 UTC ist 09:30 in Deutschland. Ohne Umrechnung stünde
+  // in der Auswertung 7 Uhr, wo um 9 telefoniert wurde.
+  assert.equal(deutscheStunde("2026-07-01T07:30:00Z"), 9);
+  // Winterzeit: dieselbe UTC-Stunde ist eine Stunde früher.
+  assert.equal(deutscheStunde("2026-01-15T07:30:00Z"), 8);
+  assert.equal(deutscheStunde("kaputt"), null);
+  assert.equal(stundenText(9), "09–10 Uhr");
+  assert.equal(stundenText(23), "23–00 Uhr");
+});
+
+test("Tageszeit: das Raster zählt je Stunde und je Grund", () => {
+  const raster = stundenRaster([
+    EV("negativ", "kein_interesse", "2026-07-01T07:10:00Z"),   // 9 Uhr
+    EV("negativ", "kein_interesse", "2026-07-01T07:50:00Z"),   // 9 Uhr
+    EV("termin", null, "2026-07-01T07:55:00Z"),                // 9 Uhr
+    EV("negativ", "kein_budget", "2026-07-01T12:05:00Z"),      // 14 Uhr
+  ], GRUENDE);
+  assert.deepEqual(raster.map((z) => z.stunde), [9, 14]);
+  assert.equal(raster[0].negativ, 2);
+  assert.equal(raster[0].termin, 1);
+  assert.equal(raster[0].erfolgsquote, 33);
+  assert.equal(raster[0].gruende.kein_interesse, 2);
+  assert.equal(raster[1].gruende.kein_budget, 1);
+});
+
+test("Tageszeit: eine Stunde mit drei Anrufen ist keine beste Stunde", () => {
+  // Sonst liest jemand eine Zufallsspitze als Muster und legt seinen
+  // Arbeitstag danach.
+  const duenn = stundenRaster([EV("termin", null, "2026-07-01T07:10:00Z")], GRUENDE);
+  assert.equal(besteStunde(duenn), null);
+  assert.equal(schlechtesteStunde(duenn), null);
+
+  const dicht = [];
+  for (let i = 0; i < MINDESTENS_JE_STUNDE; i++) dicht.push(EV("termin", null, "2026-07-01T07:10:00Z"));
+  for (let i = 0; i < MINDESTENS_JE_STUNDE; i++) dicht.push(EV("negativ", "kein_budget", "2026-07-01T13:10:00Z"));
+  const raster = stundenRaster(dicht, GRUENDE);
+  assert.equal(besteStunde(raster).stunde, 9);
+  assert.equal(besteStunde(raster).erfolgsquote, 100);
+  assert.equal(schlechtesteStunde(raster).stunde, 15);
+  assert.equal(schlechtesteStunde(raster).erfolgsquote, 0);
+});
+
+test("Tageszeit: die Spitze eines Einwands ist ein Anteil, keine Menge", () => {
+  // Vormittags wird viel telefoniert: dort steht "kein Budget" absolut
+  // höher. Nachmittags ist es aber der bestimmende Einwand — und genau das
+  // ist die Antwort auf "wann kommt welcher Einwand".
+  const ereignisse = [];
+  for (let i = 0; i < 8; i++) ereignisse.push(EV("negativ", "kein_interesse", "2026-07-01T07:10:00Z"));
+  for (let i = 0; i < 4; i++) ereignisse.push(EV("negativ", "kein_budget", "2026-07-01T07:20:00Z"));
+  for (let i = 0; i < 1; i++) ereignisse.push(EV("negativ", "kein_interesse", "2026-07-01T13:10:00Z"));
+  for (let i = 0; i < 5; i++) ereignisse.push(EV("negativ", "kein_budget", "2026-07-01T13:20:00Z"));
+
+  const raster = stundenRaster(ereignisse, GRUENDE);
+  const spitzen = spitzeJeGrund(raster, GRUENDE);
+  const budget = spitzen.find((s) => s.key === "kein_budget");
+  assert.equal(budget.stunde, 15);        // nachmittags, nicht vormittags
+  assert.equal(budget.anteil, 83);        // 5 von 6 Absagen dieser Stunde
+  assert.equal(budget.gesamt, 9);
+  const interesse = spitzen.find((s) => s.key === "kein_interesse");
+  assert.equal(interesse.stunde, 9);
+});
+
+test("Tageszeit: ohne Ereignisse bleibt alles leer statt zu raten", () => {
+  assert.deepEqual(stundenRaster([], GRUENDE), []);
+  assert.equal(besteStunde([]), null);
+  assert.deepEqual(spitzeJeGrund([], GRUENDE).map((s) => s.stunde), [null, null]);
 });

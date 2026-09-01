@@ -4,6 +4,7 @@ import LogoHintergrund from "../components/LogoHintergrund";
 import Aufklapper from "../components/Aufklapper";
 import Icon from "../components/Icon";
 import Kreisdiagramm from "../components/Kreisdiagramm";
+import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
@@ -127,7 +128,7 @@ export default function AuswertungSeite() {
 }
 
 function Bericht({ daten, offen, setOffen }) {
-  const { personen = [], teams = [], zeilen = [], kategorien = [] } = daten;
+  const { personen = [], teams = [], zeilen = [], kategorien = [], ereignisse = [] } = daten;
 
   // Zahlen je Person, dann je Team. Beides aus denselben Zeilen, damit
   // Tabelle, Trichter und Empfehlungen nie auseinanderlaufen.
@@ -346,6 +347,13 @@ function Bericht({ daten, offen, setOffen }) {
         <p className="text-xs text-textMuted mb-3">Woran die Gespräche scheitern, die nicht zum Termin führen.</p>
         <Kreisdiagramm daten={gruende} mitteText="Absagen" leerText="Keine negativen Anrufe mit Grund im Zeitraum." />
       </div>
+
+      <TageszeitAnalyse
+        ereignisse={ereignisse}
+        gruende={kategorien}
+        titel="Einwände und Termine nach Uhrzeit"
+        hinweis="Die ganze Organisation, jede Zeile eine Stunde in deutscher Zeit. Rechts, wie viele Termine in dieser Stunde zustande kamen — daran hängt, wann sich Anrufen lohnt."
+      />
 
       {/* Personen — aufklappbar, weil es die längste Tabelle ist. */}
       <div className="card mb-4">
