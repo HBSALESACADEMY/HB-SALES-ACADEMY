@@ -313,12 +313,19 @@ export default function CallTracker() {
     if (!userId) return;
     setNachtragen("laeuft");
     try {
-      const tage = alleGespeichertenTage(prefix, reasons);
+      // Nur Tage, an denen wirklich etwas gezählt wurde. Leere Tage
+      // entstehen beim blossen Öffnen der Seite und blähen die Anfrage auf,
+      // ohne je etwas beizutragen.
+      const tage = alleGespeichertenTage(prefix, reasons)
+        .filter((t) => Object.values(t.counts).some((v) => v > 0) || Object.values(t.reasons).some((v) => v > 0));
       if (!tage.length) { setNachtragen("nichts"); return; }
 
-      const { data: vorhanden } = await supabase.from("call_log_days")
+      const { data: vorhanden, error: leseFehler } = await supabase.from("call_log_days")
         .select("log_date, counts, reasons").eq("user_id", userId)
         .in("log_date", tage.map((t) => t.tag));
+      // Supabase wirft nicht — ohne diese Prüfung liefe der Abgleich gegen
+      // eine leere Liste weiter und schriebe den Serverstand platt.
+      if (leseFehler) throw leseFehler;
       const serverNach = new Map((vorhanden || []).map((z) => [z.log_date, z]));
 
       const zeilen = tage.map((t) => {
@@ -332,14 +339,23 @@ export default function CallTracker() {
         };
       });
 
-      const { error } = await supabase.from("call_log_days").upsert(zeilen);
-      if (error) throw error;
+      // In Häppchen statt in einem Rutsch: bei vielen gespeicherten Tagen
+      // wurde die Anfrage sonst so gross, dass sie unterwegs abgewiesen
+      // wurde — und dann kam kein einziger Tag an.
+      for (let i = 0; i < zeilen.length; i += 50) {
+        const { error } = await supabase.from("call_log_days")
+          .upsert(zeilen.slice(i, i + 50), { onConflict: "user_id,log_date" });
+        if (error) throw error;
+      }
       setNachtragen(`fertig:${zeilen.length}`);
       if (view === "statistik") loadTeam();
     } catch (e) {
-      setNachtragen("fehler");
-      meldeFehler("Die lokalen Zähler konnten nicht nachgetragen werden.", e);
-      meldeStoerung("Call Tracker nachtragen", e?.message || String(e));
+      // Der genaue Text der Datenbank, nicht nur "fehlgeschlagen": ohne ihn
+      // lässt sich von aussen nicht sagen, was schiefging.
+      const text = e?.message || e?.error_description || String(e);
+      setNachtragen(`fehler:${text}`);
+      meldeFehler(`Die lokalen Zähler konnten nicht nachgetragen werden: ${text}`, e);
+      meldeStoerung("Call Tracker nachtragen", text);
     }
   }
 
@@ -934,10 +950,13 @@ export default function CallTracker() {
             <button onClick={trageNach} disabled={nachtragen === "laeuft"} className="btn-ghost text-xs disabled:opacity-40">
               {nachtragen === "laeuft" ? "Trägt nach…"
                 : nachtragen === "nichts" ? "Nichts nachzutragen"
-                : nachtragen === "fehler" ? "Nachtragen fehlgeschlagen"
+                : nachtragen?.startsWith("fehler") ? "Nachtragen fehlgeschlagen"
                 : nachtragen?.startsWith("fertig") ? `${nachtragen.split(":")[1]} Tage nachgetragen ✓`
                 : "Zahlen dieses Geräts nachtragen"}
             </button>
+            {nachtragen?.startsWith("fehler:") && (
+              <span className="text-[11px] text-coral w-full">{nachtragen.slice("fehler:".length)}</span>
+            )}
           </div>
         </>
       )}
@@ -1198,10 +1217,13 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
           </p>
           <button onClick={onNachtragen} disabled={nachtragen === "laeuft"} className="btn-ghost text-xs disabled:opacity-40">
             {nachtragen === "laeuft" ? "Trägt nach…"
-              : nachtragen === "fehler" ? "Nachtragen fehlgeschlagen — nochmal versuchen"
+              : nachtragen?.startsWith("fehler") ? "Nachtragen fehlgeschlagen — nochmal versuchen"
               : nachtragen?.startsWith("fertig") ? `${nachtragen.split(":")[1]} Tage nachgetragen ✓`
               : "Zahlen dieses Geräts nachtragen"}
           </button>
+          {nachtragen?.startsWith("fehler:") && (
+            <p className="text-[11px] text-coral mt-2">{nachtragen.slice("fehler:".length)}</p>
+          )}
         </div>
       )}
 

@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, buildReport, FIELDS, istOffenerAnruf, merkeSchritt, offenerSchritt } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, buildReport, FIELDS, istOffenerAnruf, merkeSchritt, offenerSchritt, alleGespeichertenTage, merkeBuchung, nimmLetztenAnruf, leereVerlauf } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
@@ -1102,4 +1102,39 @@ test("Korrektur: nichts wird negativ", () => {
   assert.equal(neu.counts.erreicht, 0);
   assert.equal(zieheAnrufAb({}, {}, { counts: { termin: 5 } }).counts.termin, 0);
   assert.ok(GRUNDLAGEN.length >= 4);
+});
+
+test("Nachtragen: ein unlesbarer Eintrag stoppt nicht den Rest", () => {
+  // Genau hier ging es schief: ein kaputter Schlüssel brach die Schleife ab,
+  // und alle Tage danach fehlten beim Nachtragen — ohne jede Meldung.
+  const speicher = new Map();
+  globalThis.localStorage = {
+    get length() { return speicher.size; },
+    key: (i) => [...speicher.keys()][i],
+    getItem: (k) => (speicher.has(k) ? speicher.get(k) : null),
+    setItem: (k, v) => speicher.set(k, String(v)),
+    removeItem: (k) => speicher.delete(k),
+  };
+  const prefix = storagePrefix("nutzer-1");
+  speicher.set(`${prefix}callstats:2026-08-30`, JSON.stringify({ counts: { anwahlen: 5 }, reasons: {} }));
+  speicher.set(`${prefix}callstats:2026-08-31`, "{kaputt");
+  speicher.set(`${prefix}callstats:2026-09-01`, JSON.stringify({ counts: { anwahlen: 7 }, reasons: {} }));
+
+  const tage = alleGespeichertenTage(prefix, []);
+  assert.deepEqual(tage.map((t) => t.tag), ["2026-08-30", "2026-09-01"]);
+  assert.equal(tage[1].counts.anwahlen, 7);
+
+  // Der Anruf-Verlauf liegt beim selben Tag, ist aber kein Tageseintrag und
+  // darf nicht als Datum in die Datenbank wandern.
+  merkeBuchung(prefix, "callstats:2026-09-01", "anwahlen");
+  merkeBuchung(prefix, "callstats:2026-09-01", "erreicht");
+  merkeBuchung(prefix, "callstats:2026-09-01", "termin");
+  assert.deepEqual(alleGespeichertenTage(prefix, []).map((t) => t.tag), ["2026-08-30", "2026-09-01"]);
+
+  // Und der letzte Anruf kommt mit allem zurück, was er gebucht hat.
+  const letzter = nimmLetztenAnruf(prefix, "callstats:2026-09-01");
+  assert.deepEqual(letzter.counts, { anwahlen: 1, erreicht: 1, termin: 1 });
+  assert.equal(nimmLetztenAnruf(prefix, "callstats:2026-09-01"), null);
+  leereVerlauf(prefix, "callstats:2026-09-01");
+  delete globalThis.localStorage;
 });
