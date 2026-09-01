@@ -549,12 +549,12 @@ export default function CallTracker() {
               {step === "wen" && (
                 <>
                   <div className="text-3xl mb-1">🚪</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wen hast du erreicht?</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wen hast du zuerst erreicht?</div>
                   <p className="text-textMuted text-xs mb-4">Einmal antippen, zählt automatisch mit</p>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button onClick={() => { bump("gatekeeper"); setStep("durchgestellt"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("gatekeeper"), color: feldFarbe("gatekeeper") }}>
-                      Gatekeeper
+                      Vorzimmer / Gatekeeper
                     </button>
                     <button onClick={() => { bump("entscheider"); setStep("callResult"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("entscheider"), color: feldFarbe("entscheider") }}>
@@ -934,23 +934,26 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
     { label: "Nicht erreicht", value: nicht, color: feldFarbe("nicht") },
     { label: "Ohne Angabe", value: ohneAngabe, color: "#5B6079" },
   ];
-  // Wen man am Telefon hatte — eine Aufteilung der erreichten Gespräche.
+  // Wen man ZUERST am Telefon hatte — jeder erreichte Anruf zählt einmal.
   // Der Rest ist kein "ohne Angabe": seit der Umstellung fragt der Assistent
-  // immer, wen man erreicht hat. Übrig bleiben nur Gespräche von VORHER, als
-  // es die Unterscheidung noch nicht gab — und die soll man auch so nennen.
-  const vorDerUmstellung = Math.max(0, erreicht - (gesamt.gatekeeper || 0) - (gesamt.entscheider || 0));
+  // immer. Übrig bleiben nur Gespräche von VORHER, als es die Unterscheidung
+  // noch nicht gab — und die soll man auch so nennen.
+  const gatekeeperGesamt = gesamt.gatekeeper || 0;
+  const entscheiderDirekt = gesamt.entscheider || 0;
+  const durchgestellt = gesamt.weitergeleitet || 0;
+  const vorDerUmstellung = Math.max(0, erreicht - gatekeeperGesamt - entscheiderDirekt);
   const wenErreicht = [
-    { label: "Gatekeeper", value: gesamt.gatekeeper || 0, color: feldFarbe("gatekeeper") },
-    { label: "Geschäftsführer", value: gesamt.entscheider || 0, color: feldFarbe("entscheider") },
+    { label: "Zuerst: Vorzimmer", value: gatekeeperGesamt, color: feldFarbe("gatekeeper") },
+    { label: "Zuerst: Entscheider", value: entscheiderDirekt, color: feldFarbe("entscheider") },
     { label: "Früher erfasst", value: vorDerUmstellung, color: "#5B6079" },
   ];
-  // Am Vorzimmer vorbei — gemessen an allen Gatekeeper-Gesprächen.
-  const gatekeeper = gesamt.gatekeeper || 0;
-  const durchgestellt = gesamt.weitergeleitet || 0;
-  const amGatekeeper = [
-    { label: "Durchgestellt", value: durchgestellt, color: feldFarbe("weitergeleitet") },
-    { label: "Nicht durchgekommen", value: Math.max(0, gatekeeper - durchgestellt), color: feldFarbe("gatekeeper") },
-  ];
+
+  // Die Zahl, um die es beim Kaltakquise-Training eigentlich geht: wie oft
+  // landet jemand bei der Entscheidung — direkt oder durchgekämpft.
+  // Abgeleitet, nicht zusätzlich gebucht: sonst wäre die Summe der Zähler
+  // grösser als "erreicht" und jedes Diagramm daneben falsch.
+  const beiEntscheidung = entscheiderDirekt + durchgestellt;
+  const durchstellQuote = gatekeeperGesamt > 0 ? Math.round((durchgestellt / gatekeeperGesamt) * 100) : 0;
   // Auch hier kein "ohne Angabe": der Assistent fragt immer nach dem
   // Ergebnis. Übrig bleibt nur, wer mittendrin abbricht — Seite geschlossen,
   // Reiter gewechselt, Formular verlassen. Das gehört benannt, nicht als
@@ -1207,9 +1210,9 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card">
-          <div className="font-semibold text-textMain text-sm mb-1">Wen hast du erreicht?</div>
+          <div className="font-semibold text-textMain text-sm mb-1">Wen hast du zuerst erreicht?</div>
           <p className="text-xs text-textMuted mb-3">
-            Gatekeeper oder direkt die Entscheidung
+            Jeder Anruf zählt einmal — wer nach einer Weiterleitung beim Chef landet, steht unten im Trichter
             {vorDerUmstellung > 0 && " · „Früher erfasst“ sind Gespräche von vor dieser Unterscheidung"}
           </p>
           <Kreisdiagramm daten={wenErreicht} mitteText="erreicht" leerText="Noch keine Gespräche zustande gekommen." />
@@ -1238,12 +1241,36 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener }) {
         </div>
       </div>
 
+      {/* Der Trichter: wie viele kommen bis zur Entscheidung durch. Bewusst
+          als Reihe und nicht als Kreis — es ist ein Weg, keine Aufteilung. */}
       <div className="card mb-4">
-        <div className="font-semibold text-textMain text-sm mb-1">Am Gatekeeper vorbei?</div>
+        <div className="font-semibold text-textMain text-sm mb-1">Weg bis zur Entscheidung</div>
         <p className="text-xs text-textMuted mb-3">
-          Von {gatekeeper} Gesprächen mit dem Vorzimmer — wie oft ging es weiter zur Entscheidung
+          Jeder Anruf zählt einmal. „Beim Entscheider gelandet“ fasst zusammen: direkt erreicht plus durchgestellt.
         </p>
-        <Kreisdiagramm daten={amGatekeeper} mitteText="Gatekeeper" leerText="Noch keine Gatekeeper-Gespräche erfasst." />
+        <div className="flex flex-col gap-2.5">
+          {[
+            { label: "Erreichte Gespräche", wert: erreicht, farbe: feldFarbe("erreicht") },
+            { label: "Zuerst beim Vorzimmer", wert: gatekeeperGesamt, farbe: feldFarbe("gatekeeper") },
+            { label: "Davon durchgestellt", wert: durchgestellt, farbe: feldFarbe("weitergeleitet"), zusatz: gatekeeperGesamt > 0 ? `${durchstellQuote} % des Vorzimmers` : null },
+            { label: "Direkt beim Entscheider", wert: entscheiderDirekt, farbe: feldFarbe("entscheider") },
+            { label: "Beim Entscheider gelandet", wert: beiEntscheidung, farbe: feldFarbe("termin"), stark: true,
+              zusatz: erreicht > 0 ? `${Math.round((beiEntscheidung / erreicht) * 100)} % der Gespräche` : null },
+          ].map((z) => (
+            <div key={z.label}>
+              <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                <span className={z.stark ? "text-textMain font-semibold" : "text-textMain"}>{z.label}</span>
+                <span className="text-textMuted flex-shrink-0">
+                  {z.wert}{z.zusatz ? ` · ${z.zusatz}` : ""}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-surfaceRaised overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-300"
+                  style={{ width: `${erreicht > 0 ? Math.min(100, Math.round((z.wert / erreicht) * 100)) : 0}%`, background: z.farbe }} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="card mb-4">
