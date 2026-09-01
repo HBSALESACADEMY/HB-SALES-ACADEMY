@@ -643,7 +643,9 @@ create table if not exists team_goals (
   manager_id uuid not null references profiles(id) on delete cascade,
   team_id uuid references teams(id) on delete cascade,
   title text not null,
-  metric text not null check (metric in ('roleplay', 'quiz', 'daily_challenge')),
+  -- Erweitert in migration_99 und migration_125 — die Liste steht dort und
+  -- deckt sich mit GOAL_METRICS in lib/goalMetrics.js.
+  metric text not null,
   target_count integer not null,
   week_start date not null,
   created_at timestamptz not null default now()

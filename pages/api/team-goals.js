@@ -242,7 +242,7 @@ export default async function handler(req, res) {
             .map(aufbereiten);
           return {
             ziele: meine.filter((z) => z.bis >= heute).sort((a, b) => a.bis.localeCompare(b.bis)),
-            vergangeneZiele: meine.filter((z) => z.bis < heute).sort((a, b) => b.bis.localeCompare(a.bis)).slice(0, 12),
+            vergangeneZiele: meine.filter((z) => z.bis < heute).sort((a, b) => b.bis.localeCompare(a.bis)).slice(0, 40),
           };
         })(),
       };

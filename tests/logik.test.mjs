@@ -34,6 +34,7 @@ import { quartalsStart, quartalsName, zeitraumGrenzen } from "../lib/zeitraum.js
 import { pcmZuWav, rateAusMime } from "../lib/wav.js";
 import { LINIEN, MITTE, hatBingo, gewinnFelder, zufallsWoerter, freiePlaetze } from "../lib/bingo.js";
 import { buchungslink, normalisiere, kurzform } from "../lib/buchungslink.js";
+import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
 // --- Zeiträume -------------------------------------------------------------
@@ -208,7 +209,7 @@ test("die Datenbank erlaubt genau die Kennzahlen, die es im Code gibt", () => {
   // dann nur eine kryptische Meldung.
   // Immer die JÜNGSTE Migration, die den check setzt — sonst prüft der
   // Test eine überholte Liste.
-  const sql = readFileSync(new URL("../supabase/migration_99_ziel_kennzahlen.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../supabase/migration_125_ziel_kennzahlen_gatekeeper.sql", import.meta.url), "utf8");
   const block = sql.slice(sql.indexOf("metric in ("), sql.indexOf("));", sql.indexOf("metric in (")));
   const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(erlaubt, [...GOAL_METRIC_KEYS].sort());
@@ -218,7 +219,7 @@ test("der Wettbewerbs-Maßstab kennt dieselben Kennzahlen plus XP", () => {
   // Zweite check-Regel, zweite Gelegenheit zum Auseinanderlaufen: stimmt sie
   // nicht, lässt sich die Einstellung in der Verwaltung schlicht nicht
   // speichern.
-  const sql = readFileSync(new URL("../supabase/migration_99_ziel_kennzahlen.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../supabase/migration_125_ziel_kennzahlen_gatekeeper.sql", import.meta.url), "utf8");
   const block = sql.slice(sql.indexOf("team_ranking_metric in ("));
   const ende = block.indexOf("\n  )");
   const erlaubt = [...block.slice(0, ende).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
@@ -914,4 +915,61 @@ test("Angefangene Anrufe werden gemerkt und wieder aufgenommen", () => {
   merkeSchritt(meins, "lead");
   assert.equal(offenerSchritt(meins), null);
   assert.ok(Object.keys(daten).length >= 0);
+});
+
+// Ziele: der Balken sagt "wie weit", die Auswertung sagt "reicht das Tempo".
+// Zweiteres ist die Zahl, mit der man mitten in der Woche noch etwas ändern
+// kann — und genau dort darf sie nicht falsch sein.
+test("Ziel-Auswertung: Tempo, Hochrechnung und Bedarf", () => {
+  // Sieben Tage, Ziel 700, am vierten Tag 400 geschafft.
+  const ziel = { starts_on: "2026-08-17", ends_on: "2026-08-23", target_count: 700 };
+  const a = werteZielAus(ziel, 400, "2026-08-20");
+  assert.equal(a.status, "laeuft");
+  assert.equal(a.gesamtTage, 7);
+  assert.equal(a.vergangeneTage, 4, "Der angebrochene Tag zählt mit.");
+  assert.equal(a.verbleibendeTage, 4, "Heute zählt noch als Arbeitstag.");
+  assert.equal(a.tempo, 100);
+  assert.equal(a.hochrechnung, 700);
+  assert.equal(a.aufKurs, true);
+  assert.equal(a.noetigProTag, 75);
+
+  // Dasselbe Ziel, aber zu langsam: die Hochrechnung sagt es, der Balken nicht.
+  const b = werteZielAus(ziel, 200, "2026-08-20");
+  assert.equal(b.hochrechnung, 350);
+  assert.equal(b.aufKurs, false);
+  assert.equal(b.noetigProTag, 125);
+
+  // Abgelaufen: keine Hochrechnung mehr, nur das Ergebnis.
+  const c = werteZielAus(ziel, 650, "2026-08-30");
+  assert.equal(c.status, "vorbei");
+  assert.equal(c.hochrechnung, 650);
+  assert.equal(c.geschafft, false);
+  assert.equal(c.verbleibendeTage, 0);
+  assert.equal(c.noetigProTag, 50, "Ohne Resttage bleibt der volle Rückstand stehen.");
+
+  // Erreicht ist erreicht, auch über 100 Prozent.
+  const d = werteZielAus(ziel, 900, "2026-08-30");
+  assert.equal(d.geschafft, true);
+  assert.equal(d.anteil, 1);
+
+  // Ein Ziel, das noch nicht begonnen hat.
+  assert.equal(zielStatus(ziel, "2026-08-01"), "geplant");
+});
+
+test("Ziel-Bilanz zeigt, ob die Ziele realistisch gesetzt sind", () => {
+  const ziel = { starts_on: "2026-08-01", ends_on: "2026-08-07", target_count: 100 };
+  const auswertungen = [
+    werteZielAus(ziel, 120, "2026-08-20"),
+    werteZielAus(ziel, 100, "2026-08-20"),
+    werteZielAus(ziel, 40, "2026-08-20"),
+    werteZielAus(ziel, 60, "2026-08-20"),
+    // Ein laufendes Ziel gehört nicht in die Bilanz — es ist noch offen.
+    werteZielAus({ starts_on: "2026-08-18", ends_on: "2026-08-24", target_count: 100 }, 10, "2026-08-20"),
+  ];
+  const b = bilanz(auswertungen);
+  assert.equal(b.anzahl, 4);
+  assert.equal(b.geschafft, 2);
+  assert.equal(b.verfehlt, 2);
+  assert.equal(b.quote, 0.5);
+  assert.equal(Math.round(b.schnittErfuellung * 100), 75);
 });
