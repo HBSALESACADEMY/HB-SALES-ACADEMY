@@ -18,6 +18,10 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
   // daneben stehen die genauen Zahlen. Klick statt Zeiger genügt auch,
   // sonst wäre die Auswertung auf dem Handy nicht lesbar.
   const [aktiv, setAktiv] = useState(null);
+  // Und derselbe Griff für die Einwände: einen anfassen, und man sieht
+  // sofort, in welchen Stunden er auftritt — die Frage "wann kommt DIESER
+  // Einwand" lässt sich sonst nur aus fünf Balken zusammensuchen.
+  const [aktiverGrund, setAktiverGrund] = useState(null);
   const raster = stundenRaster(ereignisse, gruende);
   const beste = besteStunde(raster);
   const schlechteste = schlechtesteStunde(raster);
@@ -47,6 +51,8 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                 className="flex items-center gap-2 cursor-pointer rounded"
                 style={{
                   opacity: aktiv === null || aktiv === z.stunde ? 1 : 0.4,
+                  // Bei gewähltem Einwand bleibt jede Stunde lesbar — dort
+                  // treten die Balkenstücke zurück, nicht die ganze Zeile.
                   transform: aktiv === z.stunde ? "scale(1.015)" : "scale(1)",
                   transformOrigin: "left center",
                   transition: "opacity .18s ease, transform .18s ease",
@@ -57,10 +63,20 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                 <div className="flex-1 h-4 rounded bg-surfaceRaised overflow-hidden flex"
                   style={{ width: `${Math.max(6, Math.round((z.gesamt / groesste) * 100))}%` }}>
                   {z.termin > 0 && (
-                    <div style={{ width: `${(z.termin / z.gesamt) * 100}%`, background: feldFarbe("termin") }} />
+                    <div style={{
+                      width: `${(z.termin / z.gesamt) * 100}%`,
+                      background: feldFarbe("termin"),
+                      opacity: aktiverGrund === null ? 1 : 0.2,
+                      transition: "opacity .18s ease",
+                    }} />
                   )}
                   {z.verteilung.filter((g) => g.wert > 0).map((g) => (
-                    <div key={g.key} style={{ width: `${(g.wert / z.gesamt) * 100}%`, background: grundFarbe(gruende, g.key) }} />
+                    <div key={g.key} style={{
+                      width: `${(g.wert / z.gesamt) * 100}%`,
+                      background: grundFarbe(gruende, g.key),
+                      opacity: aktiverGrund === null || aktiverGrund === g.key ? 1 : 0.2,
+                      transition: "opacity .18s ease",
+                    }} />
                   ))}
                 </div>
                 <span className="text-[11px] text-textMuted w-[92px] flex-shrink-0 text-right">
@@ -74,11 +90,42 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
               die Seite beim Darüberfahren nicht springt. */}
           <div className="mt-3 min-h-[42px]">
             {(() => {
+              // Ein gewählter Einwand hat Vorrang: dann ist die Frage nicht
+              // "was war in dieser Stunde", sondern "wann kommt dieser
+              // Einwand" — und darauf antwortet die Verteilung über den Tag.
+              if (aktiverGrund) {
+                const label = gruende.find((g) => g.key === aktiverGrund)?.label || aktiverGrund;
+                const proStunde = raster
+                  .map((z) => ({ stunde: z.stunde, wert: z.gruende[aktiverGrund] || 0, negativ: z.negativ }))
+                  .filter((z) => z.wert > 0);
+                const summe = proStunde.reduce((sum, z) => sum + z.wert, 0);
+                return (
+                  <div className="rounded-xl border border-line px-3 py-2">
+                    <div className="text-xs text-textMain font-semibold mb-1">
+                      <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: grundFarbe(gruende, aktiverGrund) }} />
+                      {label}: {summe}× am Tag
+                    </div>
+                    {proStunde.length === 0 ? (
+                      <span className="text-[11px] text-textMuted">Dieser Einwand kam im Zeitraum nicht vor.</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                        {proStunde.map((z) => (
+                          <span key={z.stunde} className="text-[11px] text-textMuted">
+                            {stundenText(z.stunde)}: <span className="text-textMain">{z.wert}</span>
+                            {z.negativ > 0 ? ` (${Math.round((z.wert / z.negativ) * 100)} %)` : ""}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               const z = raster.find((x) => x.stunde === aktiv);
               if (!z) {
                 return (
                   <p className="text-[11px] text-textMuted">
-                    Auf eine Stunde gehen oder tippen, um ihre Zahlen zu sehen.
+                    Auf eine Stunde oder einen Einwand gehen — beides lässt sich auch antippen.
                   </p>
                 );
               }
@@ -112,9 +159,14 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
               <span className="w-2 h-2 rounded-full" style={{ background: feldFarbe("termin") }} /> Termin
             </span>
             {gruende.map((g) => (
-              <span key={g.key} className="flex items-center gap-1.5 text-[11px] text-textMuted">
+              <button key={g.key}
+                onMouseEnter={() => setAktiverGrund(g.key)}
+                onMouseLeave={() => setAktiverGrund(null)}
+                onClick={() => setAktiverGrund(aktiverGrund === g.key ? null : g.key)}
+                className={`flex items-center gap-1.5 text-[11px] rounded px-1 -mx-1 ${aktiverGrund === g.key ? "text-textMain font-semibold" : "text-textMuted"}`}
+                style={{ opacity: aktiverGrund === null || aktiverGrund === g.key ? 1 : 0.4, transition: "opacity .18s ease" }}>
                 <span className="w-2 h-2 rounded-full" style={{ background: grundFarbe(gruende, g.key) }} /> {g.label}
-              </span>
+              </button>
             ))}
           </div>
 
@@ -156,7 +208,14 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                   </thead>
                   <tbody>
                     {spitzen.map((s) => (
-                      <tr key={s.key} className="border-t border-line">
+                      <tr key={s.key} className="border-t border-line cursor-pointer"
+                        onMouseEnter={() => setAktiverGrund(s.key)}
+                        onMouseLeave={() => setAktiverGrund(null)}
+                        onClick={() => setAktiverGrund(aktiverGrund === s.key ? null : s.key)}
+                        style={{
+                          opacity: aktiverGrund === null || aktiverGrund === s.key ? 1 : 0.4,
+                          transition: "opacity .18s ease",
+                        }}>
                         <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">
                           <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: grundFarbe(gruende, s.key) }} />
                           {s.label}
