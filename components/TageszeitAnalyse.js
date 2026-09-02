@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, stundenText, MINDESTENS_JE_STUNDE } from "../lib/tageszeit";
 import { grundFarbe, feldFarbe } from "../lib/diagrammFarben";
 
@@ -12,6 +13,11 @@ import { grundFarbe, feldFarbe } from "../lib/diagrammFarben";
 // Kennzahl, die zwei Ansichten unterschiedlich zeichnen, wird zweimal
 // erklärt und einmal falsch verstanden.
 export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel = "Einwände nach Uhrzeit", hinweis = null }) {
+  // Welche Stunde gerade unter dem Zeiger liegt — dieselbe Idee wie im
+  // Kreisdiagramm: das Stück tritt hervor, der Rest tritt zurück, und
+  // daneben stehen die genauen Zahlen. Klick statt Zeiger genügt auch,
+  // sonst wäre die Auswertung auf dem Handy nicht lesbar.
+  const [aktiv, setAktiv] = useState(null);
   const raster = stundenRaster(ereignisse, gruende);
   const beste = besteStunde(raster);
   const schlechteste = schlechtesteStunde(raster);
@@ -34,11 +40,22 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
         <>
           <div className="flex flex-col gap-1.5">
             {raster.map((z) => (
-              <div key={z.stunde} className="flex items-center gap-2">
-                <span className="text-[11px] text-textMuted w-[68px] flex-shrink-0 font-mono">{stundenText(z.stunde)}</span>
+              <div key={z.stunde}
+                onMouseEnter={() => setAktiv(z.stunde)}
+                onMouseLeave={() => setAktiv(null)}
+                onClick={() => setAktiv(aktiv === z.stunde ? null : z.stunde)}
+                className="flex items-center gap-2 cursor-pointer rounded"
+                style={{
+                  opacity: aktiv === null || aktiv === z.stunde ? 1 : 0.4,
+                  transform: aktiv === z.stunde ? "scale(1.015)" : "scale(1)",
+                  transformOrigin: "left center",
+                  transition: "opacity .18s ease, transform .18s ease",
+                }}>
+                <span className={`text-[11px] w-[68px] flex-shrink-0 font-mono ${aktiv === z.stunde ? "text-textMain font-semibold" : "text-textMuted"}`}>
+                  {stundenText(z.stunde)}
+                </span>
                 <div className="flex-1 h-4 rounded bg-surfaceRaised overflow-hidden flex"
-                  style={{ width: `${Math.max(6, Math.round((z.gesamt / groesste) * 100))}%` }}
-                  title={`${z.negativ} Absagen, ${z.termin} Termine`}>
+                  style={{ width: `${Math.max(6, Math.round((z.gesamt / groesste) * 100))}%` }}>
                   {z.termin > 0 && (
                     <div style={{ width: `${(z.termin / z.gesamt) * 100}%`, background: feldFarbe("termin") }} />
                   )}
@@ -51,6 +68,38 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                 </span>
               </div>
             ))}
+          </div>
+
+          {/* Die Zahlen der Stunde unter dem Zeiger. Fester Platz, damit
+              die Seite beim Darüberfahren nicht springt. */}
+          <div className="mt-3 min-h-[42px]">
+            {(() => {
+              const z = raster.find((x) => x.stunde === aktiv);
+              if (!z) {
+                return (
+                  <p className="text-[11px] text-textMuted">
+                    Auf eine Stunde gehen oder tippen, um ihre Zahlen zu sehen.
+                  </p>
+                );
+              }
+              return (
+                <div className="rounded-xl border border-line px-3 py-2">
+                  <div className="text-xs text-textMain font-semibold mb-1">
+                    {stundenText(z.stunde)} · {z.termin} Termine, {z.negativ} Absagen
+                    {z.erfolgsquote !== null ? ` · ${z.erfolgsquote} % Erfolg` : ""}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    {z.verteilung.filter((g) => g.wert > 0).map((g) => (
+                      <span key={g.key} className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                        <span className="w-2 h-2 rounded-full" style={{ background: grundFarbe(gruende, g.key) }} />
+                        {g.label}: {g.wert}
+                      </span>
+                    ))}
+                    {z.negativ === 0 && <span className="text-[11px] text-textMuted">Keine Absagen in dieser Stunde.</span>}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <p className="text-[11px] text-textMuted mt-3 leading-snug">
