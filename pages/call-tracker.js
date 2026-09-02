@@ -176,6 +176,7 @@ export default function CallTracker() {
         meldeStoerung("Call Tracker Tagesabgleich", e?.message || String(e));
       }
       if (!mounted) return;
+      angezeigterTag.current = dateKeyOf(new Date());
       setTodayCounts(start.counts);
       setTodayReasons(start.reasons);
 
@@ -220,6 +221,12 @@ export default function CallTracker() {
 
   const syncTimer = useRef(null);
   const letzterStand = useRef(null);
+  // Zu welchem Tag die Zähler auf dem Bildschirm gehören.
+  const angezeigterTag = useRef(dateKeyOf(new Date()));
+  // Die Prüfung liegt in einer Ref, damit der Listener unten immer die
+  // aktuelle Fassung ruft und nicht die vom ersten Rendern — sonst startet
+  // der neue Tag mit den Einwand-Kategorien von vorher.
+  const tageswechselRef = useRef(() => false);
   const ersteAenderung = useRef(0);
 
   // Zahlen zum Server schicken. Getrennt vom Zählen, weil sie auch dann
@@ -240,11 +247,16 @@ export default function CallTracker() {
       //
       // "erzwingen" gibt es nur für "Tag zurücksetzen" — das ist der einzige
       // Fall, in dem eine kleinere Zahl gewollt ist.
+      // Der Tag, ZU DEM dieser Stand gehört — nicht der Tag, an dem gerade
+      // gesendet wird. Wer den Tab über Mitternacht offen lässt, schrieb
+      // sonst die Zahlen von gestern in die heutige Zeile: am nächsten
+      // Morgen standen dort Anwahlen, die nie stattgefunden hatten.
+      const tag = stand.tag || dateKeyOf(new Date());
       let counts = stand.counts;
       let gruende = stand.reasons;
       if (!erzwingen) {
         const { data: serverTag } = await supabase.from("call_log_days")
-          .select("counts, reasons").eq("user_id", userId).eq("log_date", dateKeyOf(new Date())).maybeSingle();
+          .select("counts, reasons").eq("user_id", userId).eq("log_date", tag).maybeSingle();
         if (serverTag) {
           counts = zaehlerZusammenfuehren(stand.counts, serverTag.counts || {});
           gruende = zaehlerZusammenfuehren(stand.reasons, serverTag.reasons || {});
@@ -256,7 +268,7 @@ export default function CallTracker() {
         // Mit UTC landeten die ersten Anrufe nach Mitternacht in der Zeile
         // des VORTAGS und überschrieben dessen Zahlen mit den frisch bei
         // null begonnenen Zählern.
-        log_date: dateKeyOf(new Date()),
+        log_date: tag,
         counts,
         reasons: gruende,
         updated_at: new Date().toISOString(),
@@ -275,7 +287,9 @@ export default function CallTracker() {
   function persist(counts, reasonCounts, { korrektur = false } = {}) {
     if (!userId) return;
     saveDay(prefix, dayKey(), counts, reasonCounts);
-    letzterStand.current = { counts, reasons: reasonCounts };
+    // Der Tag gehört zum Stand dazu. Ohne ihn schrieb der Versand immer auf
+    // "heute" — auch einen Stand, der von gestern war.
+    letzterStand.current = { counts, reasons: reasonCounts, tag: dateKeyOf(new Date()) };
     if (korrektur) { sendeZahlen({ erzwingen: true }); return; }
 
     // Verzögert, damit nicht jeder Klick eine eigene Anfrage auslöst — aber
@@ -293,18 +307,62 @@ export default function CallTracker() {
   // hinausschicken. Genau hier gingen Tage verloren: gezählt, Tab zu, weg.
   useEffect(() => {
     const beiVerlassen = () => { if (letzterStand.current) sendeZahlen(); };
-    const beiWechsel = () => { if (document.hidden) beiVerlassen(); };
+    // Zurück auf der Seite: erst prüfen, ob inzwischen ein neuer Tag ist.
+    // Sonst zählt der erste Klick am Morgen auf den Stand von gestern.
+    const beiWechsel = () => { if (document.hidden) beiVerlassen(); else tageswechselRef.current(); };
     window.addEventListener("pagehide", beiVerlassen);
     document.addEventListener("visibilitychange", beiWechsel);
+    // Auch ohne jede Bewegung: wer den Reiter durchgehend offen hat, soll um
+    // Mitternacht nicht weiter auf die Zähler von gestern schauen.
+    const uhr = setInterval(() => tageswechselRef.current(), 60000);
     return () => {
+      clearInterval(uhr);
       window.removeEventListener("pagehide", beiVerlassen);
       document.removeEventListener("visibilitychange", beiWechsel);
       beiVerlassen();
     };
   }, [userId]);
 
+  // Ist inzwischen ein neuer Tag angebrochen?
+  //
+  // Wer den Reiter über Nacht offen lässt, sah am nächsten Morgen weiter die
+  // Zähler von gestern — und jeder Klick schrieb diesen alten Stand in den
+  // neuen Tag. Deshalb wird vor jedem Zählen geprüft: neuer Tag, dann zuerst
+  // den gestrigen Stand sauber wegschicken und bei null anfangen.
+  //
+  // Rückgabe: true, wenn gewechselt wurde — der auslösende Klick zählt dann
+  // auf dem frischen Tag weiter.
+  function pruefeTageswechsel() {
+    const jetzt = dateKeyOf(new Date());
+    if (jetzt === angezeigterTag.current) return false;
+
+    if (letzterStand.current) sendeZahlen();  // noch unter dem alten Datum
+    angezeigterTag.current = jetzt;
+    const frisch = loadDay(prefix, dayKey(), reasons);
+    letzterStand.current = null;
+    setTodayCounts(frisch.counts);
+    setTodayReasons(frisch.reasons);
+    setStep("lead");
+    showToast("Neuer Tag — die Zähler starten wieder bei null");
+    return true;
+  }
+
+  tageswechselRef.current = pruefeTageswechsel;
+
   function bump(key, by = 1) {
     if (by < 0) { korrigiereZaehler(key); return; }
+    if (pruefeTageswechsel()) {
+      // Nach dem Wechsel steht der neue Stand erst im nächsten Durchlauf.
+      // Diesen Klick auf dem frischen Tag nachziehen, statt ihn zu
+      // verschlucken: es war ein echter Anruf.
+      merkeBuchung(prefix, dayKey(), key);
+      if (key === "termin") merkeEreignis({ userId, orgId, art: "termin" });
+      const frisch = loadDay(prefix, dayKey(), reasons);
+      const next = { ...frisch.counts, [key]: (frisch.counts[key] || 0) + by };
+      setTodayCounts(next);
+      persist(next, frisch.reasons);
+      return;
+    }
     merkeBuchung(prefix, dayKey(), key);
     // Termine mit Uhrzeit festhalten — für die Frage, wann sich Anrufen
     // lohnt (migration_128). Die Zählung selbst bleibt davon unberührt.
@@ -639,7 +697,7 @@ export default function CallTracker() {
     setTodayReasons(reasons0);
     saveDay(prefix, dayKey(), counts0, reasons0);
     leereVerlauf(prefix, dayKey());
-    letzterStand.current = { counts: counts0, reasons: reasons0 };
+    letzterStand.current = { counts: counts0, reasons: reasons0, tag: dateKeyOf(new Date()) };
     setStep("lead");
     await sendeZahlen({ erzwingen: true });
     showToast("Tag zurückgesetzt");

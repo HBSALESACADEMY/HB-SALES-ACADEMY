@@ -401,7 +401,11 @@ test("lokaler Tagesschlüssel und Server-Zeile nutzen dieselbe Rechnung", () => 
   // mit den frisch bei null begonnenen. Deshalb darf in der Schreibstelle
   // kein toISOString().slice(0,10) mehr stehen.
   const quelle = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
-  const schreibstelle = quelle.slice(quelle.indexOf('from("call_log_days").upsert'), quelle.indexOf('from("call_log_days").upsert') + 500);
+  // Die ganze Versandfunktion, nicht nur der Upsert: der Tag wird dort
+  // oben gebildet und unten geschrieben (siehe "Zählerstände landen im Tag,
+  // zu dem sie gehören").
+  const start = quelle.indexOf("async function sendeZahlen");
+  const schreibstelle = quelle.slice(start, quelle.indexOf('from("call_log_days").upsert', start) + 500);
   assert.ok(schreibstelle.includes("dateKeyOf("), "log_date muss über dateKeyOf() gebildet werden");
   assert.ok(!/toISOString\(\)\.slice\(0, ?10\)/.test(schreibstelle), "log_date darf nicht aus UTC kommen");
 
@@ -1371,4 +1375,25 @@ test("Jedes Diagramm sagt, was es aussagt", () => {
   }
   assert.deepEqual(ohne, [],
     `Diese Diagramme stehen ohne Erklärung da: ${ohne.join(", ")}`);
+});
+
+test("Zählerstände landen im Tag, zu dem sie gehören", () => {
+  // Der Versand schrieb immer auf "jetzt". Wer den Reiter über Mitternacht
+  // offen liess, schob damit die Anwahlen von gestern in die heutige Zeile:
+  // am nächsten Morgen standen dort Anrufe, die nie stattgefunden hatten.
+  const quelle = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
+
+  // Der gespeicherte Stand trägt seinen Tag mit sich.
+  assert.match(quelle, /letzterStand\.current = \{[^}]*tag: dateKeyOf\(new Date\(\)\)/);
+
+  // Und der Upsert nimmt diesen Tag, nicht den Zeitpunkt des Sendens.
+  const upsert = quelle.match(/from\("call_log_days"\)\.upsert\(\{[\s\S]*?\}\)/);
+  assert.ok(upsert, "Der Upsert der Tageszähler wurde nicht gefunden.");
+  assert.match(upsert[0], /log_date: tag,/);
+  assert.ok(!/log_date: dateKeyOf\(new Date\(\)\)/.test(upsert[0]),
+    "Der Stand wird auf den Tag des Sendens geschrieben statt auf seinen eigenen.");
+
+  // Und die Seite bemerkt den Tageswechsel von sich aus.
+  assert.match(quelle, /function pruefeTageswechsel\(\)/);
+  assert.match(quelle, /setInterval\(\(\) => tageswechselRef\.current\(\)/);
 });
