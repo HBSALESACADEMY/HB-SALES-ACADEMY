@@ -1397,3 +1397,25 @@ test("Zählerstände landen im Tag, zu dem sie gehören", () => {
   assert.match(quelle, /function pruefeTageswechsel\(\)/);
   assert.match(quelle, /setInterval\(\(\) => tageswechselRef\.current\(\)/);
 });
+
+test("Einen Zähler setzen regelt die Tabelle mit ein", () => {
+  // Nach dem Setzen darf keine abhängige Zahl über ihrer Grundlage stehen:
+  // wer die Anwahlen von 120 auf 60 korrigiert, kann nicht 100 erreichte
+  // Gespräche behalten.
+  const { counts } = regleEin(
+    { anwahlen: 60, erreicht: 100, nicht: 20, gatekeeper: 90, entscheider: 10, weitergeleitet: 80, termin: 5, negativ: 50 },
+    {}
+  );
+  assert.ok(counts.erreicht + counts.nicht <= 60);
+  assert.ok(counts.gatekeeper + counts.entscheider <= counts.erreicht);
+  assert.ok(counts.weitergeleitet <= counts.gatekeeper);
+  assert.ok(counts.termin + counts.negativ <= counts.erreicht);
+
+  // Und die Seite setzt erzwungen — sonst zieht der Abgleich, der überall
+  // das Maximum nimmt, die alte höhere Zahl sofort zurück.
+  const quelle = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
+  const funktion = quelle.slice(quelle.indexOf("function setzeZaehler"), quelle.indexOf("function setzeZaehler") + 900);
+  assert.match(funktion, /korrektur: true/);
+  assert.match(funktion, /regleEin\(/);
+  assert.match(funktion, /leereVerlauf\(/);
+});

@@ -16,7 +16,7 @@ import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
-import { korrigiere } from "../lib/anrufKorrektur";
+import { korrigiere, regleEin } from "../lib/anrufKorrektur";
 import { merkeEreignis, nimmEreignisZurueck } from "../lib/callEreignis";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
@@ -79,6 +79,9 @@ export default function CallTracker() {
   const [letzteTage, setLetzteTage] = useState([]);
   // Warum die Kacheln unten möglicherweise zu wenig zeigen.
   const [abgleichFehler, setAbgleichFehler] = useState(null);
+  // Welcher Zähler gerade von Hand gesetzt wird, und worauf.
+  const [setzeFeld, setSetzeFeld] = useState(null);
+  const [setzeWert, setSetzeWert] = useState("");
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
   // In WELCHER Organisation gerade telefoniert wird — die Ereignisse hängen
@@ -345,6 +348,32 @@ export default function CallTracker() {
     setStep("lead");
     showToast("Neuer Tag — die Zähler starten wieder bei null");
     return true;
+  }
+
+  // Einen Zähler auf einen bestimmten Wert setzen.
+  //
+  // Der Minus-Knopf reicht nicht, wenn eine Zahl deutlich zu hoch steht —
+  // vierzig Mal klicken ist keine Korrektur, das ist eine Strafe. Nötig
+  // wurde das, weil ein über Mitternacht offener Reiter die Zahlen von
+  // gestern in den heutigen Tag geschoben hat.
+  //
+  // Gesetzt wird erzwungen: eine kleinere Zahl kommt sonst nicht durch den
+  // Abgleich, der sonst überall das Maximum nimmt. Danach wird die Tabelle
+  // eingeregelt, damit die abhängigen Zahlen mitgehen und nicht plötzlich
+  // über ihrer Grundlage stehen.
+  function setzeZaehler(key, roh) {
+    const wert = Math.max(0, Math.min(100000, Math.round(Number(roh))));
+    if (!Number.isFinite(wert)) { setSetzeFeld(null); return; }
+    const neu = regleEin({ ...todayCounts, [key]: wert }, todayReasons);
+    setTodayCounts(neu.counts);
+    setTodayReasons(neu.reasons);
+    persist(neu.counts, neu.reasons, { korrektur: true });
+    // Der Anruf-Verlauf beschreibt jetzt etwas anderes als die Zähler — ihn
+    // stehen zu lassen hiesse, dass der nächste Minus-Klick Buchungen
+    // zurücknimmt, die es in dieser Zahl gar nicht mehr gibt.
+    leereVerlauf(prefix, dayKey());
+    setSetzeFeld(null);
+    showToast(`${FIELDS.find((f) => f.key === key)?.label}: auf ${wert} gesetzt`);
   }
 
   tageswechselRef.current = pruefeTageswechsel;
@@ -1042,16 +1071,37 @@ export default function CallTracker() {
                   <span className="text-xs text-textMuted flex-1">{f.label}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-3xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
-                    {counts[f.key] || 0}
-                  </span>
-                  <button onClick={() => bump(f.key, -1)} title="Zähler korrigieren"
+                  {setzeFeld === f.key ? (
+                    <input
+                      autoFocus type="number" inputMode="numeric" min="0"
+                      className="input !py-1 !px-2 text-2xl font-display font-semibold w-24"
+                      value={setzeWert}
+                      onChange={(e) => setSetzeWert(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") setzeZaehler(f.key, setzeWert);
+                        if (e.key === "Escape") setSetzeFeld(null);
+                      }}
+                      onBlur={() => setzeZaehler(f.key, setzeWert)} />
+                  ) : (
+                    <button
+                      onClick={() => { setSetzeFeld(f.key); setSetzeWert(String(counts[f.key] || 0)); }}
+                      title="Zahl anklicken, um sie zu setzen"
+                      className="text-3xl font-display font-semibold hover:opacity-70"
+                      style={{ color: feldFarbe(f.key) }}>
+                      {counts[f.key] || 0}
+                    </button>
+                  )}
+                  <button onClick={() => bump(f.key, -1)} title="Zähler um eins verringern"
                     className="w-8 h-8 rounded-lg border border-line text-textMuted hover:text-textMain hover:border-amber flex items-center justify-center flex-shrink-0">
                     –
                   </button>
                 </div>
                 <div className="text-[10.5px] text-textMuted mt-1">
-                  {f.key === "anwahlen" ? "− nimmt den letzten Anruf ganz zurück" : "Bei Fehlern: − zum Korrigieren"}
+                  {setzeFeld === f.key
+                    ? "Zahl eintippen, Enter — gilt für alle Geräte"
+                    : f.key === "anwahlen"
+                      ? "− nimmt den letzten Anruf ganz zurück · Zahl antippen zum Setzen"
+                      : "− korrigiert um eins · Zahl antippen zum Setzen"}
                 </div>
               </div>
             ))}
