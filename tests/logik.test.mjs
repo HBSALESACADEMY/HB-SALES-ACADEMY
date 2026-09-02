@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 import { bereichFuer, istGleicherTag, monatsRaster, startOfWeek, endOfWeek } from "../lib/dateRange.js";
 import { fehlendePflichtfelder, resolveCoreRequired, resolveLeadFields } from "../lib/leadFields.js";
-import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, buildReport, FIELDS, istOffenerAnruf, merkeSchritt, offenerSchritt, alleGespeichertenTage, merkeBuchung, nimmLetztenAnruf, leereVerlauf } from "../lib/callTracker.js";
+import { storagePrefix, dayKey, dateKeyOf, loadDay, saveDay, aggregateRange, zaehlerZusammenfuehren, wasGiltJetzt, buildReport, FIELDS, istOffenerAnruf, merkeSchritt, offenerSchritt, alleGespeichertenTage, merkeBuchung, nimmLetztenAnruf, leereVerlauf } from "../lib/callTracker.js";
 import { textColorForColors, contrastRatio, relativeLuminance, hexToRgb } from "../lib/colorMath.js";
 import { resolveObjectionCategories } from "../lib/objectionCategories.js";
 import { GOAL_METRICS, GOAL_METRIC_KEYS } from "../lib/goalMetrics.js";
@@ -1418,4 +1418,64 @@ test("Einen Zähler setzen regelt die Tabelle mit ein", () => {
   assert.match(funktion, /korrektur: true/);
   assert.match(funktion, /regleEin\(/);
   assert.match(funktion, /leereVerlauf\(/);
+});
+
+// --- Eine Korrektur gilt überall -------------------------------------------
+
+test("Korrektur schlägt Maximum: ein anderes Gerät zieht sie nicht hoch", () => {
+  // Am Laptop stand 120, korrigiert wurde am Handy auf 60. Das Handy
+  // schreibt die Korrektur mit Zeitstempel. Der Laptop hat noch seinen
+  // alten Stand von 120 — und darf ihn NICHT zurückschreiben, sonst sehen
+  // alle wieder 120.
+  const laptop = { counts: { anwahlen: 120 }, reasons: {}, gespeichert_at: "2026-09-02T09:00:00.000Z" };
+  const server = { counts: { anwahlen: 60 }, reasons: {}, korrigiert_at: "2026-09-02T11:00:00.000Z" };
+  const gilt = wasGiltJetzt(laptop, server);
+  assert.equal(gilt.counts.anwahlen, 60);
+  assert.equal(gilt.quelle, "server");
+});
+
+test("Ohne Korrektur bleibt es beim Maximum", () => {
+  // Der Normalfall: zwei Geräte zählen, keins darf das andere löschen.
+  const geraet = { counts: { anwahlen: 40, termin: 1 }, reasons: {}, gespeichert_at: "2026-09-02T09:00:00.000Z" };
+  const server = { counts: { anwahlen: 55, termin: 0 }, reasons: {}, korrigiert_at: null };
+  const gilt = wasGiltJetzt(geraet, server);
+  assert.equal(gilt.counts.anwahlen, 55);
+  assert.equal(gilt.counts.termin, 1);
+  assert.equal(gilt.quelle, "zusammengefuehrt");
+});
+
+test("Nach der Korrektur weitergezählte Anrufe gehen nicht verloren", () => {
+  // Korrigiert um 11:00 auf 60, danach am selben Gerät weiter auf 63
+  // gezählt: der neuere Stand des Geräts gewinnt wieder das Maximum.
+  const geraet = { counts: { anwahlen: 63 }, reasons: {}, gespeichert_at: "2026-09-02T11:30:00.000Z" };
+  const server = { counts: { anwahlen: 60 }, reasons: {}, korrigiert_at: "2026-09-02T11:00:00.000Z" };
+  assert.equal(wasGiltJetzt(geraet, server).counts.anwahlen, 63);
+});
+
+test("Ein Gerät ohne Zeitstempel beugt sich der Korrektur", () => {
+  // Stände aus der Zeit vor dieser Änderung tragen keinen Zeitpunkt. Im
+  // Zweifel gilt die Korrektur — sie ist die bewusste Angabe eines Menschen,
+  // der alte Stand nur ein Überbleibsel.
+  const alt = { counts: { anwahlen: 120 }, reasons: {} };
+  const server = { counts: { anwahlen: 60 }, reasons: {}, korrigiert_at: "2026-09-02T11:00:00.000Z" };
+  assert.equal(wasGiltJetzt(alt, server).counts.anwahlen, 60);
+  // Und ohne Serverzeile bleibt der lokale Stand, wie er ist.
+  assert.equal(wasGiltJetzt(alt, null).counts.anwahlen, 120);
+});
+
+test("Der gespeicherte Tag merkt sich, wann er geschrieben wurde", () => {
+  const speicher = new Map();
+  globalThis.localStorage = {
+    get length() { return speicher.size; },
+    key: (i) => [...speicher.keys()][i],
+    getItem: (k) => (speicher.has(k) ? speicher.get(k) : null),
+    setItem: (k, v) => speicher.set(k, String(v)),
+    removeItem: (k) => speicher.delete(k),
+  };
+  const prefix = storagePrefix("nutzer-2");
+  saveDay(prefix, "callstats:2026-09-02", { anwahlen: 7 }, {});
+  const geladen = loadDay(prefix, "callstats:2026-09-02", []);
+  assert.equal(geladen.counts.anwahlen, 7);
+  assert.ok(geladen.gespeichert_at, "Ohne Zeitpunkt lässt sich keine Korrektur einordnen.");
+  delete globalThis.localStorage;
 });

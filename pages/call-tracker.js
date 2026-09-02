@@ -26,7 +26,7 @@ import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from ".
 import {
   FIELDS, storagePrefix, dayKey, dateKeyOf,
   zeroCounts, zeroReasons, todayFullLabel,
-  loadDay, saveDay, buildReport, alleGespeichertenTage, zaehlerZusammenfuehren,
+  loadDay, saveDay, buildReport, alleGespeichertenTage, zaehlerZusammenfuehren, wasGiltJetzt,
   merkeBuchung, nimmLetztenAnruf, leereVerlauf,
   merkeSchritt, offenerSchritt,
 } from "../lib/callTracker";
@@ -160,15 +160,15 @@ export default function CallTracker() {
         // verschwand im catch, die Kacheln blieben auf null, und die
         // Statistik daneben zeigte die richtigen Zahlen.
         const { data: serverTag, error: abgleichFehler } = await supabase.from("call_log_days")
-          .select("counts, reasons").eq("user_id", session.user.id)
+          .select("counts, reasons, korrigiert_at").eq("user_id", session.user.id)
           .eq("log_date", dateKeyOf(new Date())).maybeSingle();
         // Supabase wirft nicht — ohne diese Zeile bleibt jeder Fehler stumm.
         if (abgleichFehler) throw abgleichFehler;
         if (serverTag) {
-          start = {
-            counts: zaehlerZusammenfuehren(loaded.counts, serverTag.counts || {}),
-            reasons: zaehlerZusammenfuehren(loaded.reasons, serverTag.reasons || {}),
-          };
+          // Normalfall Maximum, aber eine jüngere Korrektur gilt vor allem
+          // anderen — sonst zieht dieses Gerät eine anderswo korrigierte
+          // Zahl wieder hoch, und alle sehen wieder den falschen Wert.
+          start = wasGiltJetzt(loaded, serverTag);
           saveDay(prefixJetzt, dayKey(), start.counts, start.reasons);
         }
       } catch (e) {
@@ -257,12 +257,17 @@ export default function CallTracker() {
       const tag = stand.tag || dateKeyOf(new Date());
       let counts = stand.counts;
       let gruende = stand.reasons;
+      let uebernommen = null;
       if (!erzwingen) {
         const { data: serverTag } = await supabase.from("call_log_days")
-          .select("counts, reasons").eq("user_id", userId).eq("log_date", tag).maybeSingle();
+          .select("counts, reasons, korrigiert_at").eq("user_id", userId).eq("log_date", tag).maybeSingle();
         if (serverTag) {
-          counts = zaehlerZusammenfuehren(stand.counts, serverTag.counts || {});
-          gruende = zaehlerZusammenfuehren(stand.reasons, serverTag.reasons || {});
+          const gilt = wasGiltJetzt({ ...stand, gespeichert_at: stand.gespeichert_at }, serverTag);
+          counts = gilt.counts;
+          gruende = gilt.reasons;
+          // Anderswo korrigiert: dieses Gerät übernimmt, statt die alte
+          // Zahl zurückzuschreiben. Der Bildschirm muss das mitbekommen.
+          if (gilt.quelle === "server") uebernommen = gilt;
         }
       }
       const { error } = await supabase.from("call_log_days").upsert({
@@ -275,8 +280,20 @@ export default function CallTracker() {
         counts,
         reasons: gruende,
         updated_at: new Date().toISOString(),
+        // Nur eine echte Korrektur setzt diesen Zeitstempel. Beim normalen
+        // Zählen bleibt er stehen, wie er ist — sonst hätte jeder Klick
+        // Vorrang vor jeder Korrektur.
+        ...(erzwingen ? { korrigiert_at: new Date().toISOString() } : {}),
       });
       if (error) throw error;
+
+      if (uebernommen) {
+        saveDay(prefix, dayKey(), uebernommen.counts, uebernommen.reasons);
+        setTodayCounts(uebernommen.counts);
+        setTodayReasons(uebernommen.reasons);
+        letzterStand.current = null;
+        showToast("Zahlen wurden anderswo korrigiert — Stand übernommen");
+      }
     } catch (e) {
       meldeFehler("Deine Anrufzahlen konnten gerade nicht mit dem Team geteilt werden. Lokal sind sie gespeichert.", e);
       meldeStoerung("Call Tracker teilen", e?.message || String(e));
@@ -292,7 +309,11 @@ export default function CallTracker() {
     saveDay(prefix, dayKey(), counts, reasonCounts);
     // Der Tag gehört zum Stand dazu. Ohne ihn schrieb der Versand immer auf
     // "heute" — auch einen Stand, der von gestern war.
-    letzterStand.current = { counts, reasons: reasonCounts, tag: dateKeyOf(new Date()) };
+    letzterStand.current = {
+      counts, reasons: reasonCounts,
+      tag: dateKeyOf(new Date()),
+      gespeichert_at: new Date().toISOString(),
+    };
     if (korrektur) { sendeZahlen({ erzwingen: true }); return; }
 
     // Verzögert, damit nicht jeder Klick eine eigene Anfrage auslöst — aber
