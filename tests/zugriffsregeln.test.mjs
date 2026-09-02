@@ -148,3 +148,17 @@ test("call_events sperrt niemanden aus den eigenen Zeilen aus", () => {
   // Und die Führungsrolle bleibt an die Mandanten-Grenze gebunden.
   assert.match(sql, /call_events_select_managers[\s\S]*?sieht_person\(user_id\)/);
 });
+
+test("Ein Folgetermin für jemand anderen bleibt bei dieser Person", () => {
+  // Der Folgetermin behält den ursprünglichen Vertriebler als created_by,
+  // sonst stünde er plötzlich in der Statistik der Führungskraft und fehlte
+  // in seiner eigenen. Die Insert-Regel muss das zulassen — und zwar nur
+  // innerhalb der eigenen Organisation und nur für Menschen, die man führt.
+  const sql = readFileSync(new URL("../supabase/migration_130_folgetermin.sql", import.meta.url), "utf8");
+  assert.match(sql, /create policy "leads_insert"/);
+  assert.match(sql, /created_by = auth\.uid\(\)/);
+  assert.match(sql, /sieht_person\(created_by\)/);
+  assert.match(sql, /ist_fuehrungsrolle\(auth\.uid\(\)\)|is_team_lead_of\(created_by, auth\.uid\(\)\)/);
+  // Die Mandanten-Grenze bleibt.
+  assert.match(sql, /organization_id is not distinct from aktive_org\(auth\.uid\(\)\)/);
+});

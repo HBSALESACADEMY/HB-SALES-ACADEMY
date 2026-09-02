@@ -430,7 +430,7 @@ export default function Termine() {
     const err = await aendereGeprueft(supabase.from("leads").update({ appointment_at: neu, status: "geplant" }).eq("id", id), "Diesen Termin darf nur verschieben, wer ihn angelegt hat, oder ein Manager.");
     if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, appointment_at: neu, status: "geplant" } : l)));
-    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${deutscheZeit(neu)} Uhr.`);
+    meldeTerminAenderung(id, "bearbeitet", `Der Termin wurde verschoben auf ${deutscheZeit(neu)} Uhr.`, { zeitpunktGeaendert: true });
     setVerschiebeId(null);
     setVerschiebeDatum("");
   }
@@ -467,7 +467,7 @@ export default function Termine() {
     const verschoben = original && original.appointment_at !== patch.appointment_at;
     meldeTerminAenderung(id, "bearbeitet", verschoben
       ? `Der Termin wurde verschoben auf ${patch.appointment_at ? `${deutscheZeit(patch.appointment_at)} Uhr` : "keinen Zeitpunkt"}.`
-      : "Die Termindaten wurden bearbeitet.");
+      : "Die Termindaten wurden bearbeitet.", { zeitpunktGeaendert: verschoben });
     setEditingLeadId(null);
     setEditDraft(null);
   }
@@ -598,7 +598,7 @@ export default function Termine() {
     const err = await aendereGeprueft(supabase.from("leads").update({ status }).eq("id", id), "Den Status darf nur ändern, wer den Termin angelegt hat, oder ein Manager.");
     if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
-    meldeTerminAenderung(id, "status", `Neuer Status: ${STATUS_LABELS[status] || status}`);
+    meldeTerminAenderung(id, "status", `Neuer Status: ${STATUS_LABELS[status] || status}`, { status });
   }
 
   async function markOutcome(id, outcome) {
@@ -611,7 +611,7 @@ export default function Termine() {
     const err = await aendereGeprueft(supabase.from("leads").update({ outcome }).eq("id", id), "Das Ergebnis darf nur eintragen, wer den Termin angelegt hat, oder ein Manager.");
     if (err) { setError(err); return; }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome } : l)));
-    meldeTerminAenderung(id, "ergebnis", `Ergebnis: ${OUTCOME_LABELS[outcome] || outcome}`);
+    meldeTerminAenderung(id, "ergebnis", `Ergebnis: ${OUTCOME_LABELS[outcome] || outcome}`, { outcome });
   }
 
   // Legt einen EIGENEN Folgetermin an, der auf den ursprünglichen verweist.

@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeAlarm } from "../../lib/alarm";
 import { deutscheZeit } from "../../lib/terminzeit";
+import { meldungsGrund, MELDENSWERT } from "../../lib/terminMeldung";
 
 // Meldet Änderungen an einem bestehenden Termin an das Team — Statuswechsel,
 // Ergebnis, Folgetermin, Bearbeitung, Löschung.
@@ -28,14 +29,30 @@ const TITEL = {
   geloescht: "🗑️ Termin gelöscht",
 };
 
+// Überschrift nach dem GRUND der Meldung, nicht nach der Art der Änderung:
+// "Termin abgesagt" sagt mehr als "Status geändert".
+const GRUND_TITEL = {
+  verschoben: "🕐 Termin verschoben",
+  abgesagt: "❌ Termin abgesagt",
+  geloescht: "🗑️ Termin gelöscht",
+  folgetermin: "📅 Folgetermin angelegt",
+  kunde: "🎉 Kunde geworden",
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const auth = await requireUser(req, res);
   if (!auth) return;
   const { client, user } = auth;
 
-  const { leadId, ereignis, beschreibung, activeOrgId } = req.body || {};
+  const { leadId, ereignis, beschreibung, activeOrgId, details } = req.body || {};
   if (!leadId || !TITEL[ereignis]) return res.status(400).json({ error: "leadId und gültiges Ereignis erforderlich." });
+
+  // Die Entscheidung fällt auf dem SERVER, nicht in der Seite: sonst
+  // müsste jede aufrufende Stelle sie einzeln richtig treffen, und die
+  // erste, die es vergisst, füllt den Kanal wieder.
+  const grund = meldungsGrund(ereignis, details || {});
+  if (!grund) return res.status(200).json({ ok: true, gemeldet: false });
 
   try {
     // Über den RLS-gebundenen Client: wer den Termin nicht sehen darf, kann
@@ -62,7 +79,7 @@ export default async function handler(req, res) {
 
     if (org?.telegram_chat_id) {
       const text = [
-        `${TITEL[ereignis]}: ${lead.name}` + (lead.company ? ` (${lead.company})` : ""),
+        `${GRUND_TITEL[grund] || TITEL[ereignis]}: ${lead.name}` + (lead.company ? ` (${lead.company})` : ""),
         beschreibung ? beschreibung : null,
         `Von ${wer}`,
         ``,
@@ -72,7 +89,7 @@ export default async function handler(req, res) {
       await sendeAlarm(text, org.telegram_chat_id);
     }
 
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, gemeldet: true, grund: MELDENSWERT[grund] });
   } catch (e) {
     console.error("Termin-Meldung fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message || "Meldung konnte nicht gesendet werden." });

@@ -38,6 +38,7 @@ import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
 import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } from "../lib/quoten.js";
 import { korrigiere, regleEin, zieheAnrufAb, ziehreAnteiligMit, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
 import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
+import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
@@ -1533,4 +1534,37 @@ test("Die Rückfrage kommt nur, wenn wirklich etwas daran hängt", () => {
   assert.match(anwenden, /ziehreAnteiligMit\(/);
   assert.match(anwenden, /regleEin\(/);
   assert.match(anwenden, /korrektur: true/);
+});
+
+// --- Was eine Telegram-Meldung wert ist ------------------------------------
+
+test("Gemeldet wird, was den Kalender ändert oder ein Abschluss ist", () => {
+  assert.equal(meldungsGrund("bearbeitet", { zeitpunktGeaendert: true }), "verschoben");
+  assert.equal(meldungsGrund("status", { status: "abgesagt" }), "abgesagt");
+  assert.equal(meldungsGrund("geloescht"), "geloescht");
+  assert.equal(meldungsGrund("folgetermin"), "folgetermin");
+  assert.equal(meldungsGrund("ergebnis", { outcome: "kunde" }), "kunde");
+  // Jeder Grund hat einen Klartext für die Antwort der Route.
+  Object.keys(MELDENSWERT).forEach((k) => assert.ok(MELDENSWERT[k].length > 3, k));
+});
+
+test("Alltägliches bleibt still", () => {
+  // Eine nachgetragene Telefonnummer weckt nicht das ganze Team.
+  assert.equal(meldungsGrund("bearbeitet", { zeitpunktGeaendert: false }), null);
+  assert.equal(meldungsGrund("bearbeitet", {}), null);
+  // Der Normalfall nach einem Termin.
+  assert.equal(meldungsGrund("status", { status: "wahrgenommen" }), null);
+  assert.equal(meldungsGrund("status", { status: "geplant" }), null);
+  // Steht in der Auswertung; beim Folgetermin meldet sich der neue Termin.
+  assert.equal(meldungsGrund("ergebnis", { outcome: "absage" }), null);
+  assert.equal(meldungsGrund("ergebnis", { outcome: "follow_up" }), null);
+  assert.equal(sollMeldung("ergebnis", { outcome: "absage" }), false);
+});
+
+test("Die Entscheidung fällt auf dem Server, nicht in der Seite", () => {
+  // Sonst müsste jede aufrufende Stelle sie einzeln richtig treffen — und
+  // die erste, die es vergisst, füllt den Kanal wieder.
+  const route = readFileSync(new URL("../pages/api/lead-notify.js", import.meta.url), "utf8");
+  assert.match(route, /meldungsGrund\(ereignis, details \|\| \{\}\)/);
+  assert.match(route, /if \(!grund\) return res\.status\(200\)/);
 });
