@@ -16,7 +16,7 @@ import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
-import { korrigiere, regleEin } from "../lib/anrufKorrektur";
+import { korrigiere, regleEin, ziehreAnteiligMit } from "../lib/anrufKorrektur";
 import { merkeEreignis, nimmEreignisZurueck } from "../lib/callEreignis";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
@@ -82,6 +82,8 @@ export default function CallTracker() {
   // Welcher Zähler gerade von Hand gesetzt wird, und worauf.
   const [setzeFeld, setSetzeFeld] = useState(null);
   const [setzeWert, setSetzeWert] = useState("");
+  // Steht eine Rückfrage an: "sollen die übrigen Zahlen mitgehen?"
+  const [ruecklauf, setRuecklauf] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
   // In WELCHER Organisation gerade telefoniert wird — die Ereignisse hängen
@@ -385,6 +387,20 @@ export default function CallTracker() {
   function setzeZaehler(key, roh) {
     const wert = Math.max(0, Math.min(100000, Math.round(Number(roh))));
     if (!Number.isFinite(wert)) { setSetzeFeld(null); return; }
+    const alt = todayCounts[key] || 0;
+
+    // Wird eine Zahl kleiner und hängen andere daran, gibt es zwei
+    // vernünftige Antworten — und die kann nur der Mensch geben: War die
+    // Zahl ANTEILIG zu hoch (Anwahlen von gestern mit drin), muss alles
+    // mitgehen. War es ein einzelner Fehlklick, darf sonst nichts
+    // angefasst werden. Deshalb wird gefragt statt geraten.
+    const haengtWas = FIELDS.some((f) => f.key !== key && (todayCounts[f.key] || 0) > 0);
+    if (wert < alt && alt > 0 && haengtWas) {
+      setSetzeFeld(null);
+      setRuecklauf({ key, alt, wert });
+      return;
+    }
+
     const neu = regleEin({ ...todayCounts, [key]: wert }, todayReasons);
     setTodayCounts(neu.counts);
     setTodayReasons(neu.reasons);
@@ -395,6 +411,20 @@ export default function CallTracker() {
     leereVerlauf(prefix, dayKey());
     setSetzeFeld(null);
     showToast(`${FIELDS.find((f) => f.key === key)?.label}: auf ${wert} gesetzt`);
+  }
+
+  // Antwort auf die Rückfrage anwenden.
+  function wendeRuecklaufAn(anteilig) {
+    const { key, alt, wert } = ruecklauf;
+    const neu = anteilig
+      ? ziehreAnteiligMit(todayCounts, todayReasons, key, alt, wert)
+      : regleEin({ ...todayCounts, [key]: wert }, todayReasons);
+    setTodayCounts(neu.counts);
+    setTodayReasons(neu.reasons);
+    persist(neu.counts, neu.reasons, { korrektur: true });
+    leereVerlauf(prefix, dayKey());
+    setRuecklauf(null);
+    showToast(anteilig ? "Alle Zahlen im gleichen Verhältnis gekürzt" : `Auf ${wert} gesetzt`);
   }
 
   tageswechselRef.current = pruefeTageswechsel;
@@ -812,6 +842,32 @@ export default function CallTracker() {
           {isToday && wiederaufgenommen && step !== "lead" && (
             <div className="card mb-3 border-amber/40 text-sm text-amber">
               Hier war noch ein Anruf offen — bitte kurz zu Ende erfassen, dann stimmt die Auswertung.
+            </div>
+          )}
+
+          {isToday && ruecklauf && (
+            <div className="card mb-3 border-amber/50">
+              <div className="text-sm text-textMain mb-1">
+                {FIELDS.find((f) => f.key === ruecklauf.key)?.label} von {ruecklauf.alt} auf {ruecklauf.wert} —
+                sollen die übrigen Zahlen im gleichen Verhältnis mitgehen?
+              </div>
+              <p className="text-xs text-textMuted mb-3">
+                <strong className="text-textMain">Ja</strong>, wenn die Zahl anteilig zu hoch war — dann stecken
+                die fremden Anrufe auch in „erreicht“, in den Terminen und in den Ablehnungsgründen.
+                {" "}<strong className="text-textMain">Nein</strong>, wenn nur diese eine Zahl falsch war; dann
+                bleibt alles andere stehen und es werden nur Widersprüche aufgelöst.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => wendeRuecklaufAn(true)} className="btn text-sm">
+                  Ja, alles mitziehen
+                </button>
+                <button onClick={() => wendeRuecklaufAn(false)} className="btn-ghost text-sm">
+                  Nein, nur diese Zahl
+                </button>
+                <button onClick={() => setRuecklauf(null)} className="btn-ghost text-sm text-textMuted">
+                  Abbrechen
+                </button>
+              </div>
             </div>
           )}
 

@@ -36,7 +36,7 @@ import { LINIEN, MITTE, hatBingo, gewinnFelder, zufallsWoerter, freiePlaetze } f
 import { buchungslink, normalisiere, kurzform } from "../lib/buchungslink.js";
 import { werteZielAus, zielStatus, bilanz } from "../lib/zielAuswertung.js";
 import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } from "../lib/quoten.js";
-import { korrigiere, regleEin, zieheAnrufAb, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
+import { korrigiere, regleEin, zieheAnrufAb, ziehreAnteiligMit, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
 import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -1414,10 +1414,14 @@ test("Einen Zähler setzen regelt die Tabelle mit ein", () => {
   // Und die Seite setzt erzwungen — sonst zieht der Abgleich, der überall
   // das Maximum nimmt, die alte höhere Zahl sofort zurück.
   const quelle = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
-  const funktion = quelle.slice(quelle.indexOf("function setzeZaehler"), quelle.indexOf("function setzeZaehler") + 900);
-  assert.match(funktion, /korrektur: true/);
-  assert.match(funktion, /regleEin\(/);
-  assert.match(funktion, /leereVerlauf\(/);
+  // Beide Wege — direkt gesetzt und über die Rückfrage — speichern
+  // erzwungen, regeln ein und räumen den Anruf-Verlauf ab.
+  const direkt = quelle.slice(quelle.indexOf("function setzeZaehler"), quelle.indexOf("function setzeZaehler") + 1800);
+  assert.match(direkt, /korrektur: true/);
+  assert.match(direkt, /regleEin\(/);
+  const ueberRueckfrage = quelle.slice(quelle.indexOf("function wendeRuecklaufAn"), quelle.indexOf("function wendeRuecklaufAn") + 700);
+  assert.match(ueberRueckfrage, /korrektur: true/);
+  assert.match(ueberRueckfrage, /leereVerlauf\(/);
 });
 
 // --- Eine Korrektur gilt überall -------------------------------------------
@@ -1478,4 +1482,55 @@ test("Der gespeicherte Tag merkt sich, wann er geschrieben wurde", () => {
   assert.equal(geladen.counts.anwahlen, 7);
   assert.ok(geladen.gespeichert_at, "Ohne Zeitpunkt lässt sich keine Korrektur einordnen.");
   delete globalThis.localStorage;
+});
+
+test("Anteilig kürzen zieht alles im selben Verhältnis mit", () => {
+  // Der Fall: die Anwahlen von gestern sind im heutigen Tag gelandet. Dann
+  // stecken die fremden Anrufe auch in erreicht, in den Terminen und in den
+  // Gründen — ein blosses Auflösen der Widersprüche liesse sie stehen.
+  const counts = { anwahlen: 120, erreicht: 20, nicht: 25, gatekeeper: 12, entscheider: 8, weitergeleitet: 5, termin: 3, negativ: 10 };
+  const neu = ziehreAnteiligMit(counts, { kein_interesse: 7, kein_budget: 3 }, "anwahlen", 120, 60);
+  assert.equal(neu.counts.anwahlen, 60);
+  assert.equal(neu.counts.erreicht, 10);
+  assert.equal(neu.counts.gatekeeper, 6);
+  assert.equal(neu.counts.negativ, 5);
+  // Kaufmännisch gerundet: aus 3 Terminen werden 2, nicht 1. Im Zweifel
+  // bleibt lieber ein Termin zu viel stehen — den sieht man in der Liste,
+  // den fehlenden nie wieder.
+  assert.equal(neu.counts.termin, 2);
+  // 7 halbiert wären 4 (kaufmännisch gerundet) — daraus wird 3, weil die
+  // Gründe zusammen nicht über den 5 negativen Anrufen liegen dürfen. Das
+  // Einregeln läuft nach dem anteiligen Kürzen noch einmal drüber.
+  assert.equal(neu.reasons.kein_interesse, 3);
+  assert.equal(neu.reasons.kein_interesse + neu.reasons.kein_budget, neu.counts.negativ);
+
+  // Und das Ergebnis bleibt in sich stimmig.
+  assert.ok(neu.counts.erreicht + neu.counts.nicht <= neu.counts.anwahlen);
+  assert.ok(neu.counts.termin + neu.counts.negativ <= neu.counts.erreicht);
+});
+
+test("Anteilig kürzen greift nur nach unten", () => {
+  const counts = { anwahlen: 60, erreicht: 20, termin: 3 };
+  // Nach oben wird nichts mitgezogen: wer die Anwahlen erhöht, hat nicht
+  // rückwirkend mehr Gespräche geführt.
+  const hoch = ziehreAnteiligMit(counts, {}, "anwahlen", 60, 120);
+  assert.equal(hoch.counts.anwahlen, 120);
+  assert.equal(hoch.counts.erreicht, 20);
+  assert.equal(hoch.counts.termin, 3);
+  // Und von null aus gibt es kein Verhältnis.
+  const ausNull = ziehreAnteiligMit({ anwahlen: 0, erreicht: 5 }, {}, "anwahlen", 0, 10);
+  assert.equal(ausNull.counts.anwahlen, 10);
+});
+
+test("Die Rückfrage kommt nur, wenn wirklich etwas daran hängt", () => {
+  const quelle = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
+  const fn = quelle.slice(quelle.indexOf("function setzeZaehler"), quelle.indexOf("function setzeZaehler") + 1400);
+  // Nur bei kleinerer Zahl UND vorhandenen abhängigen Werten.
+  assert.match(fn, /wert < alt/);
+  assert.match(fn, /haengtWas/);
+  // Und beide Antworten führen zu einer erzwungenen Korrektur.
+  const anwenden = quelle.slice(quelle.indexOf("function wendeRuecklaufAn"), quelle.indexOf("function wendeRuecklaufAn") + 700);
+  assert.match(anwenden, /ziehreAnteiligMit\(/);
+  assert.match(anwenden, /regleEin\(/);
+  assert.match(anwenden, /korrektur: true/);
 });
