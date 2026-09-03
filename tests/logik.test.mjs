@@ -19,7 +19,7 @@ import { eigeneFlaechenGelten, istHellerTon } from "../lib/orgBranding.js";
 import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib/profilPflicht.js";
 import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
 import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js";
-import { baueIcs, icsDateiname } from "../lib/ics.js";
+import { baueIcs, baueIcsFeed, icsDateiname } from "../lib/ics.js";
 import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
 import { deutscherTag } from "../lib/terminzeit.js";
 import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
@@ -1567,4 +1567,56 @@ test("Die Entscheidung fällt auf dem Server, nicht in der Seite", () => {
   const route = readFileSync(new URL("../pages/api/lead-notify.js", import.meta.url), "utf8");
   assert.match(route, /meldungsGrund\(ereignis, details \|\| \{\}\)/);
   assert.match(route, /if \(!grund\) return res\.status\(200\)/);
+});
+
+// --- Kalender-Abo ----------------------------------------------------------
+
+test("Der Abo-Kalender trägt mehrere Termine und einen Namen", () => {
+  const feed = baueIcsFeed([
+    { uid: "lead-1@x", titel: "Termin: Meier GmbH", start: "2026-09-10T09:00:00Z" },
+    { uid: "event-2@x", titel: "Schulung", tagVon: "2026-09-12", tagBis: "2026-09-13" },
+  ], { name: "HB — Houman" });
+
+  assert.equal((feed.match(/BEGIN:VEVENT/g) || []).length, 2);
+  assert.match(feed, /X-WR-CALNAME:HB — Houman/);
+  // Beides, weil Apple das eine liest und Google das andere.
+  assert.match(feed, /X-PUBLISHED-TTL:PT1H/);
+  assert.match(feed, /REFRESH-INTERVAL;VALUE=DURATION:PT1H/);
+  // Ganztägig endet am Folgetag des letzten Tages.
+  assert.match(feed, /DTSTART;VALUE=DATE:20260912/);
+  assert.match(feed, /DTEND;VALUE=DATE:20260914/);
+  assert.ok(feed.endsWith("END:VCALENDAR\r\n"));
+});
+
+test("Abgesagte Termine verschwinden nicht, sie werden abgesagt", () => {
+  // Fällt ein Termin einfach aus der Datei, bleibt er in manchen Kalendern
+  // für immer stehen. CANCELLED räumt ihn dort weg.
+  const feed = baueIcsFeed([{ uid: "lead-9@x", titel: "Termin: Weg", start: "2026-09-10T09:00:00Z", abgesagt: true }]);
+  assert.match(feed, /STATUS:CANCELLED/);
+});
+
+test("Die UID eines Termins bleibt gleich, wenn er verschoben wird", () => {
+  // Sonst legt der fremde Kalender den verschobenen Termin ein zweites Mal
+  // an, statt den vorhandenen zu bewegen.
+  const frueh = baueIcsFeed([{ uid: "lead-7@x", titel: "Termin", start: "2026-09-10T09:00:00Z" }]);
+  const spaet = baueIcsFeed([{ uid: "lead-7@x", titel: "Termin", start: "2026-09-11T14:00:00Z" }]);
+  assert.match(frueh, /UID:lead-7@x/);
+  assert.match(spaet, /UID:lead-7@x/);
+  assert.ok(frueh !== spaet);
+});
+
+test("Der Abo-Kalender liefert nur die Termine EINER Person", () => {
+  // Der Link ist ein Geheimnis in einer Adresse und wird ohne Anmeldung
+  // abgerufen. Käme dort heraus, was jemand als Führungskraft sehen darf,
+  // gäbe ein weitergeleiteter Link unbemerkt die halbe Organisation preis.
+  const route = readFileSync(new URL("../pages/api/kalender-abo.js", import.meta.url), "utf8");
+  assert.match(route, /eq\("kalender_token", token\)/);
+  assert.match(route, /eq\("created_by", profil\.id\)/);
+  assert.match(route, /eq\("person_id", profil\.id\)/);
+  // Keine Führungs-Ausweitung in dieser Route.
+  assert.ok(!/ist_fuehrungsrolle|istFuehrungsrolle|sieht_person/.test(route),
+    "Der Abo-Link darf niemals mehr zeigen als die eigenen Termine.");
+  // Und kein Zwischenspeicher, sonst hinkt der Kalender hinterher.
+  assert.match(route, /no-store/);
+  assert.match(route, /noindex/);
 });

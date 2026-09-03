@@ -4,7 +4,7 @@ import Avatar from "../components/Avatar";
 import PersonenAuswahl from "../components/PersonenAuswahl";
 import LogoHintergrund from "../components/LogoHintergrund";
 import { supabase } from "../lib/supabaseClient";
-import { apiGet } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { openProfile } from "../lib/profileModalBus";
 import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel } from "../lib/dateRange";
@@ -43,6 +43,11 @@ export default function Kalender() {
   const [anker, setAnker] = useState(() => new Date());
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState("");
+  // Das Kalender-Abo: Link in den eigenen Kalender eintragen (migration_131).
+  const [aboOffen, setAboOffen] = useState(false);
+  const [abo, setAbo] = useState(null);
+  const [aboBusy, setAboBusy] = useState(false);
+  const [kopiert, setKopiert] = useState(false);
   const [formularOffen, setFormularOffen] = useState(false);
   const [entwurf, setEntwurf] = useState({ titel: "", art: "meeting", von: "", bis: "", uhrzeit: "", beschreibung: "" });
   const [busy, setBusy] = useState(false);
@@ -257,6 +262,44 @@ export default function Kalender() {
     return Array.from({ length: 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
   })();
 
+  // Der Abo-Link wird erst beim Öffnen erzeugt: wer das Abo nie nutzt,
+  // bekommt auch keinen Schlüssel, der irgendwo herumliegen könnte.
+  async function oeffneAbo() {
+    setAboOffen((v) => !v);
+    if (abo) return;
+    setAboBusy(true);
+    try {
+      setAbo(await apiGet("/api/kalender-abo-link"));
+    } catch (e) {
+      setFehler(e?.message || "Der Abo-Link konnte nicht erzeugt werden.");
+    }
+    setAboBusy(false);
+  }
+
+  // Neuer Schlüssel — der alte Link ist im selben Moment wertlos. Der Weg
+  // für den Fall, dass jemand den Link versehentlich weitergegeben hat.
+  async function aboNeu() {
+    if (!confirm("Neuen Link erzeugen? Der bisherige hört sofort auf zu funktionieren — Kalender, die ihn schon eingetragen haben, zeigen dann nichts mehr an.")) return;
+    setAboBusy(true);
+    try {
+      setAbo(await apiPost("/api/kalender-abo-link", { neu: true }));
+      setKopiert(false);
+    } catch (e) {
+      setFehler(e?.message || "Der neue Link konnte nicht erzeugt werden.");
+    }
+    setAboBusy(false);
+  }
+
+  async function kopiereAbo() {
+    try {
+      await navigator.clipboard.writeText(abo.url);
+      setKopiert(true);
+      setTimeout(() => setKopiert(false), 2500);
+    } catch (e) {
+      setFehler("Kopieren war nicht möglich — bitte den Link von Hand markieren.");
+    }
+  }
+
   function blaettern(richtung) {
     setGewaehlterTag(null);
     setAnker((d) => {
@@ -287,6 +330,56 @@ export default function Kalender() {
       </p>
 
       {fehler && <div className="card mb-4 border-coral/40 text-sm text-coral">{fehler}</div>}
+
+      {/* Kalender-Abo: einmal eintragen, danach hält sich der eigene
+          Kalender selbst auf dem Stand. Der Link ist ein Geheimnis — das
+          steht ausdrücklich dabei, weil man ihn sonst arglos weiterschickt. */}
+      {aboOffen && (
+        <div className="card mb-4">
+          <div className="font-semibold text-textMain text-sm mb-1">Termine im eigenen Kalender</div>
+          <p className="text-xs text-textMuted mb-3">
+            Diesen Link einmal in Apple-, Google- oder Outlook-Kalender eintragen. Danach stehen deine Termine
+            dort automatisch drin: verschobene wandern mit, abgesagte werden durchgestrichen. Du musst nichts
+            mehr einzeln exportieren.
+          </p>
+
+          {aboBusy && !abo && <p className="text-xs text-textMuted">Link wird erzeugt…</p>}
+
+          {abo && (
+            <>
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <input readOnly value={abo.url} onFocus={(e) => e.target.select()}
+                  className="input !py-1.5 text-xs flex-1 min-w-[240px] font-mono" />
+                <button onClick={kopiereAbo} className="btn text-xs">{kopiert ? "Kopiert ✓" : "Link kopieren"}</button>
+                {/* Apple und Outlook tragen den Kalender über webcal:// mit
+                    einem Klick ein, statt die Datei herunterzuladen. */}
+                <a href={abo.webcal} className="btn-ghost text-xs">Direkt eintragen (Apple / Outlook)</a>
+              </div>
+
+              <div className="text-xs text-textMuted leading-relaxed mb-3">
+                <strong className="text-textMain">Google Kalender:</strong> Andere Kalender → Per URL hinzufügen → Link einfügen.<br />
+                <strong className="text-textMain">Apple Kalender:</strong> Ablage → Neues Kalenderabonnement → Link einfügen.<br />
+                <strong className="text-textMain">Outlook:</strong> Kalender hinzufügen → Aus dem Internet abonnieren.
+              </div>
+
+              <div className="rounded-xl border border-amber/40 px-3 py-2 mb-3">
+                <div className="text-xs text-textMain mb-1">Der Link ist wie ein Schlüssel.</div>
+                <p className="text-[11px] text-textMuted">
+                  Wer ihn hat, sieht deine Termine — ohne Anmeldung. Also nicht weitergeben und nicht in eine
+                  Gruppe posten. Ändern kannst du damit nichts, es wird nur gelesen.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={aboNeu} disabled={aboBusy} className="btn-ghost text-xs text-coral disabled:opacity-40">
+                  {aboBusy ? "Erzeugt…" : "Neuen Link erzeugen"}
+                </button>
+                <span className="text-[11px] text-textMuted">Macht den bisherigen Link sofort wertlos.</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Offene Einladungen zuerst — unabhängig davon, welcher Zeitraum
           gerade angezeigt wird. */}
@@ -327,6 +420,9 @@ export default function Kalender() {
               {label}
             </button>
           ))}
+          <button onClick={oeffneAbo} className="btn-ghost text-xs" title="Termine im eigenen Kalender abonnieren">
+            📆 Mit meinem Kalender verbinden
+          </button>
           <button onClick={() => { setFormularOffen((v) => !v); setEntwurf((e) => ({ ...e, von: e.von || heute })); }} className="btn text-xs">
             {formularOffen ? "Abbrechen" : "+ Eintrag"}
           </button>
