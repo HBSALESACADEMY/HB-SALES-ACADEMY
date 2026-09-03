@@ -688,7 +688,7 @@ export default function Layout({ children, fullBleed }) {
   // Schneller Weg für Manager/Admins, direkt aus der Sidebar heraus einen
   // neuen Reiter anzulegen — der bisherige Weg über "Navigation verwalten"
   // wurde als zu umständlich empfunden. Nutzt dieselbe Tabellen-Logik wie
-  // dort (pages/admin/navigation.js), nur ohne Seitenwechsel.
+  // dort (components/SidebarStruktur.js), nur ohne Seitenwechsel.
   async function createNavTab() {
     if (!newTabName.trim()) return;
     setCreatingTab(true);
@@ -929,7 +929,7 @@ export default function Layout({ children, fullBleed }) {
           <div className="absolute left-0 right-0 top-full max-h-[70vh] overflow-y-auto bg-surface border-b border-line shadow-xl px-3 py-3">
             {renderNavGroups({ mobile: true })}
             {(profile?.role === "manager" || profile?.is_admin || profile?.is_platform_admin) && (
-              <button onClick={() => { setMobileNavOpen(false); router.push("/admin/navigation"); }}
+              <button onClick={() => { setMobileNavOpen(false); router.push("/admin/content"); }}
                 className="flex items-center gap-2.5 px-3 py-3 mt-1 rounded-lg text-[13.5px] font-medium text-left w-full text-textMuted hover:text-textMain border border-dashed border-line">
                 + Reiter verwalten
               </button>

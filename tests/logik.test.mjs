@@ -1808,6 +1808,10 @@ test("Verwaltung: jede Seite hat genau einen Ort", () => {
   // Sidebar-Struktur hängt bei "Kurse & Module", wo sie gebraucht wird.
   assert.ok(!routen.includes("/admin/navigation"),
     "Die Sidebar-Verwaltung steht wieder als gleichrangiger Reiter — sie gehört zu den Inhalten.");
+  // Sie ist keine eigene Seite mehr, sondern klappt bei "Kurse & Module"
+  // auf. Ein zurückgelassener Link würde ins Leere führen.
+  assert.ok(!readFileSync(new URL("../pages/admin/content.js", import.meta.url), "utf8").includes("/admin/navigation"),
+    "Es gibt noch einen Link auf die gelöschte Navigationsseite.");
   // Und die Führungsauswertung steht im Verwaltungsbereich, nicht zusätzlich
   // in der Sidebar: derselbe Ort an zwei Stellen ist einer zu viel.
   const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");

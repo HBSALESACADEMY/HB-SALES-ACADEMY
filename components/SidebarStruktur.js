@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import Layout from "../../components/Layout";
-import Icon from "../../components/Icon";
-import IconPicker from "../../components/IconPicker";
-import AdminTabs from "../../components/AdminTabs";
-import { NUR_IM_VERWALTUNGSBEREICH } from "../../components/Layout";
-import { supabase } from "../../lib/supabaseClient";
-import { getActiveOrgId } from "../../lib/activeOrg";
-import { loescheGeprueft } from "../../lib/loeschen";
+import Icon from "./Icon";
+import IconPicker from "./IconPicker";
+import { NUR_IM_VERWALTUNGSBEREICH } from "./Layout";
+import { supabase } from "../lib/supabaseClient";
+import { getActiveOrgId } from "../lib/activeOrg";
+import { loescheGeprueft } from "../lib/loeschen";
 
-export default function NavigationAdmin() {
-  const router = useRouter();
+// Die Struktur der Sidebar: Ordner anlegen, umbenennen, sortieren,
+// ausblenden.
+//
+// Früher eine eigene Verwaltungsseite. Als gleichrangiger Reiter stand sie
+// neben Dingen, die man täglich benutzt — dabei braucht man sie genau
+// einmal je Ordner, und zwar dann, wenn man einen Kurs anlegen will und
+// merkt, dass der passende Ordner fehlt. Deshalb liegt sie jetzt genau
+// dort: aufklappbar bei "Kurse & Module".
+export default function SidebarStruktur() {
   const [isManager, setIsManager] = useState(true);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
@@ -109,30 +113,12 @@ export default function NavigationAdmin() {
     setCreating(false);
   }
 
-  if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
-  if (!isManager) {
-    return (
-      <Layout>
-        <h1 className="text-2xl font-display text-textMain mb-1">Navigation verwalten</h1>
-        <p className="text-textMuted text-sm">Diese Ansicht ist nur für Manager, Trainer und Admins verfügbar.</p>
-      </Layout>
-    );
-  }
+  if (loading) return <p className="text-textMuted text-sm">Lädt...</p>;
+  if (!isManager) return <p className="text-textMuted text-sm">Nur für Manager, Trainer und Admins.</p>;
 
   return (
-    <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Sidebar & eigene Ordner</h1>
-      <div className="brand-stripe w-16 mb-4" />
-      <AdminTabs />
-      <p className="text-textMuted text-sm mb-3">Hier legst du nur die <strong>Struktur der Sidebar</strong> fest: Reiter/Ordner anlegen, umbenennen, Icon ändern, Reihenfolge ändern, ausblenden oder entfernen — auch die fest eingebauten. Entfernen löscht bei eigenen Ordnern auch deren Kurse; bei fest eingebauten Seiten verschwindet nur der Sidebar-Link, die Seite bleibt erreichbar.</p>
-      <div className="card border border-violet/30 mb-6 flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-textMuted text-xs">
-          Um <strong className="text-textMain">Kurse mit Inhalten</strong> in einen Ordner zu füllen (Module, Videos, Anhänge), geh zu „Inhalte verwalten" — dort wählst du den Ordner aus, der hier angelegt wurde.
-        </p>
-        <button onClick={() => router.push("/admin/content")} className="btn-ghost text-xs flex-shrink-0">Zurück zu „Kurse & Module"</button>
-      </div>
-
+    <>
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
       <div className="card mb-6">
@@ -172,6 +158,6 @@ export default function NavigationAdmin() {
           );
         })}
       </div>
-    </Layout>
+    </>
   );
 }

@@ -3,6 +3,8 @@ import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import AdminTabs from "../../components/AdminTabs";
+import SidebarStruktur from "../../components/SidebarStruktur";
+import Aufklapper from "../../components/Aufklapper";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 import { loescheGeprueft, aendereGeprueft } from "../../lib/loeschen";
@@ -14,6 +16,8 @@ const COLOR_HEX = { amber: "var(--org-accent, #CE3A5C)", teal: "#00E5C7", coral:
 export default function ContentAdmin() {
   const router = useRouter();
   const [isManager, setIsManager] = useState(true);
+  // Die Sidebar-Struktur liegt hier eingeklappt (früher eine eigene Seite).
+  const [strukturOffen, setStrukturOffen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [modulesByCourse, setModulesByCourse] = useState({});
@@ -331,12 +335,18 @@ export default function ContentAdmin() {
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Hier füllst du einen Ordner mit <strong className="text-textMain">Kursen und Inhalten</strong> (Module, Text, Video, Anhänge). Den Ordner selbst — also den Reiter in der Sidebar — legst du unter „Sidebar & eigene Ordner" an.</p>
-      {/* Der Weg dorthin steht hier, weil er hier gebraucht wird. Als
-          eigener Reiter stand er gleichrangig neben Dingen, die man täglich
-          benutzt — dabei braucht man ihn genau einmal je Ordner. */}
-      <button onClick={() => router.push("/admin/navigation")} className="btn-ghost text-xs mb-6">
-        ⚙️ Sidebar & eigene Ordner anpassen
+      {/* Aufklappbar statt eigene Seite: man braucht das genau dann, wenn
+          man einen Kurs anlegen will und merkt, dass der Ordner fehlt —
+          also hier, ohne den Platz wegzunehmen, wenn alles da ist. */}
+      <button onClick={() => setStrukturOffen((v) => !v)} aria-expanded={strukturOffen}
+        className="btn-ghost text-xs mb-3">
+        ⚙️ Sidebar & eigene Ordner {strukturOffen ? "schliessen" : "anpassen"}
       </button>
+      <Aufklapper offen={strukturOffen}>
+        <div className="mb-6">
+          <SidebarStruktur />
+        </div>
+      </Aufklapper>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -348,7 +358,7 @@ export default function ContentAdmin() {
           {folders.length === 0 ? (
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-coral">Noch kein Ordner vorhanden. Leg zuerst einen Ordner an, bevor du einen Kurs erstellst.</p>
-              <button onClick={() => router.push("/admin/navigation")} className="btn-ghost text-xs flex-shrink-0">Ordner anlegen</button>
+              <button onClick={() => setStrukturOffen(true)} className="btn-ghost text-xs flex-shrink-0">Ordner anlegen</button>
             </div>
           ) : (
             <select className="input" value={newCourse.navItemId} onChange={(e) => setNewCourse({ ...newCourse, navItemId: e.target.value })}>
