@@ -293,10 +293,13 @@ export default function Kalender() {
   // Umfang umstellen. Der Link bleibt derselbe — es ändert sich nur, was
   // darüber ausgeliefert wird, und zwar sofort für alle Kalender, die ihn
   // schon eingetragen haben.
-  async function setzeUmfang(umfang) {
+  async function setzeUmfang(umfang, personen) {
     setAboBusy(true);
     try {
-      setAbo(await apiPost("/api/kalender-abo-link", { umfang }));
+      setAbo(await apiPost("/api/kalender-abo-link", {
+        umfang,
+        ...(personen ? { personen } : {}),
+      }));
     } catch (e) {
       setFehler(e?.message || "Der Umfang konnte nicht geändert werden.");
     }
@@ -364,15 +367,67 @@ export default function Kalender() {
                 <div className="mb-3">
                   <div className="text-xs text-textMain mb-1.5">Was soll im Kalender stehen?</div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {[["eigene", "Nur meine Termine"], ["team", "Auch die Termine meines Teams"]].map(([key, label]) => (
-                      <button key={key} onClick={() => setzeUmfang(key)} disabled={aboBusy}
+                    {[
+                      ["eigene", "Nur meine Termine"],
+                      ["team", "Mein ganzes Team"],
+                      ["auswahl", "Bestimmte Personen"],
+                    ].map(([key, label]) => (
+                      <button key={key} onClick={() => setzeUmfang(key, key === "auswahl" ? abo.auswahl : null)} disabled={aboBusy}
                         className={`px-3 py-1.5 rounded-full text-xs font-semibold border disabled:opacity-40 ${abo.umfang === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
                         {label}
                       </button>
                     ))}
                   </div>
-                  <p className="text-[11px] text-textMuted mt-1.5">
-                    Der Link bleibt derselbe — die Umstellung wirkt sofort, auch in Kalendern, die ihn schon
+
+                  {/* "Mein ganzes Team" nimmt auch die mit, die morgen
+                      dazukommen — bei einer festen Auswahl muss man nach
+                      jeder Neueinstellung selbst daran denken. Das gehört
+                      dazugeschrieben, sonst fehlt irgendwann jemand. */}
+                  {abo.umfang === "team" && (
+                    <p className="text-[11px] text-textMuted mt-1.5">
+                      Auch neue Teammitglieder erscheinen automatisch — du musst die Liste nie nachziehen.
+                    </p>
+                  )}
+
+                  {abo.umfang === "auswahl" && (
+                    <div className="mt-2">
+                      {abo.auswaehlbar?.length ? (
+                        <>
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <button onClick={() => setzeUmfang("auswahl", abo.auswaehlbar.map((p) => p.id))}
+                              disabled={aboBusy} className="btn-ghost text-xs disabled:opacity-40">Alle</button>
+                            <button onClick={() => setzeUmfang("auswahl", [])}
+                              disabled={aboBusy} className="btn-ghost text-xs disabled:opacity-40">Keine</button>
+                            <span className="text-[11px] text-textMuted">
+                              {abo.auswahl?.length || 0} von {abo.auswaehlbar.length} ausgewählt
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {abo.auswaehlbar.map((p) => {
+                              const an = (abo.auswahl || []).includes(p.id);
+                              return (
+                                <button key={p.id} disabled={aboBusy}
+                                  onClick={() => setzeUmfang("auswahl", an
+                                    ? (abo.auswahl || []).filter((x) => x !== p.id)
+                                    : [...(abo.auswahl || []), p.id])}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border disabled:opacity-40 ${an ? "border-amber text-textMain" : "border-line text-textMuted hover:text-textMain"}`}
+                                  style={an ? { background: "color-mix(in srgb, var(--org-accent, #E9B44C) 18%, transparent)" } : undefined}>
+                                  {an ? "✓ " : ""}{p.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-textMuted">
+                          Zu deinen Teams ist noch niemand zugeordnet — es gibt nichts auszuwählen.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-textMuted mt-2">
+                    Der Link bleibt derselbe — jede Umstellung wirkt sofort, auch in Kalendern, die ihn schon
                     eingetragen haben. Bei fremden Terminen steht der Name der Person hinter dem Termin.
                   </p>
                 </div>
@@ -396,10 +451,15 @@ export default function Kalender() {
               <div className="rounded-xl border border-amber/40 px-3 py-2 mb-3">
                 <div className="text-xs text-textMain mb-1">Der Link ist wie ein Schlüssel.</div>
                 <p className="text-[11px] text-textMuted">
-                  Wer ihn hat, sieht {abo.umfang === "team" ? "die Termine deines ganzen Teams" : "deine Termine"} —
+                  Wer ihn hat, sieht {abo.umfang === "team"
+                    ? "die Termine deines ganzen Teams"
+                    : abo.umfang === "auswahl" && abo.auswahl?.length
+                      ? `deine Termine und die von ${abo.auswahl.length} weiteren Personen`
+                      : "deine Termine"} —
                   ohne Anmeldung. Also nicht weitergeben und nicht in eine Gruppe posten. Ändern kannst du damit
                   nichts, es wird nur gelesen.
-                  {abo.umfang === "team" && " Weil hier fremde Termine drinstehen, wiegt ein weitergegebener Link schwerer als sonst."}
+                  {(abo.umfang === "team" || (abo.umfang === "auswahl" && abo.auswahl?.length > 0))
+                    && " Weil hier fremde Termine drinstehen, wiegt ein weitergegebener Link schwerer als sonst."}
                 </p>
               </div>
 

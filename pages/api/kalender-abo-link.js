@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { istFuehrungsrolle } from "../../lib/rollen";
+import { erlaubtePersonen } from "./kalender-abo";
 
 // Den eigenen Abo-Schlüssel holen oder neu erzeugen.
 //
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     const umfangWunsch = req.method === "POST" ? req.body?.umfang : null;
 
     const { data: profil } = await admin.from("profiles")
-      .select("kalender_token, kalender_umfang, role, is_admin, is_platform_admin, organization_id")
+      .select("kalender_token, kalender_umfang, kalender_personen, role, is_admin, is_platform_admin, organization_id")
       .eq("id", user.id).maybeSingle();
 
     // Wer darf überhaupt Team-Termine abonnieren: Führungsrollen, und wer
@@ -34,10 +35,28 @@ export default async function handler(req, res) {
       .select("id", { count: "exact", head: true }).eq("created_by", user.id);
     const darfTeam = istFuehrungsrolle(profil) || (eigeneTeams || 0) > 0;
 
+    // Wen diese Person überhaupt auswählen könnte — dieselbe Rechnung wie
+    // beim Ausliefern des Kalenders, damit die Liste nicht mehr anbietet,
+    // als später tatsächlich hineinkommt.
+    const erlaubt = darfTeam ? await erlaubtePersonen(admin, { ...profil, id: user.id }) : new Map();
+    const auswaehlbar = [...erlaubt.entries()]
+      .map(([id, name]) => ({ id, name: name || "Unbenannt" }))
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
+
     let umfang = profil?.kalender_umfang || "eigene";
-    if (umfangWunsch === "eigene" || (umfangWunsch === "team" && darfTeam)) {
+    let auswahl = profil?.kalender_personen || [];
+
+    const wunschErlaubt = umfangWunsch === "eigene"
+      || ((umfangWunsch === "team" || umfangWunsch === "auswahl") && darfTeam);
+    if (wunschErlaubt) {
       umfang = umfangWunsch;
-      const { error } = await admin.from("profiles").update({ kalender_umfang: umfang }).eq("id", user.id);
+      // Nur Personen speichern, die auch wirklich erlaubt sind — sonst
+      // stünden in der Liste Kennungen, die niemand vergeben hat.
+      if (Array.isArray(req.body?.personen)) {
+        auswahl = req.body.personen.filter((id) => erlaubt.has(id));
+      }
+      const { error } = await admin.from("profiles")
+        .update({ kalender_umfang: umfang, kalender_personen: auswahl }).eq("id", user.id);
       if (error) throw error;
     }
 
@@ -56,6 +75,8 @@ export default async function handler(req, res) {
       webcal: `${basis.replace(/^https?:/, "webcal:")}/api/kalender-abo?token=${token}`,
       umfang,
       darfTeam,
+      auswahl,
+      auswaehlbar,
       neu,
     });
   } catch (e) {

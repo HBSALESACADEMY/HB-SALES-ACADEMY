@@ -1615,7 +1615,10 @@ test("Der Abo-Kalender liefert nur die Termine EINER Person", () => {
   // Der erweiterte Umfang hängt an der Datenbank, nicht an der Adresse:
   // stünde er dort, hinge jeder "&umfang=team" an und bekäme, was ihm nicht
   // zusteht.
-  assert.match(route, /profil\.kalender_umfang === "team"/);
+  assert.match(route, /profil\.kalender_umfang === "team" \|\| profil\.kalender_umfang === "auswahl"/);
+  // Die gespeicherte Auswahl ist ein Filter, keine Berechtigung: sie wird
+  // gegen das geschnitten, was die Rolle JETZT hergibt.
+  assert.match(route, /if \(gewuenscht && !gewuenscht\.has\(id\)\) return;/);
   assert.ok(!/req\.query\.umfang/.test(route),
     "Der Umfang darf nicht aus der Adresse kommen — sonst erweitert ihn jeder selbst.");
   // Und die Rolle wird bei JEDEM Abruf neu geprüft, nicht einmal beim

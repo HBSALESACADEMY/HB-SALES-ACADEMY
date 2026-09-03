@@ -29,6 +29,42 @@ export const config = { maxDuration: 20 };
 const TAGE_ZURUECK = 60;
 const TAGE_VORAUS = 400;
 
+/**
+ * Wessen Termine diese Person überhaupt sehen darf — als Map id → Name.
+ *
+ * Führungsrollen ihre Organisation, Teamleitungen die Mitglieder ihrer
+ * eigenen Teams. Die Organisation ist dabei die HEIMAT-Organisation: ein Abo
+ * läuft ohne Sitzung, es gibt keine "gerade aktive" Organisation, und ein
+ * Kalender, dessen Inhalt davon abhinge, in welchem Reiter jemand zuletzt
+ * war, wäre nicht nachvollziehbar.
+ */
+export async function erlaubtePersonen(admin, profil) {
+  const map = new Map();
+  if (!profil?.organization_id) return map;
+
+  if (istFuehrungsrolle(profil)) {
+    const { data: alle } = await admin.from("profiles")
+      .select("id, full_name").eq("organization_id", profil.organization_id);
+    (alle || []).forEach((p) => { if (p.id !== profil.id) map.set(p.id, p.full_name); });
+    return map;
+  }
+
+  const { data: meineTeams } = await admin.from("teams").select("id").eq("created_by", profil.id);
+  const teamIds = (meineTeams || []).map((t) => t.id);
+  if (!teamIds.length) return map;
+
+  const { data: mitglieder } = await admin.from("team_members")
+    .select("user_id, profiles:user_id(full_name, organization_id)").in("team_id", teamIds);
+  (mitglieder || []).forEach((m) => {
+    // Die Mandanten-Grenze hält auch hier: nur Menschen aus der eigenen
+    // Organisation.
+    if (m.user_id === profil.id) return;
+    if (m.profiles?.organization_id !== profil.organization_id) return;
+    map.set(m.user_id, m.profiles?.full_name);
+  });
+  return map;
+}
+
 export default async function handler(req, res) {
   const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
   // Form vorab prüfen: sonst geht jede Zeichenkette als Abfrage an die
@@ -38,7 +74,7 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
     const { data: profil } = await admin.from("profiles")
-      .select("id, full_name, organization_id, kalender_umfang, role, is_admin, is_platform_admin")
+      .select("id, full_name, organization_id, kalender_umfang, kalender_personen, role, is_admin, is_platform_admin")
       .eq("kalender_token", token).maybeSingle();
     if (!profil) return res.status(404).send("Nicht gefunden.");
 
@@ -52,26 +88,19 @@ export default async function handler(req, res) {
     // wäre nicht nachvollziehbar.
     const personen = new Set([profil.id]);
     const namen = new Map();
-    if (profil.kalender_umfang === "team") {
-      if (istFuehrungsrolle(profil) && profil.organization_id) {
-        const { data: alle } = await admin.from("profiles")
-          .select("id, full_name").eq("organization_id", profil.organization_id);
-        (alle || []).forEach((p) => { personen.add(p.id); namen.set(p.id, p.full_name); });
-      } else {
-        const { data: meineTeams } = await admin.from("teams").select("id").eq("created_by", profil.id);
-        const teamIds = (meineTeams || []).map((t) => t.id);
-        if (teamIds.length) {
-          const { data: mitglieder } = await admin.from("team_members")
-            .select("user_id, profiles:user_id(full_name, organization_id)").in("team_id", teamIds);
-          (mitglieder || []).forEach((m) => {
-            // Die Mandanten-Grenze hält auch hier: nur Menschen aus der
-            // eigenen Organisation.
-            if (m.profiles?.organization_id !== profil.organization_id) return;
-            personen.add(m.user_id);
-            namen.set(m.user_id, m.profiles?.full_name);
-          });
-        }
-      }
+    if (profil.kalender_umfang === "team" || profil.kalender_umfang === "auswahl") {
+      const erlaubt = await erlaubtePersonen(admin, profil);
+      // Die gespeicherte Auswahl ist ein FILTER, keine Berechtigung: sie
+      // wird gegen das geschnitten, was die Rolle JETZT hergibt. Sonst liefe
+      // eine alte Auswahl nach einem Rollenwechsel einfach weiter.
+      const gewuenscht = profil.kalender_umfang === "auswahl"
+        ? new Set(profil.kalender_personen || [])
+        : null;
+      erlaubt.forEach((name, id) => {
+        if (gewuenscht && !gewuenscht.has(id)) return;
+        personen.add(id);
+        namen.set(id, name);
+      });
     }
 
     const jetzt = new Date();
