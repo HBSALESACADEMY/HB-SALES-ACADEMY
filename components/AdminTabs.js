@@ -17,8 +17,8 @@ let betreiberGemerkt = null;
 // weiss, klickt sich durch, und weil "Aktivitäten", "Login-Verlauf" und
 // "Insights" alle drei nach Beobachtung klingen, landet man dreimal falsch.
 //
-// Deshalb Bereiche: erst die Frage ("geht es um Menschen, um Inhalte, um
-// Zahlen oder um Einstellungen?"), dann die Seite. Jede Seite hat genau
+// Deshalb Bereiche: erst die Frage ("geht es um Menschen, um Inhalte, um die
+// Auswertung oder um Einstellungen?"), dann die Seite. Jede Seite hat genau
 // einen Ort — und einen Satz dazu, der sie von ihren Nachbarn abgrenzt.
 //
 // "Betrieb" steht abgetrennt und nur für den Plattform-Betreiber: das sind
@@ -53,13 +53,16 @@ const BEREICHE = [
     ],
   },
   {
-    key: "zahlen",
-    label: "Zahlen",
+    key: "auswertung",
+    label: "Auswertung",
     seiten: [
-      { key: "auswertung", label: "Auswertung", route: "/auswertung", icon: "chart",
-        zweck: "Die Führungsauswertung: Quoten, Trichter, Engpässe, Empfehlungen." },
-      { key: "insights", label: "Insights", route: "/admin/insights", icon: "award",
-        zweck: "Überblick über alle Mitglieder und Teams — Lernfortschritt und XP." },
+      // Zwei Auswertungen, die nichts miteinander zu tun haben: die eine
+      // misst das Telefonieren, die andere das Lernen. "Auswertung" und
+      // "Insights" nebeneinander sagten das nicht — die Namen tun es jetzt.
+      { key: "auswertung", label: "Vertrieb", route: "/auswertung", icon: "chart",
+        zweck: "Quoten, Trichter, Engpässe und Handlungsempfehlungen aus den Anrufen." },
+      { key: "insights", label: "Lernfortschritt", route: "/admin/insights", icon: "award",
+        zweck: "Wer wie weit ist: Kurse, Quiz, Rollenspiele, XP — über alle Teams." },
     ],
   },
   {

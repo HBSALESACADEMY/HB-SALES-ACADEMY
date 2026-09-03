@@ -107,7 +107,7 @@ export default function Admin() {
   if (!isManager) {
     return (
       <Layout>
-        <h1 className="text-2xl font-display text-textMain mb-1">Nutzerverwaltung</h1>
+        <h1 className="text-2xl font-display text-textMain mb-1">Nutzer</h1>
         <p className="text-textMuted text-sm">Diese Ansicht ist nur für Konten mit der Rolle "manager" verfügbar.</p>
       </Layout>
     );
@@ -115,7 +115,10 @@ export default function Admin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Verwaltung</h1>
+      {/* Die Seite heisst wie ihr Reiter. Vorher stand hier "Verwaltung"
+          und im Reiter "Nutzer", woanders wieder "Nutzerverwaltung" — drei
+          Namen für dieselbe Seite, und keiner sagte, wo man gerade ist. */}
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Nutzer</h1>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
       <p className="text-textMuted text-sm mb-6">Alle registrierten Konten. Vergib oder entziehe Manager- oder Trainer-Rechte, oder entferne Konten. Team-Mitgliedschaft wird unter "Team (Manager)" verwaltet.</p>
