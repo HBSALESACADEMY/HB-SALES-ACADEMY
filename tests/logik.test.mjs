@@ -1611,11 +1611,22 @@ test("Der Abo-Kalender liefert nur die Termine EINER Person", () => {
   // gäbe ein weitergeleiteter Link unbemerkt die halbe Organisation preis.
   const route = readFileSync(new URL("../pages/api/kalender-abo.js", import.meta.url), "utf8");
   assert.match(route, /eq\("kalender_token", token\)/);
-  assert.match(route, /eq\("created_by", profil\.id\)/);
   assert.match(route, /eq\("person_id", profil\.id\)/);
-  // Keine Führungs-Ausweitung in dieser Route.
-  assert.ok(!/ist_fuehrungsrolle|istFuehrungsrolle|sieht_person/.test(route),
-    "Der Abo-Link darf niemals mehr zeigen als die eigenen Termine.");
+  // Der erweiterte Umfang hängt an der Datenbank, nicht an der Adresse:
+  // stünde er dort, hinge jeder "&umfang=team" an und bekäme, was ihm nicht
+  // zusteht.
+  assert.match(route, /profil\.kalender_umfang === "team"/);
+  assert.ok(!/req\.query\.umfang/.test(route),
+    "Der Umfang darf nicht aus der Adresse kommen — sonst erweitert ihn jeder selbst.");
+  // Und die Rolle wird bei JEDEM Abruf neu geprüft, nicht einmal beim
+  // Einrichten: wer die Teamleitung abgibt, verliert den Kalender sofort.
+  assert.match(route, /istFuehrungsrolle\(profil\)/);
+  assert.match(route, /eq\("created_by", profil\.id\)/);
+  // Die Mandanten-Grenze hält auch bei Team-Mitgliedern.
+  assert.match(route, /organization_id !== profil\.organization_id/);
+  // Ohne die bewusste Umstellung bleibt es bei den eigenen Terminen: die
+  // Personenliste startet mit genau einer Kennung.
+  assert.match(route, /new Set\(\[profil\.id\]\)/);
   // Und kein Zwischenspeicher, sonst hinkt der Kalender hinterher.
   assert.match(route, /no-store/);
   assert.match(route, /noindex/);

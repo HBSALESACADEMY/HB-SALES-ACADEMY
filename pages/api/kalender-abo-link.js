@@ -1,5 +1,6 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Den eigenen Abo-Schlüssel holen oder neu erzeugen.
 //
@@ -20,9 +21,25 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
     const neu = req.method === "POST" && req.body?.neu === true;
+    const umfangWunsch = req.method === "POST" ? req.body?.umfang : null;
 
     const { data: profil } = await admin.from("profiles")
-      .select("kalender_token").eq("id", user.id).maybeSingle();
+      .select("kalender_token, kalender_umfang, role, is_admin, is_platform_admin, organization_id")
+      .eq("id", user.id).maybeSingle();
+
+    // Wer darf überhaupt Team-Termine abonnieren: Führungsrollen, und wer
+    // mindestens ein Team leitet. Geprüft wird hier UND bei jedem Abruf des
+    // Kalenders — diese Antwort hier ist nur für die Anzeige.
+    const { count: eigeneTeams } = await admin.from("teams")
+      .select("id", { count: "exact", head: true }).eq("created_by", user.id);
+    const darfTeam = istFuehrungsrolle(profil) || (eigeneTeams || 0) > 0;
+
+    let umfang = profil?.kalender_umfang || "eigene";
+    if (umfangWunsch === "eigene" || (umfangWunsch === "team" && darfTeam)) {
+      umfang = umfangWunsch;
+      const { error } = await admin.from("profiles").update({ kalender_umfang: umfang }).eq("id", user.id);
+      if (error) throw error;
+    }
 
     let token = profil?.kalender_token || null;
     if (!token || neu) {
@@ -37,6 +54,8 @@ export default async function handler(req, res) {
       // Dieselbe Adresse mit webcal:// — damit tragen Apple und Outlook den
       // Kalender mit einem Klick ein, statt die Datei herunterzuladen.
       webcal: `${basis.replace(/^https?:/, "webcal:")}/api/kalender-abo?token=${token}`,
+      umfang,
+      darfTeam,
       neu,
     });
   } catch (e) {

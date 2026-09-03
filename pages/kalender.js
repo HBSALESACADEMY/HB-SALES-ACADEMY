@@ -290,6 +290,19 @@ export default function Kalender() {
     setAboBusy(false);
   }
 
+  // Umfang umstellen. Der Link bleibt derselbe — es ändert sich nur, was
+  // darüber ausgeliefert wird, und zwar sofort für alle Kalender, die ihn
+  // schon eingetragen haben.
+  async function setzeUmfang(umfang) {
+    setAboBusy(true);
+    try {
+      setAbo(await apiPost("/api/kalender-abo-link", { umfang }));
+    } catch (e) {
+      setFehler(e?.message || "Der Umfang konnte nicht geändert werden.");
+    }
+    setAboBusy(false);
+  }
+
   async function kopiereAbo() {
     try {
       await navigator.clipboard.writeText(abo.url);
@@ -347,6 +360,24 @@ export default function Kalender() {
 
           {abo && (
             <>
+              {abo.darfTeam && (
+                <div className="mb-3">
+                  <div className="text-xs text-textMain mb-1.5">Was soll im Kalender stehen?</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {[["eigene", "Nur meine Termine"], ["team", "Auch die Termine meines Teams"]].map(([key, label]) => (
+                      <button key={key} onClick={() => setzeUmfang(key)} disabled={aboBusy}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border disabled:opacity-40 ${abo.umfang === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-textMuted mt-1.5">
+                    Der Link bleibt derselbe — die Umstellung wirkt sofort, auch in Kalendern, die ihn schon
+                    eingetragen haben. Bei fremden Terminen steht der Name der Person hinter dem Termin.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 flex-wrap mb-3">
                 <input readOnly value={abo.url} onFocus={(e) => e.target.select()}
                   className="input !py-1.5 text-xs flex-1 min-w-[240px] font-mono" />
@@ -365,8 +396,10 @@ export default function Kalender() {
               <div className="rounded-xl border border-amber/40 px-3 py-2 mb-3">
                 <div className="text-xs text-textMain mb-1">Der Link ist wie ein Schlüssel.</div>
                 <p className="text-[11px] text-textMuted">
-                  Wer ihn hat, sieht deine Termine — ohne Anmeldung. Also nicht weitergeben und nicht in eine
-                  Gruppe posten. Ändern kannst du damit nichts, es wird nur gelesen.
+                  Wer ihn hat, sieht {abo.umfang === "team" ? "die Termine deines ganzen Teams" : "deine Termine"} —
+                  ohne Anmeldung. Also nicht weitergeben und nicht in eine Gruppe posten. Ändern kannst du damit
+                  nichts, es wird nur gelesen.
+                  {abo.umfang === "team" && " Weil hier fremde Termine drinstehen, wiegt ein weitergegebener Link schwerer als sonst."}
                 </p>
               </div>
 
