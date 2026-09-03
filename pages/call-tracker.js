@@ -506,7 +506,9 @@ export default function CallTracker() {
       showToast("Gezählt — dein Grund geht als Vorschlag an die Leitung");
     } catch (e) {
       // Der Anruf ist gezählt, nur der Vorschlag fehlt. Das darf den
-      // nächsten Anruf nicht aufhalten, aber still bleiben soll es nicht.
+      // nächsten Anruf nicht aufhalten — aber schweigen darf es auch nicht,
+      // sonst tippt jemand tagelang Gründe ein, die nirgends ankommen.
+      meldeFehler("Der Anruf ist gezählt, aber dein Grund konnte nicht als Vorschlag gespeichert werden.", e);
       meldeStoerung("Grund-Vorschlag speichern", e?.message || String(e));
     }
   }

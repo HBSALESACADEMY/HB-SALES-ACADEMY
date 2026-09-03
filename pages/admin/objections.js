@@ -23,6 +23,7 @@ export default function ObjectionsAdmin() {
   // Gründe, die aus dem Team kommen (migration_135).
   const [vorschlaege, setVorschlaege] = useState([]);
   const [vorschlagBusy, setVorschlagBusy] = useState(null);
+  const [vorschlagFehler, setVorschlagFehler] = useState("");
 
   async function load() {
     setLoading(true);
@@ -38,18 +39,32 @@ export default function ObjectionsAdmin() {
     const orgId = getActiveOrgId(me);
     setActiveOrgId(orgId);
     if (!orgId) { setLoading(false); return; }
-    const [{ data: org }, { data: objections, error: err }, { data: offene }] = await Promise.all([
+    const [{ data: org }, { data: objections, error: err }, offene] = await Promise.all([
       supabase.from("organizations").select("objection_categories").eq("id", orgId).maybeSingle(),
       supabase.from("custom_objections").select("*").eq("organization_id", orgId).order("created_at"),
       // Die Zugriffsregeln entscheiden, wer das sieht — hier steht deshalb
       // kein zweiter Organisationsfilter (migration_135).
+      // Getrennt abgefangen: eine fehlende Tabelle darf nicht die ganze
+      // Seite lahmlegen.
       supabase.from("grund_vorschlaege").select("id, text, user_id, created_at")
         .eq("status", "offen").order("created_at", { ascending: false }).limit(500),
     ]);
-    setVorschlaege(fasseZusammen(offene || []));
     const cats = resolveObjectionCategories(org);
     setCategories(cats);
     setNewDraft((d) => (d.cat ? d : { ...d, cat: cats[0]?.key || "" }));
+    // Fehlt die Tabelle noch, sagt die Seite das — sonst sieht ein leerer
+    // Bereich genauso aus wie "es gibt keine Vorschläge", und man wartet auf
+    // etwas, das nie kommen kann.
+    if (offene.error) {
+      setVorschlagFehler(/relation|does not exist|schema cache/i.test(offene.error.message || "")
+        ? "Die Tabelle für Vorschläge fehlt noch — bitte migration_135 einspielen. Bis dahin kommt hier nichts an."
+        : offene.error.message);
+      setVorschlaege([]);
+    } else {
+      setVorschlagFehler("");
+      setVorschlaege(fasseZusammen(offene.data || []));
+    }
+
     if (err) setError(err.message);
     setRows(objections || []);
     setLoading(false);
@@ -171,6 +186,10 @@ export default function ObjectionsAdmin() {
 
       {/* Was am Telefon tatsächlich gesagt wurde. Steht bewusst GANZ OBEN:
           diese Vorschläge sind zeitkritisch, alles andere hier hat Zeit. */}
+      {vorschlagFehler && (
+        <div className="card mb-6 border-coral/40 text-coral text-sm">{vorschlagFehler}</div>
+      )}
+
       {vorschlaege.length > 0 && (
         <div className="card mb-6 border-amber/40">
           <div className="font-semibold text-textMain text-sm mb-1">

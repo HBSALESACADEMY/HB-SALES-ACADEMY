@@ -1785,3 +1785,28 @@ test("Grund-Vorschläge: der Schlüssel überschreibt keine bestehende Kategorie
   assert.equal(schluesselFuer("Kein Interesse", vorhanden), "kein_interesse_2");
   assert.ok(schluesselFuer("!!!", vorhanden).length > 0);
 });
+
+test("Verwaltung: jede Seite hat genau einen Ort", () => {
+  // Vorher standen dreizehn gleichrangige Reiter nebeneinander, darunter
+  // drei, die alle nach Beobachtung klingen. Wer nicht wusste, wo etwas
+  // steht, landete dreimal falsch.
+  const quelle = readFileSync(new URL("../components/AdminTabs.js", import.meta.url), "utf8");
+  const routen = [...quelle.matchAll(/route: "([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(routen).size, routen.length,
+    `Diese Seite steht in mehr als einem Bereich: ${routen.filter((r, i) => routen.indexOf(r) !== i).join(", ")}`);
+
+  // Jede Seite sagt, wofür sie da ist — sonst lassen sich Nachbarn wie
+  // "Aktivitäten" und "Anmeldungen" nur durch Ausprobieren unterscheiden.
+  const seiten = [...quelle.matchAll(/\{ key: "[^"]+", label: "[^"]+", route: "[^"]+", icon: "[^"]+",\s*\n?\s*zweck: "([^"]+)"/g)];
+  assert.equal(seiten.length, routen.length, "Es gibt Seiten ohne Zweck-Beschreibung.");
+
+  // Und der Betriebs-Bereich bleibt dem Plattform-Betreiber vorbehalten.
+  assert.match(quelle, /nurBetreiber: true/);
+  assert.match(quelle, /istBetreiber \? \[\.\.\.BEREICHE, BETRIEB\] : BEREICHE/);
+
+  // Jede verlinkte Verwaltungsseite existiert auch.
+  routen.filter((r) => r.startsWith("/admin/")).forEach((r) => {
+    const datei = new URL(`../pages${r}.js`, import.meta.url);
+    assert.ok(readFileSync(datei, "utf8").length > 0, `Seite fehlt: ${r}`);
+  });
+});
