@@ -136,11 +136,19 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                     {z.erfolgsquote !== null ? ` · ${z.erfolgsquote} % Erfolg` : ""}
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    {/* Auch hier anfassbar: von "was war in dieser Stunde"
+                        führt der Weg direkt weiter zu "wann kommt dieser
+                        Einwand" — die zweite Frage stellt sich immer, sobald
+                        man die erste beantwortet hat. */}
                     {z.verteilung.filter((g) => g.wert > 0).map((g) => (
-                      <span key={g.key} className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                      <button key={g.key}
+                        onMouseEnter={() => setAktiverGrund(g.key)}
+                        onMouseLeave={() => setAktiverGrund(null)}
+                        onClick={(ev) => { ev.stopPropagation(); setAktiverGrund(aktiverGrund === g.key ? null : g.key); }}
+                        className="flex items-center gap-1.5 text-[11px] text-textMuted hover:text-textMain rounded px-1 -mx-1">
                         <span className="w-2 h-2 rounded-full" style={{ background: grundFarbe(gruende, g.key) }} />
                         {g.label}: {g.wert}
-                      </span>
+                      </button>
                     ))}
                     {z.negativ === 0 && <span className="text-[11px] text-textMuted">Keine Absagen in dieser Stunde.</span>}
                   </div>
