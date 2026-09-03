@@ -20,6 +20,8 @@ import { PFLICHTFELDER, fehlendeProfilangaben, profilVollstaendig } from "../lib
 import { pfadAusOeffentlicherUrl } from "../lib/speicherPfad.js";
 import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js";
 import { baueIcs, baueIcsFeed, icsDateiname } from "../lib/ics.js";
+import { leseIcs, leseZeitpunkt, loeseWiederholung } from "../lib/icsLesen.js";
+import { pruefeUrl, istFaellig, FRISCH_MS } from "../lib/externerKalenderAbruf.js";
 import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
 import { deutscherTag } from "../lib/terminzeit.js";
 import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
@@ -1633,4 +1635,112 @@ test("Der Abo-Kalender liefert nur die Termine EINER Person", () => {
   // Und kein Zwischenspeicher, sonst hinkt der Kalender hinterher.
   assert.match(route, /no-store/);
   assert.match(route, /noindex/);
+});
+
+// --- Fremde Kalender lesen -------------------------------------------------
+
+const ICS = (...zeilen) => ["BEGIN:VCALENDAR", ...zeilen, "END:VCALENDAR"].join("\r\n");
+const FENSTER = { vonMs: Date.parse("2026-09-01"), bisMs: Date.parse("2026-10-01") };
+
+test("Fremder Kalender: Ortszeit wird nach UTC gerechnet, nicht abgetippt", () => {
+  // 09:00 deutscher Sommerzeit sind 07:00 UTC. Wer das "Z" einfach annimmt,
+  // legt jeden Termin im Sommer zwei Stunden daneben.
+  assert.equal(leseZeitpunkt("20260907T090000", { TZID: "Europe/Berlin" }).ms, Date.parse("2026-09-07T07:00:00Z"));
+  // Im Winter ist es eine Stunde.
+  assert.equal(leseZeitpunkt("20260115T090000", { TZID: "Europe/Berlin" }).ms, Date.parse("2026-01-15T08:00:00Z"));
+  // Mit Z ist es schon UTC.
+  assert.equal(leseZeitpunkt("20260907T090000Z").ms, Date.parse("2026-09-07T09:00:00Z"));
+  // Ohne Zeitzone gilt die deutsche, denn hier wird gearbeitet.
+  assert.equal(leseZeitpunkt("20260907T090000").ms, Date.parse("2026-09-07T07:00:00Z"));
+  // Reine Datumsangabe heisst ganztägig.
+  assert.deepEqual(leseZeitpunkt("20260910"), { ms: Date.parse("2026-09-10T00:00:00Z"), ganztags: true });
+});
+
+test("Fremder Kalender: gefaltete Zeilen werden zusammengesetzt", () => {
+  // Lange Titel werden umgebrochen. Wer das übersieht, bekommt
+  // abgeschnittene Titel und kaputte Datumsangaben.
+  const lang = "Quartalsgespräch mit dem gesamten Vertriebsteam und der Leitung";
+  const roh = ICS("BEGIN:VEVENT", "UID:x@y", `SUMMARY:${lang.slice(0, 30)}`, ` ${lang.slice(30)}`,
+    "DTSTART:20260907T090000Z", "END:VEVENT");
+  const [t] = leseIcs(roh, FENSTER);
+  assert.equal(t.titel, lang.slice(0, 30) + lang.slice(30));
+});
+
+test("Fremder Kalender: wiederkehrende Termine stehen in jeder Woche", () => {
+  // Ein wöchentliches Meeting steht EINMAL in der Datei, mit einer Regel.
+  // Ohne deren Auflösung fehlt es in jeder Woche ausser der ersten.
+  const roh = ICS("BEGIN:VEVENT", "UID:m@y", "SUMMARY:Jour fixe",
+    "DTSTART;TZID=Europe/Berlin:20260907T090000", "DTEND;TZID=Europe/Berlin:20260907T100000",
+    "RRULE:FREQ=WEEKLY;COUNT=3", "END:VEVENT");
+  const termine = leseIcs(roh, FENSTER);
+  assert.equal(termine.length, 3);
+  assert.deepEqual(termine.map((t) => t.beginn.slice(0, 10)), ["2026-09-07", "2026-09-14", "2026-09-21"]);
+  // Jede Ausprägung braucht eine eigene Kennung, sonst überschreiben sie
+  // sich beim Speichern gegenseitig.
+  assert.equal(new Set(termine.map((t) => t.uid)).size, 3);
+});
+
+test("Fremder Kalender: UNTIL und INTERVAL werden beachtet", () => {
+  const zwei = loeseWiederholung(Date.parse("2026-09-07T07:00:00Z"), "FREQ=WEEKLY;INTERVAL=2",
+    { bisMs: Date.parse("2026-10-01") });
+  assert.deepEqual(zwei.map((ms) => new Date(ms).toISOString().slice(0, 10)),
+    ["2026-09-07", "2026-09-21"]);
+  const bisEnde = loeseWiederholung(Date.parse("2026-09-07T07:00:00Z"), "FREQ=DAILY;UNTIL=20260909T235959Z",
+    { bisMs: Date.parse("2026-10-01") });
+  assert.equal(bisEnde.length, 3);
+});
+
+test("Fremder Kalender: Abgesagtes und Ausserhalb bleiben draussen", () => {
+  const roh = ICS(
+    "BEGIN:VEVENT", "UID:a@y", "SUMMARY:Abgesagt", "DTSTART:20260907T090000Z", "STATUS:CANCELLED", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:b@y", "SUMMARY:Letztes Jahr", "DTSTART:20250907T090000Z", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:c@y", "SUMMARY:Zählt", "DTSTART:20260907T090000Z", "END:VEVENT",
+  );
+  const termine = leseIcs(roh, FENSTER);
+  assert.deepEqual(termine.map((t) => t.titel), ["Zählt"]);
+});
+
+test("Fremder Kalender: kaputte Daten werfen nicht", () => {
+  assert.deepEqual(leseIcs("", FENSTER), []);
+  assert.deepEqual(leseIcs("völliger Unsinn ohne Kalender", FENSTER), []);
+  // Ein Termin ohne Beginn wird übersprungen, der Rest bleibt lesbar.
+  const roh = ICS("BEGIN:VEVENT", "SUMMARY:Ohne Datum", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:ok@y", "SUMMARY:Gut", "DTSTART:20260907T090000Z", "END:VEVENT");
+  assert.deepEqual(leseIcs(roh, FENSTER).map((t) => t.titel), ["Gut"]);
+});
+
+test("Fremde Kalender: keine Adressen ins eigene Netz", () => {
+  // Ohne diese Prüfung liesse sich unser Server dazu bringen, interne
+  // Adressen abzurufen und das Ergebnis auszuliefern.
+  ["http://localhost/x.ics", "https://127.0.0.1/x.ics", "http://10.0.0.5/x.ics",
+   "https://192.168.1.9/x.ics", "http://172.16.0.1/x.ics", "https://server.local/x.ics",
+  ].forEach((u) => assert.ok(pruefeUrl(u).fehler, u));
+  // Und keine anderen Protokolle.
+  assert.ok(pruefeUrl("file:///etc/passwd").fehler);
+  assert.ok(pruefeUrl("javascript:alert(1)").fehler);
+  assert.ok(pruefeUrl("").fehler);
+  // webcal:// ist die übliche Form aus Apple und Outlook — die wird
+  // umgeschrieben statt abgelehnt.
+  assert.equal(pruefeUrl("webcal://p12.calendar.icloud.com/x.ics").url, "https://p12.calendar.icloud.com/x.ics");
+  assert.ok(pruefeUrl("https://calendar.google.com/calendar/ical/abc/basic.ics").url);
+});
+
+test("Fremde Kalender: nicht bei jedem Seitenaufruf neu holen", () => {
+  const jetzt = Date.parse("2026-09-03T12:00:00Z");
+  assert.equal(istFaellig(null, jetzt), true);
+  assert.equal(istFaellig(new Date(jetzt - FRISCH_MS - 1000).toISOString(), jetzt), true);
+  assert.equal(istFaellig(new Date(jetzt - 60000).toISOString(), jetzt), false);
+  // Ein unlesbares Datum lieber neu holen als nie wieder.
+  assert.equal(istFaellig("Unsinn", jetzt), true);
+});
+
+test("Fremde Kalender: der Titel wird auf dem Server entschieden", () => {
+  // Eine Zugriffsregel kann keine einzelne Spalte ausblenden. Stünde die
+  // Entscheidung in der Anzeige, käme der Titel trotzdem über die Leitung
+  // und stünde in jedem Netzwerk-Protokoll.
+  const route = readFileSync(new URL("../pages/api/org-kalender.js", import.meta.url), "utf8");
+  assert.match(route, /const mitTitel = eigener \|\| quelle\?\.sichtbarkeit === "titel"/);
+  assert.match(route, /titel: mitTitel \? \(t\.titel \|\| "Termin"\) : "Belegt"/);
+  // Aufgefrischt werden nur die EIGENEN Kalender.
+  assert.match(route, /from\("externe_kalender"\)[\s\S]{0,200}eq\("user_id", userId\)/);
 });

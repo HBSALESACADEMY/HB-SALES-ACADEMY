@@ -4,7 +4,7 @@ import Avatar from "../components/Avatar";
 import PersonenAuswahl from "../components/PersonenAuswahl";
 import LogoHintergrund from "../components/LogoHintergrund";
 import { supabase } from "../lib/supabaseClient";
-import { apiGet, apiPost } from "../lib/apiClient";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/apiClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { openProfile } from "../lib/profileModalBus";
 import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel } from "../lib/dateRange";
@@ -48,6 +48,10 @@ export default function Kalender() {
   const [abo, setAbo] = useState(null);
   const [aboBusy, setAboBusy] = useState(false);
   const [kopiert, setKopiert] = useState(false);
+  // Eigene Kalender, die in die Academy gespiegelt werden (migration_134).
+  const [quellen, setQuellen] = useState(null);
+  const [quelleEntwurf, setQuelleEntwurf] = useState({ name: "", url: "", sichtbarkeit: "belegt" });
+  const [quelleBusy, setQuelleBusy] = useState(false);
   const [formularOffen, setFormularOffen] = useState(false);
   const [entwurf, setEntwurf] = useState({ titel: "", art: "meeting", von: "", bis: "", uhrzeit: "", beschreibung: "" });
   const [busy, setBusy] = useState(false);
@@ -244,7 +248,7 @@ export default function Kalender() {
   // --- Zusammenstellen -----------------------------------------------------
 
   function eintraegeAm(datum) {
-    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [] };
+    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [] };
     if (!daten || !datum) return leer;
     const schluessel = tagesSchluessel(datum);
     return {
@@ -254,6 +258,15 @@ export default function Kalender() {
       termine: (daten.termine || []).filter((t) => deutscherTag(t.appointment_at) === schluessel),
       geburtstage: daten.geburtstage.filter((g) => g.tag === schluessel),
       abwesend: daten.abwesenheiten.filter((a) => schluessel >= a.von && schluessel <= a.bis),
+      // Termine aus privaten Kalendern (migration_134). Über Beginn UND
+      // Ende: ein ganztägiger Eintrag über drei Tage gehört an alle drei.
+      extern: (daten.externeTermine || []).filter((t) => {
+        const von = deutscherTag(t.beginn);
+        // Ganztägige Termine enden im Format am Folgetag — sonst stünde der
+        // Urlaub einen Tag zu lang im Kalender.
+        const bisRoh = new Date(new Date(t.ende).getTime() - (t.ganztags ? 1000 : 0));
+        return schluessel >= von && schluessel <= deutscherTag(bisRoh.toISOString());
+      }),
     };
   }
 
@@ -266,6 +279,7 @@ export default function Kalender() {
   // bekommt auch keinen Schlüssel, der irgendwo herumliegen könnte.
   async function oeffneAbo() {
     setAboOffen((v) => !v);
+    if (quellen === null) ladeQuellen();
     if (abo) return;
     setAboBusy(true);
     try {
@@ -304,6 +318,58 @@ export default function Kalender() {
       setFehler(e?.message || "Der Umfang konnte nicht geändert werden.");
     }
     setAboBusy(false);
+  }
+
+  async function ladeQuellen() {
+    try {
+      const { kalender } = await apiGet("/api/externe-kalender");
+      setQuellen(kalender || []);
+    } catch (e) {
+      setQuellen([]);
+    }
+  }
+
+  async function fuegeQuelleHinzu() {
+    if (!quelleEntwurf.url.trim()) return;
+    setQuelleBusy(true);
+    setFehler("");
+    try {
+      const antwort = await apiPost("/api/externe-kalender", quelleEntwurf);
+      // Der Abruf läuft sofort mit — ein Fehler dabei ist der eigentlich
+      // interessante Fall, denn dann stimmt die Adresse nicht.
+      if (antwort.fehler) setFehler(antwort.fehler);
+      setQuelleEntwurf({ name: "", url: "", sichtbarkeit: "belegt" });
+      await ladeQuellen();
+      await laden();
+    } catch (e) {
+      setFehler(e?.message || "Der Kalender konnte nicht hinzugefügt werden.");
+    }
+    setQuelleBusy(false);
+  }
+
+  async function aendereQuelle(id, patch) {
+    setQuelleBusy(true);
+    try {
+      await apiPatch("/api/externe-kalender", { id, ...patch });
+      await ladeQuellen();
+      await laden();
+    } catch (e) {
+      setFehler(e?.message || "Die Änderung war nicht möglich.");
+    }
+    setQuelleBusy(false);
+  }
+
+  async function entferneQuelle(id) {
+    if (!confirm("Diesen Kalender entfernen? Seine Termine verschwinden damit aus der Academy.")) return;
+    setQuelleBusy(true);
+    try {
+      await apiDelete(`/api/externe-kalender?id=${id}`);
+      await ladeQuellen();
+      await laden();
+    } catch (e) {
+      setFehler(e?.message || "Der Kalender konnte nicht entfernt werden.");
+    }
+    setQuelleBusy(false);
   }
 
   async function kopiereAbo() {
@@ -471,6 +537,61 @@ export default function Kalender() {
               </div>
             </>
           )}
+
+          <div className="border-t border-line mt-4 pt-4">
+            <div className="font-semibold text-textMain text-sm mb-1">Mein Kalender in der Academy</div>
+            <p className="text-xs text-textMuted mb-3">
+              Die andere Richtung: trage hier die Adresse deines privaten Kalenders ein, dann erscheinen
+              deine Termine auch hier. So sieht man beim Terminieren, wann du schon belegt bist. Bei Google
+              heisst das <strong className="text-textMain">„Geheime Adresse im iCal-Format“</strong> (Einstellungen →
+              Kalender → Kalender integrieren), bei Apple die Freigabe-Adresse, bei Outlook „Kalender
+              veröffentlichen“.
+            </p>
+
+            {(quellen || []).map((k) => (
+              <div key={k.id} className="rounded-xl border border-line px-3 py-2 mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-textMain">{k.name}</span>
+                  <span className="text-[11px] text-textMuted font-mono">{k.url}</span>
+                  <button onClick={() => entferneQuelle(k.id)} disabled={quelleBusy}
+                    className="btn-ghost text-xs text-coral ml-auto disabled:opacity-40">Entfernen</button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-2">
+                  {[["belegt", "Nur „Belegt“ zeigen"], ["titel", "Titel zeigen"]].map(([key, label]) => (
+                    <button key={key} onClick={() => aendereQuelle(k.id, { sichtbarkeit: key })} disabled={quelleBusy}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border disabled:opacity-40 ${k.sichtbarkeit === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                      {label}
+                    </button>
+                  ))}
+                  <span className="text-[11px] text-textMuted">
+                    {k.sichtbarkeit === "titel"
+                      ? "Andere sehen, worum es geht."
+                      : "Andere sehen nur, dass du keine Zeit hast."}
+                  </span>
+                </div>
+                {k.letzter_fehler && (
+                  <p className="text-[11px] text-coral mt-1.5">{k.letzter_fehler}</p>
+                )}
+              </div>
+            ))}
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <input className="input !py-1.5 text-xs !w-auto" placeholder="Name (z. B. Privat)"
+                value={quelleEntwurf.name}
+                onChange={(e) => setQuelleEntwurf((q) => ({ ...q, name: e.target.value }))} />
+              <input className="input !py-1.5 text-xs flex-1 min-w-[220px]" placeholder="https://calendar.google.com/…/basic.ics"
+                value={quelleEntwurf.url}
+                onChange={(e) => setQuelleEntwurf((q) => ({ ...q, url: e.target.value }))} />
+              <button onClick={fuegeQuelleHinzu} disabled={quelleBusy || !quelleEntwurf.url.trim()}
+                className="btn text-xs disabled:opacity-40">
+                {quelleBusy ? "Prüft…" : "Kalender hinzufügen"}
+              </button>
+            </div>
+            <p className="text-[11px] text-textMuted mt-2">
+              Neue Kalender starten auf „Nur Belegt“ — dass ein Arzttermin im Firmenkalender steht, will
+              niemand aus Versehen. Du selbst siehst deine Titel immer.
+            </p>
+          </div>
         </div>
       )}
 
@@ -574,7 +695,7 @@ export default function Kalender() {
                 {monatsRaster(anker).map((tag, i) => {
                   if (!tag) return <div key={`leer-${i}`} />;
                   const inhalt = eintraegeAm(tag);
-                  const anzahl = inhalt.eintraege.length + inhalt.geburtstage.length + inhalt.termine.length;
+                  const anzahl = inhalt.eintraege.length + inhalt.geburtstage.length + inhalt.termine.length + inhalt.extern.length;
                   const istHeute = tagesSchluessel(tag) === heute;
                   const gewaehlt = gewaehlterTag && istGleicherTag(tag, gewaehlterTag);
                   return (
@@ -669,6 +790,12 @@ function zeilenFuerTag(inhalt, meinStatus) {
   return [
     ...inhalt.termine.map((t) => ({ symbol: zeichen("lead", t.id, "📞"), titel: `${uhrzeitDeutsch(t.appointment_at)} ${t.name}` })),
     ...inhalt.eintraege.map((e) => ({ symbol: zeichen("org_event", e.id, symbolFuer(e.art)), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
+    // Privatkalender zuletzt: sie sind Hintergrund für die Frage "wer kann
+    // wann", nicht das, wonach im Firmenkalender gesucht wird.
+    ...inhalt.extern.map((t) => ({
+      symbol: "🔒",
+      titel: t.ganztags ? t.titel : `${uhrzeitDeutsch(t.beginn)} ${t.titel}`,
+    })),
     ...inhalt.geburtstage.map((g) => ({ symbol: "🎂", titel: g.name })),
     ...inhalt.abwesend.map((a) => ({ symbol: "🌴", titel: `${a.name} abwesend` })),
   ];
@@ -679,7 +806,7 @@ function zeilenFuerTag(inhalt, meinStatus) {
 function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, selbst, einladenFuer, setEinladenFuer, onEinladen, onZuruecknehmen, onLoeschen, busy,
   bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
-    && inhalt.termine.length === 0 && inhalt.abwesend.length === 0;
+    && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0;
   if (leer) return <p className="text-textMuted text-xs">{kompakt ? "—" : "Für diesen Tag ist nichts eingetragen."}</p>;
 
   return (
@@ -774,6 +901,26 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
                 setOffen={setEinladenFuer} onEinladen={onEinladen} onZuruecknehmen={onZuruecknehmen} busy={busy}
               />
             )}
+          </div>
+        </div>
+      ))}
+
+      {/* Aus privaten Kalendern. Blasser und ohne Knöpfe: sie sind der
+          Hintergrund für "wer kann wann", nichts, was man hier bearbeitet.
+          Steht dort "Belegt", hat die Person genau das so eingestellt. */}
+      {inhalt.extern.map((t) => (
+        <div key={`ext-${t.id}`} className="flex items-start gap-2 py-1 opacity-75">
+          <span>🔒</span>
+          <div className="flex-1 min-w-0">
+            <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
+              {t.titel}
+            </div>
+            <div className="text-[11px] text-textMuted">
+              {t.ganztags ? "ganztägig" : terminZeile(t.beginn, kompakt)}
+              {t.eigener
+                ? (t.quelle && !kompakt ? ` · ${t.quelle}` : "")
+                : ` · ${personen?.find((p) => p.id === t.user_id)?.name || "Teammitglied"}`}
+            </div>
           </div>
         </div>
       ))}

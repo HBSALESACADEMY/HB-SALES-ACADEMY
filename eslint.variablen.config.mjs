@@ -12,7 +12,7 @@ const browserGlobals = [
   "window", "document", "console", "fetch", "localStorage", "sessionStorage",
   "setTimeout", "clearTimeout", "setInterval", "clearInterval", "requestAnimationFrame",
   "cancelAnimationFrame", "alert", "confirm", "navigator", "Blob", "File", "FileReader",
-  "URL", "URLSearchParams", "FormData", "Image", "Audio", "MediaRecorder", "AbortController",
+  "URL", "URLSearchParams", "FormData", "Image", "Audio", "MediaRecorder", "AbortController", "AbortSignal",
   "crypto", "atob", "btoa", "CustomEvent", "Event", "EventTarget", "Intl", "React", "process", "Buffer", "structuredClone",
 ];
 

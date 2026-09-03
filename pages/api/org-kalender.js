@@ -1,5 +1,6 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
+import { istFaellig, aktualisiereKalender } from "../../lib/externerKalenderAbruf";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { tagesBeginnZeitpunkt, tagPlus } from "../../lib/woche";
 import { offeneEinladungenFuer } from "../../lib/einladungenServer";
@@ -106,6 +107,13 @@ export default async function handler(req, res) {
     // blättert. Dieselbe Auflösung wie auf dem Dashboard.
     const offeneEinladungen = await offeneEinladungenFuer(admin, auth.user.id, orgId);
 
+    // Externe Kalender (migration_134): erst die eigenen fälligen
+    // auffrischen, dann die sichtbaren Termine holen. Der Abruf hängt am
+    // Seitenaufruf und nicht an einem Zeitplan — so bleibt es ohne
+    // zusätzliche Infrastruktur aktuell, und ein Kalender, den niemand
+    // ansieht, wird auch nicht abgerufen.
+    const externeTermine = await ladeExterneTermine(admin, auth.client, auth.user.id, { vonZeitpunkt, bisZeitpunkt });
+
     const personenListe = (personen || []).map((p) => ({ id: p.id, name: p.full_name || "Unbenannt", avatar_url: p.avatar_url }));
     const namen = new Map(personenListe.map((p) => [p.id, p.name]));
     return res.status(200).json({
@@ -118,6 +126,7 @@ export default async function handler(req, res) {
       })),
       geburtstage,
       abwesenheiten,
+      externeTermine,
       // Für die Auswahlliste beim Einladen — nur die eigene Organisation.
       personen: personenListe,
       offeneEinladungen,
@@ -132,4 +141,62 @@ export default async function handler(req, res) {
 function naechsterMonat(monat) {
   const [j, m] = monat.split("-").map(Number);
   return m === 12 ? `${j + 1}-01` : `${j}-${String(m + 1).padStart(2, "0")}`;
+}
+
+
+/**
+ * Externe Kalender-Termine, die diese Person sehen darf.
+ *
+ * Zwei Schritte, die nicht vertauscht werden dürfen:
+ *
+ *   1. WER — das entscheidet die Datenbank über den RLS-gebundenen Client.
+ *      Eigene Termine immer, fremde nur bei Führung oder Teamleitung.
+ *   2. WAS — das entscheidet der Server hier. Steht die Quelle auf
+ *      "belegt", wird der Titel gar nicht erst mitgeschickt. Eine
+ *      Zugriffsregel kann keine einzelne Spalte ausblenden, also muss es an
+ *      dieser Stelle passieren — und bevor die Daten den Server verlassen,
+ *      nicht erst in der Anzeige.
+ */
+async function ladeExterneTermine(admin, client, userId, { vonZeitpunkt, bisZeitpunkt }) {
+  try {
+    // Nur die EIGENEN fälligen Kalender abrufen: fremde aufzufrischen wäre
+    // eine Aufgabe, die sich von aussen beliebig oft anstossen liesse.
+    const { data: eigene } = await admin.from("externe_kalender")
+      .select("id, user_id, url, letzter_abruf").eq("user_id", userId).eq("aktiv", true);
+    const faellige = (eigene || []).filter((k) => istFaellig(k.letzter_abruf));
+    if (faellige.length) await Promise.all(faellige.map((k) => aktualisiereKalender(admin, k)));
+
+    const { data: termine } = await client.from("externe_termine")
+      .select("id, user_id, kalender_id, titel, beginn, ende, ganztags")
+      .lt("beginn", bisZeitpunkt).gt("ende", vonZeitpunkt)
+      .order("beginn").limit(2000);
+    if (!termine?.length) return [];
+
+    const quellIds = [...new Set(termine.map((t) => t.kalender_id))];
+    const { data: quellen } = await admin.from("externe_kalender")
+      .select("id, sichtbarkeit, name").in("id", quellIds);
+    const sicht = new Map((quellen || []).map((q) => [q.id, q]));
+
+    return termine.map((t) => {
+      const quelle = sicht.get(t.kalender_id);
+      const eigener = t.user_id === userId;
+      // Den eigenen Titel sieht man immer: die Einstellung schützt vor den
+      // anderen, nicht vor einem selbst.
+      const mitTitel = eigener || quelle?.sichtbarkeit === "titel";
+      return {
+        id: t.id,
+        user_id: t.user_id,
+        titel: mitTitel ? (t.titel || "Termin") : "Belegt",
+        beginn: t.beginn,
+        ende: t.ende,
+        ganztags: t.ganztags,
+        eigener,
+        quelle: eigener ? quelle?.name || null : null,
+      };
+    });
+  } catch (e) {
+    // Ein fremder Kalender darf den eigenen nie aufhalten.
+    console.error("Externe Kalender laden:", e.message);
+    return [];
+  }
 }
