@@ -62,21 +62,40 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                 </span>
                 <div className="flex-1 h-4 rounded bg-surfaceRaised overflow-hidden flex"
                   style={{ width: `${Math.max(6, Math.round((z.gesamt / groesste) * 100))}%` }}>
+                  {/* Jedes Stück im Balken ist anfassbar — genau wie ein
+                      Segment im Kreisdiagramm. Wer auf eine Farbe zeigt,
+                      fragt nach dieser Farbe, und dann soll sie antworten:
+                      das getroffene Stück bleibt kräftig und bekommt einen
+                      hellen Rand, alle anderen treten zurück. */}
                   {z.termin > 0 && (
-                    <div style={{
-                      width: `${(z.termin / z.gesamt) * 100}%`,
-                      background: feldFarbe("termin"),
-                      opacity: aktiverGrund === null ? 1 : 0.2,
-                      transition: "opacity .18s ease",
-                    }} />
+                    <div
+                      title={`${z.termin} Termine in dieser Stunde`}
+                      onMouseEnter={() => setAktiverGrund("__termin")}
+                      onMouseLeave={() => setAktiverGrund(null)}
+                      onClick={(ev) => { ev.stopPropagation(); setAktiverGrund(aktiverGrund === "__termin" ? null : "__termin"); }}
+                      style={{
+                        width: `${(z.termin / z.gesamt) * 100}%`,
+                        background: feldFarbe("termin"),
+                        opacity: aktiverGrund === null || aktiverGrund === "__termin" ? 1 : 0.15,
+                        boxShadow: aktiverGrund === "__termin" ? "inset 0 0 0 1.5px rgba(255,255,255,.85)" : "none",
+                        transition: "opacity .18s ease, box-shadow .18s ease",
+                        cursor: "pointer",
+                      }} />
                   )}
                   {z.verteilung.filter((g) => g.wert > 0).map((g) => (
-                    <div key={g.key} style={{
-                      width: `${(g.wert / z.gesamt) * 100}%`,
-                      background: grundFarbe(gruende, g.key),
-                      opacity: aktiverGrund === null || aktiverGrund === g.key ? 1 : 0.2,
-                      transition: "opacity .18s ease",
-                    }} />
+                    <div key={g.key}
+                      title={`${g.label}: ${g.wert} in dieser Stunde`}
+                      onMouseEnter={() => setAktiverGrund(g.key)}
+                      onMouseLeave={() => setAktiverGrund(null)}
+                      onClick={(ev) => { ev.stopPropagation(); setAktiverGrund(aktiverGrund === g.key ? null : g.key); }}
+                      style={{
+                        width: `${(g.wert / z.gesamt) * 100}%`,
+                        background: grundFarbe(gruende, g.key),
+                        opacity: aktiverGrund === null || aktiverGrund === g.key ? 1 : 0.15,
+                        boxShadow: aktiverGrund === g.key ? "inset 0 0 0 1.5px rgba(255,255,255,.85)" : "none",
+                        transition: "opacity .18s ease, box-shadow .18s ease",
+                        cursor: "pointer",
+                      }} />
                   ))}
                 </div>
                 <span className="text-[11px] text-textMuted w-[92px] flex-shrink-0 text-right">
@@ -93,6 +112,27 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
               // Ein gewählter Einwand hat Vorrang: dann ist die Frage nicht
               // "was war in dieser Stunde", sondern "wann kommt dieser
               // Einwand" — und darauf antwortet die Verteilung über den Tag.
+              if (aktiverGrund === "__termin") {
+                const proStunde = raster.filter((z) => z.termin > 0);
+                const summe = proStunde.reduce((sum, z) => sum + z.termin, 0);
+                return (
+                  <div className="rounded-xl border border-line px-3 py-2">
+                    <div className="text-xs text-textMain font-semibold mb-1">
+                      <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: feldFarbe("termin") }} />
+                      Termine: {summe}× am Tag
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      {proStunde.map((z) => (
+                        <span key={z.stunde} className="text-[11px] text-textMuted">
+                          {stundenText(z.stunde)}: <span className="text-textMain">{z.termin}</span>
+                          {z.erfolgsquote !== null ? ` (${z.erfolgsquote} %)` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
               if (aktiverGrund) {
                 const label = gruende.find((g) => g.key === aktiverGrund)?.label || aktiverGrund;
                 const proStunde = raster
@@ -125,7 +165,7 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
               if (!z) {
                 return (
                   <p className="text-[11px] text-textMuted">
-                    Auf eine Stunde oder einen Einwand gehen — beides lässt sich auch antippen.
+                    Auf eine Stunde oder direkt auf ein farbiges Stück im Balken gehen — alles lässt sich auch antippen.
                   </p>
                 );
               }
@@ -163,9 +203,14 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
           </p>
 
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3">
-            <span className="flex items-center gap-1.5 text-[11px] text-textMuted">
+            <button
+              onMouseEnter={() => setAktiverGrund("__termin")}
+              onMouseLeave={() => setAktiverGrund(null)}
+              onClick={() => setAktiverGrund(aktiverGrund === "__termin" ? null : "__termin")}
+              className={`flex items-center gap-1.5 text-[11px] rounded px-1 -mx-1 ${aktiverGrund === "__termin" ? "text-textMain font-semibold" : "text-textMuted"}`}
+              style={{ opacity: aktiverGrund === null || aktiverGrund === "__termin" ? 1 : 0.4, transition: "opacity .18s ease" }}>
               <span className="w-2 h-2 rounded-full" style={{ background: feldFarbe("termin") }} /> Termin
-            </span>
+            </button>
             {gruende.map((g) => (
               <button key={g.key}
                 onMouseEnter={() => setAktiverGrund(g.key)}
