@@ -22,6 +22,7 @@ import { DASHBOARD_KACHELN, sichtbareKacheln } from "../lib/dashboardKacheln.js"
 import { baueIcs, baueIcsFeed, icsDateiname } from "../lib/ics.js";
 import { leseIcs, leseZeitpunkt, loeseWiederholung } from "../lib/icsLesen.js";
 import { pruefeUrl, istFaellig, FRISCH_MS } from "../lib/externerKalenderAbruf.js";
+import { saeubere, vergleichsForm, schluesselFuer, fasseZusammen } from "../lib/grundVorschlag.js";
 import { FENSTER_MS, istMeldenswert, meldungsSchluessel, sollMelden } from "../lib/fehlerMeldung.js";
 import { deutscherTag } from "../lib/terminzeit.js";
 import { vorWieLange, istGeradeAktiv } from "../lib/relativeZeit.js";
@@ -1743,4 +1744,44 @@ test("Fremde Kalender: der Titel wird auf dem Server entschieden", () => {
   assert.match(route, /titel: mitTitel \? \(t\.titel \|\| "Termin"\) : "Belegt"/);
   // Aufgefrischt werden nur die EIGENEN Kalender.
   assert.match(route, /from\("externe_kalender"\)[\s\S]{0,200}eq\("user_id", userId\)/);
+});
+
+// --- Gründe aus dem Team ---------------------------------------------------
+
+test("Grund-Vorschläge: Freitext wird gesäubert, Unsinn fällt raus", () => {
+  assert.equal(saeubere("  Vertrag   läuft noch  "), "Vertrag läuft noch");
+  // Nur Satzzeichen ist kein Grund — sonst stehen "..." und "???" in der
+  // Liste, und niemand kann sie übernehmen.
+  assert.equal(saeubere("..."), "");
+  assert.equal(saeubere("???"), "");
+  assert.equal(saeubere(""), "");
+  assert.equal(saeubere(null), "");
+  assert.ok(saeubere("x".repeat(200)).length <= 60);
+});
+
+test("Grund-Vorschläge: gleiche Gründe werden zusammengefasst", () => {
+  // Ohne das stünde derselbe Grund dreimal mit Anzahl 1 in der Liste — und
+  // damit sähe kein einziger Vorschlag wichtig aus.
+  assert.equal(vergleichsForm("Kein Interesse"), vergleichsForm("kein  interesse!"));
+  const gruppen = fasseZusammen([
+    { id: "1", text: "Kein Interesse", user_id: "a", created_at: "2026-09-01" },
+    { id: "2", text: "kein interesse!", user_id: "b", created_at: "2026-09-02" },
+    { id: "3", text: "Vertrag läuft noch", user_id: "a", created_at: "2026-09-03" },
+    { id: "4", text: "...", user_id: "a", created_at: "2026-09-03" },
+  ]);
+  assert.equal(gruppen.length, 2);
+  assert.equal(gruppen[0].anzahl, 2);
+  assert.equal(gruppen[0].personen, 2);
+  assert.deepEqual(gruppen[0].ids.sort(), ["1", "2"]);
+  // Häufigstes zuerst — danach entscheidet die Leitung schneller.
+  assert.ok(gruppen[0].anzahl >= gruppen[1].anzahl);
+});
+
+test("Grund-Vorschläge: der Schlüssel überschreibt keine bestehende Kategorie", () => {
+  const vorhanden = [{ key: "preis", label: "Preis" }, { key: "kein_interesse", label: "Kein Interesse" }];
+  assert.equal(schluesselFuer("Vertrag läuft noch", vorhanden), "vertrag_lauft_noch");
+  // Derselbe Name noch einmal: durchnummerieren statt still überschreiben —
+  // sonst verschwinden die bisher darauf gebuchten Zahlen.
+  assert.equal(schluesselFuer("Kein Interesse", vorhanden), "kein_interesse_2");
+  assert.ok(schluesselFuer("!!!", vorhanden).length > 0);
 });

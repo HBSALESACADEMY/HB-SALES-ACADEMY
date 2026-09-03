@@ -18,6 +18,7 @@ import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import { korrigiere, regleEin, ziehreAnteiligMit } from "../lib/anrufKorrektur";
 import { merkeEreignis, nimmEreignisZurueck } from "../lib/callEreignis";
+import { saeubere, MAX_LAENGE } from "../lib/grundVorschlag";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import { stundenRaster, stundenText } from "../lib/tageszeit";
@@ -80,6 +81,9 @@ export default function CallTracker() {
   // Warum die Kacheln unten möglicherweise zu wenig zeigen.
   const [abgleichFehler, setAbgleichFehler] = useState(null);
   // Welcher Zähler gerade von Hand gesetzt wird, und worauf.
+  // Eigener Grund als Freitext (migration_135).
+  const [eigenerGrund, setEigenerGrund] = useState("");
+  const [grundFeldOffen, setGrundFeldOffen] = useState(false);
   const [setzeFeld, setSetzeFeld] = useState(null);
   const [setzeWert, setSetzeWert] = useState("");
   // Steht eine Rückfrage an: "sollen die übrigen Zahlen mitgehen?"
@@ -479,6 +483,32 @@ export default function CallTracker() {
     setTodayCounts(neu.counts);
     setTodayReasons(neu.reasons);
     persist(neu.counts, neu.reasons, { korrektur: true });
+  }
+
+  // Ein eingetippter Grund. Gezählt wird er wie "Sonstiges" — die
+  // bestehenden Zahlen bleiben also stimmig —, und zusätzlich geht der
+  // Wortlaut als Vorschlag an die Leitung. Ohne diesen zweiten Schritt wäre
+  // die Information nach dem Klick verloren, und genau um sie geht es.
+  async function zaehleEigenenGrund() {
+    const text = saeubere(eigenerGrund);
+    if (!text) return;
+    const sammel = reasons.find((r) => r.key === "sonstiges")?.key || reasons[reasons.length - 1]?.key;
+
+    setEigenerGrund("");
+    setGrundFeldOffen(false);
+    if (sammel) countReason(sammel);
+
+    try {
+      const { error } = await supabase.from("grund_vorschlaege").insert({
+        user_id: userId, organization_id: orgId, text,
+      });
+      if (error) throw error;
+      showToast("Gezählt — dein Grund geht als Vorschlag an die Leitung");
+    } catch (e) {
+      // Der Anruf ist gezählt, nur der Vorschlag fehlt. Das darf den
+      // nächsten Anruf nicht aufhalten, aber still bleiben soll es nicht.
+      meldeStoerung("Grund-Vorschlag speichern", e?.message || String(e));
+    }
   }
 
   function countReason(reasonKey) {
@@ -986,6 +1016,32 @@ export default function CallTracker() {
                       </button>
                     ))}
                   </div>
+                  {/* Was hier wirklich gesagt wurde. Zählt wie "Sonstiges",
+                      aber der Wortlaut geht als Vorschlag an die Leitung —
+                      sonst verschwindet genau die Information, die neu ist. */}
+                  {grundFeldOffen ? (
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
+                      <input autoFocus className="input !py-2 text-sm flex-1 min-w-[200px]"
+                        maxLength={MAX_LAENGE}
+                        placeholder="Was war der Grund? (z. B. „Vertrag läuft noch 2 Jahre“)"
+                        value={eigenerGrund}
+                        onChange={(e) => setEigenerGrund(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") zaehleEigenenGrund();
+                          if (e.key === "Escape") { setGrundFeldOffen(false); setEigenerGrund(""); }
+                        }} />
+                      <button onClick={zaehleEigenenGrund} disabled={!saeubere(eigenerGrund)}
+                        className="btn text-sm disabled:opacity-40">Zählen</button>
+                      <button onClick={() => { setGrundFeldOffen(false); setEigenerGrund(""); }}
+                        className="btn-ghost text-sm">Abbrechen</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setGrundFeldOffen(true)}
+                      className="w-full px-3 py-2.5 rounded-lg border border-dashed border-line text-sm text-textMuted hover:border-amber hover:text-amber transition mb-3">
+                      ✏️ Anderer Grund — eintippen
+                    </button>
+                  )}
+
                   {/* Ohne Angabe: zählt auf die letzte Kategorie (Sammelpunkt). */}
                   <button onClick={() => countReason(reasons[reasons.length - 1].key)} className="text-textMuted text-xs underline">Ohne Angabe zählen</button>
                   {/* Der Weg zu eigenen Gründen gehört dorthin, wo die Gründe
