@@ -1812,10 +1812,13 @@ test("Verwaltung: jede Seite hat genau einen Ort", () => {
   // auf. Ein zurückgelassener Link würde ins Leere führen.
   assert.ok(!readFileSync(new URL("../pages/admin/content.js", import.meta.url), "utf8").includes("/admin/navigation"),
     "Es gibt noch einen Link auf die gelöschte Navigationsseite.");
-  // Und die Führungsauswertung steht im Verwaltungsbereich, nicht zusätzlich
-  // in der Sidebar: derselbe Ort an zwei Stellen ist einer zu viel.
+  // Und die Vertriebsauswertung steht NICHT in der Verwaltung: sie ist ein
+  // eigener Reiter in der Sidebar, weil sie täglich gelesen wird — die
+  // Verwaltung betritt man selten.
+  assert.ok(!routen.includes("/auswertung"),
+    "Die Vertriebsauswertung steht wieder in der Verwaltung — sie gehört in die Sidebar.");
   const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
-  assert.match(layout, /IN_BEREICH_AUFGEGANGEN = new Set\(\[[\s\S]*?"\/auswertung",[\s\S]*?\]\)/);
+  assert.match(layout, /route: "\/auswertung", is_builtin: true, requires_manager: true/);
 
   // Jede verlinkte Verwaltungsseite existiert auch.
   routen.filter((r) => r.startsWith("/admin/")).forEach((r) => {

@@ -17,9 +17,13 @@ let betreiberGemerkt = null;
 // weiss, klickt sich durch, und weil "Aktivitäten", "Login-Verlauf" und
 // "Insights" alle drei nach Beobachtung klingen, landet man dreimal falsch.
 //
-// Deshalb Bereiche: erst die Frage ("geht es um Menschen, um Inhalte, um die
-// Auswertung oder um Einstellungen?"), dann die Seite. Jede Seite hat genau
-// einen Ort — und einen Satz dazu, der sie von ihren Nachbarn abgrenzt.
+// Deshalb Bereiche: erst die Frage ("geht es um Menschen, um Inhalte oder
+// um Einstellungen?"), dann die Seite. Jede Seite hat genau einen Ort — und
+// einen Satz dazu, der sie von ihren Nachbarn abgrenzt.
+//
+// Die Vertriebsauswertung steht bewusst NICHT hier, sondern als eigener
+// Reiter in der Sidebar: sie wird täglich gelesen, die Verwaltung betritt
+// man selten.
 //
 // "Betrieb" steht abgetrennt und nur für den Plattform-Betreiber: das sind
 // die Dinge, die über alle Organisationen hinweg gelten.
@@ -34,6 +38,12 @@ const BEREICHE = [
         zweck: "Was in der Academy passiert ist — gelernt, telefoniert, Termine erfasst." },
       { key: "logins", label: "Anmeldungen", route: "/admin/logins", icon: "logout",
         zweck: "Nur die Anmeldungen, mit Verlauf je Person." },
+      // Der Lernfortschritt gehört zu den Menschen. Ein eigener Bereich nur
+      // dafür wäre eine Überschrift über einer einzigen Seite — die
+      // Vertriebsauswertung, die dort danebenstand, ist jetzt ein eigener
+      // Reiter in der Sidebar.
+      { key: "insights", label: "Lernfortschritt", route: "/admin/insights", icon: "award",
+        zweck: "Wer wie weit ist: Kurse, Quiz, Rollenspiele, XP — über alle Teams." },
     ],
   },
   {
@@ -50,19 +60,6 @@ const BEREICHE = [
         zweck: "Eigene Einwand-Szenarien und die Gründe, die aus dem Team kommen." },
       { key: "suggestions", label: "Wissens-Vorschläge", route: "/admin/suggestions", icon: "chat",
         zweck: "Was die KI aus Rollenspielen aufgeschnappt hat." },
-    ],
-  },
-  {
-    key: "auswertung",
-    label: "Auswertung",
-    seiten: [
-      // Zwei Auswertungen, die nichts miteinander zu tun haben: die eine
-      // misst das Telefonieren, die andere das Lernen. "Auswertung" und
-      // "Insights" nebeneinander sagten das nicht — die Namen tun es jetzt.
-      { key: "auswertung", label: "Vertrieb", route: "/auswertung", icon: "chart",
-        zweck: "Quoten, Trichter, Engpässe und Handlungsempfehlungen aus den Anrufen." },
-      { key: "insights", label: "Lernfortschritt", route: "/admin/insights", icon: "award",
-        zweck: "Wer wie weit ist: Kurse, Quiz, Rollenspiele, XP — über alle Teams." },
     ],
   },
   {
