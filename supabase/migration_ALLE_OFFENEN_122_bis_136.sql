@@ -1,5 +1,5 @@
 -- ===================================================================
--- ALLE OFFENEN MIGRATIONEN (122 bis 135) — in einem Durchlauf
+-- ALLE OFFENEN MIGRATIONEN (122 bis 136) — in einem Durchlauf
 -- ===================================================================
 --
 -- Zusammengefasst, weil vierzehn einzelne Durchläufe vierzehn Gelegenheiten
@@ -596,3 +596,17 @@ drop policy if exists "grund_vorschlaege_update_leitung" on grund_vorschlaege;
 create policy "grund_vorschlaege_update_leitung" on grund_vorschlaege for update using (
   ist_fuehrungsrolle(auth.uid()) and sieht_person(user_id)
 );
+
+-- ===================================================================
+-- migration_136_auswertung_nav_weg.sql
+-- ===================================================================
+-- Den Menüpunkt "Auswertung" wieder entfernen (Gegenstück zu migration_127).
+--
+-- Die Führungsauswertung liegt im Verwaltungsbereich unter Auswertung →
+-- Vertrieb. Ein zweiter Weg über die Sidebar wäre derselbe Ort an zwei
+-- Stellen — und in der Navigationsverwaltung stand damit ein Punkt, den man
+-- sortieren und umbenennen konnte, ohne dass es irgendetwas bewirkte.
+--
+-- Die Seite selbst bleibt unter /auswertung erreichbar; entfernt wird nur
+-- der Eintrag im Menü.
+delete from nav_items where key = 'auswertung';
