@@ -24,6 +24,7 @@ export default function ObjectionsAdmin() {
   const [vorschlaege, setVorschlaege] = useState([]);
   const [vorschlagBusy, setVorschlagBusy] = useState(null);
   const [vorschlagFehler, setVorschlagFehler] = useState("");
+  const [vorschlagStand, setVorschlagStand] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -46,8 +47,8 @@ export default function ObjectionsAdmin() {
       // kein zweiter Organisationsfilter (migration_135).
       // Getrennt abgefangen: eine fehlende Tabelle darf nicht die ganze
       // Seite lahmlegen.
-      supabase.from("grund_vorschlaege").select("id, text, user_id, created_at")
-        .eq("status", "offen").order("created_at", { ascending: false }).limit(500),
+      supabase.from("grund_vorschlaege").select("id, text, user_id, created_at, status")
+        .order("created_at", { ascending: false }).limit(500),
     ]);
     const cats = resolveObjectionCategories(org);
     setCategories(cats);
@@ -62,7 +63,15 @@ export default function ObjectionsAdmin() {
       setVorschlaege([]);
     } else {
       setVorschlagFehler("");
-      setVorschlaege(fasseZusammen(offene.data || []));
+      const alle = offene.data || [];
+      setVorschlaege(fasseZusammen(alle.filter((v) => v.status === "offen")));
+      // Auch die erledigten zählen: "keine offenen Vorschläge" und "es kam
+      // noch nie einer an" sehen sonst gleich aus, und man sucht den Fehler
+      // an der falschen Stelle.
+      setVorschlagStand({
+        gesamt: alle.length,
+        erledigt: alle.filter((v) => v.status !== "offen").length,
+      });
     }
 
     if (err) setError(err.message);
@@ -188,6 +197,26 @@ export default function ObjectionsAdmin() {
           diese Vorschläge sind zeitkritisch, alles andere hier hat Zeit. */}
       {vorschlagFehler && (
         <div className="card mb-6 border-coral/40 text-coral text-sm">{vorschlagFehler}</div>
+      )}
+
+      {/* Nichts Offenes: dann sagen, warum. Ein leerer Bereich beantwortet
+          die Frage "kommt hier überhaupt etwas an?" nicht. */}
+      {!vorschlagFehler && vorschlaege.length === 0 && vorschlagStand && (
+        <div className="card mb-6">
+          <div className="font-semibold text-textMain text-sm mb-1">Gründe aus dem Team</div>
+          <p className="text-xs text-textMuted">
+            {vorschlagStand.gesamt === 0 ? (
+              <>
+                Bis jetzt hat niemand einen eigenen Grund eingetippt. Der Weg dorthin: Call Tracker → negativer
+                Anruf → <strong className="text-textMain">„Anderer Grund — eintippen“</strong>. Was vor dem
+                Einspielen der Datenbank-Änderung eingetippt wurde, ist nicht angekommen und muss einmal neu
+                erfasst werden.
+              </>
+            ) : (
+              <>Alle {vorschlagStand.erledigt} eingegangenen Vorschläge sind bearbeitet — hier wartet gerade nichts.</>
+            )}
+          </p>
+        </div>
       )}
 
       {vorschlaege.length > 0 && (
