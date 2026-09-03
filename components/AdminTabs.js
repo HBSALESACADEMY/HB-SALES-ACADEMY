@@ -41,7 +41,7 @@ const BEREICHE = [
     label: "Inhalte",
     seiten: [
       { key: "content", label: "Kurse & Module", route: "/admin/content", icon: "book",
-        zweck: "Eigene Kurse, Module und ihre Reihenfolge." },
+        zweck: "Eigene Kurse, Module und ihre Reihenfolge — und der Weg zu eigenen Ordnern in der Sidebar." },
       { key: "flashcards", label: "Flashcards", route: "/admin/flashcards", icon: "library",
         zweck: "Karten zum Auswendiglernen." },
       { key: "lernpfade", label: "Lernpfade", route: "/admin/lernpfade", icon: "target",
@@ -71,8 +71,6 @@ const BEREICHE = [
     seiten: [
       { key: "organization", label: "Organisation", route: "/admin/organization", icon: "dashboard",
         zweck: "Name, Logo, Farben, Firmencode, Einwand-Kategorien, Terminfelder." },
-      { key: "navigation", label: "Navigation", route: "/admin/navigation", icon: "chevron",
-        zweck: "Welche Menüpunkte es gibt und in welcher Reihenfolge." },
     ],
   },
 ];

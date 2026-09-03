@@ -4,6 +4,7 @@ import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import IconPicker from "../../components/IconPicker";
 import AdminTabs from "../../components/AdminTabs";
+import { NUR_IM_VERWALTUNGSBEREICH } from "../../components/Layout";
 import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 import { loescheGeprueft } from "../../lib/loeschen";
@@ -39,8 +40,13 @@ export default function NavigationAdmin() {
       ? await supabase.from("nav_items").select("*").or(`is_builtin.eq.true,organization_id.eq.${orgId}`).order("order_index")
       : await supabase.from("nav_items").select("*").eq("is_builtin", true).order("order_index");
     if (err) setError(err.message);
-    setItems(data || []);
-    setDrafts(Object.fromEntries((data || []).map((n) => [n.id, { label: n.label, icon: n.icon }])));
+    // Punkte, die längst in einem Bereich aufgegangen sind, erscheinen gar
+    // nicht mehr in der Sidebar. Sie hier trotzdem zum Sortieren und
+    // Umbenennen anzubieten, hiess: man verstellt etwas, und nichts
+    // passiert. Genau das war an dieser Seite unsinnig.
+    const sichtbar = (data || []).filter((n) => !(n.is_builtin && NUR_IM_VERWALTUNGSBEREICH.has(n.route)));
+    setItems(sichtbar);
+    setDrafts(Object.fromEntries(sichtbar.map((n) => [n.id, { label: n.label, icon: n.icon }])));
     setLoading(false);
   }
 
@@ -116,7 +122,7 @@ export default function NavigationAdmin() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Navigation verwalten</h1>
+      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Sidebar & eigene Ordner</h1>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
       <p className="text-textMuted text-sm mb-3">Hier legst du nur die <strong>Struktur der Sidebar</strong> fest: Reiter/Ordner anlegen, umbenennen, Icon ändern, Reihenfolge ändern, ausblenden oder entfernen — auch die fest eingebauten. Entfernen löscht bei eigenen Ordnern auch deren Kurse; bei fest eingebauten Seiten verschwindet nur der Sidebar-Link, die Seite bleibt erreichbar.</p>
@@ -124,7 +130,7 @@ export default function NavigationAdmin() {
         <p className="text-textMuted text-xs">
           Um <strong className="text-textMain">Kurse mit Inhalten</strong> in einen Ordner zu füllen (Module, Videos, Anhänge), geh zu „Inhalte verwalten" — dort wählst du den Ordner aus, der hier angelegt wurde.
         </p>
-        <button onClick={() => router.push("/admin/content")} className="btn-ghost text-xs flex-shrink-0">Zu „Inhalte verwalten"</button>
+        <button onClick={() => router.push("/admin/content")} className="btn-ghost text-xs flex-shrink-0">Zurück zu „Kurse & Module"</button>
       </div>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}

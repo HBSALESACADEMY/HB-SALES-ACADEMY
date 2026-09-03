@@ -330,7 +330,13 @@ export default function ContentAdmin() {
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Inhalte verwalten</h1>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
-      <p className="text-textMuted text-sm mb-6">Hier füllst du einen Ordner mit <strong className="text-textMain">Kursen und Inhalten</strong> (Module, Text, Video, Anhänge). Den Ordner selbst — also den Reiter in der Sidebar — legst du unter „Navigation verwalten" an.</p>
+      <p className="text-textMuted text-sm mb-6">Hier füllst du einen Ordner mit <strong className="text-textMain">Kursen und Inhalten</strong> (Module, Text, Video, Anhänge). Den Ordner selbst — also den Reiter in der Sidebar — legst du unter „Sidebar & eigene Ordner" an.</p>
+      {/* Der Weg dorthin steht hier, weil er hier gebraucht wird. Als
+          eigener Reiter stand er gleichrangig neben Dingen, die man täglich
+          benutzt — dabei braucht man ihn genau einmal je Ordner. */}
+      <button onClick={() => router.push("/admin/navigation")} className="btn-ghost text-xs mb-6">
+        ⚙️ Sidebar & eigene Ordner anpassen
+      </button>
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
 
@@ -342,7 +348,7 @@ export default function ContentAdmin() {
           {folders.length === 0 ? (
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-coral">Noch kein Ordner vorhanden. Leg zuerst einen Ordner an, bevor du einen Kurs erstellst.</p>
-              <button onClick={() => router.push("/admin/navigation")} className="btn-ghost text-xs flex-shrink-0">Zu „Navigation verwalten"</button>
+              <button onClick={() => router.push("/admin/navigation")} className="btn-ghost text-xs flex-shrink-0">Ordner anlegen</button>
             </div>
           ) : (
             <select className="input" value={newCourse.navItemId} onChange={(e) => setNewCourse({ ...newCourse, navItemId: e.target.value })}>

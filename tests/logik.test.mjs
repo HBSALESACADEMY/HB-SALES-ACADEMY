@@ -1804,6 +1804,15 @@ test("Verwaltung: jede Seite hat genau einen Ort", () => {
   assert.match(quelle, /nurBetreiber: true/);
   assert.match(quelle, /istBetreiber \? \[\.\.\.BEREICHE, BETRIEB\] : BEREICHE/);
 
+  // Kein Reiter für Seiten, die man einmal je Ordner braucht: die
+  // Sidebar-Struktur hängt bei "Kurse & Module", wo sie gebraucht wird.
+  assert.ok(!routen.includes("/admin/navigation"),
+    "Die Sidebar-Verwaltung steht wieder als gleichrangiger Reiter — sie gehört zu den Inhalten.");
+  // Und die Führungsauswertung steht im Verwaltungsbereich, nicht zusätzlich
+  // in der Sidebar: derselbe Ort an zwei Stellen ist einer zu viel.
+  const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
+  assert.match(layout, /IN_BEREICH_AUFGEGANGEN = new Set\(\[[\s\S]*?"\/auswertung",[\s\S]*?\]\)/);
+
   // Jede verlinkte Verwaltungsseite existiert auch.
   routen.filter((r) => r.startsWith("/admin/")).forEach((r) => {
     const datei = new URL(`../pages${r}.js`, import.meta.url);

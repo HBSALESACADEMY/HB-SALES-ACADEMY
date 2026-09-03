@@ -74,7 +74,17 @@ const IN_BEREICH_AUFGEGANGEN = new Set([
   "/scripts", "/leitfaden-generator",
   "/daily-challenge", "/duel", "/leaderboard",
   "/lernpfad", "/custom-courses",
+  // Die Führungsauswertung liegt im Verwaltungsbereich (Auswertung →
+  // Vertrieb). Ein zweiter Weg dorthin über die Sidebar hiesse: derselbe
+  // Ort an zwei Stellen, und in der Navigationsverwaltung stünde ein Punkt,
+  // den man sortieren kann, ohne dass es irgendetwas bewirkt.
+  "/auswertung",
 ]);
+
+// Diese Routen gehören in den Verwaltungsbereich und nicht in die Sidebar.
+// Wird von der Navigationsverwaltung mitbenutzt — dort sollen sie gar nicht
+// erst als verschiebbare Punkte auftauchen.
+export const NUR_IM_VERWALTUNGSBEREICH = IN_BEREICH_AUFGEGANGEN;
 
 // Die verbliebenen Punkte führen jetzt einen ganzen Bereich an und heissen
 // entsprechend allgemeiner.
