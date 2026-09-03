@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import IconPicker from "./IconPicker";
-import { NUR_IM_VERWALTUNGSBEREICH } from "./Layout";
+import { NUR_IM_VERWALTUNGSBEREICH, ENTFERNTE_SEITEN } from "./Layout";
 import { supabase } from "../lib/supabaseClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { loescheGeprueft } from "../lib/loeschen";
@@ -48,7 +48,11 @@ export default function SidebarStruktur() {
     // nicht mehr in der Sidebar. Sie hier trotzdem zum Sortieren und
     // Umbenennen anzubieten, hiess: man verstellt etwas, und nichts
     // passiert. Genau das war an dieser Seite unsinnig.
-    const sichtbar = (data || []).filter((n) => !(n.is_builtin && NUR_IM_VERWALTUNGSBEREICH.has(n.route)));
+    const sichtbar = (data || [])
+      // Gelöschte Seiten stehen hier nicht mehr zum Sortieren bereit — man
+      // würde einen Punkt pflegen, der ins Leere führt.
+      .filter((n) => !ENTFERNTE_SEITEN.has(n.route))
+      .filter((n) => !(n.is_builtin && NUR_IM_VERWALTUNGSBEREICH.has(n.route)));
     setItems(sichtbar);
     setDrafts(Object.fromEntries(sichtbar.map((n) => [n.id, { label: n.label, icon: n.icon }])));
     setLoading(false);

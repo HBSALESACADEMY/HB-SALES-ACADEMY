@@ -79,10 +79,22 @@ const IN_BEREICH_AUFGEGANGEN = new Set([
   "/auswertung",
 ]);
 
+// Seiten, die es nicht mehr gibt.
+//
+// Ein Menüpunkt lebt in der Datenbank weiter, auch wenn die Seite dazu
+// gelöscht wurde — und führt dann ins Leere. Genau das ist zweimal passiert.
+// Deshalb werden diese Routen IMMER ausgefiltert, unabhängig davon, ob die
+// zugehörige Migration schon eingespielt wurde: eine tote Verlinkung ist
+// schlimmer als ein fehlender Eintrag.
+const ENTFERNTE_SEITEN = new Set([
+  "/admin/navigation",  // klappt jetzt bei "Kurse & Module" auf
+]);
+
 // Diese Routen gehören in den Verwaltungsbereich und nicht in die Sidebar.
 // Wird von der Navigationsverwaltung mitbenutzt — dort sollen sie gar nicht
 // erst als verschiebbare Punkte auftauchen.
 export const NUR_IM_VERWALTUNGSBEREICH = IN_BEREICH_AUFGEGANGEN;
+export { ENTFERNTE_SEITEN };
 
 // Die verbliebenen Punkte führen jetzt einen ganzen Bereich an und heissen
 // entsprechend allgemeiner.
@@ -94,6 +106,7 @@ const NEUE_NAMEN = {
 
 function fasseZusammen(items) {
   return (items || [])
+    .filter((n) => !ENTFERNTE_SEITEN.has(n.route))
     .filter((n) => !(n.is_builtin && IN_BEREICH_AUFGEGANGEN.has(n.route)))
     .map((n) => (NEUE_NAMEN[n.route] ? { ...n, label: NEUE_NAMEN[n.route] } : n));
 }

@@ -1823,3 +1823,23 @@ test("Verwaltung: jede Seite hat genau einen Ort", () => {
     assert.ok(readFileSync(datei, "utf8").length > 0, `Seite fehlt: ${r}`);
   });
 });
+
+test("Kein Menüpunkt zeigt auf eine Seite, die es nicht gibt", () => {
+  // Ein Menüpunkt lebt in der Datenbank weiter, auch wenn die Seite dazu
+  // gelöscht wurde — und führt dann ins Leere. Genau das ist zweimal
+  // passiert. Deshalb filtert die Academy solche Routen immer aus, statt
+  // sich darauf zu verlassen, dass jemand die Migration einspielt.
+  const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
+  const entfernt = layout.match(/ENTFERNTE_SEITEN = new Set\(\[([\s\S]*?)\]\)/)?.[1] || "";
+  const routen = [...entfernt.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(routen.length > 0, "Die Liste entfernter Seiten ist leer — sie hält tote Menüpunkte auf.");
+
+  // Was dort steht, darf es tatsächlich nicht mehr geben.
+  routen.forEach((r) => {
+    assert.throws(() => readFileSync(new URL(`../pages${r}.js`, import.meta.url), "utf8"),
+      `${r} steht als entfernt, die Seite existiert aber noch.`);
+  });
+
+  // Und der Filter greift, bevor irgendetwas anderes filtert.
+  assert.match(layout, /\.filter\(\(n\) => !ENTFERNTE_SEITEN\.has\(n\.route\)\)/);
+});
