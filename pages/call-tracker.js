@@ -441,6 +441,7 @@ export default function CallTracker() {
       // verschlucken: es war ein echter Anruf.
       merkeBuchung(prefix, dayKey(), key);
       if (key === "termin") merkeEreignis({ userId, orgId, art: "termin" });
+      if (key === "anwahlen") merkeEreignis({ userId, orgId, art: "anwahl" });
       const frisch = loadDay(prefix, dayKey(), reasons);
       const next = { ...frisch.counts, [key]: (frisch.counts[key] || 0) + by };
       setTodayCounts(next);
@@ -451,6 +452,9 @@ export default function CallTracker() {
     // Termine mit Uhrzeit festhalten — für die Frage, wann sich Anrufen
     // lohnt (migration_128). Die Zählung selbst bleibt davon unberührt.
     if (key === "termin") merkeEreignis({ userId, orgId, art: "termin" });
+    // Der Beginn jedes Anrufs — Grundlage für "wie zügig wird telefoniert"
+    // (migration_136). Tagessummen wissen nur, dass es 120 waren.
+    if (key === "anwahlen") merkeEreignis({ userId, orgId, art: "anwahl" });
     setTodayCounts((prev) => {
       const next = { ...prev, [key]: (prev[key] || 0) + by };
       persist(next, todayReasons);
@@ -470,9 +474,11 @@ export default function CallTracker() {
     // Was der Zähler verliert, verliert auch der Zeitstempel — sonst stünde
     // in der Tageszeit-Auswertung ein Einwand, den es nie gab.
     if (key === "negativ" || key === "termin") nimmEreignisZurueck({ userId, art: key });
+    if (key === "anwahlen") nimmEreignisZurueck({ userId, art: "anwahl" });
     if (anruf) {
       Object.keys(anruf.counts || {}).forEach((k) => {
         if (k === "termin") nimmEreignisZurueck({ userId, art: "termin" });
+        if (k === "anwahlen") nimmEreignisZurueck({ userId, art: "anwahl" });
       });
       if (Object.keys(anruf.reasons || {}).length) nimmEreignisZurueck({ userId, art: "negativ" });
     }

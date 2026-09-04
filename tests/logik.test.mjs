@@ -42,6 +42,7 @@ import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } fro
 import { korrigiere, regleEin, zieheAnrufAb, ziehreAnteiligMit, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
 import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
 import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js";
+import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
 
@@ -1845,4 +1846,64 @@ test("Kein Menüpunkt zeigt auf eine Seite, die es nicht gibt", () => {
 
   // Und der Filter greift, bevor irgendetwas anderes filtert.
   assert.match(layout, /\.filter\(\(n\) => !ENTFERNTE_SEITEN\.has\(n\.route\)\)/);
+});
+
+// --- Tempo: wie zügig telefoniert wird -------------------------------------
+
+// Sommerzeit: UTC+2, also ist 07:00 UTC gleich 09:00 in Deutschland.
+const ANWAHL = (stunde, minute) => ({
+  art: "anwahl",
+  erfasst_at: new Date(Date.UTC(2026, 8, 1, stunde - 2, minute)).toISOString(),
+});
+
+test("Tempo: eine Mittagspause zählt nicht als Telefonzeit", () => {
+  // Fünf Anrufe am Vormittag, drei am Mittag, dazwischen über zwei Stunden
+  // Pause. Ohne Pausengrenze wäre die "aktive Zeit" die ganze Spanne — und
+  // das Tempo damit ein Viertel des tatsächlichen.
+  const t = tempoAuswertung([
+    ANWAHL(9, 0), ANWAHL(9, 5), ANWAHL(9, 12), ANWAHL(9, 20), ANWAHL(9, 26),
+    ANWAHL(12, 0), ANWAHL(12, 4), ANWAHL(12, 9),
+  ]).tage[0];
+
+  assert.equal(t.anzahl, 8);
+  assert.equal(t.ersterAnruf, "09:00");
+  assert.equal(t.letzterAnruf, "12:09");
+  assert.equal(t.aktiveMinuten, 35);       // nicht 189 — die Pause fehlt darin
+  assert.equal(t.pausen, 1);
+  // Abstände am Hörer: 5, 7, 8, 6, 4, 5 — der mittlere Wert liegt bei 6.
+  assert.equal(t.medianAbstand, 6);
+  assert.ok(t.proStunde > 12 && t.proStunde < 15);
+});
+
+test("Tempo: der Median lässt sich von einem Ausreisser nicht verbiegen", () => {
+  // Abstände 2, 3, 4 und einer knapp unter der Pausengrenze. Der
+  // Durchschnitt wäre 7 — der Median sagt, wie der Alltag wirklich aussieht.
+  const t = tempoAuswertung([
+    ANWAHL(9, 0), ANWAHL(9, 2), ANWAHL(9, 5), ANWAHL(9, 9), ANWAHL(9, 28),
+  ]).tage[0];
+  // Abstände 2, 3, 4, 19: der Durchschnitt wäre 7 und damit fast doppelt so
+  // hoch wie der Alltag. Der Median bleibt bei 4.
+  assert.equal(t.medianAbstand, 4);
+  assert.equal(t.aktiveMinuten, 28);
+});
+
+test("Tempo: zu wenige Anrufe gelten nicht als belastbar", () => {
+  const wenig = tempoAuswertung([ANWAHL(9, 0), ANWAHL(9, 5)]);
+  assert.equal(wenig.tage[0].belastbar, false);
+  assert.equal(wenig.gesamt.fruehesterStart, null);   // nichts behaupten
+  assert.equal(wenig.gesamt.tageMitDaten, 0);
+  assert.ok(MINDESTENS_ANRUFE >= 3);
+  assert.ok(PAUSE_AB_MINUTEN >= 10);
+});
+
+test("Tempo: ohne Anwahl-Ereignisse bleibt alles leer", () => {
+  // Termine und Absagen tragen zwar auch Zeitstempel, sagen aber nichts
+  // über das Tempo der Anwahlen.
+  const nurAndere = tempoAuswertung([{ art: "termin", erfasst_at: "2026-09-01T09:00:00Z" }]);
+  assert.deepEqual(nurAndere.tage, []);
+  assert.equal(nurAndere.gesamt.proStunde, null);
+  assert.equal(dauerText(null), "—");
+  assert.equal(dauerText(35), "35 min");
+  assert.equal(dauerText(105), "1 h 45 min");
+  assert.equal(dauerText(120), "2 h");
 });
