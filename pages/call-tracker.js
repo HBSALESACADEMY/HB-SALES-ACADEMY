@@ -21,6 +21,7 @@ import { merkeEreignis, nimmEreignisZurueck } from "../lib/callEreignis";
 import { saeubere, MAX_LAENGE } from "../lib/grundVorschlag";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
+import TempoKarte from "../components/TempoKarte";
 import { stundenRaster, stundenText } from "../lib/tageszeit";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
@@ -1882,6 +1883,13 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         <Kreisdiagramm daten={gruendeDaten} mitteText="Gründe" leerText="Noch keine negativen Anrufe mit Grund erfasst."
           erklaerung="Zeigt, woran die Gespräche scheitern. Ein Grund, der deutlich heraussticht, ist ein Trainingsthema — ein Skript-Baustein dagegen wirkt breiter als jede allgemeine Schulung." />
       </div>
+
+      {/* Das eigene Tempo — dieselbe Karte wie in der Auswertung. Bei
+          mehreren gewählten Personen mit Tabelle, sonst nur die Kennzahlen. */}
+      <TempoKarte
+        ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
+        personen={sichtbare.length > 1 ? mitglieder : []}
+      />
 
       <TageszeitAnalyse
         ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
