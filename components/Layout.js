@@ -34,6 +34,7 @@ const FALLBACK_NAV = [
   { id: "bingo", label: "Cold Call Bingo", icon: "target", route: "/bingo", is_builtin: true, requires_manager: false },
   { id: "ziele", label: "Ziele", icon: "target", route: "/ziele", is_builtin: true, requires_manager: false },
   { id: "auswertung", label: "Auswertung", icon: "chart", route: "/auswertung", is_builtin: true, requires_manager: true },
+  { id: "email-marketing", label: "E-Mail Marketing", icon: "send", route: "/email-marketing", is_builtin: true, requires_manager: true },
   { id: "manager", label: "Team (Manager)", icon: "users", route: "/manager", is_builtin: true, requires_manager: true },
   { id: "admin", label: "Verwaltung", icon: "lock", route: "/admin", is_builtin: true, requires_manager: true },
 ];
@@ -50,7 +51,7 @@ const NAV_GROUPS = {
   bingo: "Lernen",
   "einwand-trainer": "Lernen", lernpfad: "Lernen",
   community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team", termine: "Team", "call-tracker": "Team", kunden: "Team", recordings: "Team",
-  einwandbehandlung: "Team", kalender: "Team", ziele: "Team", auswertung: "Team",
+  einwandbehandlung: "Team", kalender: "Team", ziele: "Team", auswertung: "Team", "email-marketing": "Team",
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
   "admin-lernpfade": "Verwaltung",

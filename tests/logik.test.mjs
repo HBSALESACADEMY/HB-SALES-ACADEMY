@@ -44,6 +44,7 @@ import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } f
 import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js";
 import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
 import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
+import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -213,14 +214,26 @@ test("Ziel-Kennzahlen des Call Trackers entsprechen echten Zählern", () => {
   });
 });
 
+// Die jüngste Migration, die eine bestimmte Regel setzt. Migrationen sind
+// durchnummeriert, also gewinnt die höchste Nummer.
+function juengsteMigrationMit(regel) {
+  const ordner = new URL("../supabase/", import.meta.url);
+  const treffer = readdirSync(ordner)
+    .filter((n) => /^migration_\d+/.test(n) && readFileSync(new URL(n, ordner), "utf8").includes(`add constraint ${regel}`))
+    .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
+  assert.ok(treffer.length, `Keine Migration setzt ${regel}`);
+  return readFileSync(new URL(treffer[treffer.length - 1], ordner), "utf8");
+}
+
 test("die Datenbank erlaubt genau die Kennzahlen, die es im Code gibt", () => {
   // Diese Liste steht zwangsläufig zweimal: einmal als Auswahl im Code, einmal
   // als check-Regel in der Datenbank. Läuft sie auseinander, lehnt die
   // Datenbank neue Ziele mit einem Constraint-Fehler ab — im Manager sieht man
   // dann nur eine kryptische Meldung.
-  // Immer die JÜNGSTE Migration, die den check setzt — sonst prüft der
-  // Test eine überholte Liste.
-  const sql = readFileSync(new URL("../supabase/migration_125_ziel_kennzahlen_gatekeeper.sql", import.meta.url), "utf8");
+  // Immer die JÜNGSTE Migration, die den check setzt — automatisch gesucht,
+  // weil eine fest eingetragene Dateiname bei der nächsten Erweiterung
+  // wieder auf eine überholte Liste zeigt.
+  const sql = juengsteMigrationMit("team_goals_metric_check");
   const block = sql.slice(sql.indexOf("metric in ("), sql.indexOf("));", sql.indexOf("metric in (")));
   const erlaubt = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(erlaubt, [...GOAL_METRIC_KEYS].sort());
@@ -230,7 +243,7 @@ test("der Wettbewerbs-Maßstab kennt dieselben Kennzahlen plus XP", () => {
   // Zweite check-Regel, zweite Gelegenheit zum Auseinanderlaufen: stimmt sie
   // nicht, lässt sich die Einstellung in der Verwaltung schlicht nicht
   // speichern.
-  const sql = readFileSync(new URL("../supabase/migration_125_ziel_kennzahlen_gatekeeper.sql", import.meta.url), "utf8");
+  const sql = juengsteMigrationMit("organizations_team_ranking_metric_check");
   const block = sql.slice(sql.indexOf("team_ranking_metric in ("));
   const ende = block.indexOf("\n  )");
   const erlaubt = [...block.slice(0, ende).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
@@ -2021,4 +2034,39 @@ test("Kursdetails: offene Module bleiben sichtbar", () => {
   assert.equal(kursA.module.find((m) => m.id === "a2").gemacht, false);
   assert.equal(kursA.module.find((m) => m.id === "a1").ergebnis, 90);
   assert.equal(kursA.pruefung, null);
+});
+
+// --- E-Mail-Kontakte -------------------------------------------------------
+
+test("E-Mail gewünscht ist ein eigener Ausgang, kein Ablehnungsgrund", () => {
+  // Der Kern der Sache: als Grund gezählt gälte der Anruf in jeder
+  // Statistik als verloren, dabei ist ein Kontakt entstanden.
+  const zaehler = FIELDS.map((f) => f.key);
+  assert.ok(zaehler.includes("email"));
+  // Und der neue Ausgang hängt an "erreicht" wie Termin und Absage: die
+  // Summe darf nie grösser sein als die geführten Gespräche.
+  const { counts } = regleEin({ erreicht: 10, termin: 5, negativ: 5, email: 5 }, {});
+  assert.ok(counts.termin + counts.negativ + counts.email <= 10);
+});
+
+test("E-Mail-Kontakte: Status heissen überall gleich", () => {
+  STATUS_REIHENFOLGE.forEach((s) => assert.ok(EMAIL_STATUS[s], `${s} hat keine Bezeichnung`));
+  assert.equal(Object.keys(EMAIL_STATUS).length, STATUS_REIHENFOLGE.length);
+  assert.equal(istErledigt("offen"), false);
+  assert.equal(istErledigt("verschickt"), false);   // da ist noch etwas offen
+  assert.equal(istErledigt("termin"), true);
+});
+
+test("E-Mail-Kontakte: Adressprüfung und Trefferquote", () => {
+  assert.ok(gueltigeAdresse("max@firma.de"));
+  assert.ok(!gueltigeAdresse("max@firma"));
+  assert.ok(!gueltigeAdresse("max firma.de"));
+  assert.ok(!gueltigeAdresse(""));
+
+  // Ohne bearbeitete Kontakte gibt es keine Quote — und nicht null Prozent.
+  assert.equal(marketingQuote([{ status: "offen" }]), null);
+  assert.equal(marketingQuote([]), null);
+  assert.equal(marketingQuote([
+    { status: "termin" }, { status: "keine_antwort" }, { status: "kein_interesse" }, { status: "offen" },
+  ]), 33);
 });

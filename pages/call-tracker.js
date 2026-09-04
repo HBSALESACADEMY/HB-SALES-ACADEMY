@@ -3,7 +3,8 @@ import Layout, { getCachedOrg } from "../components/Layout";
 import Icon from "../components/Icon";
 import InfoCard from "../components/InfoCard";
 import { supabase } from "../lib/supabaseClient";
-import { apiPost } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
+import { EMAIL_STATUS } from "../lib/emailKontakt";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -84,6 +85,11 @@ export default function CallTracker() {
   const [abgleichFehler, setAbgleichFehler] = useState(null);
   // Zuletzt gutgeschriebenes XP — nur zum Anzeigen.
   const [xpHinweis, setXpHinweis] = useState(null);
+  // Der E-Mail-Kontakt aus dem Gespräch (migration_138).
+  const [emailEntwurf, setEmailEntwurf] = useState({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailFehler, setEmailFehler] = useState("");
+  const [dublette, setDublette] = useState(null);
   // Welcher Zähler gerade von Hand gesetzt wird, und worauf.
   // Eigener Grund als Freitext (migration_135).
   const [eigenerGrund, setEigenerGrund] = useState("");
@@ -456,6 +462,44 @@ export default function CallTracker() {
       // Meldung auf den Bildschirm werfen noch den Anruf aufhalten — beim
       // nächsten Aufruf wird ohnehin nachgezahlt.
     }
+  }
+
+  // Gibt es diese Adresse schon? Zwei Mails an denselben Kontakt sind der
+  // eine Fehler, den man im Marketing nie machen will. Nur ein Hinweis,
+  // keine Sperre: dass zwei Leute dieselbe Firma erwischt haben, ist eine
+  // Information für die Organisation und kein Grund, den Kontakt zu
+  // verwerfen.
+  async function pruefeDublette(adresse) {
+    const sauber = String(adresse || "").trim().toLowerCase();
+    setDublette(null);
+    if (!sauber.includes("@")) return;
+    try {
+      const { kontakt } = await apiGet(`/api/email-kontakt?email=${encodeURIComponent(sauber)}`);
+      if (kontakt) setDublette(kontakt);
+    } catch (e) { /* Die Prüfung ist ein Komfort, kein Muss. */ }
+  }
+
+  async function speichereEmailKontakt() {
+    setEmailFehler("");
+    if (!emailEntwurf.name.trim()) { setEmailFehler("Bitte einen Namen eintragen."); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailEntwurf.email.trim())) {
+      setEmailFehler("Bitte eine gültige E-Mail-Adresse eintragen.");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      await apiPost("/api/email-kontakt", { ...emailEntwurf, activeOrgId: orgId });
+      // Erst wenn der Kontakt sicher übergeben ist, wird gezählt — sonst
+      // stünde in der Statistik ein Kontakt, den niemand bekommen hat.
+      bump("email");
+      showToast("An die Organisation übergeben");
+      setEmailEntwurf({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+      setDublette(null);
+      zurueckZumStart();
+    } catch (e) {
+      setEmailFehler(e?.message || "Der Kontakt konnte nicht übergeben werden.");
+    }
+    setEmailBusy(false);
   }
 
   tageswechselRef.current = pruefeTageswechsel;
@@ -1041,12 +1085,84 @@ export default function CallTracker() {
               {step === "callResult" && (
                 <>
                   <div className="text-3xl mb-1">💬</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-4">Wurde ein Termin vereinbart?</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-4">Wie ist das Gespräch ausgegangen?</div>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Nein</button>
+                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Negativ</button>
+                    {/* Der dritte Weg: "schicken Sie mir was per Mail" ist
+                        weder Termin noch Absage, sondern ein offener Faden.
+                        Als Ablehnungsgrund gezählt gälte der Anruf als
+                        verloren, dabei ist ein Kontakt entstanden. */}
+                    <button onClick={() => { setEmailEntwurf({ name: leadDraft.name || "", email: "", firma: "", telefon: "", notiz: "" }); setDublette(null); setStep("emailForm"); }}
+                      className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
+                      ✉️ E-Mail gewünscht
+                    </button>
                     {/* "Terminiert" wird erst gezählt, wenn der Termin unten
                         tatsächlich gespeichert oder bestätigt wird. */}
                     <button onClick={() => { resetLeadDraft(); setStep("booking"); }} className="btn-ghost text-sm px-4 py-2.5 border-teal/40 text-teal">Ja, Termin vereinbaren</button>
+                  </div>
+                </>
+              )}
+
+              {step === "emailForm" && (
+                <>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wohin soll die E-Mail?</div>
+                  <p className="text-textMuted text-xs mb-4">
+                    Geht mit deinem Namen an die Organisation — dort wird sie verschickt und nachgehalten.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-left">
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Name *</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.name}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
+                      <input className="input !py-2 text-sm" type="email" inputMode="email" value={emailEntwurf.email}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, email: e.target.value }))}
+                        onBlur={(e) => pruefeDublette(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Firma</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.firma}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, firma: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Telefon</label>
+                      <input className="input !py-2 text-sm" type="tel" value={emailEntwurf.telefon}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, telefon: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="text-left mb-3">
+                    <label className="block text-xs text-textMuted mb-1">Gesprächsnotiz</label>
+                    <textarea className="input !py-2 text-sm" rows={3}
+                      placeholder="Worum ging es? Was war das Interesse?"
+                      value={emailEntwurf.notiz}
+                      onChange={(e) => setEmailEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
+                    <p className="text-[11px] text-textMuted mt-1">
+                      Ohne Notiz schreibt die Organisation eine Mail ins Blaue — das merkt der Kontakt sofort.
+                    </p>
+                  </div>
+
+                  {/* Zwei Mails an denselben Kontakt sind der eine Fehler,
+                      den man im Marketing nie machen will. */}
+                  {dublette && (
+                    <div className="card mb-3 border-amber/50 text-left">
+                      <div className="text-sm text-textMain mb-1">Diese Adresse gibt es schon.</div>
+                      <p className="text-xs text-textMuted">
+                        Erfasst von {dublette.wer} am {new Date(dublette.created_at).toLocaleDateString("de-DE")}
+                        {dublette.status !== "offen" ? ` · Stand: ${EMAIL_STATUS[dublette.status] || dublette.status}` : ""}.
+                        Trotzdem erfassen geht — dann weiss die Organisation, dass zwei von euch dort waren.
+                      </p>
+                    </div>
+                  )}
+
+                  {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
+
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setStep("callResult")} className="btn-ghost text-sm">Zurück</button>
+                    <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
+                      {emailBusy ? "Wird übergeben…" : "An die Organisation übergeben"}
+                    </button>
                   </div>
                 </>
               )}
