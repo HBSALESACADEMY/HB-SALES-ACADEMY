@@ -22,6 +22,7 @@ import { saeubere, MAX_LAENGE } from "../lib/grundVorschlag";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import TempoKarte from "../components/TempoKarte";
+import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import { stundenRaster, stundenText } from "../lib/tageszeit";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
@@ -1630,28 +1631,29 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         </div>
       )}
 
-      {/* Personen zum Vergleichen: mehrere anwählbar, leer heisst alle. */}
-      <div className={`flex items-center gap-1.5 mb-4 flex-wrap ${alleMitglieder.length > 1 ? "" : "hidden"}`}>
-        <button onClick={() => { setAuswahl([]); setOffeneKachel(null); }}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${gewaehlt.length === 0 ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-          Alle ({imTeam.length})
-        </button>
-        {imTeam.map((m, i) => {
-          const an = gewaehlt.includes(m.id);
-          return (
-            <button key={m.id}
-              onClick={() => {
-                setOffeneKachel(null);
-                setAuswahl((prev) => (prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id]));
-              }}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${an ? "text-textMain" : "border-line text-textMuted hover:text-textMain"}`}
-              style={an ? { borderColor: paletteFarbe(i), background: `color-mix(in srgb, ${paletteFarbe(i)} 18%, transparent)` } : undefined}>
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: paletteFarbe(i) }} />
-              {zeigeName(m)}
+      {/* Personen zum Vergleichen: als Klappmenü statt als Knopfreihe.
+          Bei zwanzig Leuten füllte die Reihe den halben Bildschirm, und die
+          Zahlen rutschten aus dem Bild. */}
+      {alleMitglieder.length > 1 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="text-[11px] text-textMuted">Personen:</span>
+          <MehrfachAuswahl
+            eintraege={imTeam.map((m) => ({ id: m.id, name: zeigeName(m) }))}
+            ausgewaehlt={gewaehlt}
+            onChange={(ids) => { setAuswahl(ids); setOffeneKachel(null); }}
+            alleText="Alle"
+            platzhalter="Name suchen…"
+            // Dieselben Farben wie in den Diagrammen — sonst müsste man die
+            // Zuordnung im Kopf neu herstellen.
+            farbe={(e) => paletteFarbe(imTeam.findIndex((m) => m.id === e.id))}
+          />
+          {gewaehlt.length > 0 && (
+            <button onClick={() => { setAuswahl([]); setOffeneKachel(null); }} className="btn-ghost text-xs">
+              Auswahl leeren
             </button>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
 
       {vergleich && (
         <p className="text-[11px] text-textMuted mb-3">
