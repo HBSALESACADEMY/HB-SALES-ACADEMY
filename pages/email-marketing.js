@@ -5,8 +5,8 @@ import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import { supabase } from "../lib/supabaseClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
-import { aendereGeprueft } from "../lib/loeschen";
-import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote } from "../lib/emailKontakt";
+import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
+import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse } from "../lib/emailKontakt";
 import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
@@ -28,6 +28,9 @@ export default function EmailMarketing() {
   // Für welchen Kontakt gerade ein Termin eingetragen wird.
   const [terminFuer, setTerminFuer] = useState(null);
   const [terminZeit, setTerminZeit] = useState("");
+  // Welcher Kontakt gerade bearbeitet wird, und der Entwurf dazu.
+  const [bearbeite, setBearbeite] = useState(null);
+  const [entwurf, setEntwurf] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -95,6 +98,50 @@ export default function EmailMarketing() {
     await setzeStatus(kontakt, "termin");
     setTerminFuer(null);
     setTerminZeit("");
+  }
+
+  // Bearbeiten ist kein Luxus: ein Tippfehler in der Adresse macht den
+  // ganzen Kontakt wertlos, und wer ihn im Gespräch aufgeschnappt hat, kann
+  // ihn hinterher nicht mehr korrigieren.
+  function starteBearbeiten(k) {
+    setBearbeite(k.id);
+    setEntwurf({
+      name: k.name || "", email: k.email || "", firma: k.firma || "",
+      telefon: k.telefon || "", notiz: k.notiz || "",
+    });
+    setFehler("");
+  }
+
+  async function speichereBearbeitung(k) {
+    if (!entwurf.name.trim()) { setFehler("Der Name darf nicht leer sein."); return; }
+    if (!gueltigeAdresse(entwurf.email)) { setFehler("Bitte eine gültige E-Mail-Adresse eintragen."); return; }
+    const patch = {
+      name: entwurf.name.trim(),
+      email: entwurf.email.trim(),
+      firma: entwurf.firma.trim() || null,
+      telefon: entwurf.telefon.trim() || null,
+      notiz: entwurf.notiz.trim() || null,
+    };
+    setKontakte((prev) => prev.map((x) => (x.id === k.id ? { ...x, ...patch } : x)));
+    const err = await aendereGeprueft(
+      supabase.from("email_kontakte").update(patch).eq("id", k.id),
+      "Diesen Kontakt darf nur die Leitung der Organisation ändern."
+    );
+    if (err) { setFehler(err); laden(); return; }
+    setBearbeite(null);
+    setEntwurf(null);
+  }
+
+  // Löschen ist endgültig und betrifft die Arbeit einer anderen Person —
+  // deshalb wird der Name in der Rückfrage genannt.
+  async function loesche(k) {
+    if (!confirm(`Kontakt „${k.name}" wirklich löschen? Er wurde von ${nameVon(k.user_id)} erfasst und ist danach weg.`)) return;
+    setKontakte((prev) => prev.filter((x) => x.id !== k.id));
+    const err = await loescheGeprueft(
+      supabase.from("email_kontakte").delete().eq("id", k.id),
+      "Diesen Kontakt darf nur die Leitung der Organisation löschen."
+    );
+    if (err) { setFehler(err); laden(); }
   }
 
   const gefiltert = kontakte.filter((k) => {
@@ -195,21 +242,52 @@ export default function EmailMarketing() {
                 {EMAIL_STATUS[k.status] || k.status}
               </span>
             </div>
-            <div className="flex items-center gap-3 flex-wrap text-xs text-textMuted mb-2">
-              <a href={`mailto:${k.email}`} className="text-amber hover:underline">{k.email}</a>
-              {k.telefon && <span>{k.telefon}</span>}
-              <span>von {nameVon(k.user_id)}</span>
-              <span>{deutscheZeit(k.created_at)} Uhr</span>
-            </div>
-            {k.notiz && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{k.notiz}</p>}
+            {bearbeite === k.id ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                <input className="input !py-1.5 text-xs" placeholder="Name" value={entwurf.name}
+                  onChange={(e) => setEntwurf((d) => ({ ...d, name: e.target.value }))} />
+                <input className="input !py-1.5 text-xs" placeholder="E-Mail" type="email" value={entwurf.email}
+                  onChange={(e) => setEntwurf((d) => ({ ...d, email: e.target.value }))} />
+                <input className="input !py-1.5 text-xs" placeholder="Firma" value={entwurf.firma}
+                  onChange={(e) => setEntwurf((d) => ({ ...d, firma: e.target.value }))} />
+                <input className="input !py-1.5 text-xs" placeholder="Telefon" type="tel" value={entwurf.telefon}
+                  onChange={(e) => setEntwurf((d) => ({ ...d, telefon: e.target.value }))} />
+                <textarea className="input !py-1.5 text-xs sm:col-span-2" rows={3} placeholder="Gesprächsnotiz"
+                  value={entwurf.notiz} onChange={(e) => setEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 flex-wrap text-xs text-textMuted mb-2">
+                  <a href={`mailto:${k.email}`} className="text-amber hover:underline">{k.email}</a>
+                  {k.telefon && <span>{k.telefon}</span>}
+                </div>
+                {/* Wer den Kontakt erarbeitet hat, steht in einer eigenen
+                    Zeile: daran hängt, wem der Termin später gehört. */}
+                <div className="text-[11px] text-textMuted mb-2">
+                  Angelegt von <span className="text-textMain">{nameVon(k.user_id)}</span> am {deutscheZeit(k.created_at)} Uhr
+                </div>
+                {k.notiz && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{k.notiz}</p>}
+              </>
+            )}
 
             <div className="flex items-center gap-2 flex-wrap">
-              {k.status === "offen" && (
+              {bearbeite === k.id ? (
+                <>
+                  <button onClick={() => speichereBearbeitung(k)} className="btn text-xs">Speichern</button>
+                  <button onClick={() => { setBearbeite(null); setEntwurf(null); }} className="btn-ghost text-xs">Abbrechen</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => starteBearbeiten(k)} className="btn-ghost text-xs">Bearbeiten</button>
+                  <button onClick={() => loesche(k)} className="btn-ghost text-xs text-coral">Löschen</button>
+                </>
+              )}
+              {bearbeite !== k.id && k.status === "offen" && (
                 <button onClick={() => setzeStatus(k, "verschickt")} className="btn text-xs">
                   ✓ Mail verschickt
                 </button>
               )}
-              {k.status !== "offen" && k.status !== "termin" && terminFuer !== k.id && (
+              {bearbeite !== k.id && k.status !== "offen" && k.status !== "termin" && terminFuer !== k.id && (
                 <button onClick={() => { setTerminFuer(k.id); setTerminZeit(""); }} className="btn text-xs">
                   Termin daraus geworden
                 </button>
@@ -225,7 +303,7 @@ export default function EmailMarketing() {
                   </span>
                 </div>
               )}
-              {STATUS_REIHENFOLGE.filter((s) => s !== k.status && s !== "termin" && !(s === "offen" && k.status !== "offen")).map((s) => (
+              {bearbeite !== k.id && STATUS_REIHENFOLGE.filter((s) => s !== k.status && s !== "termin" && !(s === "offen" && k.status !== "offen")).map((s) => (
                 <button key={s} onClick={() => setzeStatus(k, s)} className="btn-ghost text-xs">
                   {EMAIL_STATUS[s]}
                 </button>
