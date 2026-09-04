@@ -90,6 +90,22 @@ export default function CallTracker() {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFehler, setEmailFehler] = useState("");
   const [dublette, setDublette] = useState(null);
+  // Von welchem Schritt aus das E-Mail-Formular geöffnet wurde. "Zurück"
+  // sprang sonst immer zur Termin-Frage — auch wenn man vom Vorzimmer kam,
+  // wo diese Frage gar nicht gestellt wurde.
+  const [emailHerkunft, setEmailHerkunft] = useState("callResult");
+
+  // Ein Ort für den Einstieg ins Formular: der Wunsch nach einer E-Mail
+  // kann an jeder Stelle des Gesprächs fallen — beim Vorzimmer, beim
+  // Entscheider, oder erst wenn man schon nach dem Ablehnungsgrund gefragt
+  // wird.
+  function starteEmailKontakt(vonSchritt) {
+    setEmailEntwurf({ name: leadDraft.name || "", email: "", firma: "", telefon: "", notiz: "" });
+    setEmailFehler("");
+    setDublette(null);
+    setEmailHerkunft(vonSchritt);
+    setStep("emailForm");
+  }
   // Welcher Zähler gerade von Hand gesetzt wird, und worauf.
   // Eigener Grund als Freitext (migration_135).
   const [eigenerGrund, setEigenerGrund] = useState("");
@@ -1074,6 +1090,13 @@ export default function CallTracker() {
                   <div className="font-display font-semibold text-textMain text-lg mb-4">Wurdest du zum Entscheider durchgestellt?</div>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Nein</button>
+                    {/* Auch das Vorzimmer sagt oft "schicken Sie was per
+                        Mail". Das ist derselbe offene Faden wie beim
+                        Entscheider und kein Ablehnungsgrund. */}
+                    <button onClick={() => starteEmailKontakt("durchgestellt")}
+                      className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
+                      ✉️ E-Mail gewünscht
+                    </button>
                     <button onClick={() => { bump("weitergeleitet"); setStep("callResult"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("weitergeleitet"), color: feldFarbe("weitergeleitet") }}>
                       Ja, durchgestellt
@@ -1092,7 +1115,7 @@ export default function CallTracker() {
                         weder Termin noch Absage, sondern ein offener Faden.
                         Als Ablehnungsgrund gezählt gälte der Anruf als
                         verloren, dabei ist ein Kontakt entstanden. */}
-                    <button onClick={() => { setEmailEntwurf({ name: leadDraft.name || "", email: "", firma: "", telefon: "", notiz: "" }); setDublette(null); setStep("emailForm"); }}
+                    <button onClick={() => starteEmailKontakt("callResult")}
                       className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
                       ✉️ E-Mail gewünscht
                     </button>
@@ -1159,7 +1182,7 @@ export default function CallTracker() {
                   {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
 
                   <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => setStep("callResult")} className="btn-ghost text-sm">Zurück</button>
+                    <button onClick={() => setStep(emailHerkunft)} className="btn-ghost text-sm">Zurück</button>
                     <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
                       {emailBusy ? "Wird übergeben…" : "An die Organisation übergeben"}
                     </button>
@@ -1170,7 +1193,14 @@ export default function CallTracker() {
               {step === "reason" && (
                 <>
                   <div className="font-display font-semibold text-textMain text-lg mb-1">Was war der Grund?</div>
-                  <p className="text-textMuted text-xs mb-4">Einmal antippen, zählt automatisch mit</p>
+                  <p className="text-textMuted text-xs mb-3">Einmal antippen, zählt automatisch mit</p>
+                  {/* Der Ausweg aus dieser Frage: war es gar keine Absage,
+                      sondern eine Bitte um Unterlagen, gehört der Anruf
+                      nicht in die Ablehnungsgründe. */}
+                  <button onClick={() => starteEmailKontakt("reason")}
+                    className="btn-ghost text-xs mb-4 border-amber/50 text-amber">
+                    ✉️ Keine Absage — es wurde eine E-Mail gewünscht
+                  </button>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {reasons.map((r) => (
                       <button key={r.key} onClick={() => countReason(r.key)}
