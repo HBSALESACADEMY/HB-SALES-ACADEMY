@@ -42,6 +42,7 @@ import { berechneQuoten, prozentText, zahlText, QUOTEN_SPALTEN, quotenText } fro
 import { korrigiere, regleEin, zieheAnrufAb, ziehreAnteiligMit, GRUNDLAGEN } from "../lib/anrufKorrektur.js";
 import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
 import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js";
+import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -1906,4 +1907,45 @@ test("Tempo: ohne Anwahl-Ereignisse bleibt alles leer", () => {
   assert.equal(dauerText(35), "35 min");
   assert.equal(dauerText(105), "1 h 45 min");
   assert.equal(dauerText(120), "2 h");
+});
+
+// --- XP aus dem Call Tracker -----------------------------------------------
+
+test("XP gibt es für Ergebnisse, nicht fürs Klicken", () => {
+  // 200-mal auf "Anwahl starten" tippen, ohne je ein Gespräch zu führen:
+  // Wer dafür XP bekäme, klickt statt zu telefonieren, und die Rangliste
+  // wäre wertlos. Es bleibt beim einmaligen Tagesbonus.
+  const nurGeklickt = xpFuerTag({ anwahlen: 200 }, {});
+  assert.equal(nurGeklickt, CALL_XP.tagesbonus);
+
+  // Ein echter Arbeitstag: 60 Anwahlen, 25 Gespräche, 2 Termine,
+  // 20 Absagen mit Grund.
+  const echt = xpFuerTag({ anwahlen: 60, erreicht: 25, termin: 2, negativ: 20 }, { kein_interesse: 15, kein_budget: 5 });
+  assert.equal(echt, 10 + 25 * CALL_XP.erreicht + 2 * CALL_XP.termin + 20 * CALL_XP.negativMitGrund);
+  assert.ok(echt > nurGeklickt * 5);
+});
+
+test("XP für Absagen nur mit erfasstem Grund", () => {
+  // Für das blosse Wegklicken gibt es nichts — sonst lohnt sich das
+  // Abkürzen des Assistenten.
+  const ohneGrund = xpFuerTag({ erreicht: 0, negativ: 10 }, {});
+  const mitGrund = xpFuerTag({ erreicht: 0, negativ: 10 }, { kein_interesse: 10 });
+  assert.equal(ohneGrund, 0);
+  assert.equal(mitGrund, 10 * CALL_XP.negativMitGrund);
+});
+
+test("XP ist je Tag gedeckelt", () => {
+  const wahnsinn = xpFuerTag({ anwahlen: 500, erreicht: 300, termin: 50 }, {});
+  assert.equal(wahnsinn, CALL_XP.tagesLimit);
+});
+
+test("XP wird nie doppelt und nie negativ gutgeschrieben", () => {
+  const counts = { anwahlen: 60, erreicht: 25, termin: 2 };
+  const anspruch = xpFuerTag(counts, {});
+  // Beim ersten Mal alles, danach nichts mehr.
+  assert.equal(offeneXp(counts, {}, 0), anspruch);
+  assert.equal(offeneXp(counts, {}, anspruch), 0);
+  // Nach einer Korrektur nach unten wird nichts zurückgefordert: wer für
+  // echte Arbeit XP bekommen hat, soll es nicht wieder verlieren.
+  assert.equal(offeneXp({ anwahlen: 10 }, {}, anspruch), 0);
 });

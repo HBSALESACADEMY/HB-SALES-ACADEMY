@@ -80,6 +80,8 @@ export default function CallTracker() {
   const [letzteTage, setLetzteTage] = useState([]);
   // Warum die Kacheln unten möglicherweise zu wenig zeigen.
   const [abgleichFehler, setAbgleichFehler] = useState(null);
+  // Zuletzt gutgeschriebenes XP — nur zum Anzeigen.
+  const [xpHinweis, setXpHinweis] = useState(null);
   // Welcher Zähler gerade von Hand gesetzt wird, und worauf.
   // Eigener Grund als Freitext (migration_135).
   const [eigenerGrund, setEigenerGrund] = useState("");
@@ -431,6 +433,29 @@ export default function CallTracker() {
     showToast(anteilig ? "Alle Zahlen im gleichen Verhältnis gekürzt" : `Auf ${wert} gesetzt`);
   }
 
+  // XP für die heutige Arbeit gutschreiben lassen.
+  //
+  // Der Betrag kommt vom Server aus den Zahlen in der Datenbank — die Seite
+  // sagt nur, um welchen Tag es geht. Beliebig oft aufrufbar: gezahlt wird
+  // die Differenz zum Anspruch, nicht der Anspruch selbst.
+  async function holeXp() {
+    if (!userId) return;
+    try {
+      // Erst die Zahlen hinausschicken, sonst rechnet der Server auf einem
+      // veralteten Stand und der Termin von gerade eben fehlt darin.
+      if (letzterStand.current) await sendeZahlen();
+      const antwort = await apiPost("/api/call-xp", { tag: dateKeyOf(new Date()) });
+      if (antwort?.vergeben > 0) {
+        setXpHinweis(antwort.vergeben);
+        setTimeout(() => setXpHinweis(null), 6000);
+      }
+    } catch (e) {
+      // XP sind ein Extra. Wenn die Gutschrift hakt, darf das weder eine
+      // Meldung auf den Bildschirm werfen noch den Anruf aufhalten — beim
+      // nächsten Aufruf wird ohnehin nachgezahlt.
+    }
+  }
+
   tageswechselRef.current = pruefeTageswechsel;
 
   function bump(key, by = 1) {
@@ -455,6 +480,9 @@ export default function CallTracker() {
     // Der Beginn jedes Anrufs — Grundlage für "wie zügig wird telefoniert"
     // (migration_136). Tagessummen wissen nur, dass es 120 waren.
     if (key === "anwahlen") merkeEreignis({ userId, orgId, art: "anwahl" });
+    // Nach einem Termin sofort: das ist der Moment, in dem die Gutschrift
+    // etwas bedeutet. Alles andere sammelt sich und wird später verrechnet.
+    if (key === "termin") setTimeout(holeXp, 300);
     setTodayCounts((prev) => {
       const next = { ...prev, [key]: (prev[key] || 0) + by };
       persist(next, todayReasons);
@@ -591,6 +619,9 @@ export default function CallTracker() {
   }
 
   async function switchView(next) {
+    // Beim Verlassen des Zähl-Reiters abrechnen: dann ist der Tag ohnehin
+    // gerade fertig geschickt worden.
+    if (view === "today" && next !== "today") holeXp();
     setView(next);
     if (next === "statistik") { loadTeam(); return; }
     setStep("lead");
@@ -880,6 +911,12 @@ export default function CallTracker() {
           {isToday && wiederaufgenommen && step !== "lead" && (
             <div className="card mb-3 border-amber/40 text-sm text-amber">
               Hier war noch ein Anruf offen — bitte kurz zu Ende erfassen, dann stimmt die Auswertung.
+            </div>
+          )}
+
+          {isToday && xpHinweis && (
+            <div className="card mb-3 border-teal/50 text-sm text-textMain">
+              <span className="text-teal font-semibold">+{xpHinweis} XP</span> für deine Arbeit am Telefon.
             </div>
           )}
 
