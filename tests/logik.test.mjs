@@ -43,6 +43,7 @@ import { korrigiere, regleEin, zieheAnrufAb, ziehreAnteiligMit, GRUNDLAGEN } fro
 import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } from "../lib/auswertung.js";
 import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js";
 import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
+import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -1963,4 +1964,61 @@ test("Tempo: Unterbrechungen werden gezählt, nicht gemeldet", () => {
   assert.equal(g.pausen, 2);              // zweimal längere Lücke
   assert.ok(g.pausenMinuten > 200);
   assert.equal(g.pausenJeTag, 2);         // an einem Tag mit Daten
+});
+
+// --- Kursergebnisse --------------------------------------------------------
+
+const KURSE = [
+  { id: "a", title: "Kurs A", modules: [{ id: "a1", title: "A1" }, { id: "a2", title: "A2" }] },
+  { id: "b", title: "Kurs B", modules: [{ id: "b1", title: "B1" }] },
+];
+
+test("Kursstand: Fortschritt und Schnitt sind zwei verschiedene Zahlen", () => {
+  // Zwei perfekte Module sind kein grösserer Wissensstand als zwölf
+  // mittelmässige — und kein kleinerer. Beide Zahlen müssen nebeneinander
+  // stehen, sonst zieht man aus einer allein den falschen Schluss.
+  const perfektAberWenig = kursStand(
+    [{ course_id: "a", module_id: "a1", mc_score: 10, mc_total: 10, created_at: "2026-09-01" }], [], KURSE
+  );
+  assert.equal(perfektAberWenig.module, 1);
+  assert.equal(perfektAberWenig.fortschritt, 33);   // 1 von 3 Modulen
+  assert.equal(perfektAberWenig.schnitt, 100);
+
+  const vielAberMittel = kursStand([
+    { course_id: "a", module_id: "a1", mc_score: 5, mc_total: 10, created_at: "2026-09-01" },
+    { course_id: "a", module_id: "a2", mc_score: 6, mc_total: 10, created_at: "2026-09-02" },
+    { course_id: "b", module_id: "b1", mc_score: 5, mc_total: 10, created_at: "2026-09-03" },
+  ], [], KURSE);
+  assert.equal(vielAberMittel.fortschritt, 100);
+  assert.equal(vielAberMittel.schnitt, 53);
+});
+
+test("Kursstand: Prozent der Punkte, nicht Punkte", () => {
+  // Module sind unterschiedlich lang: 8 von 10 ist etwas anderes als 8 von 20.
+  const kurz = kursStand([{ course_id: "a", module_id: "a1", mc_score: 8, mc_total: 10 }], [], KURSE);
+  const lang = kursStand([{ course_id: "a", module_id: "a1", mc_score: 8, mc_total: 20 }], [], KURSE);
+  assert.equal(kurz.schnitt, 80);
+  assert.equal(lang.schnitt, 40);
+});
+
+test("Kursstand: ohne ein einziges Modul gibt es keinen Schnitt", () => {
+  const leer = kursStand([], [], KURSE);
+  assert.equal(leer.schnitt, null);      // und nicht 0 %
+  assert.equal(leer.module, 0);
+  assert.equal(leer.zuletzt, null);
+  assert.ok(moduleGesamt(KURSE) === 3);
+});
+
+test("Kursdetails: offene Module bleiben sichtbar", () => {
+  // Der Blick der Führungskraft ist "was fehlt noch" — ein Modul, das nicht
+  // gemacht wurde, darf deshalb nicht einfach fehlen.
+  const details = kursDetails(
+    [{ course_id: "a", module_id: "a1", mc_score: 9, mc_total: 10 }], [], KURSE
+  );
+  const kursA = details.find((k) => k.id === "a");
+  assert.equal(kursA.gemacht, 1);
+  assert.equal(kursA.gesamt, 2);
+  assert.equal(kursA.module.find((m) => m.id === "a2").gemacht, false);
+  assert.equal(kursA.module.find((m) => m.id === "a1").ergebnis, 90);
+  assert.equal(kursA.pruefung, null);
 });

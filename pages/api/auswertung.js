@@ -92,6 +92,42 @@ export default async function handler(req, res) {
       zaehleJePerson("daily_challenge_completions"),
     ]);
 
+    // Kursergebnisse: bewusst OHNE Zeitfilter. Eine Führungskraft fragt
+    // "hat sie den Kurs gemacht und wie ist er ausgefallen" — und nicht
+    // "hat sie ihn in diesen sieben Tagen gemacht". Ein Kurs vom letzten
+    // Monat verschwindet sonst aus der Übersicht, obwohl er zählt.
+    const [{ data: quizAlle }, { data: pruefungen }] = await Promise.all([
+      admin.from("quiz_results")
+        .select("user_id, course_id, module_id, mc_score, mc_total, open_score, open_total, created_at")
+        .in("user_id", ids).order("created_at", { ascending: false }).limit(5000),
+      admin.from("exam_results")
+        .select("user_id, course_id, score, total, passed, created_at")
+        .in("user_id", ids).order("created_at", { ascending: false }).limit(2000),
+    ]);
+
+    // Nur der jüngste Versuch je Person und Modul zählt: wer ein Quiz
+    // wiederholt, soll am zuletzt Gekonnten gemessen werden und nicht am
+    // ersten Anlauf. Die Liste kommt absteigend, also gewinnt der erste
+    // Treffer.
+    const letzteQuiz = new Map();
+    (quizAlle || []).forEach((q) => {
+      const schluessel = `${q.user_id}|${q.course_id}|${q.module_id}`;
+      if (!letzteQuiz.has(schluessel)) letzteQuiz.set(schluessel, q);
+    });
+    const quizJePerson = {};
+    letzteQuiz.forEach((q) => { (quizJePerson[q.user_id] = quizJePerson[q.user_id] || []).push(q); });
+
+    const letztePruefung = new Map();
+    (pruefungen || []).forEach((p) => {
+      const schluessel = `${p.user_id}|${p.course_id}`;
+      // Eine bestandene Prüfung schlägt einen späteren Fehlversuch nicht —
+      // aber ein späteres Bestehen schlägt einen früheren Fehlversuch.
+      const vorhanden = letztePruefung.get(schluessel);
+      if (!vorhanden || (!vorhanden.passed && p.passed)) letztePruefung.set(schluessel, p);
+    });
+    const pruefungJePerson = {};
+    letztePruefung.forEach((p) => { (pruefungJePerson[p.user_id] = pruefungJePerson[p.user_id] || []).push(p); });
+
     const teamsVonPerson = {};
     (mitglieder || []).forEach((m) => {
       (teamsVonPerson[m.user_id] = teamsVonPerson[m.user_id] || []).push(m.team_id);
@@ -118,6 +154,8 @@ export default async function handler(req, res) {
         training: (quiz[p.id] || 0) + (roleplay[p.id] || 0) + (challenge[p.id] || 0),
         trainingDetail: { quiz: quiz[p.id] || 0, roleplay: roleplay[p.id] || 0, challenge: challenge[p.id] || 0 },
         termine: termineJePerson[p.id] || { gesamt: 0, wahrgenommen: 0, abgesagt: 0, kunden: 0 },
+        quiz: quizJePerson[p.id] || [],
+        pruefungen: pruefungJePerson[p.id] || [],
       })),
       zeilen: zeilen || [],
       ereignisse: ereignisse || [],

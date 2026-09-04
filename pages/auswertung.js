@@ -6,6 +6,7 @@ import Icon from "../components/Icon";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import TempoKarte from "../components/TempoKarte";
+import { kursStand, kursDetails } from "../lib/kursstand";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
@@ -367,6 +368,8 @@ function Bericht({ daten, offen, setOffen }) {
         hinweis="Die ganze Organisation, jede Zeile eine Stunde in deutscher Zeit. Rechts, wie viele Termine in dieser Stunde zustande kamen — daran hängt, wann sich Anrufen lohnt."
       />
 
+      <KursKarte personen={mitZahlen} offen={offen} setOffen={setOffen} />
+
       {/* Personen — aufklappbar, weil es die längste Tabelle ist. */}
       <div className="card mb-4">
         <button onClick={() => setOffen(offen === "personen" ? null : "personen")}
@@ -448,5 +451,118 @@ function Bericht({ daten, offen, setOffen }) {
         )}
       </div>
     </>
+  );
+}
+
+// Wer welchen Kurs gemacht hat — und wie er ausgefallen ist.
+//
+// Bewusst zwei Zahlen nebeneinander: Fortschritt sagt, WIE VIEL jemand
+// geschafft hat, der Schnitt WIE GUT er dabei war. Zwei perfekt bestandene
+// Module sind etwas anderes als zwölf mittelmässige, und aus einer der
+// beiden Zahlen allein zieht man den falschen Schluss.
+function KursKarte({ personen = [], offen, setOffen }) {
+  const mitStand = personen
+    .map((p) => ({ ...p, stand: kursStand(p.quiz || [], p.pruefungen || []) }))
+    .filter((p) => p.stand.module > 0 || p.stand.pruefungenVersucht > 0)
+    .sort((a, b) => b.stand.module - a.stand.module);
+
+  return (
+    <div className="card mb-4">
+      <div className="font-semibold text-textMain text-sm mb-1">Kurse und Prüfungen</div>
+      <p className="text-xs text-textMuted mb-3">
+        Gezählt wird der jüngste Versuch je Modul — wer ein Quiz wiederholt, wird an dem gemessen, was er zuletzt
+        konnte, nicht am ersten Anlauf. Der Zeitraum oben gilt hier nicht: ein Kurs vom letzten Monat zählt weiter.
+      </p>
+
+      {mitStand.length === 0 ? (
+        <p className="text-textMuted text-xs">In dieser Organisation hat noch niemand ein Modul abgeschlossen.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-textMuted text-left">
+                <th className="font-normal pb-2 pr-3">Person</th>
+                <th className="font-normal pb-2 px-2 text-right">Module</th>
+                <th className="font-normal pb-2 px-2 text-right">Fortschritt</th>
+                <th className="font-normal pb-2 px-2 text-right">Schnitt</th>
+                <th className="font-normal pb-2 px-2 text-right">Prüfungen</th>
+                <th className="font-normal pb-2 px-2 text-right">Zuletzt</th>
+                <th className="font-normal pb-2 pl-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {mitStand.map((p) => {
+                const auf = offen === `kurs-${p.id}`;
+                return (
+                  <>
+                    <tr key={p.id} className="border-t border-line cursor-pointer"
+                      onClick={() => setOffen(auf ? null : `kurs-${p.id}`)}>
+                      <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{p.name}</td>
+                      <td className="py-1.5 px-2 text-right font-mono">{p.stand.module}/{p.stand.moduleGesamt}</td>
+                      <td className="py-1.5 px-2 text-right font-mono">{p.stand.fortschritt}%</td>
+                      <td className="py-1.5 px-2 text-right font-mono text-textMain">
+                        {p.stand.schnitt === null ? "—" : `${p.stand.schnitt}%`}
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-mono">
+                        {p.stand.pruefungenVersucht === 0
+                          ? "—"
+                          : `${p.stand.pruefungenBestanden}/${p.stand.pruefungenVersucht}`}
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-mono text-textMuted">
+                        {p.stand.zuletzt ? new Date(p.stand.zuletzt).toLocaleDateString("de-DE") : "—"}
+                      </td>
+                      <td className="py-1.5 pl-2 text-right text-textMuted">
+                        <span className={`inline-block transition-transform ${auf ? "rotate-90" : ""}`}>›</span>
+                      </td>
+                    </tr>
+                    {auf && (
+                      <tr key={`${p.id}-detail`} className="border-t border-line">
+                        <td colSpan={7} className="py-2">
+                          <div className="flex flex-col gap-2">
+                            {kursDetails(p.quiz || [], p.pruefungen || []).map((k) => (
+                              <div key={k.id}>
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <span className="text-textMain">{k.titel}</span>
+                                  <span className="text-textMuted flex-shrink-0">
+                                    {k.gemacht}/{k.gesamt} Module
+                                    {k.pruefung
+                                      ? ` · Prüfung ${k.pruefung.bestanden ? "bestanden" : "nicht bestanden"}${k.pruefung.ergebnis !== null ? ` (${k.pruefung.ergebnis}%)` : ""}`
+                                      : ""}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {k.module.map((m) => (
+                                    <span key={m.id}
+                                      title={m.gemacht ? `${m.titel}: ${m.ergebnis}%` : `${m.titel}: noch offen`}
+                                      className="text-[10px] px-1.5 py-0.5 rounded border"
+                                      style={{
+                                        borderColor: m.gemacht ? "transparent" : "var(--theme-line, #2A2F42)",
+                                        background: m.gemacht
+                                          ? `color-mix(in srgb, ${m.ergebnis >= 80 ? feldFarbe("termin") : m.ergebnis >= 50 ? "#C9A227" : feldFarbe("negativ")} 22%, transparent)`
+                                          : "transparent",
+                                      }}>
+                                      {m.titel}{m.gemacht ? ` · ${m.ergebnis}%` : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[11px] text-textMuted mt-3 leading-snug">
+        Zeigt Fortschritt und Ergebnis nebeneinander, weil beides zusammen etwas anderes aussagt als jedes für
+        sich: zwei perfekt bestandene Module sind kein grösserer Wissensstand als zwölf mittelmässige, aber auch
+        kein kleinerer. Eine Zeile anklicken zeigt, welche Module fehlen.
+      </p>
+    </div>
   );
 }
