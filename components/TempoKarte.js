@@ -35,12 +35,16 @@ export default function TempoKarte({ ereignisse = [], personen = [] }) {
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
             {[
               { label: "Anwahlen je Stunde", wert: gesamt.proStunde === null ? "—" : String(gesamt.proStunde).replace(".", ","), hinweis: "am Hörer, ohne Pausen" },
               { label: "Zeit am Hörer", wert: dauerText(gesamt.aktiveMinuten), hinweis: `über ${gesamt.tageMitDaten} Tage` },
               { label: "Abstand je Anruf", wert: gesamt.medianAbstand === null ? "—" : `${gesamt.medianAbstand} min`, hinweis: "mittlerer Wert, kein Schnitt" },
               { label: "Von … bis", wert: gesamt.fruehesterStart ? `${gesamt.fruehesterStart}–${gesamt.spaetestesEnde}` : "—", hinweis: "frühester Start, spätestes Ende" },
+              // Kein Pausenknopf, sondern gerechnet: eine Lücke über der
+              // Grenze IST eine Unterbrechung. Ein Knopf, den man vergisst,
+              // verfälscht die Daten immer in die schmeichelhafte Richtung.
+              { label: "Unterbrechungen", wert: gesamt.pausen === 0 ? "keine" : String(gesamt.pausen), hinweis: gesamt.pausenJeTag !== null && gesamt.pausen > 0 ? `${String(gesamt.pausenJeTag).replace(".", ",")} je Tag · ${dauerText(gesamt.pausenMinuten)} gesamt` : "Lücken über der Pausengrenze" },
             ].map((k) => (
               <div key={k.label} className="rounded-xl border border-line px-3 py-2.5">
                 <div className="text-lg font-display font-semibold text-textMain">{k.wert}</div>
@@ -60,6 +64,7 @@ export default function TempoKarte({ ereignisse = [], personen = [] }) {
                     <th className="font-normal pb-2 px-2 text-right">Je Stunde</th>
                     <th className="font-normal pb-2 px-2 text-right">Am Hörer</th>
                     <th className="font-normal pb-2 px-2 text-right">Abstand</th>
+                    <th className="font-normal pb-2 px-2 text-right">Unterbrechungen</th>
                     <th className="font-normal pb-2 px-2 text-right">Von–bis</th>
                   </tr>
                 </thead>
@@ -75,6 +80,9 @@ export default function TempoKarte({ ereignisse = [], personen = [] }) {
                       <td className="py-1.5 px-2 text-right font-mono">
                         {p.tempo.medianAbstand === null ? "—" : `${p.tempo.medianAbstand} min`}
                       </td>
+                      <td className="py-1.5 px-2 text-right font-mono">
+                        {p.tempo.pausen === 0 ? "—" : `${p.tempo.pausen} · ${dauerText(p.tempo.pausenMinuten)}`}
+                      </td>
                       <td className="py-1.5 px-2 text-right font-mono text-textMuted">
                         {p.tempo.fruehesterStart ? `${p.tempo.fruehesterStart}–${p.tempo.spaetestesEnde}` : "—"}
                       </td>
@@ -86,7 +94,10 @@ export default function TempoKarte({ ereignisse = [], personen = [] }) {
           )}
 
           <p className="text-[11px] text-textMuted mt-3 leading-snug">
-            Zeigt, wie dicht gearbeitet wird — nicht, wie viel. Ein niedriges Tempo bei hoher Stückzahl heisst
+            „Unterbrechungen“ sind Lücken über {PAUSE_AB_MINUTEN} Minuten, automatisch erkannt — es gibt keinen
+            Pausenknopf, den man drücken oder vergessen könnte. Vier Stunden am Stück sind etwas anderes als acht
+            Stunden mit ständigem Abreissen, auch wenn die Anrufe je Stunde gleich sind.
+            {" "}Zeigt, wie dicht gearbeitet wird — nicht, wie viel. Ein niedriges Tempo bei hoher Stückzahl heisst
             lange Gespräche, ein hohes Tempo bei wenig Stückzahl heisst kurze Arbeitszeit. Das sind zwei
             verschiedene Gespräche, und ein Strich steht überall dort, wo die Grundlage für eine Aussage fehlt.
           </p>

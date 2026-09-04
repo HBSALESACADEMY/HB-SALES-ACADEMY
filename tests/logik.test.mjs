@@ -1871,6 +1871,7 @@ test("Tempo: eine Mittagspause zählt nicht als Telefonzeit", () => {
   assert.equal(t.letzterAnruf, "12:09");
   assert.equal(t.aktiveMinuten, 35);       // nicht 189 — die Pause fehlt darin
   assert.equal(t.pausen, 1);
+  assert.ok(t.pausenMinuten > 120);
   // Abstände am Hörer: 5, 7, 8, 6, 4, 5 — der mittlere Wert liegt bei 6.
   assert.equal(t.medianAbstand, 6);
   assert.ok(t.proStunde > 12 && t.proStunde < 15);
@@ -1948,4 +1949,18 @@ test("XP wird nie doppelt und nie negativ gutgeschrieben", () => {
   // Nach einer Korrektur nach unten wird nichts zurückgefordert: wer für
   // echte Arbeit XP bekommen hat, soll es nicht wieder verlieren.
   assert.equal(offeneXp({ anwahlen: 10 }, {}, anspruch), 0);
+});
+
+test("Tempo: Unterbrechungen werden gezählt, nicht gemeldet", () => {
+  // Kein Pausenknopf: eine Lücke über der Grenze IST eine Unterbrechung.
+  // Ein Knopf, den man vergisst, verfälscht die Daten immer in die
+  // schmeichelhafte Richtung — perfektes Tempo bei zwei Anrufen.
+  const g = tempoAuswertung([
+    ANWAHL(9, 0), ANWAHL(9, 5), ANWAHL(9, 10), ANWAHL(9, 15), ANWAHL(9, 20),
+    ANWAHL(11, 0), ANWAHL(11, 5),
+    ANWAHL(14, 0), ANWAHL(14, 6),
+  ]).gesamt;
+  assert.equal(g.pausen, 2);              // zweimal längere Lücke
+  assert.ok(g.pausenMinuten > 200);
+  assert.equal(g.pausenJeTag, 2);         // an einem Tag mit Daten
 });
