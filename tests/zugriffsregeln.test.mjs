@@ -14,7 +14,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const schema = readFileSync(new URL("../supabase/schema_v2.sql", import.meta.url), "utf8");
 
@@ -161,4 +161,35 @@ test("Ein Folgetermin für jemand anderen bleibt bei dieser Person", () => {
   assert.match(sql, /ist_fuehrungsrolle\(auth\.uid\(\)\)|is_team_lead_of\(created_by, auth\.uid\(\)\)/);
   // Die Mandanten-Grenze bleibt.
   assert.match(sql, /organization_id is not distinct from aktive_org\(auth\.uid\(\)\)/);
+});
+
+// Dreimal dieselbe Falle: Duelle, Aufnahmen, E-Mail-Kontakte. Wer seine
+// eigenen Zeilen LESEN darf, muss sie auch ändern und löschen dürfen —
+// sonst sieht man seine Daten und kommt nicht an sie heran, sobald man
+// unter einem fremden Firmencode arbeitet.
+test("Wer eigene Zeilen sehen darf, darf sie auch ändern und löschen", () => {
+  const ordner = new URL("../supabase/", import.meta.url);
+  const alles = readdirSync(ordner)
+    .filter((n) => /^(migration_\d+|schema_v2)/.test(n))
+    .map((n) => readFileSync(new URL(n, ordner), "utf8"))
+    .join("\n");
+
+  // Tabellen, bei denen eigene Zeilen erklärtermassen bearbeitet werden.
+  const pflicht = ["email_kontakte", "call_events"];
+  const fehlend = [];
+  pflicht.forEach((tabelle) => {
+    ["select", "delete"].forEach((art) => {
+      const regel = new RegExp(`create policy "${tabelle}_${art}_own"[\\s\\S]*?auth\\.uid\\(\\) = user_id`);
+      if (!regel.test(alles)) fehlend.push(`${tabelle}.${art}_own`);
+    });
+  });
+  assert.deepEqual(fehlend, [],
+    `Diese Zugriffsregeln für eigene Zeilen fehlen — Betroffene kommen an ihre eigenen Daten nicht heran: ${fehlend.join(", ")}`);
+
+  // Und keine dieser Regeln trägt eine Organisationsbedingung.
+  const eigenRegeln = alles.match(/create policy "(?:email_kontakte|call_events)_\w+_own"[\s\S]*?;/g) || [];
+  eigenRegeln.forEach((r) => {
+    assert.ok(!/sieht_person|aktive_org|organization_id/.test(r),
+      `Eine Regel für eigene Zeilen prüft zusätzlich die Organisation: ${r.slice(0, 90)}`);
+  });
 });
