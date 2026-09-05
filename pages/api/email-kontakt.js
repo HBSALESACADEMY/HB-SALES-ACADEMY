@@ -65,8 +65,12 @@ export default async function handler(req, res) {
     // Hier muss jemand handeln — deshalb eine Meldung, anders als bei
     // Änderungen, die nur in der App stehen (siehe lib/terminMeldung.js).
     const { data: org } = await admin.from("organizations")
-      .select("telegram_chat_id").eq("id", orgId).maybeSingle();
-    if (org?.telegram_chat_id) {
+      .select("telegram_chat_id, telegram_marketing_chat_id").eq("id", orgId).maybeSingle();
+    // Der eigene Marketing-Kanal, wenn einer eingerichtet ist. Sonst der
+    // allgemeine — eine Meldung, die niemand bekommt, wäre schlimmer als
+    // eine im falschen Kanal (migration_139).
+    const kanal = org?.telegram_marketing_chat_id || org?.telegram_chat_id || null;
+    if (kanal) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
       await sendeAlarm([
         `✉️ E-Mail gewünscht: ${kontakt.name}${kontakt.firma ? ` (${kontakt.firma})` : ""}`,
@@ -74,7 +78,7 @@ export default async function handler(req, res) {
         `Von ${profil?.full_name || "einem Teammitglied"}`,
         kontakt.notiz ? `\nNotiz: ${kontakt.notiz}` : null,
         appUrl ? `\n${appUrl}/email-marketing` : null,
-      ].filter(Boolean).join("\n"), org.telegram_chat_id);
+      ].filter(Boolean).join("\n"), kanal);
     }
 
     return res.status(200).json({ kontakt });

@@ -152,6 +152,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [bookingInstructions, setBookingInstructions] = useState(org.booking_instructions || "");
   const [bookingUrl, setBookingUrl] = useState(org.booking_url || "");
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
+  const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
   const [rankingMetric, setRankingMetric] = useState(org.team_ranking_metric || "xp");
   const [bereich, setBereich] = useState("grunddaten");
   const [useCustomCategories, setUseCustomCategories] = useState(Array.isArray(org.objection_categories) && org.objection_categories.length > 0);
@@ -256,6 +257,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       booking_instructions: bookingInstructions.trim() || null,
       booking_url: bookingUrl.trim() || null,
       telegram_chat_id: telegramChatId.trim() || null,
+      telegram_marketing_chat_id: telegramMarketingId.trim() || null,
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
@@ -407,6 +409,16 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         Ist hier eine Chat-ID hinterlegt, gehen „Neuer Termin" und „Team erinnern" zusätzlich zur E-Mail auch dorthin —
         am besten in eine Telegram-Gruppe des Vertriebsteams. Dazu <strong>@HBSalesAcademy_bot</strong> in die Gruppe
         einladen und die Chat-ID eintragen (Gruppen-IDs beginnen mit einem Minus). Leer lassen = nur E-Mail.
+      </p>
+
+      <label className="block text-xs text-textMuted mb-1.5">Telegram für E-Mail-Kontakte (optional)</label>
+      <input className="input mb-1" value={telegramMarketingId} onChange={(e) => setTelegramMarketingId(e.target.value)}
+        placeholder="z. B. -1009876543210" />
+      <p className="text-[11px] text-textMuted mb-5">
+        Bittet jemand im Gespräch um Unterlagen, geht die Meldung hierhin — mit Adresse, Notiz und dem Namen des
+        Vertrieblers. Diese Meldungen haben einen anderen Adressaten als „Termin verschoben“: hier muss jemand
+        eine Mail schreiben. In einem gemeinsamen Kanal gehen beide Sorten unter. Leer lassen = sie laufen über
+        den Kanal darüber mit.
       </p>
 
       </Abschnitt>
