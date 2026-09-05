@@ -45,12 +45,29 @@ export default function EmailMarketing() {
 
     const orgId = getActiveOrgId(profil);
     const [{ data: zeilen, error: err }, { data: leute }] = await Promise.all([
-      supabase.from("email_kontakte").select("*").order("created_at", { ascending: false }).limit(1000),
+      // Der Name des Erfassers kommt MIT der Zeile. Über die Organisation
+      // allein ginge es nicht: wer per Firmencode hier arbeitet, hat eine
+      // andere Heimat-Organisation und stand deshalb als "Unbenannt" da —
+      // ausgerechnet bei den Kontakten, die man selbst erfasst hat.
+      supabase.from("email_kontakte")
+        .select("*, erfasser:user_id(full_name), versender:verschickt_von(full_name)")
+        .order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
     ]);
     if (err) setFehler(err.message);
     setKontakte(zeilen || []);
-    setPersonen((leute || []).map((p) => ({ id: p.id, name: p.full_name || "Unbenannt" })));
+
+    // Für den Filter: die Organisation plus alle, die tatsächlich Kontakte
+    // erfasst haben. Sonst fehlt im Filter genau die Person, deren Kontakte
+    // in der Liste stehen.
+    const ausKontakten = new Map();
+    (zeilen || []).forEach((k) => {
+      if (k.user_id && !ausKontakten.has(k.user_id)) {
+        ausKontakten.set(k.user_id, k.erfasser?.full_name || "Unbenannt");
+      }
+    });
+    (leute || []).forEach((p) => ausKontakten.set(p.id, p.full_name || "Unbenannt"));
+    setPersonen([...ausKontakten].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
     setLaedt(false);
   }
 
@@ -135,7 +152,7 @@ export default function EmailMarketing() {
   // Löschen ist endgültig und betrifft die Arbeit einer anderen Person —
   // deshalb wird der Name in der Rückfrage genannt.
   async function loesche(k) {
-    if (!confirm(`Kontakt „${k.name}" wirklich löschen? Er wurde von ${nameVon(k.user_id)} erfasst und ist danach weg.`)) return;
+    if (!confirm(`Kontakt „${k.name}" wirklich löschen? Er wurde von ${nameVon(k.user_id, k.erfasser?.full_name)} erfasst und ist danach weg.`)) return;
     setKontakte((prev) => prev.filter((x) => x.id !== k.id));
     const err = await loescheGeprueft(
       supabase.from("email_kontakte").delete().eq("id", k.id),
@@ -150,7 +167,11 @@ export default function EmailMarketing() {
     return true;
   });
 
-  const nameVon = (id) => personen.find((p) => p.id === id)?.name || "Unbenannt";
+  // Der Name aus der Zeile selbst hat Vorrang — er stammt aus derselben
+  // Abfrage und ist auch dann da, wenn die Person nicht zur Organisation
+  // dieses Firmencodes gehört.
+  const nameVon = (id, mitgeliefert) =>
+    mitgeliefert || personen.find((p) => p.id === id)?.name || "Unbenannt";
   const quote = marketingQuote(kontakte);
 
   function exportiere() {
@@ -158,7 +179,7 @@ export default function EmailMarketing() {
       `email-marketing-${new Date().toISOString().slice(0, 10)}.csv`,
       ["Name", "E-Mail", "Firma", "Telefon", "Von", "Notiz", "Status", "Erfasst"],
       gefiltert.map((k) => [
-        k.name, k.email, k.firma || "", k.telefon || "", nameVon(k.user_id),
+        k.name, k.email, k.firma || "", k.telefon || "", nameVon(k.user_id, k.erfasser?.full_name),
         k.notiz || "", EMAIL_STATUS[k.status] || k.status,
         new Date(k.created_at).toLocaleDateString("de-DE"),
       ])
@@ -264,7 +285,7 @@ export default function EmailMarketing() {
                 {/* Wer den Kontakt erarbeitet hat, steht in einer eigenen
                     Zeile: daran hängt, wem der Termin später gehört. */}
                 <div className="text-[11px] text-textMuted mb-2">
-                  Angelegt von <span className="text-textMain">{nameVon(k.user_id)}</span> am {deutscheZeit(k.created_at)} Uhr
+                  Angelegt von <span className="text-textMain">{nameVon(k.user_id, k.erfasser?.full_name)}</span> am {deutscheZeit(k.created_at)} Uhr
                 </div>
                 {k.notiz && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{k.notiz}</p>}
               </>
@@ -299,7 +320,7 @@ export default function EmailMarketing() {
                   <button onClick={() => macheTermin(k, terminZeit)} className="btn text-xs">Termin anlegen</button>
                   <button onClick={() => setTerminFuer(null)} className="btn-ghost text-xs">Abbrechen</button>
                   <span className="text-[11px] text-textMuted w-full">
-                    Der Termin wird bei {nameVon(k.user_id)} angelegt — dort ist der Kontakt entstanden.
+                    Der Termin wird bei {nameVon(k.user_id, k.erfasser?.full_name)} angelegt — dort ist der Kontakt entstanden.
                   </span>
                 </div>
               )}
@@ -311,7 +332,7 @@ export default function EmailMarketing() {
               {k.verschickt_am && (
                 <span className="text-[11px] text-textMuted ml-auto">
                   verschickt {deutscheZeit(k.verschickt_am)} Uhr
-                  {k.verschickt_von ? ` von ${nameVon(k.verschickt_von)}` : ""}
+                  {k.verschickt_von ? ` von ${nameVon(k.verschickt_von, k.versender?.full_name)}` : ""}
                 </span>
               )}
             </div>
