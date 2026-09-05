@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import { supabase } from "../lib/supabaseClient";
+import { apiPost } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
@@ -31,6 +32,8 @@ export default function EmailMarketing() {
   // Welcher Kontakt gerade bearbeitet wird, und der Entwurf dazu.
   const [bearbeite, setBearbeite] = useState(null);
   const [entwurf, setEntwurf] = useState(null);
+  const [terminBusy, setTerminBusy] = useState(false);
+  const [vergangenheit, setVergangenheit] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -89,32 +92,31 @@ export default function EmailMarketing() {
     if (err) { setFehler(err); laden(); }
   }
 
-  // Wird ein Termin daraus, entsteht ein ECHTER Termin — mit Kalender,
-  // Benachrichtigung und Zählung beim ursprünglichen Vertriebler. Sonst
-  // hätte man zwei Systeme mit Terminen, die nie zusammenkommen.
-  async function macheTermin(kontakt, wann) {
+  // Wird ein Termin daraus, entsteht ein ECHTER Termin beim ursprünglichen
+  // Vertriebler — mit Kalender, Benachrichtigung und Zählung. Sonst hätte
+  // man zwei Systeme mit Terminen, die nie zusammenkommen.
+  //
+  // Über den Server, nicht aus dem Browser: der Termin gehört einer ANDEREN
+  // Person, und daran hängen Rechte, Benachrichtigungen und die Frage, in
+  // wessen Statistik er landet.
+  async function macheTermin(kontakt, wann, trotzdem = false) {
     const zeitpunkt = new Date(wann);
     if (!wann || Number.isNaN(zeitpunkt.getTime())) { setFehler("Bitte einen Zeitpunkt wählen."); return; }
-
-    const { data: lead, error: err } = await supabase.from("leads").insert({
-      // Der Termin gehört dem, der den Kontakt erarbeitet hat — nicht dem,
-      // der die Mail verschickt hat.
-      created_by: kontakt.user_id,
-      organization_id: kontakt.organization_id,
-      name: kontakt.name,
-      email: kontakt.email,
-      phone: kontakt.telefon,
-      company: kontakt.firma,
-      notes: kontakt.notiz ? `Aus E-Mail-Marketing.\n${kontakt.notiz}` : "Aus E-Mail-Marketing.",
-      appointment_at: zeitpunkt.toISOString(),
-      status: "geplant",
-    }).select().single();
-
-    if (err) { setFehler(err.message); return; }
-    await supabase.from("email_kontakte").update({ lead_id: lead.id }).eq("id", kontakt.id);
-    await setzeStatus(kontakt, "termin");
-    setTerminFuer(null);
-    setTerminZeit("");
+    setFehler("");
+    setTerminBusy(true);
+    try {
+      await apiPost("/api/marketing-termin", { kontaktId: kontakt.id, zeitpunkt: zeitpunkt.toISOString(), trotzdem });
+      setTerminFuer(null);
+      setTerminZeit("");
+      setVergangenheit(null);
+      await laden();
+    } catch (e) {
+      // Ein Zeitpunkt in der Vergangenheit ist fast immer ein Tippfehler im
+      // Datum — die Route fragt zurück, statt stumm anzulegen.
+      if (/Vergangenheit/i.test(e?.message || "")) setVergangenheit({ id: kontakt.id, wann, text: e.message });
+      else setFehler(e?.message || "Der Termin konnte nicht angelegt werden.");
+    }
+    setTerminBusy(false);
   }
 
   // Bearbeiten ist kein Luxus: ein Tippfehler in der Adresse macht den
@@ -263,6 +265,13 @@ export default function EmailMarketing() {
                 {EMAIL_STATUS[k.status] || k.status}
               </span>
             </div>
+            {/* Wurde ein Termin daraus, führt der Weg dorthin — sonst
+                sucht man ihn in der Terminliste zusammen. */}
+            {k.lead_id && (
+              <a href={`/termine?leadId=${k.lead_id}`} className="inline-block text-[11px] text-amber hover:underline mb-2">
+                → zum Termin
+              </a>
+            )}
             {bearbeite === k.id ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                 <input className="input !py-1.5 text-xs" placeholder="Name" value={entwurf.name}
@@ -317,11 +326,27 @@ export default function EmailMarketing() {
                 <div className="flex items-center gap-2 flex-wrap w-full">
                   <input type="datetime-local" className="input !w-auto !py-1.5 text-xs"
                     value={terminZeit} onChange={(e) => setTerminZeit(e.target.value)} />
-                  <button onClick={() => macheTermin(k, terminZeit)} className="btn text-xs">Termin anlegen</button>
+                  <button onClick={() => macheTermin(k, terminZeit)} disabled={terminBusy} className="btn text-xs disabled:opacity-40">
+                    {terminBusy ? "Wird angelegt…" : "Termin anlegen"}
+                  </button>
                   <button onClick={() => setTerminFuer(null)} className="btn-ghost text-xs">Abbrechen</button>
                   <span className="text-[11px] text-textMuted w-full">
-                    Der Termin wird bei {nameVon(k.user_id, k.erfasser?.full_name)} angelegt — dort ist der Kontakt entstanden.
+                    Der Termin wird bei {nameVon(k.user_id, k.erfasser?.full_name)} angelegt — dort ist der Kontakt
+                    entstanden. Er landet in deren Kalender und Statistik, und sie bekommt eine Nachricht darüber.
                   </span>
+                  {vergangenheit?.id === k.id && (
+                    <div className="w-full card border-amber/50">
+                      <div className="text-xs text-textMain mb-2">{vergangenheit.text}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => macheTermin(k, vergangenheit.wann, true)} className="btn-ghost text-xs">
+                          Ja, trotzdem anlegen
+                        </button>
+                        <button onClick={() => setVergangenheit(null)} className="btn-ghost text-xs text-textMuted">
+                          Datum korrigieren
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {bearbeite !== k.id && STATUS_REIHENFOLGE.filter((s) => s !== k.status && s !== "termin" && !(s === "offen" && k.status !== "offen")).map((s) => (
