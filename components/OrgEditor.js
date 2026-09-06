@@ -7,6 +7,7 @@
 // für die eigene Organisation.
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
+import MailVorlagen from "./MailVorlagen";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { textColorForColors, blend } from "../lib/orgBranding";
@@ -469,32 +470,10 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         )}
       </div>
 
-      <p className="text-[11px] text-textMuted mb-3">
-        Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl. Platzhalter werden beim Verschicken ersetzt:
-        <strong> {"{{name}}"}</strong>, <strong>{"{{firma}}"}</strong>, <strong>{"{{notiz}}"}</strong> (die
-        Gesprächsnotiz), <strong>{"{{vertriebler}}"}</strong>, <strong>{"{{organisation}}"}</strong>. Steht in
-        einer Zeile nur ein Platzhalter, für den es keinen Wert gibt, fällt die ganze Zeile weg — sonst steht
-        beim Kunden „Firma:“ ohne Firma, und daran erkennt er die Serienmail.
-      </p>
-      {vorlagen.map((v, i) => (
-        <div key={i} className="card mb-2">
-          <div className="flex items-center gap-2 mb-2">
-            <input className="input !py-1.5 text-xs" placeholder="Name der Vorlage, z. B. Erstinfo"
-              value={v.name || ""}
-              onChange={(e) => setVorlagen((liste) => liste.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-            <button onClick={() => setVorlagen((liste) => liste.filter((_, j) => j !== i))}
-              className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
-          </div>
-          <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
-            value={v.betreff || ""}
-            onChange={(e) => setVorlagen((liste) => liste.map((x, j) => (j === i ? { ...x, betreff: e.target.value } : x)))} />
-          <textarea className="input !py-1.5 text-xs" rows={6} placeholder={"Hallo {{name}},\n\naus unserem Gespräch: {{notiz}}\n\nViele Grüße\n{{vertriebler}}"}
-            value={v.text || ""}
-            onChange={(e) => setVorlagen((liste) => liste.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
-        </div>
-      ))}
-      <button onClick={() => setVorlagen((liste) => [...liste, { name: "", betreff: "", text: "" }])}
-        className="btn-ghost text-xs mb-5">+ Vorlage</button>
+      <p className="text-[11px] text-textMuted mb-3">Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl.</p>
+      <div className="mb-5">
+        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} />
+      </div>
 
       </Abschnitt>
 

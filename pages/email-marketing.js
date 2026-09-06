@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
+import MailVorlagen from "../components/MailVorlagen";
+import Aufklapper from "../components/Aufklapper";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
@@ -45,6 +47,12 @@ export default function EmailMarketing() {
   const [nurNachfassen, setNurNachfassen] = useState(false);
   const [org, setOrg] = useState(null);
   const [terminDaten, setTerminDaten] = useState(null);
+  // Vorlagen hier verwalten, nicht nur in der Verwaltung: dass eine fehlt,
+  // merkt man beim Schreiben — und dann will man nicht erst die Seite
+  // wechseln und den Kontakt wiederfinden.
+  const [vorlagenOffen, setVorlagenOffen] = useState(false);
+  const [vorlagenEntwurf, setVorlagenEntwurf] = useState(null);
+  const [vorlagenBusy, setVorlagenBusy] = useState(false);
 
   async function laden() {
     setLaedt(true);
@@ -69,6 +77,7 @@ export default function EmailMarketing() {
       supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
     ]);
     const { data: org } = await supabase.from("organizations").select("*").eq("id", orgId).maybeSingle();
+    // Die Kennung wird zum Speichern der Vorlagen gebraucht.
     setVorlagen(Array.isArray(org?.email_vorlagen) ? org.email_vorlagen : []);
     setOrgName(org?.name || "");
     // Dieselben Felder wie im Call Tracker — ein Termin aus dem Marketing
@@ -231,6 +240,25 @@ export default function EmailMarketing() {
     setMailBusy(false);
   }
 
+  async function speichereVorlagen() {
+    setVorlagenBusy(true);
+    setFehler("");
+    // Unvollständige verwerfen: eine Vorlage ohne Text steht sonst in der
+    // Auswahl und liefert eine leere Mail.
+    const sauber = (vorlagenEntwurf || []).filter((v) => v.name?.trim() && v.text?.trim());
+    const err = await aendereGeprueft(
+      supabase.from("organizations").update({ email_vorlagen: sauber }).eq("id", org?.id),
+      "Vorlagen darf nur die Leitung der Organisation ändern."
+    );
+    if (err) setFehler(err);
+    else {
+      setVorlagen(sauber);
+      setVorlagenEntwurf(null);
+      setVorlagenOffen(false);
+    }
+    setVorlagenBusy(false);
+  }
+
   const gefiltert = kontakte.filter((k) => {
     if (nurNachfassen) return brauchtNachfassen(k);
     if (nurOffene && istErledigt(k.status)) return false;
@@ -318,6 +346,40 @@ export default function EmailMarketing() {
         <button onClick={exportiere} className="btn-ghost text-xs ml-auto">
           <Icon name="download" size={12} /> Für Excel
         </button>
+      </div>
+
+      {/* Vorlagen: hier zu bearbeiten und nicht nur in der Verwaltung, weil
+          man beim Schreiben merkt, dass eine fehlt. Dieselbe Komponente und
+          dasselbe Feld wie dort — zwei Masken für dieselbe Sache wären der
+          sichere Weg zu zwei verschiedenen Verhaltensweisen. */}
+      <div className="card mb-4">
+        <button
+          onClick={() => {
+            setVorlagenOffen((v) => !v);
+            if (!vorlagenEntwurf) setVorlagenEntwurf(vorlagen.map((v) => ({ ...v })));
+          }}
+          aria-expanded={vorlagenOffen}
+          className="flex items-center gap-2 w-full text-left">
+          <span className="font-semibold text-textMain text-sm flex-1">
+            Mail-Vorlagen ({vorlagen.length})
+          </span>
+          <span className={`text-textMuted text-xs transition-transform ${vorlagenOffen ? "rotate-90" : ""}`}>›</span>
+        </button>
+        <Aufklapper offen={vorlagenOffen}>
+          <div className="mt-3">
+            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} />
+            <div className="flex items-center gap-2 mt-3">
+              <button onClick={speichereVorlagen} disabled={vorlagenBusy} className="btn text-xs disabled:opacity-40">
+                {vorlagenBusy ? "Wird gespeichert…" : "Vorlagen speichern"}
+              </button>
+              <button onClick={() => { setVorlagenEntwurf(vorlagen.map((v) => ({ ...v }))); setVorlagenOffen(false); }}
+                className="btn-ghost text-xs">Abbrechen</button>
+              <span className="text-[11px] text-textMuted">
+                Gilt für die ganze Organisation — auch in der Verwaltung unter Organisation → E-Mail.
+              </span>
+            </div>
+          </div>
+        </Aufklapper>
       </div>
 
       {fehler && <div className="card mb-4 border-coral/40 text-sm text-coral">{fehler}</div>}
