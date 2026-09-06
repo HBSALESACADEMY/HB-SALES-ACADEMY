@@ -243,7 +243,9 @@ export default function EmailMarketing() {
     setMailFuer(k.id);
     setMailVorlage(vorlage?.name || "");
     setMail(fertig);
-    setGewaehlteAnhaenge([]);
+    // Die festen Anhänge der Vorlage sind sofort dabei — abwählbar, aber
+    // man muss nicht daran denken.
+    setGewaehlteAnhaenge((vorlage?.anhaenge || []).filter((id) => anhaenge.some((a) => a.id === id)));
     setProbeStand(null);
     setFehler("");
   }
@@ -314,7 +316,11 @@ export default function EmailMarketing() {
     setFehler("");
     // Unvollständige verwerfen: eine Vorlage ohne Text steht sonst in der
     // Auswahl und liefert eine leere Mail.
-    const sauber = (vorlagenEntwurf || []).filter((v) => v.name?.trim() && v.text?.trim());
+    const sauber = (vorlagenEntwurf || [])
+      .filter((v) => v.name?.trim() && v.text?.trim())
+      // Verweise auf gelöschte Dateien mitschleppen hiesse: die Mail
+      // scheitert später an einem Anhang, den es nicht mehr gibt.
+      .map((v) => ({ ...v, anhaenge: (v.anhaenge || []).filter((id) => anhaenge.some((a) => a.id === id)) }));
     const err = await aendereGeprueft(
       supabase.from("organizations")
         .update({ email_vorlagen: sauber, email_signatur: signatur.trim() || null })
@@ -486,7 +492,7 @@ export default function EmailMarketing() {
 
         <Aufklapper offen={vorlagenOffen}>
           <div className="mt-3">
-            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} />
+            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} />
 
             {/* Die Vorschau: der fertige Text mit einem erfundenen Kontakt.
                 So sieht man Anrede, Absätze und Signatur, bevor eine echte

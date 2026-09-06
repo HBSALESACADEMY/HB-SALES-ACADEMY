@@ -6,7 +6,7 @@ import { PLATZHALTER, unbekanntePlatzhalter } from "../lib/marketingVorlage";
 // Einstellungen liegen) und den E-Mail-Marketing-Reiter (wo man merkt, dass
 // eine Vorlage fehlt). Zwei getrennte Masken für dieselbe Sache wären der
 // sichere Weg zu zwei verschiedenen Verhaltensweisen.
-export default function MailVorlagen({ vorlagen = [], onChange }) {
+export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [] }) {
   function aendere(i, feld, wert) {
     onChange(vorlagen.map((v, j) => (j === i ? { ...v, [feld]: wert } : v)));
   }
@@ -50,6 +50,26 @@ export default function MailVorlagen({ vorlagen = [], onChange }) {
                 wörtlich in der Mail beim Kunden.
               </p>
             )}
+            {/* Feste Anhänge je Vorlage: "Erstinfo" soll immer dasselbe
+                PDF mitschicken, ohne dass jemand daran denken muss. */}
+            {anhaenge.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                <span className="text-[11px] text-textMuted">Immer mitschicken:</span>
+                {anhaenge.map((a) => {
+                  const an = (v.anhaenge || []).includes(a.id);
+                  return (
+                    <button key={a.id}
+                      onClick={() => aendere(i, "anhaenge", an
+                        ? (v.anhaenge || []).filter((x) => x !== a.id)
+                        : [...(v.anhaenge || []), a.id])}
+                      className={`px-2 py-1 rounded-full text-[11px] border ${an ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                      {an ? "✓ " : ""}{a.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {!v.name?.trim() || !v.text?.trim() ? (
               <p className="text-[11px] text-textMuted mt-1">
                 Ohne Name und Text wird diese Vorlage beim Speichern verworfen — eine leere Vorlage in der

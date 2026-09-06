@@ -157,6 +157,16 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
+  // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
+  // kann. Hochgeladen werden sie im E-Mail-Marketing — hier nur ausgewählt.
+  const [orgAnhaenge, setOrgAnhaenge] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("email_anhaenge").select("id, name").order("created_at", { ascending: false });
+      setOrgAnhaenge(data || []);
+    })();
+  }, []);
   // Ergebnis der Probemail — im Klartext, nicht als Häkchen.
   const [testStand, setTestStand] = useState(null);
   const [testBusy, setTestBusy] = useState(false);
@@ -472,7 +482,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
 
       <p className="text-[11px] text-textMuted mb-3">Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl.</p>
       <div className="mb-5">
-        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} />
+        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} anhaenge={orgAnhaenge} />
       </div>
 
       </Abschnitt>
