@@ -2115,3 +2115,25 @@ test("Nachfassen: nur verschickte Mails ohne Ergebnis", () => {
   assert.equal(liegtSeitTagen(vorTagen(6), jetzt), 6);
   assert.equal(liegtSeitTagen(null, jetzt), null);
 });
+
+test("Kalender-Abo: Erinnerung nur dort, wo sie Sinn ergibt", () => {
+  // Ein Abo-Kalender wird abgeholt, nicht zugestellt — die Academy kann
+  // nichts auf ein Telefon schicken. Was sie kann: den Alarm mitliefern,
+  // damit das Telefon ihn selbst stellt.
+  const feed = baueIcsFeed([
+    { uid: "a@b", titel: "Termin: Max", start: "2026-09-25T13:00:00Z" },
+    { uid: "c@d", titel: "Feiertag", tagVon: "2026-09-26" },
+    { uid: "e@f", titel: "Abgesagt", start: "2026-09-27T09:00:00Z", abgesagt: true },
+  ]);
+  const alarme = feed.split("\r\n").filter((z) => z === "BEGIN:VALARM").length;
+  assert.equal(alarme, 1, "Nur der Termin mit Uhrzeit bekommt einen Alarm.");
+  assert.ok(feed.includes("TRIGGER:-PT30M"));
+  // Ein Wecker für einen ganztägigen Eintrag klingelt um Mitternacht, und
+  // einer für einen abgesagten Termin ist schlicht falsch.
+  assert.ok(feed.includes("STATUS:CANCELLED"));
+
+  // Und das Format bleibt gültig: CRLF, Kopf, Abschluss.
+  assert.ok(feed.startsWith("BEGIN:VCALENDAR\r\n"));
+  assert.ok(feed.trim().endsWith("END:VCALENDAR"));
+  assert.equal(feed.split("\r\n").filter((z) => z === "BEGIN:VEVENT").length, 3);
+});
