@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { user } = auth;
 
-  const { kontaktId, betreff, text } = req.body || {};
+  const { kontaktId, betreff, text, vorlage } = req.body || {};
   if (!kontaktId || !String(betreff || "").trim() || !String(text || "").trim()) {
     return res.status(400).json({ error: "Betreff und Text sind nötig." });
   }
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   const admin = getAdminSupabase();
   const { data: profil } = await admin.from("profiles")
     .select("id, full_name, role, is_admin, is_platform_admin, organization_id").eq("id", user.id).maybeSingle();
-  if (!istFuehrungsrolle(profil)) return res.status(403).json({ error: "Mails verschickt die Leitung." });
+  const leitung = istFuehrungsrolle(profil);
 
   const orgId = await aktiveOrgId(admin, profil, user.id);
   if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
@@ -39,6 +39,28 @@ export default async function handler(req, res) {
     const { data: kontakt } = await admin.from("email_kontakte")
       .select("*").eq("id", kontaktId).eq("organization_id", orgId).maybeSingle();
     if (!kontakt) return res.status(404).json({ error: "Kontakt nicht gefunden." });
+
+    // Wer nicht führt, darf nur an SEINE eigenen Kontakte schreiben — und
+    // nur mit einer Vorlage der Organisation.
+    //
+    // Der zweite Teil ist der wichtigere: Was im Namen der Firma an einen
+    // Kunden geht, legt die Leitung fest. Ohne diese Schranke schriebe jede
+    // Person ihren eigenen Text nach draussen, und die erste unglückliche
+    // Formulierung fällt erst auf, wenn sie beim Kunden liegt.
+    if (!leitung) {
+      if (kontakt.user_id !== user.id) {
+        return res.status(403).json({ error: "Du kannst nur an deine eigenen Kontakte schreiben." });
+      }
+      const { data: orgVorlagen } = await admin.from("organizations")
+        .select("email_vorlagen").eq("id", orgId).maybeSingle();
+      const liste = Array.isArray(orgVorlagen?.email_vorlagen) ? orgVorlagen.email_vorlagen : [];
+      if (!liste.length) {
+        return res.status(403).json({ error: "Für eure Organisation ist noch keine Mail-Vorlage hinterlegt. Die Leitung legt sie unter Verwaltung → Organisation → E-Mail an." });
+      }
+      if (!vorlage || !liste.some((v) => v.name === vorlage)) {
+        return res.status(403).json({ error: "Bitte eine Vorlage eurer Organisation verwenden." });
+      }
+    }
     if (!gueltigeAdresse(kontakt.email)) return res.status(400).json({ error: "Die Adresse des Kontakts ist ungültig." });
 
     const { data: org } = await admin.from("organizations")
