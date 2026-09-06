@@ -769,6 +769,14 @@ export default function CallTracker() {
         .in("user_id", allIds).gte("log_date", von).lte("log_date", bis)
         .limit(ZEILEN_GRENZE);
 
+      // Die eigenen E-Mail-Kontakte: was aus ihnen geworden ist. Wer einen
+      // Kontakt abgibt, hört sonst nie wieder davon — und fragt beim
+      // nächsten Anruf entsprechend seltener nach der Adresse.
+      const { data: meineKontakte } = await supabase.from("email_kontakte")
+        .select("id, name, firma, status, created_at, lead_id")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false }).limit(50);
+
       // Einzelne Ereignisse mit Uhrzeit (migration_128). Getrennt von den
       // Tagessummen: die bleiben die verbindliche Zahl, das hier ist die
       // Zusatzinformation "wann". Fehlt die Tabelle noch, läuft die Seite
@@ -786,6 +794,7 @@ export default function CallTracker() {
         // jeder Auswahl neu beim Server nachzufragen.
         logs: logs || [],
         ereignisse: ereignisse || [],
+        meineKontakte: meineKontakte || [],
         // Angeschnitten? Dann sagt die Auswertung das, statt zu wenig zu
         // zeigen und richtig auszusehen.
         angeschnitten: (logs || []).length >= ZEILEN_GRENZE,
@@ -2034,6 +2043,43 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
 
       {/* Das eigene Tempo — dieselbe Karte wie in der Auswertung. Bei
           mehreren gewählten Personen mit Tabelle, sonst nur die Kennzahlen. */}
+      {/* Was aus den eigenen E-Mail-Kontakten wurde. Nur die eigenen — die
+          Liste der Organisation ist Führungsstoff und steht dort. */}
+      {(state.meineKontakte || []).length > 0 && (
+        <div className="card mb-4">
+          <div className="font-semibold text-textMain text-sm mb-1">Meine E-Mail-Kontakte</div>
+          <p className="text-xs text-textMuted mb-3">
+            Was aus den Adressen wurde, die du im Gespräch bekommen hast.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {state.meineKontakte.slice(0, 10).map((k) => (
+              <div key={k.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-textMain truncate">
+                  {k.name}{k.firma ? ` · ${k.firma}` : ""}
+                </span>
+                <span className="flex-shrink-0 flex items-center gap-2">
+                  {k.lead_id && (
+                    <a href={`/termine?leadId=${k.lead_id}`} className="text-amber hover:underline">→ Termin</a>
+                  )}
+                  <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border"
+                    style={k.status === "termin"
+                      ? { color: feldFarbe("termin"), borderColor: `color-mix(in srgb, ${feldFarbe("termin")} 45%, transparent)` }
+                      : { color: "var(--theme-text-muted, #8A90A6)", borderColor: "var(--theme-line, #2A2F42)" }}>
+                    {EMAIL_STATUS[k.status] || k.status}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+          {state.meineKontakte.filter((k) => k.status === "termin").length > 0 && (
+            <p className="text-[11px] text-textMuted mt-3">
+              Aus {state.meineKontakte.filter((k) => k.status === "termin").length} deiner Kontakte ist ein Termin
+              geworden — Grund genug, im nächsten Gespräch wieder nach der Adresse zu fragen.
+            </p>
+          )}
+        </div>
+      )}
+
       <TempoKarte
         ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
         personen={sichtbare.length > 1 ? mitglieder : []}

@@ -8,6 +8,7 @@ import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse } from "../lib/emailKontakt";
+import { fuelleVorlage, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN } from "../lib/marketingVorlage";
 import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
@@ -34,6 +35,13 @@ export default function EmailMarketing() {
   const [entwurf, setEntwurf] = useState(null);
   const [terminBusy, setTerminBusy] = useState(false);
   const [vergangenheit, setVergangenheit] = useState(null);
+  // Mail schreiben: Vorlagen der Organisation, Entwurf, Versand.
+  const [vorlagen, setVorlagen] = useState([]);
+  const [orgName, setOrgName] = useState("");
+  const [mailFuer, setMailFuer] = useState(null);
+  const [mail, setMail] = useState({ betreff: "", text: "" });
+  const [mailBusy, setMailBusy] = useState(false);
+  const [nurNachfassen, setNurNachfassen] = useState(false);
 
   async function laden() {
     setLaedt(true);
@@ -57,6 +65,10 @@ export default function EmailMarketing() {
         .order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
     ]);
+    const { data: org } = await supabase.from("organizations")
+      .select("name, email_vorlagen").eq("id", orgId).maybeSingle();
+    setVorlagen(Array.isArray(org?.email_vorlagen) ? org.email_vorlagen : []);
+    setOrgName(org?.name || "");
     if (err) setFehler(err.message);
     setKontakte(zeilen || []);
 
@@ -163,7 +175,40 @@ export default function EmailMarketing() {
     if (err) { setFehler(err); laden(); }
   }
 
+  // Mail schreiben. Die Vorlage wird beim Öffnen gefüllt, nicht erst beim
+  // Senden: man soll sehen, was rausgeht, und es noch ändern können.
+  function starteMail(k, vorlage = null) {
+    const werte = {
+      name: k.name,
+      firma: k.firma,
+      notiz: k.notiz,
+      vertriebler: nameVon(k.user_id, k.erfasser?.full_name),
+      organisation: orgName,
+    };
+    setMailFuer(k.id);
+    setMail({
+      betreff: vorlage ? fuelleVorlage(vorlage.betreff || "", werte) : `Ihre Anfrage${k.firma ? ` – ${k.firma}` : ""}`,
+      text: vorlage ? fuelleVorlage(vorlage.text || "", werte) : "",
+    });
+    setFehler("");
+  }
+
+  async function sendeMail(k) {
+    if (!mail.betreff.trim() || !mail.text.trim()) { setFehler("Betreff und Text dürfen nicht leer sein."); return; }
+    setMailBusy(true);
+    try {
+      await apiPost("/api/marketing-mail", { kontaktId: k.id, betreff: mail.betreff, text: mail.text });
+      setMailFuer(null);
+      setMail({ betreff: "", text: "" });
+      await laden();
+    } catch (e) {
+      setFehler(e?.message || "Die Mail konnte nicht verschickt werden.");
+    }
+    setMailBusy(false);
+  }
+
   const gefiltert = kontakte.filter((k) => {
+    if (nurNachfassen) return brauchtNachfassen(k);
     if (nurOffene && istErledigt(k.status)) return false;
     if (wer.length && !wer.includes(k.user_id)) return false;
     return true;
@@ -207,7 +252,8 @@ export default function EmailMarketing() {
 
       <div className="card mb-4">
         <p className="text-xs text-textMuted">
-          Kontakte, die im Gespräch um eine E-Mail gebeten haben. Erfasst werden sie von den Vertrieblern im
+          Kontakte, die im Gespräch um eine E-Mail gebeten haben. Verschickte Mails ohne Ergebnis melden sich
+          nach {NACHFASSEN_AB_TAGEN} Tagen von selbst — einmal, nicht täglich. Erfasst werden sie von den Vertrieblern im
           Call Tracker — hier werden sie verschickt und nachgehalten. Wird ein Termin daraus, entsteht ein
           echter Termin, der beim ursprünglichen Vertriebler zählt.
         </p>
@@ -229,7 +275,13 @@ export default function EmailMarketing() {
       </div>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <button onClick={() => setNurOffene((v) => !v)}
+        {/* Der häufigste Weg, wie ein Kontakt stirbt: verschickt, keine
+            Antwort, niemand fasst nach. */}
+        <button onClick={() => { setNurNachfassen((v) => !v); setNurOffene(false); }}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${nurNachfassen ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+          Braucht Nachfassen ({kontakte.filter((k) => brauchtNachfassen(k)).length})
+        </button>
+        <button onClick={() => { setNurOffene((v) => !v); setNurNachfassen(false); }}
           className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${nurOffene ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
           {nurOffene ? "Nur offene" : "Alle anzeigen"}
         </button>
@@ -272,6 +324,40 @@ export default function EmailMarketing() {
                 → zum Termin
               </a>
             )}
+            {/* Die Mail selbst — mit Vorlage vorbefüllt, aber änderbar:
+                man soll sehen, was rausgeht. */}
+            {mailFuer === k.id && (
+              <div className="mb-3">
+                {vorlagen.length > 0 && (
+                  <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                    <span className="text-[11px] text-textMuted">Vorlage:</span>
+                    {vorlagen.map((v, i) => (
+                      <button key={i} onClick={() => starteMail(k, v)} className="btn-ghost text-[11px]">
+                        {v.name}
+                      </button>
+                    ))}
+                    <button onClick={() => starteMail(k, null)} className="btn-ghost text-[11px] text-textMuted">
+                      Leer
+                    </button>
+                  </div>
+                )}
+                <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
+                  value={mail.betreff} onChange={(e) => setMail((d) => ({ ...d, betreff: e.target.value }))} />
+                <textarea className="input !py-1.5 text-xs" rows={8} placeholder="Text der Mail"
+                  value={mail.text} onChange={(e) => setMail((d) => ({ ...d, text: e.target.value }))} />
+                <div className="flex items-center gap-2 flex-wrap mt-2">
+                  <button onClick={() => sendeMail(k)} disabled={mailBusy} className="btn text-xs disabled:opacity-40">
+                    {mailBusy ? "Wird verschickt…" : `An ${k.email} senden`}
+                  </button>
+                  <button onClick={() => setMailFuer(null)} className="btn-ghost text-xs">Abbrechen</button>
+                  <span className="text-[11px] text-textMuted w-full">
+                    Geht im Namen von {orgName || "eurer Organisation"} raus. Nach dem Versand steht der Kontakt
+                    automatisch auf „verschickt“ — mit Zeitpunkt und Betreff in der Notiz.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {bearbeite === k.id ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                 <input className="input !py-1.5 text-xs" placeholder="Name" value={entwurf.name}
@@ -295,6 +381,9 @@ export default function EmailMarketing() {
                     Zeile: daran hängt, wem der Termin später gehört. */}
                 <div className="text-[11px] text-textMuted mb-2">
                   Angelegt von <span className="text-textMain">{nameVon(k.user_id, k.erfasser?.full_name)}</span> am {deutscheZeit(k.created_at)} Uhr
+                  {brauchtNachfassen(k) && (
+                    <span className="text-amber"> · seit {liegtSeitTagen(k.verschickt_am)} Tagen ohne Antwort</span>
+                  )}
                 </div>
                 {k.notiz && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{k.notiz}</p>}
               </>

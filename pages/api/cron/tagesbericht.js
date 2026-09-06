@@ -1,6 +1,7 @@
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { baueTagesbericht } from "../../../lib/tagesbericht";
 import { sendeAlarm } from "../../../lib/alarm";
+import { erinnereAnNachfassen } from "../../../lib/nachfassErinnerung";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -39,7 +40,19 @@ export default async function handler(req, res) {
     // sich damit auch von Hand auf der Statusseite auslösen.
     const { text } = await baueTagesbericht(admin);
     await sendeAlarm(text);
-    return res.status(200).json({ ok: true });
+
+    // Im selben Lauf: welche Marketing-Mails ohne Antwort liegen. Getrennt
+    // gemeldet, weil es in den Marketing-Kanal geht und einen anderen
+    // Adressaten hat — hier muss jemand nachfassen. Ein Fehler dabei darf
+    // den Bericht nicht nachträglich als gescheitert dastehen lassen.
+    let nachfassen = { erinnert: 0 };
+    try {
+      nachfassen = await erinnereAnNachfassen(admin);
+    } catch (e) {
+      console.error("Nachfass-Erinnerung fehlgeschlagen:", e.message);
+    }
+
+    return res.status(200).json({ ok: true, nachfassen });
   } catch (e) {
     console.error("Tagesbericht fehlgeschlagen:", e.message);
     await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);

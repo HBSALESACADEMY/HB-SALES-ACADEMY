@@ -94,6 +94,7 @@ const BEREICHE = [
   ["grunddaten", "Grunddaten"],
   ["erscheinung", "Erscheinungsbild"],
   ["calltracker", "Call Tracker"],
+  ["mailvorlagen", "Mail-Vorlagen"],
   ["benachrichtigungen", "Benachrichtigungen"],
   ["formular", "Termin-Formular"],
   ["team", "Team-Wettbewerb"],
@@ -153,6 +154,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [bookingUrl, setBookingUrl] = useState(org.booking_url || "");
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
+  const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [rankingMetric, setRankingMetric] = useState(org.team_ranking_metric || "xp");
   const [bereich, setBereich] = useState("grunddaten");
   const [useCustomCategories, setUseCustomCategories] = useState(Array.isArray(org.objection_categories) && org.objection_categories.length > 0);
@@ -258,6 +260,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       booking_url: bookingUrl.trim() || null,
       telegram_chat_id: telegramChatId.trim() || null,
       telegram_marketing_chat_id: telegramMarketingId.trim() || null,
+      // Nur vollständige Vorlagen: eine ohne Text steht sonst in der
+      // Auswahl und liefert eine leere Mail.
+      email_vorlagen: vorlagen.filter((v) => v.name?.trim() && v.text?.trim()),
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
@@ -398,6 +403,36 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           <p className="text-[11px] text-textMuted mt-2">Erscheinen im Call Tracker beim Schritt „Was war der Grund?" und in der Einwand-Verteilung. Die letzte Kategorie dient als Sammelpunkt für „Ohne Angabe zählen".</p>
         </div>
       )}
+
+      </Abschnitt>
+
+      <Abschnitt id="mailvorlagen" aktiv={bereich} titel="Mail-Vorlagen" hinweis="Textbausteine für das E-Mail-Marketing.">
+      <p className="text-[11px] text-textMuted mb-3">
+        Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl. Platzhalter werden beim Verschicken ersetzt:
+        <strong> {"{{name}}"}</strong>, <strong>{"{{firma}}"}</strong>, <strong>{"{{notiz}}"}</strong> (die
+        Gesprächsnotiz), <strong>{"{{vertriebler}}"}</strong>, <strong>{"{{organisation}}"}</strong>. Steht in
+        einer Zeile nur ein Platzhalter, für den es keinen Wert gibt, fällt die ganze Zeile weg — sonst steht
+        beim Kunden „Firma:“ ohne Firma, und daran erkennt er die Serienmail.
+      </p>
+      {vorlagen.map((v, i) => (
+        <div key={i} className="card mb-2">
+          <div className="flex items-center gap-2 mb-2">
+            <input className="input !py-1.5 text-xs" placeholder="Name der Vorlage, z. B. Erstinfo"
+              value={v.name || ""}
+              onChange={(e) => setVorlagen((liste) => liste.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+            <button onClick={() => setVorlagen((liste) => liste.filter((_, j) => j !== i))}
+              className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+          </div>
+          <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
+            value={v.betreff || ""}
+            onChange={(e) => setVorlagen((liste) => liste.map((x, j) => (j === i ? { ...x, betreff: e.target.value } : x)))} />
+          <textarea className="input !py-1.5 text-xs" rows={6} placeholder={"Hallo {{name}},\n\naus unserem Gespräch: {{notiz}}\n\nViele Grüße\n{{vertriebler}}"}
+            value={v.text || ""}
+            onChange={(e) => setVorlagen((liste) => liste.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
+        </div>
+      ))}
+      <button onClick={() => setVorlagen((liste) => [...liste, { name: "", betreff: "", text: "" }])}
+        className="btn-ghost text-xs mb-5">+ Vorlage</button>
 
       </Abschnitt>
 

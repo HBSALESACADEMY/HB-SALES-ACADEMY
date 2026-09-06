@@ -45,6 +45,7 @@ import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js
 import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
 import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2069,4 +2070,48 @@ test("E-Mail-Kontakte: Adressprüfung und Trefferquote", () => {
   assert.equal(marketingQuote([
     { status: "termin" }, { status: "keine_antwort" }, { status: "kein_interesse" }, { status: "offen" },
   ]), 33);
+});
+
+// --- Mail-Vorlagen und Wiedervorlage ---------------------------------------
+
+test("Vorlage: fehlt ein Wert, fällt die halbe Zeile nicht als Rumpf zurück", () => {
+  // "Firma:" ohne Firma ist genau das, woran ein Kunde eine Serienmail
+  // erkennt. Die ganze Zeile muss weg.
+  const text = "Hallo {{name}},\nFirma: {{firma}}\n\naus unserem Gespräch: {{notiz}}\n\nViele Grüße\n{{vertriebler}}";
+  const gefuellt = fuelleVorlage(text, { name: "Max", notiz: "will Infos", vertriebler: "Ernestine" });
+  assert.ok(!gefuellt.includes("Firma"));
+  assert.ok(!gefuellt.includes("{{"));
+  assert.ok(gefuellt.startsWith("Hallo Max,"));
+  assert.ok(gefuellt.includes("will Infos"));
+  assert.ok(gefuellt.endsWith("Ernestine"));
+});
+
+test("Vorlage: eine Zeile mit Text bleibt, auch wenn ein Wert fehlt", () => {
+  // Nur wenn die Zeile AUSSER dem Platzhalter nichts trägt, fällt sie weg.
+  const gefuellt = fuelleVorlage("Wir sprachen über {{notiz}} und melden uns.", {});
+  assert.ok(gefuellt.includes("Wir sprachen über"));
+  assert.ok(gefuellt.includes("melden uns"));
+});
+
+test("Vorlage: Tippfehler in Platzhaltern werden erkannt", () => {
+  assert.deepEqual(unbekanntePlatzhalter("Hallo {{vorname}}, {{name}}"), ["vorname"]);
+  assert.deepEqual(unbekanntePlatzhalter("Hallo {{name}}"), []);
+  PLATZHALTER.forEach((p) => assert.deepEqual(unbekanntePlatzhalter(`{{${p.schluessel}}}`), []));
+});
+
+test("Nachfassen: nur verschickte Mails ohne Ergebnis", () => {
+  const jetzt = new Date("2026-09-20T10:00:00Z");
+  const vorTagen = (n) => new Date(jetzt.getTime() - n * 86400000).toISOString();
+
+  // Offen heisst: es ist noch gar nichts passiert. Das ist unerledigt,
+  // keine Wiedervorlage.
+  assert.equal(brauchtNachfassen({ status: "offen", verschickt_am: vorTagen(10) }, jetzt), false);
+  // Frisch verschickt: niemand fasst nach zwei Tagen nach.
+  assert.equal(brauchtNachfassen({ status: "verschickt", verschickt_am: vorTagen(2) }, jetzt), false);
+  // Überfällig.
+  assert.equal(brauchtNachfassen({ status: "verschickt", verschickt_am: vorTagen(NACHFASSEN_AB_TAGEN) }, jetzt), true);
+  // Erledigt bleibt erledigt.
+  assert.equal(brauchtNachfassen({ status: "termin", verschickt_am: vorTagen(30) }, jetzt), false);
+  assert.equal(liegtSeitTagen(vorTagen(6), jetzt), 6);
+  assert.equal(liegtSeitTagen(null, jetzt), null);
 });
