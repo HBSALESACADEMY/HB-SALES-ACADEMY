@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { user } = auth;
 
-  const { kontaktId, betreff, text } = req.body || {};
+  const { kontaktId, betreff, text, vorlage, anhaenge, anMichSelbst } = req.body || {};
   if (!kontaktId || !String(betreff || "").trim() || !String(text || "").trim()) {
     return res.status(400).json({ error: "Betreff und Text sind nötig." });
   }
@@ -42,16 +42,44 @@ export default async function handler(req, res) {
     if (!gueltigeAdresse(kontakt.email)) return res.status(400).json({ error: "Die Adresse des Kontakts ist ungültig." });
 
     const { data: org } = await admin.from("organizations")
-      .select("name, email_absender, email_antwort_an").eq("id", orgId).maybeSingle();
+      .select("name, email_absender, email_antwort_an, email_signatur").eq("id", orgId).maybeSingle();
+
+    // Anhänge holt der Server aus dem Speicher; der Browser schickt nur die
+    // Kennungen. Sonst liesse sich jede beliebige Datei über eure
+    // Absenderadresse verschicken.
+    const dateien = [];
+    if (Array.isArray(anhaenge) && anhaenge.length) {
+      const { data: eintraege } = await admin.from("email_anhaenge")
+        .select("id, name, pfad").eq("organization_id", orgId).in("id", anhaenge.slice(0, 5));
+      for (const e of eintraege || []) {
+        const { data: datei } = await admin.storage.from("email-anhaenge").download(e.pfad);
+        if (!datei) continue;
+        dateien.push({
+          filename: e.name,
+          content: Buffer.from(await datei.arrayBuffer()).toString("base64"),
+        });
+      }
+    }
 
     // Zeilenumbrüche werden zu Absätzen: der Text wird in einem Textfeld
     // geschrieben, und dort erwartet niemand, HTML tippen zu müssen.
-    const html = String(text).split(/\n{2,}/).map((absatz) =>
+    // Der Standardschluss der Organisation kommt unter jede Mail: Signatur,
+    // Anschrift, Abmeldehinweis. An einer Stelle gepflegt statt in jeder
+    // Vorlage wiederholt (migration_143).
+    const mitSchluss = org?.email_signatur?.trim()
+      ? `${String(text).trim()}\n\n${org.email_signatur.trim()}`
+      : String(text);
+    const html = mitSchluss.split(/\n{2,}/).map((absatz) =>
       `<p>${absatz.replace(/\n/g, "<br/>").replace(/</g, "&lt;")}</p>`
     ).join("");
 
+    // An sich selbst: dieselbe Mail, dieselbe Vorlage, derselbe Absender —
+    // nur ein anderer Empfänger. Die Sicherheitsstufe vor dem Ernstfall.
+    const empfaenger = anMichSelbst ? user.email : kontakt.email;
+    if (!empfaenger) return res.status(400).json({ error: "Zu deinem Konto ist keine E-Mail-Adresse hinterlegt." });
+
     const versand = await sendEmail({
-      to: kontakt.email,
+      to: empfaenger,
       subject: String(betreff).trim(),
       html,
       fromName: org?.name || "HB Sales Academy",
@@ -59,6 +87,7 @@ export default async function handler(req, res) {
       // Damit die Antwort des Kontakts bei der Organisation ankommt und
       // nicht in einem Postfach, das niemand liest.
       replyTo: org?.email_antwort_an || null,
+      attachments: dateien,
     });
     // Ohne diese Prüfung stünde "verschickt" auch dann da, wenn Resend die
     // Mail abgelehnt hat — etwa weil die Absenderdomain nicht verifiziert
@@ -75,11 +104,18 @@ export default async function handler(req, res) {
     // Erst nach dem erfolgreichen Versand vermerken. Andersherum stünde
     // "verschickt" bei einer Mail, die nie ankam — und niemand würde je
     // nachfassen.
+    // Eine Probemail an sich selbst ändert am Kontakt nichts: sonst stünde
+    // "verschickt", ohne dass der Kunde je etwas bekommen hat.
+    if (anMichSelbst) return res.status(200).json({ ok: true, an: empfaenger, probe: true });
+
     const jetzt = new Date().toISOString();
     await admin.from("email_kontakte").update({
       status: "verschickt",
       verschickt_am: jetzt,
       verschickt_von: user.id,
+      // Welche Vorlage benutzt wurde — Grundlage für die Frage, welche
+      // Vorlage Termine bringt (migration_143).
+      vorlage: vorlage || null,
       // Was rausging, gehört zum Kontakt: beim Nachfassen weiss man sonst
       // nicht mehr, was der Kunde bekommen hat.
       notiz: kontakt.notiz

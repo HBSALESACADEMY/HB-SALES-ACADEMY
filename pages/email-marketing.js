@@ -10,7 +10,10 @@ import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse } from "../lib/emailKontakt";
-import { fuelleVorlage, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN } from "../lib/marketingVorlage";
+import {
+  fuelleVorlage, fertigeMail, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN,
+  BEISPIEL_KONTAKT, vorlagenErfolg,
+} from "../lib/marketingVorlage";
 import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
@@ -43,6 +46,7 @@ export default function EmailMarketing() {
   const [orgName, setOrgName] = useState("");
   const [mailFuer, setMailFuer] = useState(null);
   const [mail, setMail] = useState({ betreff: "", text: "" });
+  const [mailVorlage, setMailVorlage] = useState("");
   const [mailBusy, setMailBusy] = useState(false);
   const [nurNachfassen, setNurNachfassen] = useState(false);
   const [org, setOrg] = useState(null);
@@ -53,6 +57,11 @@ export default function EmailMarketing() {
   const [vorlagenOffen, setVorlagenOffen] = useState(false);
   const [vorlagenEntwurf, setVorlagenEntwurf] = useState(null);
   const [vorlagenBusy, setVorlagenBusy] = useState(false);
+  const [signatur, setSignatur] = useState("");
+  const [anhaenge, setAnhaenge] = useState([]);
+  const [gewaehlteAnhaenge, setGewaehlteAnhaenge] = useState([]);
+  const [anhangBusy, setAnhangBusy] = useState(false);
+  const [probeStand, setProbeStand] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -83,6 +92,10 @@ export default function EmailMarketing() {
     // Dieselben Felder wie im Call Tracker — ein Termin aus dem Marketing
     // ist kein Termin zweiter Klasse.
     setOrg(org || null);
+    setSignatur(org?.email_signatur || "");
+    const { data: dateien } = await supabase.from("email_anhaenge")
+      .select("*").order("created_at", { ascending: false });
+    setAnhaenge(dateien || []);
     if (err) setFehler(err.message);
     setKontakte(zeilen || []);
 
@@ -210,34 +223,90 @@ export default function EmailMarketing() {
 
   // Mail schreiben. Die Vorlage wird beim Öffnen gefüllt, nicht erst beim
   // Senden: man soll sehen, was rausgeht, und es noch ändern können.
-  function starteMail(k, vorlage = null) {
-    const werte = {
+  function werteFuer(k) {
+    return {
       name: k.name,
       firma: k.firma,
       notiz: k.notiz,
       vertriebler: nameVon(k.user_id, k.erfasser?.full_name),
       organisation: orgName,
     };
+  }
+
+  function starteMail(k, vorlage = null) {
+    const werte = werteFuer(k);
+    // Signatur gleich mit: man soll sehen, was rausgeht — und nicht erst
+    // beim Kunden merken, dass die Anschrift fehlt oder doppelt dasteht.
+    const fertig = vorlage
+      ? fertigeMail(vorlage, werte, signatur)
+      : { betreff: `Ihre Anfrage${k.firma ? ` – ${k.firma}` : ""}`, text: signatur ? fuelleVorlage(signatur, werte) : "" };
     setMailFuer(k.id);
-    setMail({
-      betreff: vorlage ? fuelleVorlage(vorlage.betreff || "", werte) : `Ihre Anfrage${k.firma ? ` – ${k.firma}` : ""}`,
-      text: vorlage ? fuelleVorlage(vorlage.text || "", werte) : "",
-    });
+    setMailVorlage(vorlage?.name || "");
+    setMail(fertig);
+    setGewaehlteAnhaenge([]);
+    setProbeStand(null);
     setFehler("");
   }
 
-  async function sendeMail(k) {
+  async function sendeMail(k, anMichSelbst = false) {
     if (!mail.betreff.trim() || !mail.text.trim()) { setFehler("Betreff und Text dürfen nicht leer sein."); return; }
     setMailBusy(true);
+    setProbeStand(null);
     try {
-      await apiPost("/api/marketing-mail", { kontaktId: k.id, betreff: mail.betreff, text: mail.text });
-      setMailFuer(null);
-      setMail({ betreff: "", text: "" });
-      await laden();
+      const antwort = await apiPost("/api/marketing-mail", {
+        kontaktId: k.id,
+        betreff: mail.betreff,
+        text: mail.text,
+        vorlage: mailVorlage || null,
+        anhaenge: gewaehlteAnhaenge,
+        anMichSelbst,
+      });
+      if (anMichSelbst) {
+        // Der Kontakt bleibt unberührt: eine Probemail ist keine
+        // verschickte Mail.
+        setProbeStand(`Probemail ist raus an ${antwort.an}.`);
+      } else {
+        setMailFuer(null);
+        setMail({ betreff: "", text: "" });
+        setGewaehlteAnhaenge([]);
+        await laden();
+      }
     } catch (e) {
       setFehler(e?.message || "Die Mail konnte nicht verschickt werden.");
     }
     setMailBusy(false);
+  }
+
+  // Anhänge: direkt in den Speicher, wie bei den Aufnahmen — dazu ein
+  // Eintrag, damit man sie beim Schreiben auswählen kann.
+  async function ladeAnhangHoch(datei) {
+    if (!datei || !org?.id) return;
+    if (datei.size > 4 * 1024 * 1024) {
+      setFehler("Die Datei ist grösser als 4 MB — viele Postfächer lehnen das ab.");
+      return;
+    }
+    setAnhangBusy(true);
+    setFehler("");
+    const pfad = `${org.id}/${Date.now()}-${datei.name.replace(/[^\w.\-]+/g, "_")}`;
+    const { error: upErr } = await supabase.storage.from("email-anhaenge").upload(pfad, datei);
+    if (upErr) { setFehler(upErr.message); setAnhangBusy(false); return; }
+    const { data: eintrag, error } = await supabase.from("email_anhaenge").insert({
+      organization_id: org.id, name: datei.name, pfad, groesse: datei.size,
+    }).select().single();
+    if (error) setFehler(error.message);
+    else setAnhaenge((prev) => [eintrag, ...prev]);
+    setAnhangBusy(false);
+  }
+
+  async function loescheAnhang(a) {
+    if (!confirm(`Anhang „${a.name}" löschen?`)) return;
+    await supabase.storage.from("email-anhaenge").remove([a.pfad]);
+    const err = await loescheGeprueft(
+      supabase.from("email_anhaenge").delete().eq("id", a.id),
+      "Anhänge verwaltet die Leitung der Organisation."
+    );
+    if (err) setFehler(err);
+    else setAnhaenge((prev) => prev.filter((x) => x.id !== a.id));
   }
 
   async function speichereVorlagen() {
@@ -247,7 +316,9 @@ export default function EmailMarketing() {
     // Auswahl und liefert eine leere Mail.
     const sauber = (vorlagenEntwurf || []).filter((v) => v.name?.trim() && v.text?.trim());
     const err = await aendereGeprueft(
-      supabase.from("organizations").update({ email_vorlagen: sauber }).eq("id", org?.id),
+      supabase.from("organizations")
+        .update({ email_vorlagen: sauber, email_signatur: signatur.trim() || null })
+        .eq("id", org?.id),
       "Vorlagen darf nur die Leitung der Organisation ändern."
     );
     if (err) setFehler(err);
@@ -365,9 +436,85 @@ export default function EmailMarketing() {
           </span>
           <span className={`text-textMuted text-xs transition-transform ${vorlagenOffen ? "rotate-90" : ""}`}>›</span>
         </button>
+        {/* Direkt sichtbar, was es gibt — man soll nicht aufklappen müssen,
+            um zu wissen, ob eine passende Vorlage existiert. */}
+        {!vorlagenOffen && (
+          <div className="flex flex-col gap-1.5 mt-2">
+            {vorlagen.length === 0 && (
+              <p className="text-xs text-textMuted">
+                Noch keine Vorlage. Ohne Vorlage schreibt jeder seinen eigenen Text — aufklappen und anlegen.
+              </p>
+            )}
+            {vorlagen.map((v) => {
+              const erfolg = vorlagenErfolg(kontakte).find((e) => e.name === v.name);
+              return (
+                <div key={v.name} className="flex items-start gap-2 text-xs">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-textMain">{v.name}</div>
+                    <div className="text-[11px] text-textMuted truncate">{v.betreff || "(kein Betreff)"}</div>
+                  </div>
+                  {erfolg && (
+                    <span className="text-[11px] text-textMuted flex-shrink-0">
+                      {erfolg.verschickt}× verschickt
+                      {erfolg.quote !== null ? ` · ${erfolg.quote} % Termine` : ""}
+                    </span>
+                  )}
+                  <button
+                    onClick={async () => {
+                      // Der reine Text in die Zwischenablage — für alle,
+                      // die ausserhalb der Academy schreiben.
+                      try {
+                        await navigator.clipboard.writeText(`${v.betreff || ""}\n\n${v.text || ""}`.trim());
+                        setProbeStand("Vorlage kopiert.");
+                        setTimeout(() => setProbeStand(null), 2500);
+                      } catch (e) { setFehler("Kopieren war nicht möglich."); }
+                    }}
+                    className="btn-ghost text-[11px] flex-shrink-0">Kopieren</button>
+                  <button
+                    onClick={() => {
+                      const kopie = { ...v, name: `${v.name} (Kopie)` };
+                      setVorlagenEntwurf([...(vorlagenEntwurf || vorlagen), kopie]);
+                      setVorlagenOffen(true);
+                    }}
+                    className="btn-ghost text-[11px] flex-shrink-0">Duplizieren</button>
+                </div>
+              );
+            })}
+            {probeStand && <p className="text-[11px] text-teal">{probeStand}</p>}
+          </div>
+        )}
+
         <Aufklapper offen={vorlagenOffen}>
           <div className="mt-3">
             <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} />
+
+            {/* Die Vorschau: der fertige Text mit einem erfundenen Kontakt.
+                So sieht man Anrede, Absätze und Signatur, bevor eine echte
+                Mail rausgeht. */}
+            {(vorlagenEntwurf || []).filter((v) => v.text?.trim()).length > 0 && (
+              <div className="card mt-3">
+                <div className="text-xs text-textMain font-semibold mb-2">Vorschau mit Beispielkontakt</div>
+                {(vorlagenEntwurf || []).filter((v) => v.text?.trim()).map((v, i) => {
+                  const fertig = fertigeMail(v, { ...BEISPIEL_KONTAKT, vertriebler: "Beispiel Vertrieblerin", organisation: orgName }, signatur);
+                  return (
+                    <div key={i} className="mb-3">
+                      <div className="text-[11px] text-textMuted mb-1">{v.name || "(ohne Namen)"} · Betreff: {fertig.betreff}</div>
+                      <pre className="text-[11px] text-textMain whitespace-pre-wrap bg-surfaceRaised rounded-lg px-3 py-2">{fertig.text}</pre>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <label className="block text-xs text-textMuted mt-4 mb-1">Standardschluss unter jeder Mail</label>
+            <textarea className="input !py-1.5 text-xs" rows={4} value={signatur}
+              onChange={(e) => setSignatur(e.target.value)}
+              placeholder={"Viele Grüße\n{{vertriebler}}\n{{organisation}}\nMusterstraße 1, 12345 Musterstadt"} />
+            <p className="text-[11px] text-textMuted mt-1 mb-2">
+              Kommt automatisch unter jede Mail — Signatur, Anschrift, Abmeldehinweis. Bei Werbemails an
+              Geschäftskontakte gehört ein Absender mit Anschrift dazu, und an einer Stelle gepflegt ist das
+              billiger, als es später in acht Vorlagen nachzuziehen.
+            </p>
             <div className="flex items-center gap-2 mt-3">
               <button onClick={speichereVorlagen} disabled={vorlagenBusy} className="btn text-xs disabled:opacity-40">
                 {vorlagenBusy ? "Wird gespeichert…" : "Vorlagen speichern"}
@@ -377,6 +524,31 @@ export default function EmailMarketing() {
               <span className="text-[11px] text-textMuted">
                 Gilt für die ganze Organisation — auch in der Verwaltung unter Organisation → E-Mail.
               </span>
+            </div>
+
+            {/* Anhänge: einmal hochladen, bei jeder Mail auswählbar. */}
+            <div className="mt-4 pt-4 border-t border-line">
+              <div className="text-xs text-textMain font-semibold mb-2">Anhänge</div>
+              <div className="flex flex-col gap-1.5 mb-2">
+                {anhaenge.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-textMain flex-1 truncate">{a.name}</span>
+                    <span className="text-[11px] text-textMuted flex-shrink-0">
+                      {a.groesse ? `${Math.round(a.groesse / 1024)} KB` : ""}
+                    </span>
+                    <button onClick={() => loescheAnhang(a)} className="btn-ghost text-[11px] text-coral">Löschen</button>
+                  </div>
+                ))}
+                {anhaenge.length === 0 && <p className="text-[11px] text-textMuted">Noch keine Dateien.</p>}
+              </div>
+              <label className="btn-ghost text-xs cursor-pointer inline-block">
+                {anhangBusy ? "Wird geladen…" : "+ Datei hochladen"}
+                <input type="file" className="hidden" disabled={anhangBusy}
+                  onChange={(e) => { ladeAnhangHoch(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              <p className="text-[11px] text-textMuted mt-1">
+                Höchstens 4 MB je Datei — grössere lehnen viele Postfächer ab, und dann kommt gar nichts an.
+              </p>
             </div>
           </div>
         </Aufklapper>
@@ -431,15 +603,39 @@ export default function EmailMarketing() {
                   value={mail.betreff} onChange={(e) => setMail((d) => ({ ...d, betreff: e.target.value }))} />
                 <textarea className="input !py-1.5 text-xs" rows={8} placeholder="Text der Mail"
                   value={mail.text} onChange={(e) => setMail((d) => ({ ...d, text: e.target.value }))} />
+                {anhaenge.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                    <span className="text-[11px] text-textMuted">Anhänge:</span>
+                    {anhaenge.map((a) => {
+                      const an = gewaehlteAnhaenge.includes(a.id);
+                      return (
+                        <button key={a.id}
+                          onClick={() => setGewaehlteAnhaenge((prev) => (an ? prev.filter((x) => x !== a.id) : [...prev, a.id]))}
+                          className={`px-2 py-1 rounded-full text-[11px] border ${an ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                          {an ? "✓ " : ""}{a.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 flex-wrap mt-2">
                   <button onClick={() => sendeMail(k)} disabled={mailBusy} className="btn text-xs disabled:opacity-40">
                     {mailBusy ? "Wird verschickt…" : `An ${k.email} senden`}
+                  </button>
+                  {/* Die Sicherheitsstufe vor dem Ernstfall: dieselbe Mail,
+                      derselbe Absender, nur an dich. Am Kontakt ändert das
+                      nichts. */}
+                  <button onClick={() => sendeMail(k, true)} disabled={mailBusy} className="btn-ghost text-xs disabled:opacity-40">
+                    Erst an mich selbst
                   </button>
                   <button onClick={() => setMailFuer(null)} className="btn-ghost text-xs">Abbrechen</button>
                   <span className="text-[11px] text-textMuted w-full">
                     Geht im Namen von {orgName || "eurer Organisation"} raus. Nach dem Versand steht der Kontakt
                     automatisch auf „verschickt“ — mit Zeitpunkt und Betreff in der Notiz.
+                    {signatur ? " Der Standardschluss steht schon im Text." : ""}
                   </span>
+                  {probeStand && <span className="text-[11px] text-teal w-full">{probeStand}</span>}
                 </div>
               </div>
             )}

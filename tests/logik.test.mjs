@@ -45,7 +45,7 @@ import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js
 import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
 import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
-import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER } from "../lib/marketingVorlage.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2136,4 +2136,36 @@ test("Kalender-Abo: Erinnerung nur dort, wo sie Sinn ergibt", () => {
   assert.ok(feed.startsWith("BEGIN:VCALENDAR\r\n"));
   assert.ok(feed.trim().endsWith("END:VCALENDAR"));
   assert.equal(feed.split("\r\n").filter((z) => z === "BEGIN:VEVENT").length, 3);
+});
+
+test("Fertige Mail: Vorlage plus Signatur, an einer Stelle zusammengesetzt", () => {
+  // Vorschau, Probemail und echter Versand müssen denselben Text ergeben —
+  // sonst fällt der Unterschied erst beim Kunden auf.
+  const fertig = fertigeMail(
+    { betreff: "Info für {{firma}}", text: "Hallo {{name}}," },
+    { ...BEISPIEL_KONTAKT, organisation: "VolkWork" },
+    "Viele Grüße\n{{organisation}}"
+  );
+  assert.equal(fertig.betreff, "Info für Musterfirma GmbH");
+  assert.ok(fertig.text.startsWith("Hallo Beispiel Ansprechpartner,"));
+  assert.ok(fertig.text.endsWith("Viele Grüße\nVolkWork"));
+  // Ohne Signatur bleibt es beim Text allein.
+  assert.equal(fertigeMail({ text: "Kurz." }, {}, "").text, "Kurz.");
+});
+
+test("Vorlagen-Erfolg: gerade Verschicktes zählt noch nicht gegen die Vorlage", () => {
+  const erfolg = vorlagenErfolg([
+    { vorlage: "Erstinfo", status: "termin" },
+    { vorlage: "Erstinfo", status: "kein_interesse" },
+    { vorlage: "Erstinfo", status: "verschickt" },   // noch offen
+    { vorlage: "Kurzinfo", status: "verschickt" },
+    { status: "termin" },                             // ohne Vorlage
+  ]);
+  const erst = erfolg.find((e) => e.name === "Erstinfo");
+  assert.equal(erst.verschickt, 3);
+  assert.equal(erst.bewertet, 2);
+  assert.equal(erst.quote, 50);
+  // Ohne abgeschlossene Fälle keine Quote — und nicht null Prozent.
+  assert.equal(erfolg.find((e) => e.name === "Kurzinfo").quote, null);
+  assert.equal(erfolg.length, 2);
 });
