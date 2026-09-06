@@ -12,6 +12,7 @@ import { fuelleVorlage, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN }
 import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
+import { resolveLeadFields, resolveCoreRequired } from "../lib/leadFields";
 
 // E-Mail Marketing: die Kontakte, die im Gespräch um eine Mail gebeten
 // haben (migration_138).
@@ -42,6 +43,8 @@ export default function EmailMarketing() {
   const [mail, setMail] = useState({ betreff: "", text: "" });
   const [mailBusy, setMailBusy] = useState(false);
   const [nurNachfassen, setNurNachfassen] = useState(false);
+  const [org, setOrg] = useState(null);
+  const [terminDaten, setTerminDaten] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -65,10 +68,12 @@ export default function EmailMarketing() {
         .order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
     ]);
-    const { data: org } = await supabase.from("organizations")
-      .select("name, email_vorlagen").eq("id", orgId).maybeSingle();
+    const { data: org } = await supabase.from("organizations").select("*").eq("id", orgId).maybeSingle();
     setVorlagen(Array.isArray(org?.email_vorlagen) ? org.email_vorlagen : []);
     setOrgName(org?.name || "");
+    // Dieselben Felder wie im Call Tracker — ein Termin aus dem Marketing
+    // ist kein Termin zweiter Klasse.
+    setOrg(org || null);
     if (err) setFehler(err.message);
     setKontakte(zeilen || []);
 
@@ -111,16 +116,35 @@ export default function EmailMarketing() {
   // Über den Server, nicht aus dem Browser: der Termin gehört einer ANDEREN
   // Person, und daran hängen Rechte, Benachrichtigungen und die Frage, in
   // wessen Statistik er landet.
+  // Das Formular öffnen — vorbefüllt mit dem, was aus dem Gespräch bekannt
+  // ist. Was fehlt, muss ergänzt werden: es sind dieselben Pflichtfelder wie
+  // im Call Tracker.
+  function starteTermin(k) {
+    setTerminFuer(k.id);
+    setTerminZeit("");
+    setVergangenheit(null);
+    setFehler("");
+    setTerminDaten({
+      name: k.name || "",
+      phone: k.telefon || "",
+      email: k.email || "",
+      fields: { company: k.firma || "" },
+    });
+  }
+
   async function macheTermin(kontakt, wann, trotzdem = false) {
     const zeitpunkt = new Date(wann);
     if (!wann || Number.isNaN(zeitpunkt.getTime())) { setFehler("Bitte einen Zeitpunkt wählen."); return; }
     setFehler("");
     setTerminBusy(true);
     try {
-      await apiPost("/api/marketing-termin", { kontaktId: kontakt.id, zeitpunkt: zeitpunkt.toISOString(), trotzdem });
+      await apiPost("/api/marketing-termin", {
+        kontaktId: kontakt.id, zeitpunkt: zeitpunkt.toISOString(), trotzdem, daten: terminDaten,
+      });
       setTerminFuer(null);
       setTerminZeit("");
       setVergangenheit(null);
+      setTerminDaten(null);
       await laden();
     } catch (e) {
       // Ein Zeitpunkt in der Vergangenheit ist fast immer ein Tippfehler im
@@ -407,18 +431,63 @@ export default function EmailMarketing() {
                 </button>
               )}
               {bearbeite !== k.id && k.status !== "offen" && k.status !== "termin" && terminFuer !== k.id && (
-                <button onClick={() => { setTerminFuer(k.id); setTerminZeit(""); }} className="btn text-xs">
+                <button onClick={() => starteTermin(k)} className="btn text-xs">
                   Termin daraus geworden
                 </button>
               )}
               {terminFuer === k.id && (
                 <div className="flex items-center gap-2 flex-wrap w-full">
+                  {/* Dieselben Felder wie im Call Tracker, samt der
+                      Pflichtangaben dieser Organisation. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full mb-1">
+                    <div>
+                      <label className="block text-[11px] text-textMuted mb-1">Name *</label>
+                      <input className="input !py-1.5 text-xs" value={terminDaten?.name || ""}
+                        onChange={(e) => setTerminDaten((d) => ({ ...d, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-textMuted mb-1">
+                        Telefon{resolveCoreRequired(org).phone ? " *" : ""}
+                      </label>
+                      <input className="input !py-1.5 text-xs" type="tel" value={terminDaten?.phone || ""}
+                        onChange={(e) => setTerminDaten((d) => ({ ...d, phone: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-textMuted mb-1">
+                        E-Mail{resolveCoreRequired(org).email ? " *" : ""}
+                      </label>
+                      <input className="input !py-1.5 text-xs" type="email" value={terminDaten?.email || ""}
+                        onChange={(e) => setTerminDaten((d) => ({ ...d, email: e.target.value }))} />
+                    </div>
+                    {resolveLeadFields(org).filter((f) => f.type !== "checkbox" && !f.multiline).map((f) => (
+                      <div key={f.key}>
+                        <label className="block text-[11px] text-textMuted mb-1">{f.label}{f.required ? " *" : ""}</label>
+                        <input className="input !py-1.5 text-xs" value={terminDaten?.fields?.[f.key] || ""}
+                          onChange={(e) => setTerminDaten((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                      </div>
+                    ))}
+                    {resolveLeadFields(org).filter((f) => f.multiline).map((f) => (
+                      <div key={f.key} className="sm:col-span-2">
+                        <label className="block text-[11px] text-textMuted mb-1">{f.label}{f.required ? " *" : ""}</label>
+                        <textarea className="input !py-1.5 text-xs" rows={2} value={terminDaten?.fields?.[f.key] || ""}
+                          onChange={(e) => setTerminDaten((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                      </div>
+                    ))}
+                    {resolveLeadFields(org).filter((f) => f.type === "checkbox").map((f) => (
+                      <label key={f.key} className="flex items-center gap-2 text-xs text-textMuted">
+                        <input type="checkbox" checked={!!terminDaten?.fields?.[f.key]}
+                          onChange={(e) => setTerminDaten((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} />
+                        {f.label}{f.required ? " *" : ""}
+                      </label>
+                    ))}
+                  </div>
+                  <label className="block text-[11px] text-textMuted w-full">Termin (Datum/Uhrzeit) *</label>
                   <input type="datetime-local" className="input !w-auto !py-1.5 text-xs"
                     value={terminZeit} onChange={(e) => setTerminZeit(e.target.value)} />
                   <button onClick={() => macheTermin(k, terminZeit)} disabled={terminBusy} className="btn text-xs disabled:opacity-40">
                     {terminBusy ? "Wird angelegt…" : "Termin anlegen"}
                   </button>
-                  <button onClick={() => setTerminFuer(null)} className="btn-ghost text-xs">Abbrechen</button>
+                  <button onClick={() => { setTerminFuer(null); setTerminDaten(null); }} className="btn-ghost text-xs">Abbrechen</button>
                   <span className="text-[11px] text-textMuted w-full">
                     Der Termin wird bei {nameVon(k.user_id, k.erfasser?.full_name)} angelegt — dort ist der Kontakt
                     entstanden. Er landet in deren Kalender und Statistik, und sie bekommt eine Nachricht darüber.

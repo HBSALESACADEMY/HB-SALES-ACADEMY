@@ -6,6 +6,7 @@ import { notifyOrgManagers } from "../../lib/notifyManagers";
 import { sendEmail } from "../../lib/email";
 import { sendeAlarm } from "../../lib/alarm";
 import { terminText, deutscheZeit } from "../../lib/terminzeit";
+import { RESERVED_FIELD_COLUMNS, resolveLeadFields, fehlendePflichtfelder } from "../../lib/leadFields";
 
 // Aus einem E-Mail-Kontakt wird ein Termin.
 //
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { user } = auth;
 
-  const { kontaktId, zeitpunkt, trotzdem } = req.body || {};
+  const { kontaktId, zeitpunkt, trotzdem, daten } = req.body || {};
   if (!kontaktId || !zeitpunkt) return res.status(400).json({ error: "Kontakt und Zeitpunkt sind nötig." });
 
   const wann = new Date(zeitpunkt);
@@ -62,6 +63,35 @@ export default async function handler(req, res) {
       });
     }
 
+    // Dieselben Pflichtfelder wie im Call Tracker: ein Termin aus dem
+    // Marketing ist kein Termin zweiter Klasse. Sonst fehlen später
+    // ausgerechnet dort die Angaben, die die Organisation für jeden anderen
+    // Termin verlangt.
+    const { data: orgFelder } = await admin.from("organizations").select("*").eq("id", orgId).maybeSingle();
+    const eingabe = daten || {};
+    const fehlt = fehlendePflichtfelder({
+      name: eingabe.name ?? kontakt.name,
+      phone: eingabe.phone ?? kontakt.telefon,
+      email: eingabe.email ?? kontakt.email,
+      appointmentAt: zeitpunkt,
+      fields: eingabe.fields || {},
+      org: orgFelder,
+    });
+    if (fehlt.length) {
+      return res.status(400).json({ error: `Es fehlen noch: ${fehlt.join(", ")}.`, fehlt });
+    }
+
+    // Zusatzfelder wie im Call Tracker: manche haben eine eigene Spalte,
+    // der Rest landet in custom_fields (siehe lib/leadFields.js).
+    const spalten = {};
+    const custom = {};
+    resolveLeadFields(orgFelder).forEach((f) => {
+      const wert = eingabe.fields?.[f.key];
+      const spalte = RESERVED_FIELD_COLUMNS[f.key];
+      if (spalte) spalten[spalte] = f.type === "checkbox" ? !!wert : (wert || null);
+      else if (wert !== null && wert !== undefined && wert !== "") custom[f.key] = wert;
+    });
+
     const { data: vertriebler } = await admin.from("profiles")
       .select("full_name").eq("id", kontakt.user_id).maybeSingle();
     const wer = profil?.full_name || "die Leitung";
@@ -76,11 +106,16 @@ export default async function handler(req, res) {
     const { data: lead, error: insertErr } = await admin.from("leads").insert({
       created_by: kontakt.user_id,
       organization_id: kontakt.organization_id || orgId,
-      name: kontakt.name,
-      email: kontakt.email,
-      phone: kontakt.telefon,
-      company: kontakt.firma,
-      notes: notizen,
+      name: eingabe.name || kontakt.name,
+      email: eingabe.email || kontakt.email,
+      phone: eingabe.phone || kontakt.telefon,
+      // Erst die Eingabe, dann die Spalten-Zusatzfelder, dann der Kontakt:
+      // was gerade getippt wurde, hat Vorrang vor dem, was beim Anruf
+      // notiert war.
+      company: spalten.company ?? kontakt.firma,
+      ...spalten,
+      custom_fields: custom,
+      notes: spalten.notes ? `${notizen}\n\n${spalten.notes}` : notizen,
       appointment_at: wann.toISOString(),
       status: "geplant",
     }).select().single();
