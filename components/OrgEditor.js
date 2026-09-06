@@ -156,6 +156,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
+  // Ergebnis der Probemail — im Klartext, nicht als Häkchen.
+  const [testStand, setTestStand] = useState(null);
+  const [testBusy, setTestBusy] = useState(false);
   const [antwortAn, setAntwortAn] = useState(org.email_antwort_an || "");
   const [rankingMetric, setRankingMetric] = useState(org.team_ranking_metric || "xp");
   const [bereich, setBereich] = useState("grunddaten");
@@ -430,6 +433,41 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         ein, lehnt der Versand ab — und dann geht <strong>gar keine</strong> Mail dieser Organisation mehr raus,
         auch keine Termin-Benachrichtigung. Im Zweifel leer lassen und nur die Antwortadresse oben setzen.
       </p>
+
+      {/* Eine falsche Absenderadresse legt den Versand der ganzen
+          Organisation still lahm — auch die Termin-Benachrichtigungen.
+          Ohne diesen Knopf merkt man das erst, wenn eine Kundenmail nicht
+          ankommt, und sucht dann an der falschen Stelle. */}
+      <div className="card mb-5">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-xs text-textMain font-semibold">Einstellungen prüfen</span>
+          <button
+            onClick={async () => {
+              setTestBusy(true);
+              setTestStand(null);
+              try {
+                setTestStand(await apiPost("/api/test-mail", {}));
+              } catch (e) {
+                setTestStand({ ok: false, text: e?.message || "Die Testmail konnte nicht ausgelöst werden." });
+              }
+              setTestBusy(false);
+            }}
+            disabled={testBusy}
+            className="btn-ghost text-xs ml-auto disabled:opacity-40">
+            {testBusy ? "Wird verschickt…" : "Testmail an mich senden"}
+          </button>
+        </div>
+        <p className="text-[11px] text-textMuted">
+          Schickt eine Probemail an deine eigene Anmeldeadresse — mit genau den Einstellungen von hier. Erst
+          speichern, dann prüfen: der Knopf liest, was in der Datenbank steht, nicht was gerade im Formular
+          getippt ist.
+        </p>
+        {testStand && (
+          <p className={`text-[11px] mt-2 ${testStand.ok ? "text-teal" : "text-coral"}`}>
+            {testStand.text}
+          </p>
+        )}
+      </div>
 
       <p className="text-[11px] text-textMuted mb-3">
         Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl. Platzhalter werden beim Verschicken ersetzt:
