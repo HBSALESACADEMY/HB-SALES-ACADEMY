@@ -94,7 +94,7 @@ const BEREICHE = [
   ["grunddaten", "Grunddaten"],
   ["erscheinung", "Erscheinungsbild"],
   ["calltracker", "Call Tracker"],
-  ["mailvorlagen", "Mail-Vorlagen"],
+  ["mailvorlagen", "E-Mail"],
   ["benachrichtigungen", "Benachrichtigungen"],
   ["formular", "Termin-Formular"],
   ["team", "Team-Wettbewerb"],
@@ -155,6 +155,8 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
+  const [absender, setAbsender] = useState(org.email_absender || "");
+  const [antwortAn, setAntwortAn] = useState(org.email_antwort_an || "");
   const [rankingMetric, setRankingMetric] = useState(org.team_ranking_metric || "xp");
   const [bereich, setBereich] = useState("grunddaten");
   const [useCustomCategories, setUseCustomCategories] = useState(Array.isArray(org.objection_categories) && org.objection_categories.length > 0);
@@ -263,6 +265,8 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       // Nur vollständige Vorlagen: eine ohne Text steht sonst in der
       // Auswahl und liefert eine leere Mail.
       email_vorlagen: vorlagen.filter((v) => v.name?.trim() && v.text?.trim()),
+      email_absender: absender.trim() || null,
+      email_antwort_an: antwortAn.trim() || null,
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
@@ -406,7 +410,27 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
 
       </Abschnitt>
 
-      <Abschnitt id="mailvorlagen" aktiv={bereich} titel="Mail-Vorlagen" hinweis="Textbausteine für das E-Mail-Marketing.">
+      <Abschnitt id="mailvorlagen" aktiv={bereich} titel="E-Mail" hinweis="Absender, Antwortadresse und Textbausteine für das E-Mail-Marketing.">
+      <label className="block text-xs text-textMuted mb-1.5">Antwortadresse (empfohlen)</label>
+      <input className="input mb-1" value={antwortAn} onChange={(e) => setAntwortAn(e.target.value)}
+        placeholder="z. B. vertrieb@deine-firma.de" />
+      <p className="text-[11px] text-textMuted mb-4">
+        Hier landen die Antworten eurer Kontakte. Das darf <strong>jede</strong> Adresse sein, auch eine GMX- oder
+        Gmail-Adresse — sie steht nicht im Absender, sondern nur dort, wo die Antwort hingeht. Für die meisten ist
+        genau das gemeint, wenn sie „mit meiner Adresse verschicken“ sagen, und es funktioniert ohne jede
+        technische Einrichtung.
+      </p>
+
+      <label className="block text-xs text-textMuted mb-1.5">Absenderadresse (nur mit verifizierter Domain)</label>
+      <input className="input mb-1" value={absender} onChange={(e) => setAbsender(e.target.value)}
+        placeholder="z. B. info@deine-firma.de" />
+      <p className="text-[11px] text-textMuted mb-5">
+        Was im Absender steht. <strong className="text-textMain">Achtung:</strong> Die Domain dieser Adresse muss
+        beim Mailversand (Resend) hinterlegt und per DNS bestätigt sein. Trägst du hier eine beliebige Adresse
+        ein, lehnt der Versand ab — und dann geht <strong>gar keine</strong> Mail dieser Organisation mehr raus,
+        auch keine Termin-Benachrichtigung. Im Zweifel leer lassen und nur die Antwortadresse oben setzen.
+      </p>
+
       <p className="text-[11px] text-textMuted mb-3">
         Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl. Platzhalter werden beim Verschicken ersetzt:
         <strong> {"{{name}}"}</strong>, <strong>{"{{firma}}"}</strong>, <strong>{"{{notiz}}"}</strong> (die

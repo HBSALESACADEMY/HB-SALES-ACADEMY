@@ -41,7 +41,8 @@ export default async function handler(req, res) {
     if (!kontakt) return res.status(404).json({ error: "Kontakt nicht gefunden." });
     if (!gueltigeAdresse(kontakt.email)) return res.status(400).json({ error: "Die Adresse des Kontakts ist ungültig." });
 
-    const { data: org } = await admin.from("organizations").select("name").eq("id", orgId).maybeSingle();
+    const { data: org } = await admin.from("organizations")
+      .select("name, email_absender, email_antwort_an").eq("id", orgId).maybeSingle();
 
     // Zeilenumbrüche werden zu Absätzen: der Text wird in einem Textfeld
     // geschrieben, und dort erwartet niemand, HTML tippen zu müssen.
@@ -49,12 +50,27 @@ export default async function handler(req, res) {
       `<p>${absatz.replace(/\n/g, "<br/>").replace(/</g, "&lt;")}</p>`
     ).join("");
 
-    await sendEmail({
+    const versand = await sendEmail({
       to: kontakt.email,
       subject: String(betreff).trim(),
       html,
       fromName: org?.name || "HB Sales Academy",
+      fromEmail: org?.email_absender || null,
+      // Damit die Antwort des Kontakts bei der Organisation ankommt und
+      // nicht in einem Postfach, das niemand liest.
+      replyTo: org?.email_antwort_an || null,
     });
+    // Ohne diese Prüfung stünde "verschickt" auch dann da, wenn Resend die
+    // Mail abgelehnt hat — etwa weil die Absenderdomain nicht verifiziert
+    // ist. Genau dann fasst niemand nach, weil scheinbar alles lief.
+    if (versand?.error) {
+      return res.status(502).json({
+        error: "Der Mailversand wurde abgelehnt. Prüfe die Absenderadresse der Organisation — sie muss bei Resend verifiziert sein.",
+      });
+    }
+    if (versand?.skipped) {
+      return res.status(503).json({ error: "Für diese Academy ist kein Mailversand eingerichtet (RESEND_API_KEY fehlt)." });
+    }
 
     // Erst nach dem erfolgreichen Versand vermerken. Andersherum stünde
     // "verschickt" bei einer Mail, die nie ankam — und niemand würde je
