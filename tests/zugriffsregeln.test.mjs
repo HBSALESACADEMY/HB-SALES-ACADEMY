@@ -193,3 +193,45 @@ test("Wer eigene Zeilen sehen darf, darf sie auch ändern und löschen", () => {
       `Eine Regel für eigene Zeilen prüft zusätzlich die Organisation: ${r.slice(0, 90)}`);
   });
 });
+
+// Die häufigste Fehlerursache in diesem Projekt: Supabase WIRFT nicht,
+// es gibt den Fehler als Feld zurück. Wer ihn nicht abfragt, sieht eine
+// abgelehnte Änderung als Erfolg — die Seite meldet nichts, und beim
+// nächsten Laden ist die Änderung einfach weg. Genau so sind hier ein
+// halbes Dutzend Fehler entstanden, die jedes Mal erst im Betrieb
+// aufgefallen sind.
+//
+// Schreibende Aufrufe müssen deshalb entweder über die geprüften Helfer
+// laufen (aendereGeprueft/loescheGeprueft) oder ihren Fehler selbst
+// auswerten.
+test("Kein schreibender Datenbankaufruf verschluckt seinen Fehler", () => {
+  const ordner = new URL("../pages/", import.meta.url);
+  // Nur die Seiten, nicht die API-Routen. In einer Route geht das Ergebnis
+  // als Antwort an den Aufrufer zurück, und manche Schreibvorgänge dort
+  // sind bewusst nebenläufig (eine fehlgeschlagene Meldung darf einen
+  // Termin nicht rückgängig machen). Im Browser dagegen ist ein
+  // verschluckter Fehler immer falsch: die Person sieht ihre Änderung auf
+  // dem Bildschirm und beim nächsten Laden ist sie weg.
+  const dateien = readdirSync(ordner, { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js") && !n.startsWith("api/"));
+
+  const ungeprueft = [];
+  for (const name of dateien) {
+    const quelle = readFileSync(new URL(name, ordner), "utf8");
+    const zeilen = quelle.split("\n");
+    zeilen.forEach((zeile, i) => {
+      // Schreibende Aufrufe im Browser-Teil der Seiten.
+      if (!/\.(insert|update|delete|upsert)\(/.test(zeile)) return;
+      if (!/supabase\.from\(/.test(zeile) && !/from\("[a-z_]+"\)/.test(zeile)) return;
+
+      // Der Aufruf und die zwei Zeilen davor und danach — der Fehler wird
+      // oft eine Zeile weiter ausgewertet.
+      const umfeld = zeilen.slice(Math.max(0, i - 3), i + 4).join("\n");
+      const geprueft = /aendereGeprueft|loescheGeprueft|error|Fehler|catch/i.test(umfeld);
+      if (!geprueft) ungeprueft.push(`${name}:${i + 1}`);
+    });
+  }
+
+  assert.deepEqual(ungeprueft, [],
+    `Diese Schreibvorgänge prüfen ihr Ergebnis nicht — eine abgelehnte Änderung sieht dort aus wie ein Erfolg: ${ungeprueft.join(", ")}`);
+});

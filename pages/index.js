@@ -10,6 +10,7 @@ import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet } from "../lib/apiClient";
 import { aendereGeprueft } from "../lib/loeschen";
+import { meldeFehler } from "../lib/errorBus";
 import { deutscheZeit } from "../lib/terminzeit";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import { feldFarbe } from "../lib/diagrammFarben";
@@ -111,7 +112,12 @@ export default function Dashboard() {
   async function respondFriendRequest(id, status) {
     setFriendReqBusyId(id);
     const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from("friendships").update({ status }).eq("id", id);
+    // Sichtbar prüfen: eine abgelehnte Änderung sähe sonst aus wie eine
+    // angenommene Anfrage, und beim nächsten Laden stünde sie wieder da.
+    const freundFehler = await aendereGeprueft(
+      supabase.from("friendships").update({ status }).eq("id", id),
+      "Die Anfrage konnte nicht beantwortet werden.");
+    if (freundFehler) meldeFehler(freundFehler);
     if (session) await loadPendingFriendRequests(session.user.id);
     setFriendReqBusyId(null);
   }
@@ -123,7 +129,10 @@ export default function Dashboard() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
         patchCachedProfile({ dashboard_prefs: next });
-        await supabase.from("profiles").update({ dashboard_prefs: next }).eq("id", session.user.id);
+        const fehlerA = await aendereGeprueft(
+          supabase.from("profiles").update({ dashboard_prefs: next }).eq("id", session.user.id),
+          "Die Auswahl konnte nicht gespeichert werden — beim nächsten Laden wäre sie weg.");
+        if (fehlerA) meldeFehler(fehlerA);
       })();
       return next;
     });
@@ -140,7 +149,10 @@ export default function Dashboard() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
         patchCachedProfile({ dashboard_prefs: next });
-        await supabase.from("profiles").update({ dashboard_prefs: next }).eq("id", session.user.id);
+        const fehlerB = await aendereGeprueft(
+          supabase.from("profiles").update({ dashboard_prefs: next }).eq("id", session.user.id),
+          "Die Auswahl konnte nicht gespeichert werden — beim nächsten Laden wäre sie weg.");
+        if (fehlerB) meldeFehler(fehlerB);
       })();
       return next;
     });
@@ -162,7 +174,11 @@ export default function Dashboard() {
   async function dismissOnboarding() {
     setOnboarding(null);
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await supabase.from("profiles").update({ onboarding_dismissed: true }).eq("id", session.user.id);
+    // Unkritisch: schlägt es fehl, erscheint die Startliste erneut.
+    if (session) {
+      const { error } = await supabase.from("profiles").update({ onboarding_dismissed: true }).eq("id", session.user.id);
+      if (error) console.warn("Startliste nicht ausgeblendet:", error.message);
+    }
   }
 
   useEffect(() => {
@@ -234,10 +250,17 @@ export default function Dashboard() {
       });
 
       if (!me?.onboarding_dismissed) {
+        // Der erste Tag entscheidet, ob jemand in Woche zwei noch dabei
+        // ist. Deshalb steht hier nicht nur das Lernen, sondern auch der
+        // erste Anruf — für eine Vertriebsperson ist das der eigentliche
+        // Anfang.
+        const { data: ersterTag } = await supabase.from("call_log_days")
+          .select("log_date").eq("user_id", uid).limit(1);
         const steps = [
           { key: "profile", label: "Profil ausfüllen (Foto/Bio)", done: !!(me?.avatar_url || me?.bio), route: "/profile" },
           { key: "course", label: "Ersten Kurs starten", done: (qr || []).length > 0, route: "/courses" },
           { key: "roleplay", label: "Erstes Rollenspiel üben", done: (rp || []).length > 0, route: "/roleplay" },
+          { key: "call", label: "Ersten Anruf erfassen", done: (ersterTag || []).length > 0, route: "/call-tracker" },
         ];
         if (steps.some((s) => !s.done)) setOnboarding(steps);
       }

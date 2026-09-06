@@ -3,12 +3,15 @@ import Layout from "../../components/Layout";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
 import { ABSTAND } from "../../lib/autoRefresh";
-import { apiPost } from "../../lib/apiClient";
+import { apiGet, apiPost } from "../../lib/apiClient";
+import { fehlendeMigrationen, zustandsText } from "../../lib/schemaErwartung";
 
 // Zeigt den zuletzt geprüften Systemzustand. Die Prüfung selbst läuft
 // serverseitig (pages/api/cron/health-check.js) und meldet Störungen per
 // Telegram — diese Seite ist zum Nachschauen, nicht die Überwachung selbst.
 export default function SystemStatus() {
+  const [schema, setSchema] = useState([]);
+  const [schemaBusy, setSchemaBusy] = useState(false);
   const [erlaubt, setErlaubt] = useState(true);
   const [laedt, setLaedt] = useState(true);
   const [stand, setStand] = useState(null);
@@ -90,11 +93,69 @@ export default function SystemStatus() {
   // etwa — sie stehen schlicht nicht in den Daten.
   const detailsFehlen = gestoert.length > 0 && gestoert.every((p) => !p.folge);
 
+  const fehlend = fehlendeMigrationen(schema);
+
+  async function pruefeSchema() {
+    setSchemaBusy(true);
+    try {
+      const { ergebnisse } = await apiGet("/api/admin/schema-check");
+      setSchema(ergebnisse || []);
+    } catch (e) {
+      setSchema([]);
+    }
+    setSchemaBusy(false);
+  }
+
+  // Beim Öffnen der Seite gleich prüfen: wer hierherkommt, sucht einen
+  // Fehler, und das ist die erste Frage.
+  useEffect(() => { pruefeSchema(); }, []);
+
   return (
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Systemstatus</h1>
       <div className="brand-stripe w-16 mb-4" />
       <AdminTabs />
+
+      {/* Zuerst die Frage, die im Betrieb die meisten Rätsel verursacht
+          hat: Ist die Datenbank überhaupt auf dem Stand, den die Anwendung
+          erwartet? Eine fehlende Migration sieht sonst aus wie ein Fehler im
+          Programm — und dann sucht man an der falschen Stelle. */}
+      <div className="card mb-4">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="font-semibold text-textMain text-sm">Datenbank-Stand</span>
+          <button onClick={pruefeSchema} disabled={schemaBusy} className="btn-ghost text-xs ml-auto disabled:opacity-40">
+            {schemaBusy ? "Prüft…" : "Migrationen prüfen"}
+          </button>
+        </div>
+        <p className={`text-xs ${fehlend.length ? "text-coral" : "text-textMuted"}`}>
+          {zustandsText(schema)}
+        </p>
+
+        {fehlend.length > 0 && (
+          <div className="flex flex-col gap-2 mt-3">
+            {fehlend.map((f) => (
+              <div key={f.migration} className="rounded-xl border border-coral/40 px-3 py-2">
+                <div className="text-sm text-textMain">
+                  Migration {f.migration} — {f.zweck}
+                </div>
+                <div className="text-[11px] text-textMuted">
+                  Es fehlt: {f.fehlt.join(", ")} · Datei: supabase/migration_{f.migration}_*.sql
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-textMuted">
+              Solange eine Migration fehlt, sieht der betroffene Teil der Academy kaputt aus, obwohl am Programm
+              nichts falsch ist. Die Dateien liegen im Ordner <strong>supabase/</strong> und werden im
+              SQL-Editor von Supabase ausgeführt.
+            </p>
+          </div>
+        )}
+
+        <p className="text-[11px] text-textMuted mt-2">
+          Geprüft werden Tabellen und Spalten. Zugriffsregeln und Funktionen lassen sich von aussen nicht
+          abfragen — eine Migration kann also hier grün sein und trotzdem nur halb eingespielt.
+        </p>
+      </div>
 
       <div className="card mb-4 flex items-center gap-2 flex-wrap">
         <button onClick={() => pruefen(false)} disabled={!!busy} className="btn text-xs disabled:opacity-40">

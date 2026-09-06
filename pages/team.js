@@ -111,7 +111,10 @@ export default function Team() {
     // verschwindet damit (gleiches Muster wie bei der Community).
     // Fehlt die Spalte (migration_87), schlägt nur dieses Update fehl — der
     // Rest der Seite darf davon nichts merken.
-    await supabase.from("profiles").update({ last_seen_team_goals_at: new Date().toISOString() }).eq("id", session.user.id);
+    const { error: gesehenFehler } = await supabase.from("profiles")
+      .update({ last_seen_team_goals_at: new Date().toISOString() }).eq("id", session.user.id);
+    // Unkritisch: dann gilt ein Ziel eben noch einmal als neu.
+    if (gesehenFehler) console.warn("Zeitpunkt „Ziele gesehen“ nicht gespeichert:", gesehenFehler.message);
 
     setLoading(false);
   }

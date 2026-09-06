@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 import { resolveObjectionCategories } from "../../lib/objectionCategories";
 import { fasseZusammen, schluesselFuer } from "../../lib/grundVorschlag";
-import { loescheGeprueft } from "../../lib/loeschen";
+import { aendereGeprueft, loescheGeprueft } from "../../lib/loeschen";
 
 const EMPTY_DRAFT = { cat: "", q_pro: "", a_pro: "", q_ent: "", a_ent: "", tip: "" };
 
@@ -107,7 +107,12 @@ export default function ObjectionsAdmin() {
     setVorschlagBusy(gruppe.form);
     // Abgelehnte werden nicht gelöscht — sonst taucht derselbe Vorschlag
     // nächste Woche wieder auf, und man entscheidet dieselbe Frage erneut.
-    await supabase.from("grund_vorschlaege").update({ status: "abgelehnt" }).in("id", gruppe.ids);
+    // Ohne Prüfung taucht ein abgelehnter Vorschlag nächste Woche wieder
+    // auf, und man entscheidet dieselbe Frage erneut.
+    const ablehnFehler = await aendereGeprueft(
+      supabase.from("grund_vorschlaege").update({ status: "abgelehnt" }).in("id", gruppe.ids),
+      "Der Vorschlag konnte nicht abgelehnt werden.");
+    if (ablehnFehler) { setError(ablehnFehler); return; }
     setVorschlaege((prev) => prev.filter((g) => g.form !== gruppe.form));
     setVorschlagBusy(null);
   }

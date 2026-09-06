@@ -82,6 +82,7 @@ export default function EmailMarketing() {
       // ausgerechnet bei den Kontakten, die man selbst erfasst hat.
       supabase.from("email_kontakte")
         .select("*, erfasser:user_id(full_name), versender:verschickt_von(full_name)")
+        .is("geloescht_am", null)
         .order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
     ]);
@@ -212,10 +213,12 @@ export default function EmailMarketing() {
   // Löschen ist endgültig und betrifft die Arbeit einer anderen Person —
   // deshalb wird der Name in der Rückfrage genannt.
   async function loesche(k) {
-    if (!confirm(`Kontakt „${k.name}" wirklich löschen? Er wurde von ${nameVon(k.user_id, k.erfasser?.full_name)} erfasst und ist danach weg.`)) return;
+    if (!confirm(`Kontakt „${k.name}" in den Papierkorb legen? Er wurde von ${nameVon(k.user_id, k.erfasser?.full_name)} erfasst.`)) return;
     setKontakte((prev) => prev.filter((x) => x.id !== k.id));
-    const err = await loescheGeprueft(
-      supabase.from("email_kontakte").delete().eq("id", k.id),
+    // Papierkorb statt endgültig (migration_145) — der eine Fehlklick soll
+    // nicht die Arbeit eines anderen vernichten.
+    const err = await aendereGeprueft(
+      supabase.from("email_kontakte").update({ geloescht_am: new Date().toISOString() }).eq("id", k.id),
       "Diesen Kontakt darf nur die Leitung der Organisation löschen."
     );
     if (err) { setFehler(err); laden(); }

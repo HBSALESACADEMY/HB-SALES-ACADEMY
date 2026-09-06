@@ -181,17 +181,21 @@ export default function Messages() {
     const offen = conversations.filter((c) => c.unread > 0);
     if (!offen.length || !selfId) return;
     const jetzt = new Date().toISOString();
-    await supabase.from("conversation_reads").upsert(
+    // Unkritisch: schlägt es fehl, steht die Nachricht wieder als
+    // ungelesen da. Trotzdem festgehalten statt verschluckt.
+    const { error: leseFehlerA } = await supabase.from("conversation_reads").upsert(
       offen.map((c) => ({ user_id: selfId, target_id: c.id, is_group: c.type === "group", last_read_at: jetzt })),
       { onConflict: "user_id,target_id,is_group" }
     );
+    if (leseFehlerA) console.warn("Gelesen-Stand nicht gespeichert:", leseFehlerA.message);
     setConversations((prev) => prev.map((c) => ({ ...c, unread: 0 })));
   }
 
   async function markRead(contact, uid) {
-    await supabase.from("conversation_reads").upsert({
+    const { error: leseFehlerB } = await supabase.from("conversation_reads").upsert({
       user_id: uid, target_id: contact.id, is_group: contact.type === "group", last_read_at: new Date().toISOString(),
     }, { onConflict: "user_id,target_id,is_group" });
+    if (leseFehlerB) console.warn("Gelesen-Stand nicht gespeichert:", leseFehlerB.message);
     setConversations((prev) => prev.map((c) => (c.id === contact.id && c.type === contact.type) ? { ...c, unread: 0 } : c));
   }
 

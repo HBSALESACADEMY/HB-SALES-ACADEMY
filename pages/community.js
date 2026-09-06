@@ -5,6 +5,7 @@ import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
+import { meldeFehler } from "../lib/errorBus";
 import { openProfile } from "../lib/profileModalBus";
 import { validatePostAttachment } from "../lib/uploadValidation";
 import { getActiveOrgId } from "../lib/activeOrg";
@@ -132,7 +133,11 @@ export default function Community() {
     if (mentions?.length) {
       // Direkt als gelesen markieren, sobald sie geladen/angezeigt werden —
       // dasselbe simple "beim Betreten gesehen"-Muster wie last_seen_community_at.
-      await supabase.from("community_notifications").update({ read: true }).eq("user_id", session.user.id).eq("read", false);
+      const { error: leseFehler } = await supabase.from("community_notifications")
+        .update({ read: true }).eq("user_id", session.user.id).eq("read", false);
+      // Unkritisch: schlägt es fehl, steht der Hinweis beim nächsten Mal
+      // wieder da. Trotzdem festgehalten statt verschluckt.
+      if (leseFehler) console.warn("Benachrichtigungen nicht als gelesen markiert:", leseFehler.message);
     }
 
     setFriendIds(new Set((friendships || []).map((f) => f.requester_id === session.user.id ? f.addressee_id : f.requester_id)));
@@ -188,7 +193,9 @@ export default function Community() {
     setAllProfiles(profiles || []);
 
     const seenAt = new Date().toISOString();
-    await supabase.from("profiles").update({ last_seen_community_at: seenAt }).eq("id", session.user.id);
+    const { error: gesehenFehler } = await supabase.from("profiles")
+      .update({ last_seen_community_at: seenAt }).eq("id", session.user.id);
+    if (gesehenFehler) console.warn("Zeitpunkt „zuletzt gesehen“ nicht gespeichert:", gesehenFehler.message);
     // Ohne dies bleibt der veraltete Zeitstempel im Modul-Level-Cache von
     // Layout.js hängen (siehe cachedProfile dort) — die Badge-Berechnung
     // würde dann nach dem Verlassen dieser Seite weiterhin mit dem alten
@@ -444,16 +451,22 @@ export default function Community() {
 
     const mentionedIds = extractMentionedIds(newPost);
     if (mentionedIds.length) {
-      await supabase.from("community_notifications").insert(
+      const { error: erwaehntFehler } = await supabase.from("community_notifications").insert(
         mentionedIds.map((uid) => ({ user_id: uid, actor_id: session.user.id, type: "mention_post", post_id: newRow.id }))
       );
+      // Der Beitrag steht, aber die Erwähnten erfahren nichts davon — das
+      // muss man sehen, sonst wartet jemand auf eine Antwort, die nie kommt.
+      if (erwaehntFehler) meldeFehler("Der Beitrag wurde gespeichert, aber die erwähnten Personen konnten nicht benachrichtigt werden.", erwaehntFehler);
     }
 
     const pollLabels = newPollOptions.map((o) => o.trim()).filter(Boolean);
     if (showPollForm && pollLabels.length >= 2) {
-      await supabase.from("community_poll_options").insert(
+      const { error: umfrageFehler } = await supabase.from("community_poll_options").insert(
         pollLabels.map((label, i) => ({ post_id: newRow.id, label, position: i }))
       );
+      // Ohne Antwortmöglichkeiten ist die Umfrage nur ein Beitrag mit einer
+      // Frage — und niemand kann abstimmen.
+      if (umfrageFehler) meldeFehler("Die Umfrage wurde ohne Antwortmöglichkeiten gespeichert.", umfrageFehler);
     }
 
     // Erst nach bestätigtem Speichern leeren — sonst geht ein fehlgeschlagener
@@ -535,9 +548,10 @@ export default function Community() {
 
     const mentionedIds = extractMentionedIds(text.trim());
     if (mentionedIds.length) {
-      await supabase.from("community_notifications").insert(
+      const { error: erwaehntKommentar } = await supabase.from("community_notifications").insert(
         mentionedIds.map((uid) => ({ user_id: uid, actor_id: session.user.id, type: "mention_comment", post_id: postId, comment_id: newComment.id }))
       );
+      if (erwaehntKommentar) meldeFehler("Der Kommentar steht, aber die erwähnten Personen konnten nicht benachrichtigt werden.", erwaehntKommentar);
     }
 
     // Erst nach bestätigtem Speichern leeren — sonst geht ein fehlgeschlagener

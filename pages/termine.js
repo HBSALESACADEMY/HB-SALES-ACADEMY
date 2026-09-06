@@ -119,7 +119,10 @@ export default function Termine() {
     // Team-Ansicht zeigen statt einer leeren "Meine"-Liste.
     if ((me?.role === "backend" || wantsTeamForDeepLink) && viewMode === "own") { setViewMode("team"); return; }
 
-    let query = supabase.from("leads").select("*").order("appointment_at", { ascending: true, nullsFirst: false });
+    // Gelöschtes taucht nirgends mehr auf — es liegt nur noch im
+    // Papierkorb (migration_145).
+    let query = supabase.from("leads").select("*").is("geloescht_am", null)
+      .order("appointment_at", { ascending: true, nullsFirst: false });
     if (!(canManage && viewMode === "team")) query = query.eq("created_by", session.user.id);
     const { data: leadRowsRaw, error: leadErr } = await query;
     if (leadErr) setError(leadErr.message);
@@ -282,14 +285,20 @@ export default function Termine() {
     // Löschen parallel, fände die Route den Termin womöglich schon nicht mehr
     // und die Meldung ginge ersatzlos verloren.
     await meldeTerminAenderung(lead.id, "geloescht", "Der Termin wurde gelöscht.");
-    const loeschFehler = await loescheGeprueft(supabase.from("leads").delete().eq("id", lead.id), "Diesen Termin darf nur löschen, wer ihn angelegt hat, oder ein Manager.");
+    // In den Papierkorb statt endgültig weg (migration_145): ein Fehlklick
+    // kostet sonst Arbeit, die niemand wiederherstellen kann — im
+    // kostenlosen Supabase-Tarif gibt es kein Backup für eine einzelne
+    // Zeile.
+    const loeschFehler = await aendereGeprueft(
+      supabase.from("leads").update({ geloescht_am: new Date().toISOString() }).eq("id", lead.id),
+      "Diesen Termin darf nur löschen, wer ihn angelegt hat, oder ein Manager.");
     const err = loeschFehler ? { message: loeschFehler } : null;
     if (err) { setError(err.message); setDeleting(false); return; }
     // Sonst bliebe die Aufnahme im Speicher liegen, nur der Datenbank-Eintrag
     // würde verschwinden (DSGVO: Löschung muss auch die Datei selbst treffen).
-    if (lead.recording_path) {
-      await supabase.storage.from("lead-recordings").remove([lead.recording_path]);
-    }
+    // Die Aufnahme bleibt vorerst liegen: solange der Termin im
+    // Papierkorb ist, soll er vollständig zurückholbar sein. Endgültig
+    // entfernt wird beides erst beim Leeren des Papierkorbs.
     setLeads((prev) => prev.filter((l) => l.id !== lead.id));
     setConfirmDelete(null);
     setDeleting(false);
