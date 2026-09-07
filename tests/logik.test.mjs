@@ -2169,3 +2169,36 @@ test("Vorlagen-Erfolg: gerade Verschicktes zählt noch nicht gegen die Vorlage",
   assert.equal(erfolg.find((e) => e.name === "Kurzinfo").quote, null);
   assert.equal(erfolg.length, 2);
 });
+
+test("Kein Hook steht hinter einem frühen Ausstieg", () => {
+  // React verlangt, dass jeder Aufruf einer Komponente dieselben Hooks in
+  // derselben Reihenfolge ausführt. Steht ein useEffect hinter einem
+  // "if (...) return", wird er beim ersten Zeichnen übersprungen und danach
+  // nicht mehr — die Seite stürzt dann mit einer Ausnahme ab, die weder der
+  // Build noch ein Test der Rechenlogik sieht. Genau so ging der
+  // Systemstatus kaputt.
+  const ordner = new URL("../pages/", import.meta.url);
+  const dateien = readdirSync(ordner, { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js") && !n.startsWith("api/"));
+
+  const treffer = [];
+  for (const name of dateien) {
+    const zeilen = readFileSync(new URL(name, ordner), "utf8").split("\n");
+    let ausstieg = null;
+    zeilen.forEach((zeile, i) => {
+      // Jede neue Funktion auf oberster Ebene fängt von vorn an — sonst
+      // zählt ein Ausstieg aus einer Hilfsfunktion für alles danach mit.
+      if (/^(export default )?function \w+/.test(zeile) || /^const \w+ = \(/.test(zeile)) { ausstieg = null; return; }
+      // Ein Ausstieg auf oberster Ebene der Komponente: zwei Leerzeichen
+      // Einrückung, "if (...) return".
+      if (/^ {2}if \(.*\) return /.test(zeile)) { if (ausstieg === null) ausstieg = i + 1; return; }
+      // Danach darf kein Hook mehr kommen.
+      if (ausstieg !== null && /^ {2}(const \[[^\]]+\] = useState|useEffect\(|const \w+ = useMemo\(|const \w+ = useRef\()/.test(zeile)) {
+        treffer.push(`${name}:${i + 1} (nach Ausstieg in Zeile ${ausstieg})`);
+      }
+    });
+  }
+
+  assert.deepEqual(treffer, [],
+    `Diese Hooks stehen hinter einem frühen return — die Seite stürzt beim zweiten Zeichnen ab: ${treffer.join(", ")}`);
+});

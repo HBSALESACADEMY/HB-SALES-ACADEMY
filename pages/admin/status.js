@@ -76,6 +76,16 @@ export default function SystemStatus() {
     setBusy("");
   }
 
+  // Beim Öffnen gleich prüfen: wer hierherkommt, sucht einen Fehler, und
+  // das ist die erste Frage.
+  //
+  // MUSS vor den Ausstiegen unten stehen: React verlangt, dass jeder Aufruf
+  // dieser Komponente dieselben Hooks in derselben Reihenfolge ausführt.
+  // Stand der Effekt hinter "if (laedt) return", wurde er beim ersten
+  // Zeichnen übersprungen und danach nicht mehr — und die ganze Seite
+  // stürzte mit einer Ausnahme ab, die der Build nicht sehen kann.
+  useEffect(() => { pruefeSchema(); }, []);
+
   if (laedt) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
   if (!erlaubt) {
     return (
@@ -105,10 +115,6 @@ export default function SystemStatus() {
     }
     setSchemaBusy(false);
   }
-
-  // Beim Öffnen der Seite gleich prüfen: wer hierherkommt, sucht einen
-  // Fehler, und das ist die erste Frage.
-  useEffect(() => { pruefeSchema(); }, []);
 
   return (
     <Layout>
