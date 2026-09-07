@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import MailVorlagen from "./MailVorlagen";
+import { resolveLeitfaden } from "../lib/leitfaden";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { textColorForColors, blend } from "../lib/orgBranding";
@@ -95,6 +96,7 @@ const BEREICHE = [
   ["grunddaten", "Grunddaten"],
   ["erscheinung", "Erscheinungsbild"],
   ["calltracker", "Call Tracker"],
+  ["leitfaden", "Gesprächsablauf"],
   ["aufnahmen", "Aufnahmen"],
   ["mailvorlagen", "E-Mail"],
   ["benachrichtigungen", "Benachrichtigungen"],
@@ -161,6 +163,8 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
   // kann. Hochgeladen werden sie im E-Mail-Marketing — hier nur ausgewählt.
   const [orgAnhaenge, setOrgAnhaenge] = useState([]);
+  // Der Ablauf, der beim Gespräch mit der Entscheidung erscheint.
+  const [leitfaden, setLeitfaden] = useState(() => resolveLeitfaden(org));
   const [aufnahmeFrist, setAufnahmeFrist] = useState(
     Number.isFinite(org.aufnahme_frist_tage) ? String(org.aufnahme_frist_tage) : "30"
   );
@@ -287,6 +291,11 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       // 0 heisst ausdrücklich "keine Frist" — deshalb wird die Null hier
       // nicht wie ein leeres Feld behandelt.
       aufnahme_frist_tage: Math.max(0, Math.min(3650, parseInt(aufnahmeFrist, 10) || 0)),
+      // Schritte ohne Titel fliegen raus; eine leere Liste heisst
+      // ausdrücklich "kein Leitfaden" und wird so gespeichert.
+      gespraechsleitfaden: leitfaden.filter((s) => s.titel?.trim()).map((s) => ({
+        titel: s.titel.trim(), hinweis: (s.hinweis || "").trim() || null,
+      })),
       email_antwort_an: antwortAn.trim() || null,
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
@@ -387,6 +396,42 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           <p className="text-[11px] text-textMuted sm:col-span-3">Textfarbe wird automatisch für ausreichenden Kontrast auf Hintergrund/Fläche geprüft, sofern hier nichts eingetragen wird — die manuelle Auswahl hat aber immer Vorrang.</p>
         </div>
       )}
+
+      </Abschnitt>
+
+      <Abschnitt id="leitfaden" aktiv={bereich} titel="Gesprächsablauf" hinweis="Was im Call Tracker erscheint, sobald die Entscheidung am Telefon ist.">
+      <p className="text-[11px] text-textMuted mb-3">
+        Diese Schritte sieht ein Vertriebler in dem Moment, in dem der Entscheider drangeht — direkt erreicht
+        oder durchgestellt. Es ist eine Gedächtnisstütze im Gespräch, kein Schulungsmaterial: kurz halten. Wer
+        im Telefonat einen Absatz lesen muss, liest ihn nicht, sondern redet einfach los. Beim Vorzimmer
+        erscheint nichts — dort geht es nur ums Durchkommen.
+      </p>
+      {leitfaden.map((schritt, i) => (
+        <div key={i} className="flex items-center gap-2 mb-2">
+          <span className="w-6 h-6 rounded-full bg-surfaceRaised text-textMuted text-xs flex items-center justify-center flex-shrink-0">
+            {i + 1}
+          </span>
+          <input className="input !py-1.5 text-xs" placeholder="Schritt, z. B. Pitch" value={schritt.titel || ""}
+            onChange={(e) => setLeitfaden((l) => l.map((x, j) => (j === i ? { ...x, titel: e.target.value } : x)))} />
+          <input className="input !py-1.5 text-xs" placeholder="Kurzer Hinweis (optional)" value={schritt.hinweis || ""}
+            onChange={(e) => setLeitfaden((l) => l.map((x, j) => (j === i ? { ...x, hinweis: e.target.value } : x)))} />
+          <button onClick={() => setLeitfaden((l) => l.filter((_, j) => j !== i))}
+            className="btn-ghost text-xs text-coral flex-shrink-0">×</button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2 mb-5">
+        <button onClick={() => setLeitfaden((l) => [...l, { titel: "", hinweis: "" }])} className="btn-ghost text-xs">
+          + Schritt
+        </button>
+        {leitfaden.length > 0 && (
+          <button onClick={() => setLeitfaden([])} className="btn-ghost text-xs text-textMuted">
+            Leitfaden abschalten
+          </button>
+        )}
+        {leitfaden.length === 0 && (
+          <span className="text-[11px] text-textMuted">Abgeschaltet — im Call Tracker erscheint nichts.</span>
+        )}
+      </div>
 
       </Abschnitt>
 

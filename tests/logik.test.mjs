@@ -45,6 +45,7 @@ import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js
 import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
 import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
+import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
@@ -2230,4 +2231,24 @@ test("Aufnahmen: der Hinweis sagt, was gilt", () => {
   assert.match(fristText({}), /30 Tagen/);
   assert.match(fristText({ aufnahme_frist_tage: 7 }), /7 Tagen/);
   assert.match(fristText({ aufnahme_frist_tage: 0 }), /unbegrenzt/);
+});
+
+test("Gesprächsablauf: Voreinstellung, eigener Ablauf, abgeschaltet", () => {
+  // Ohne Einstellung gilt der Standard.
+  assert.deepEqual(resolveLeitfaden(null), STANDARD_LEITFADEN);
+  assert.deepEqual(resolveLeitfaden({}), STANDARD_LEITFADEN);
+  assert.equal(STANDARD_LEITFADEN.length, 4);
+  assert.deepEqual(STANDARD_LEITFADEN.map((s) => s.titel),
+    ["Pitch", "Bedarfsanalyse", "Terminierung", "Qualifizierung"]);
+
+  // Eine leere Liste heisst ausdrücklich "kein Leitfaden" — wer ihn
+  // abschaltet, darf nicht den Standard zurückbekommen.
+  assert.deepEqual(resolveLeitfaden({ gespraechsleitfaden: [] }), []);
+  assert.equal(hatLeitfaden({ gespraechsleitfaden: [] }), false);
+  assert.equal(hatLeitfaden({}), true);
+
+  // Schritte ohne Titel fallen weg: eine leere Zeile im Gespräch hilft
+  // niemandem.
+  const eigen = resolveLeitfaden({ gespraechsleitfaden: [{ titel: "Einstieg" }, { titel: "  " }, { hinweis: "ohne Titel" }] });
+  assert.deepEqual(eigen.map((s) => s.titel), ["Einstieg"]);
 });

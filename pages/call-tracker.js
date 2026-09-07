@@ -5,6 +5,7 @@ import InfoCard from "../components/InfoCard";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { EMAIL_STATUS } from "../lib/emailKontakt";
+import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -1083,7 +1084,7 @@ export default function CallTracker() {
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("gatekeeper"), color: feldFarbe("gatekeeper") }}>
                       Vorzimmer / Gatekeeper
                     </button>
-                    <button onClick={() => { bump("entscheider"); setStep("callResult"); }}
+                    <button onClick={() => { bump("entscheider"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("entscheider"), color: feldFarbe("entscheider") }}>
                       Geschäftsführer
                     </button>
@@ -1107,11 +1108,41 @@ export default function CallTracker() {
                       className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
                       ✉️ E-Mail gewünscht
                     </button>
-                    <button onClick={() => { bump("weitergeleitet"); setStep("callResult"); }}
+                    <button onClick={() => { bump("weitergeleitet"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("weitergeleitet"), color: feldFarbe("weitergeleitet") }}>
                       Ja, durchgestellt
                     </button>
                   </div>
+                </>
+              )}
+
+              {step === "leitfaden" && (
+                <>
+                  <div className="text-3xl mb-1">🎧</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">
+                    Du hast die Entscheidung am Telefon
+                  </div>
+                  <p className="text-textMuted text-xs mb-4">Dein Ablauf — nichts anklicken, einfach sprechen.</p>
+
+                  {/* Gross und kurz: wer im Gespräch einen Absatz lesen
+                      muss, liest ihn nicht, sondern redet einfach los. */}
+                  <div className="flex flex-col gap-2 mb-4 text-left">
+                    {resolveLeitfaden(org).map((schritt, i) => (
+                      <div key={schritt.titel} className="flex items-start gap-3 rounded-xl border border-line px-3 py-2.5">
+                        <span className="w-6 h-6 rounded-full bg-amber text-[var(--org-button-text,#fff)] text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold text-textMain">{schritt.titel}</div>
+                          {schritt.hinweis && <div className="text-xs text-textMuted">{schritt.hinweis}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button onClick={() => setStep("callResult")} className="btn text-sm">
+                    Gespräch beendet
+                  </button>
                 </>
               )}
 
