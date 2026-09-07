@@ -623,7 +623,14 @@ export default function Kalender() {
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => blaettern(-1)} className="btn-ghost text-xs">‹ Zurück</button>
-          <span className="font-display font-semibold text-textMain text-sm">{titelZeile}</span>
+          <span className="font-display font-semibold text-textMain text-sm flex items-center gap-2">
+            {titelZeile}
+            {/* In der Tagesansicht sieht man sonst nicht, ob man gerade auf
+                heute schaut oder drei Tage weitergeblättert hat. */}
+            {ansicht === "tag" && tagesSchluessel(anker) === heute && (
+              <span className="text-[10px] rounded-full bg-amber text-[var(--org-button-text,#fff)] px-2 py-px font-semibold">heute</span>
+            )}
+          </span>
           <button onClick={() => blaettern(1)} className="btn-ghost text-xs">Weiter ›</button>
           <button onClick={() => { setAnker(new Date()); setGewaehlterTag(null); }} className="btn-ghost text-xs text-textMuted">Heute</button>
         </div>
@@ -704,10 +711,23 @@ export default function Kalender() {
                        herauszufinden, worum es geht. */
                     <button key={tag.toISOString()}
                       onClick={() => setGewaehlterTag(gewaehlt ? null : tag)}
-                      className={`min-h-[5.5rem] rounded-lg border p-1 flex flex-col items-stretch text-left text-xs overflow-hidden
-                        ${gewaehlt ? "border-amber bg-amber/10" : istHeute ? "border-amber/40" : "border-line"}
+                      /* Heute hat eine eigene Fläche, nicht nur eine
+                         Randfarbe: im vollen Monatsraster geht ein dünner
+                         Rand zwischen dreissig anderen unter. Der GEWÄHLTE
+                         Tag bleibt trotzdem unterscheidbar — er bekommt den
+                         kräftigen Rahmen, heute die Fläche. */
+                      className={`min-h-[5.5rem] rounded-lg border p-1 flex flex-col items-stretch text-left text-xs overflow-hidden transition-colors
+                        ${gewaehlt ? "border-amber bg-amber/15" : istHeute ? "border-amber/50 bg-amber/[0.07]" : "border-line"}
                         ${anzahl ? "text-textMain" : "text-textMuted"} hover:border-amber/60`}>
-                      <span className={`px-0.5 ${istHeute ? "font-bold text-amber" : ""}`}>{tag.getDate()}</span>
+                      <span className="px-0.5 flex items-center gap-1">
+                        {istHeute ? (
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber text-[var(--org-button-text,#fff)] text-[11px] font-bold">
+                            {tag.getDate()}
+                          </span>
+                        ) : (
+                          tag.getDate()
+                        )}
+                      </span>
                       <span className="flex flex-col gap-0.5 mt-0.5 leading-tight">
                         {zeilenFuerTag(inhalt, meinStatus).slice(0, 3).map((z, k) => (
                           <span key={k} title={z.titel} className="truncate text-[10px] px-0.5">
@@ -731,9 +751,10 @@ export default function Kalender() {
                 const inhalt = eintraegeAm(tag);
                 const istHeute = tagesSchluessel(tag) === heute;
                 return (
-                  <div key={tag.toISOString()} className={`card !p-2.5 ${istHeute ? "border-amber/40" : ""}`}>
-                    <div className={`text-[11px] mb-1.5 ${istHeute ? "text-amber font-semibold" : "text-textMuted"}`}>
+                  <div key={tag.toISOString()} className={`card !p-2.5 ${istHeute ? "border-amber/50 bg-amber/[0.07]" : ""}`}>
+                    <div className={`text-[11px] mb-1.5 flex items-center gap-1.5 ${istHeute ? "text-amber font-semibold" : "text-textMuted"}`}>
                       {tag.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
+                      {istHeute && <span className="text-[10px] rounded-full bg-amber text-[var(--org-button-text,#fff)] px-1.5 py-px">heute</span>}
                     </div>
                     <TagesInhalt inhalt={inhalt} meinStatus={meinStatus} kompakt />
                   </div>
