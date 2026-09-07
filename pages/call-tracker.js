@@ -7,7 +7,6 @@ import { apiGet, apiPost } from "../lib/apiClient";
 import { EMAIL_STATUS } from "../lib/emailKontakt";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
-import { aendereGeprueft } from "../lib/loeschen";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
@@ -91,9 +90,6 @@ export default function CallTracker() {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFehler, setEmailFehler] = useState("");
   const [dublette, setDublette] = useState(null);
-  // Die Rückrufliste: wer nicht rangegangen ist, ist nicht verloren.
-  const [rueckrufe, setRueckrufe] = useState([]);
-  const [rueckrufEntwurf, setRueckrufEntwurf] = useState(null);
   // Von welchem Schritt aus das E-Mail-Formular geöffnet wurde. "Zurück"
   // sprang sonst immer zur Termin-Frage — auch wenn man vom Vorzimmer kam,
   // wo diese Frage gar nicht gestellt wurde.
@@ -240,12 +236,6 @@ export default function CallTracker() {
       // Angefangenen Anruf wieder aufnehmen. Ohne das blieb "Erreicht"
       // gezählt und das Ergebnis für immer offen — der graue Rest in der
       // Auswertung (siehe lib/callTracker.js).
-      // Offene Rückrufe: die Liste ist der halbe Zweck des Notierens.
-      const { data: offeneRueckrufe } = await supabase.from("rueckrufe")
-        .select("*").eq("user_id", session.user.id).is("erledigt_am", null)
-        .order("created_at", { ascending: false }).limit(50);
-      if (mounted) setRueckrufe(offeneRueckrufe || []);
-
       const offen = offenerSchritt(prefixJetzt);
       if (offen) { setStep(offen); setWiederaufgenommen(true); }
 
@@ -526,36 +516,6 @@ export default function CallTracker() {
       setEmailFehler(e?.message || "Der Kontakt konnte nicht übergeben werden.");
     }
     setEmailBusy(false);
-  }
-
-  async function merkeRueckruf() {
-    if (!userId) return;
-    const eintrag = {
-      user_id: userId,
-      organization_id: orgId || null,
-      name: rueckrufEntwurf?.name?.trim() || null,
-      telefon: rueckrufEntwurf?.telefon?.trim() || null,
-      notiz: rueckrufEntwurf?.notiz?.trim() || null,
-    };
-    const { data, error } = await supabase.from("rueckrufe").insert(eintrag).select().single();
-    if (error) {
-      // Nicht still verschlucken: der Anruf ist gezählt, die Nummer wäre
-      // aber weg — und genau die wollte man behalten.
-      meldeFehler("Der Rückruf konnte nicht gemerkt werden.", error);
-    } else {
-      setRueckrufe((prev) => [data, ...prev]);
-      showToast("Auf der Rückrufliste");
-    }
-    setRueckrufEntwurf(null);
-    zurueckZumStart();
-  }
-
-  async function erledigeRueckruf(r) {
-    setRueckrufe((prev) => prev.filter((x) => x.id !== r.id));
-    await aendereGeprueft(
-      supabase.from("rueckrufe").update({ erledigt_am: new Date().toISOString() }).eq("id", r.id),
-      "Der Rückruf konnte nicht abgehakt werden."
-    );
   }
 
   tageswechselRef.current = pruefeTageswechsel;
@@ -1025,36 +985,6 @@ export default function CallTracker() {
             </div>
           )}
 
-          {/* Die Rückrufliste steht im Zähl-Reiter, nicht in den
-              Statistiken: sie ist Arbeit für gleich, keine Auswertung. */}
-          {isToday && rueckrufe.length > 0 && step === "lead" && (
-            <div className="card mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="font-semibold text-textMain text-sm flex-1">
-                  Rückrufliste ({rueckrufe.length})
-                </span>
-                <span className="text-[11px] text-textMuted">Nummer ist da, Recherche gemacht</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {rueckrufe.slice(0, 8).map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 text-xs">
-                    <span className="text-textMain truncate flex-1 text-left">
-                      {r.name || "Ohne Namen"}
-                      {r.telefon ? <span className="text-textMuted"> · {r.telefon}</span> : null}
-                      {r.notiz ? <span className="text-textMuted"> · {r.notiz}</span> : null}
-                    </span>
-                    <button onClick={() => erledigeRueckruf(r)} className="btn-ghost text-[11px] flex-shrink-0">
-                      Erledigt
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {rueckrufe.length > 8 && (
-                <p className="text-[11px] text-textMuted mt-2">… und {rueckrufe.length - 8} weitere.</p>
-              )}
-            </div>
-          )}
-
           {isToday && xpHinweis && (
             <div className="card mb-3 border-teal/50 text-sm text-textMain">
               <span className="text-teal font-semibold">+{xpHinweis} XP</span> für deine Arbeit am Telefon.
@@ -1132,11 +1062,7 @@ export default function CallTracker() {
                   <div className="text-3xl mb-1">📞</div>
                   <div className="font-display font-semibold text-textMain text-lg mb-4">Wurde die Person erreicht?</div>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
-                    {/* "Nicht erreicht" wird sonst gezählt und vergessen.
-                        Der Rückruf am Nachmittag ist der billigste Termin
-                        überhaupt: die Nummer ist da, die Recherche gemacht. */}
-                    <button onClick={() => { bump("nicht"); setRueckrufEntwurf({ name: leadDraft.name || "", telefon: "", firma: "", notiz: "" }); setStep("rueckruf"); }}
-                      className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
+                    <button onClick={() => { bump("nicht"); showToast("Erfasst: Nicht erreicht"); zurueckZumStart(); }} className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
                     <button onClick={() => { bump("erreicht"); setStep("wen"); }} className="btn">Erreicht</button>
                   </div>
                 </>
@@ -1269,40 +1195,6 @@ export default function CallTracker() {
                     <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
                       {emailBusy ? "Wird übergeben…" : "An die Organisation übergeben"}
                     </button>
-                  </div>
-                </>
-              )}
-
-              {step === "rueckruf" && (
-                <>
-                  <div className="text-3xl mb-1">↩️</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Nochmal versuchen?</div>
-                  <p className="text-textMuted text-xs mb-4">
-                    Gezählt ist der Anruf schon. Wenn du die Nummer notierst, steht sie später in deiner
-                    Rückrufliste — sonst ist die Recherche von eben verloren.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-left">
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Name / Firma</label>
-                      <input className="input !py-2 text-sm" value={rueckrufEntwurf?.name || ""}
-                        onChange={(e) => setRueckrufEntwurf((d) => ({ ...d, name: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Telefon</label>
-                      <input className="input !py-2 text-sm" type="tel" value={rueckrufEntwurf?.telefon || ""}
-                        onChange={(e) => setRueckrufEntwurf((d) => ({ ...d, telefon: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div className="text-left mb-3">
-                    <label className="block text-xs text-textMuted mb-1">Notiz (optional)</label>
-                    <input className="input !py-2 text-sm" placeholder="z. B. „vor 10 Uhr erreichbar“"
-                      value={rueckrufEntwurf?.notiz || ""}
-                      onChange={(e) => setRueckrufEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
-                  </div>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => { setRueckrufEntwurf(null); showToast("Erfasst: Nicht erreicht"); zurueckZumStart(); }}
-                      className="btn-ghost text-sm">Nein, weiter</button>
-                    <button onClick={merkeRueckruf} className="btn text-sm">Auf die Rückrufliste</button>
                   </div>
                 </>
               )}
