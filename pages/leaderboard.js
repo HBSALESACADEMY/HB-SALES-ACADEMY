@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import FilterAuswahl from "../components/FilterAuswahl";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
@@ -104,11 +105,16 @@ export default function Leaderboard() {
 
       <div className="flex items-center justify-between gap-2 mb-5 flex-wrap">
         <div className="flex items-center gap-2">
-          {[["week", "Diese Woche"], ["month", "Dieser Monat"], ["all", "Allzeit"]].map(([key, label]) => (
-            <button key={key} onClick={() => setRange(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${range === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-              {label}
-            </button>
-          ))}
+          <FilterAuswahl
+            etikett="Zeitraum:"
+            wert={range}
+            onChange={setRange}
+            optionen={[
+              { wert: "week", label: "Diese Woche" },
+              { wert: "month", label: "Dieser Monat" },
+              { wert: "all", label: "Allzeit" },
+            ]}
+          />
         </div>
         <div className="flex items-center gap-2">
           {[["individual", "Einzeln"], ["teams", "Teams"]].map(([key, label]) => (

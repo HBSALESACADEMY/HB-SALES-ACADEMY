@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import FilterAuswahl from "../components/FilterAuswahl";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import AudioPlayer from "../components/AudioPlayer";
@@ -312,21 +313,28 @@ export default function Recordings() {
       </div>
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {[["all", "Alle"], ["positiv", "Positiv"], ["negativ", "Negativ"]].map(([key, l]) => (
-          <button key={key} onClick={() => setOutcomeFilter(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${outcomeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {l}
-          </button>
-        ))}
+        <FilterAuswahl
+          etikett="Ergebnis:"
+          wert={outcomeFilter}
+          onChange={setOutcomeFilter}
+          optionen={[
+            { wert: "all", label: "Alle" },
+            { wert: "positiv", label: "Positiv" },
+            { wert: "negativ", label: "Negativ" },
+          ]}
+        />
         {/* Wer hat hochgeladen — erst ab zwei Personen, davor wäre die
             Auswahl eine Schaltfläche ohne Wahl. */}
         {hochgeladenVon.length > 1 && (
-          <select className="input !w-auto !py-1.5 text-xs" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)}>
-            <option value="all">Alle Mitglieder ({recordings.length})</option>
-            {hochgeladenVon.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} ({p.anzahl})</option>
-            ))}
-          </select>
+          <FilterAuswahl
+            etikett="Von:"
+            wert={personFilter}
+            onChange={setPersonFilter}
+            optionen={[
+              { wert: "all", label: "Alle Mitglieder", anzahl: recordings.length },
+              ...hochgeladenVon.map((p) => ({ wert: p.id, label: p.name, anzahl: p.anzahl })),
+            ]}
+          />
         )}
         {/* Steht hier nur die eigene Person, liegt das fast immer an der
             Freigabe beim Hochladen — nicht daran, dass niemand aufnimmt. */}

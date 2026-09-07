@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
+import FilterAuswahl from "../components/FilterAuswahl";
 import Aufklapper from "../components/Aufklapper";
 import { supabase } from "../lib/supabaseClient";
 import { apiPost } from "../lib/apiClient";
@@ -33,6 +34,9 @@ export default function EmailMarketing() {
   const [nurOffene, setNurOffene] = useState(true);
   const [wer, setWer] = useState([]);
   const [ich, setIch] = useState(null);
+  // Führung sieht und macht alles; Vertriebler sehen ihre eigenen Kontakte
+  // und dürfen sie korrigieren, solange nichts rausgegangen ist.
+  const [leitung, setLeitung] = useState(false);
   // Für welchen Kontakt gerade ein Termin eingetragen wird.
   const [terminFuer, setTerminFuer] = useState(null);
   const [terminZeit, setTerminZeit] = useState("");
@@ -71,7 +75,11 @@ export default function EmailMarketing() {
 
     const { data: profil } = await supabase.from("profiles")
       .select("role, is_admin, is_platform_admin, organization_id").eq("id", session.user.id).maybeSingle();
-    if (!istFuehrungsrolle(profil)) { setDarf(false); setLaedt(false); return; }
+    // Auch Vertriebler dürfen hierher: sie sehen ihre eigenen Kontakte —
+    // dafür sorgen die Zugriffsregeln, nicht diese Seite. Wer einen Kontakt
+    // erarbeitet hat, soll sehen, was daraus wird.
+    const fuehrung = istFuehrungsrolle(profil);
+    setLeitung(fuehrung);
     setDarf(true);
 
     const orgId = getActiveOrgId(profil);
@@ -365,17 +373,6 @@ export default function EmailMarketing() {
     );
   }
 
-  if (darf === false) {
-    return (
-      <Layout>
-        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">E-Mail Marketing</h1>
-        <div className="brand-stripe w-16 mb-4" />
-        <div className="card text-sm text-textMuted">
-          Dieser Bereich ist der Leitung vorbehalten. Deine eigenen Kontakte siehst du im Call Tracker.
-        </div>
-      </Layout>
-    );
-  }
 
   return (
     <Layout>
@@ -407,16 +404,19 @@ export default function EmailMarketing() {
       </div>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {/* Der häufigste Weg, wie ein Kontakt stirbt: verschickt, keine
-            Antwort, niemand fasst nach. */}
-        <button onClick={() => { setNurNachfassen((v) => !v); setNurOffene(false); }}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${nurNachfassen ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-          Braucht Nachfassen ({kontakte.filter((k) => brauchtNachfassen(k)).length})
-        </button>
-        <button onClick={() => { setNurOffene((v) => !v); setNurNachfassen(false); }}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${nurOffene ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-          {nurOffene ? "Nur offene" : "Alle anzeigen"}
-        </button>
+        {/* Ein Filter statt zweier Knöpfe, die sich gegenseitig
+            ausschalten — welche Kombination gerade gilt, musste man sonst
+            aus zwei Zuständen zusammenreimen. */}
+        <FilterAuswahl
+          etikett="Zeigen:"
+          wert={nurNachfassen ? "nachfassen" : nurOffene ? "offen" : "alle"}
+          onChange={(v) => { setNurNachfassen(v === "nachfassen"); setNurOffene(v === "offen"); }}
+          optionen={[
+            { wert: "offen", label: "Nur offene", anzahl: kontakte.filter((k) => !istErledigt(k.status)).length },
+            { wert: "nachfassen", label: "Braucht Nachfassen", anzahl: kontakte.filter((k) => brauchtNachfassen(k)).length },
+            { wert: "alle", label: "Alle", anzahl: kontakte.length },
+          ]}
+        />
         {personen.length > 1 && (
           <>
             <span className="text-[11px] text-textMuted">Von:</span>
@@ -688,16 +688,27 @@ export default function EmailMarketing() {
                 </>
               ) : (
                 <>
-                  <button onClick={() => starteBearbeiten(k)} className="btn-ghost text-xs">Bearbeiten</button>
+                  {/* Nach dem Versand liegt die Mail beim Kunden — was dort
+                      stand, ändert niemand mehr rückwirkend. Für die Leitung
+                      bleibt es offen, sie muss Tippfehler korrigieren
+                      können. */}
+                  {(leitung || k.status === "offen") && (
+                    <button onClick={() => starteBearbeiten(k)} className="btn-ghost text-xs">Bearbeiten</button>
+                  )}
                   <button onClick={() => loesche(k)} className="btn-ghost text-xs text-coral">Löschen</button>
+                  {!leitung && k.status !== "offen" && (
+                    <span className="text-[11px] text-textMuted">
+                      Die Mail ist raus — Änderungen macht ab hier die Leitung.
+                    </span>
+                  )}
                 </>
               )}
-              {bearbeite !== k.id && k.status === "offen" && (
+              {leitung && bearbeite !== k.id && k.status === "offen" && (
                 <button onClick={() => setzeStatus(k, "verschickt")} className="btn text-xs">
                   ✓ Mail verschickt
                 </button>
               )}
-              {bearbeite !== k.id && k.status !== "offen" && k.status !== "termin" && terminFuer !== k.id && (
+              {leitung && bearbeite !== k.id && k.status !== "offen" && k.status !== "termin" && terminFuer !== k.id && (
                 <button onClick={() => starteTermin(k)} className="btn text-xs">
                   Termin daraus geworden
                 </button>
@@ -774,7 +785,7 @@ export default function EmailMarketing() {
                   )}
                 </div>
               )}
-              {bearbeite !== k.id && STATUS_REIHENFOLGE.filter((s) => s !== k.status && s !== "termin" && !(s === "offen" && k.status !== "offen")).map((s) => (
+              {leitung && bearbeite !== k.id && STATUS_REIHENFOLGE.filter((s) => s !== k.status && s !== "termin" && !(s === "offen" && k.status !== "offen")).map((s) => (
                 <button key={s} onClick={() => setzeStatus(k, s)} className="btn-ghost text-xs">
                   {EMAIL_STATUS[s]}
                 </button>

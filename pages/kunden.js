@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import FilterAuswahl from "../components/FilterAuswahl";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
@@ -224,11 +225,12 @@ export default function Kunden() {
       <div className="flex items-center justify-between gap-2 mb-5 flex-wrap">
         {canSeeTeam ? (
           <div className="flex items-center gap-2">
-            {[["own", "Meine"], ["team", "Alle im Team"]].map(([key, label]) => (
-              <button key={key} onClick={() => setViewMode(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${viewMode === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-                {label}
-              </button>
-            ))}
+            <FilterAuswahl
+              etikett="Zeigen:"
+              wert={viewMode}
+              onChange={setViewMode}
+              optionen={[{ wert: "own", label: "Meine" }, { wert: "team", label: "Alle im Team" }]}
+            />
           </div>
         ) : <div />}
         {outcomeTab === "kunde" && (

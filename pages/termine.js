@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../components/Layout";
+import FilterAuswahl from "../components/FilterAuswahl";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -910,11 +911,12 @@ export default function Termine() {
 
       {canSeeTeam && (
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          {[["own", "Meine"], ["team", "Alle im Team"]].map(([key, label]) => (
-            <button key={key} onClick={() => setViewMode(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${viewMode === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-              {label}
-            </button>
-          ))}
+          <FilterAuswahl
+            etikett="Termine:"
+            wert={viewMode}
+            onChange={setViewMode}
+            optionen={[{ wert: "own", label: "Meine" }, { wert: "team", label: "Alle im Team" }]}
+          />
           <button onClick={() => setShowEmailManager((v) => !v)} className="btn-ghost text-xs ml-auto">
             <Icon name="send" size={12} /> Benachrichtigungen
           </button>
@@ -985,11 +987,19 @@ export default function Termine() {
         {ansicht === "vergangen" && (
           <span className="text-[11px] text-textMuted">Alles, was vor dem heutigen Tag lag — das Jüngste zuerst.</span>
         )}
-        {ansicht === "liste" && [["tag", "Heute"], ["woche", "Diese Woche"], ["monat", "Dieser Monat"], ["alle", "Alle"]].map(([key, label]) => (
-          <button key={key} onClick={() => setTimeFilter(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${timeFilter === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {label}
-          </button>
-        ))}
+        {ansicht === "liste" && (
+          <FilterAuswahl
+            etikett="Zeitraum:"
+            wert={timeFilter}
+            onChange={setTimeFilter}
+            optionen={[
+              { wert: "tag", label: "Heute" },
+              { wert: "woche", label: "Diese Woche" },
+              { wert: "monat", label: "Dieser Monat" },
+              { wert: "alle", label: "Alle" },
+            ]}
+          />
+        )}
         <button onClick={() => setOnlyOpenTasks((v) => !v)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${onlyOpenTasks ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
           Nur mit offenen Aufgaben
         </button>

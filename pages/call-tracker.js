@@ -24,6 +24,7 @@ import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import TempoKarte from "../components/TempoKarte";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
+import FilterAuswahl from "../components/FilterAuswahl";
 import { stundenRaster, stundenText } from "../lib/tageszeit";
 import { downloadCsv } from "../lib/csv";
 import { resolveLeadFields, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
@@ -1712,12 +1713,15 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
   return (
     <>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {ZEITRAEUME.map(([key, label]) => (
-          <button key={key} onClick={() => onZeitraum(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {key === "quartal" ? quartalsName(berlinHeute()) : label}
-          </button>
-        ))}
+        <FilterAuswahl
+          etikett="Zeitraum:"
+          wert={zeitraum}
+          onChange={onZeitraum}
+          optionen={ZEITRAEUME.map(([key, label]) => ({
+            wert: key,
+            label: key === "quartal" ? quartalsName(berlinHeute()) : label,
+          }))}
+        />
       </div>
 
       {zeitraum === "eigen" && (

@@ -6,6 +6,7 @@ import Icon from "../components/Icon";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import TempoKarte from "../components/TempoKarte";
+import FilterAuswahl from "../components/FilterAuswahl";
 import { kursStand, kursDetails } from "../lib/kursstand";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
@@ -104,12 +105,15 @@ export default function AuswertungSeite() {
       </div>
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {ZEITRAEUME.map(([key, label]) => (
-          <button key={key} onClick={() => setZeitraum(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${zeitraum === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {key === "quartal" ? quartalsName(berlinHeute()) : label}
-          </button>
-        ))}
+        <FilterAuswahl
+          etikett="Zeitraum:"
+          wert={zeitraum}
+          onChange={setZeitraum}
+          optionen={ZEITRAEUME.map(([key, label]) => ({
+            wert: key,
+            label: key === "quartal" ? quartalsName(berlinHeute()) : label,
+          }))}
+        />
       </div>
 
       {zeitraum === "eigen" && (

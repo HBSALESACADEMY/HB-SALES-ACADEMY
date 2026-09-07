@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout, { getCachedOrg } from "../components/Layout";
 import InfoCard from "../components/InfoCard";
+import FilterAuswahl from "../components/FilterAuswahl";
 import { supabase } from "../lib/supabaseClient";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -178,12 +179,12 @@ export default function EinwandTrainer() {
       </div>
 
       <div className="flex items-center gap-2 mb-5 flex-wrap">
-        {[["all", "Alle"], ...categories.map((c) => [c.key, c.label])].map(([key, label]) => (
-          <button key={key} onClick={() => setActiveCat(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${activeCat === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {label}
-          </button>
-        ))}
+        <FilterAuswahl
+          etikett="Kategorie:"
+          wert={activeCat}
+          onChange={setActiveCat}
+          optionen={[{ wert: "all", label: "Alle" }, ...categories.map((c) => ({ wert: c.key, label: c.label }))]}
+        />
       </div>
 
       {!current ? (
