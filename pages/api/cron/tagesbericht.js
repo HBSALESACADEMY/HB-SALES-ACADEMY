@@ -2,6 +2,7 @@ import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { baueTagesbericht } from "../../../lib/tagesbericht";
 import { sendeAlarm } from "../../../lib/alarm";
 import { erinnereAnNachfassen } from "../../../lib/nachfassErinnerung";
+import { raeumeAufnahmenAuf } from "../../../lib/aufnahmenAufraeumen";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -52,7 +53,16 @@ export default async function handler(req, res) {
       console.error("Nachfass-Erinnerung fehlgeschlagen:", e.message);
     }
 
-    return res.status(200).json({ ok: true, nachfassen });
+    // Fällige Aufnahmen entfernen. Auch das darf den Bericht nicht
+    // nachträglich als gescheitert dastehen lassen.
+    let aufgeraeumt = { geloescht: 0 };
+    try {
+      aufgeraeumt = await raeumeAufnahmenAuf(admin);
+    } catch (e) {
+      console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
+    }
+
+    return res.status(200).json({ ok: true, nachfassen, aufgeraeumt });
   } catch (e) {
     console.error("Tagesbericht fehlgeschlagen:", e.message);
     await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);

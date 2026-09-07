@@ -95,6 +95,7 @@ const BEREICHE = [
   ["grunddaten", "Grunddaten"],
   ["erscheinung", "Erscheinungsbild"],
   ["calltracker", "Call Tracker"],
+  ["aufnahmen", "Aufnahmen"],
   ["mailvorlagen", "E-Mail"],
   ["benachrichtigungen", "Benachrichtigungen"],
   ["formular", "Termin-Formular"],
@@ -160,6 +161,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
   // kann. Hochgeladen werden sie im E-Mail-Marketing — hier nur ausgewählt.
   const [orgAnhaenge, setOrgAnhaenge] = useState([]);
+  const [aufnahmeFrist, setAufnahmeFrist] = useState(
+    Number.isFinite(org.aufnahme_frist_tage) ? String(org.aufnahme_frist_tage) : "30"
+  );
 
   useEffect(() => {
     (async () => {
@@ -280,6 +284,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       // Auswahl und liefert eine leere Mail.
       email_vorlagen: vorlagen.filter((v) => v.name?.trim() && v.text?.trim()),
       email_absender: absender.trim() || null,
+      // 0 heisst ausdrücklich "keine Frist" — deshalb wird die Null hier
+      // nicht wie ein leeres Feld behandelt.
+      aufnahme_frist_tage: Math.max(0, Math.min(3650, parseInt(aufnahmeFrist, 10) || 0)),
       email_antwort_an: antwortAn.trim() || null,
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
@@ -380,6 +387,20 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           <p className="text-[11px] text-textMuted sm:col-span-3">Textfarbe wird automatisch für ausreichenden Kontrast auf Hintergrund/Fläche geprüft, sofern hier nichts eingetragen wird — die manuelle Auswahl hat aber immer Vorrang.</p>
         </div>
       )}
+
+      </Abschnitt>
+
+      <Abschnitt id="aufnahmen" aktiv={bereich} titel="Aufnahmen" hinweis="Wie lange Gesprächsaufnahmen gespeichert bleiben.">
+      <label className="block text-xs text-textMuted mb-1.5">Aufbewahrung in Tagen</label>
+      <input className="input mb-1 !w-32" type="number" min="0" max="3650" value={aufnahmeFrist}
+        onChange={(e) => setAufnahmeFrist(e.target.value)} />
+      <p className="text-[11px] text-textMuted mb-5">
+        Nach dieser Zeit werden Aufnahmen samt Datei automatisch gelöscht — einmal täglich, ohne dass jemand
+        daran denken muss. <strong>30 Tage</strong> sind die Voreinstellung: Coaching passiert zeitnah oder gar
+        nicht, und danach ist eine Aufnahme kein Lernmaterial mehr, sondern nur noch ein Datenbestand.
+        Einzelne Aufnahmen lassen sich als Musterbeispiel davon ausnehmen. <strong>0</strong> schaltet die Frist
+        ab — dann wächst der Speicher unbegrenzt, und im kostenlosen Tarif ist bei 1 GB Schluss.
+      </p>
 
       </Abschnitt>
 

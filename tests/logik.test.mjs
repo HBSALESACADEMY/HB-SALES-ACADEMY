@@ -44,6 +44,7 @@ import { summiere, trichter, engpass, benchmark, impactAnalyse, empfehlungen } f
 import { meldungsGrund, sollMeldung, MELDENSWERT } from "../lib/terminMeldung.js";
 import { xpFuerTag, offeneXp, CALL_XP } from "../lib/callXp.js";
 import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
+import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
@@ -2201,4 +2202,32 @@ test("Kein Hook steht hinter einem frühen Ausstieg", () => {
 
   assert.deepEqual(treffer, [],
     `Diese Hooks stehen hinter einem frühen return — die Seite stürzt beim zweiten Zeichnen ab: ${treffer.join(", ")}`);
+});
+
+// --- Löschfrist für Aufnahmen ----------------------------------------------
+
+test("Aufnahmen: die Frist gilt, aber Musterbeispiele bleiben", () => {
+  const vorTagen = (n) => ({ created_at: new Date(Date.now() - n * 86400000).toISOString() });
+
+  assert.equal(fristTage({}), STANDARD_FRIST_TAGE);
+  assert.equal(fristTage({ aufnahme_frist_tage: 14 }), 14);
+  // Null heisst ausdrücklich "keine Frist" und darf nicht als fehlender
+  // Wert durchgehen — sonst löscht die Academy, wo jemand es abgeschaltet hat.
+  assert.equal(fristTage({ aufnahme_frist_tage: 0 }), 0);
+  assert.equal(verbleibendeTage(vorTagen(5), { aufnahme_frist_tage: 0 }), null);
+
+  assert.equal(verbleibendeTage(vorTagen(0), {}), 30);
+  assert.equal(verbleibendeTage(vorTagen(29), {}), 1);
+  assert.equal(istAbgelaufen(vorTagen(31), {}), true);
+  assert.equal(istAbgelaufen(vorTagen(10), {}), false);
+
+  // Ein Musterbeispiel bleibt, egal wie alt.
+  assert.equal(istAbgelaufen({ ...vorTagen(400), behalten: true }, {}), false);
+  assert.equal(verbleibendeTage({ ...vorTagen(400), behalten: true }, {}), null);
+});
+
+test("Aufnahmen: der Hinweis sagt, was gilt", () => {
+  assert.match(fristText({}), /30 Tagen/);
+  assert.match(fristText({ aufnahme_frist_tage: 7 }), /7 Tagen/);
+  assert.match(fristText({ aufnahme_frist_tage: 0 }), /unbegrenzt/);
 });

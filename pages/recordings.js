@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
+import { fristText, verbleibendeTage, fristTage } from "../lib/aufnahmeFrist";
+import { getActiveOrgId } from "../lib/activeOrg";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
 import AudioPlayer from "../components/AudioPlayer";
@@ -26,6 +28,9 @@ export default function Recordings() {
   const [visibility, setVisibility] = useState("private");
   const [outcome, setOutcome] = useState(null);
   const [file, setFile] = useState(null);
+  // Die Aufbewahrungsfrist der Organisation — sie steht vor dem Hochladen
+  // da, nicht erst wenn die Aufnahme weg ist.
+  const [orgFrist, setOrgFrist] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [playingId, setPlayingId] = useState(null);
@@ -62,6 +67,17 @@ export default function Recordings() {
     if (err) setError(err.message);
     setRecordings(data || []);
     setMyLeads(leadRows || []);
+
+    // Die Aufbewahrungsfrist der Organisation, in der gerade gearbeitet
+    // wird (migration_147).
+    const { data: meinProfil } = await supabase.from("profiles")
+      .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const orgId = getActiveOrgId(meinProfil);
+    if (orgId) {
+      const { data: org } = await supabase.from("organizations")
+        .select("aufnahme_frist_tage").eq("id", orgId).maybeSingle();
+      setOrgFrist(org || null);
+    }
 
     const otherIds = [...new Set((data || []).filter((r) => r.created_by !== session.user.id).map((r) => r.created_by))];
     if (otherIds.length) {
@@ -263,6 +279,13 @@ export default function Recordings() {
               Gewählt: {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB · {file.type || "ohne Typangabe"}
             </div>
           )}
+          {/* Vor dem Hochladen, nicht danach: wer weiss, dass die Aufnahme
+              eine Frist hat, kann sich entscheiden — hinterher wundert er
+              sich nur, warum sie weg ist. */}
+          <div className="text-[11px] text-textMuted rounded-lg border border-line px-3 py-2">
+            ℹ️ {fristText(orgFrist)}
+            {fristTage(orgFrist) > 0 && " Wichtige Beispiele lassen sich davon ausnehmen — dazu bei der Aufnahme auf „Behalten“ tippen."}
+          </div>
           <label className="btn-ghost text-xs cursor-pointer inline-flex items-center gap-1.5 w-fit">
             <Icon name="mic" size={12} /> {file ? file.name : "Audio-Datei wählen (max. 15 MB)"}
             {/* Die Endungen stehen mit dabei, weil iPhones bei "audio/*"
@@ -473,8 +496,39 @@ export default function Recordings() {
                 <div className="flex flex-col items-end flex-shrink-0">
                   <span className="text-[10.5px] text-textMuted">{STATUS_LABELS[r.status]}</span>
                   <span className="text-[10.5px] text-textMuted">{deutscheZeit(r.created_at)} Uhr</span>
+                  {/* Wie lange sie noch da ist. Ab einer Woche auffällig,
+                      damit man rechtzeitig entscheiden kann statt sich
+                      hinterher zu wundern. */}
+                  {(() => {
+                    const rest = verbleibendeTage(r, orgFrist);
+                    if (rest === null) {
+                      return r.behalten
+                        ? <span className="text-[10.5px] text-teal">bleibt dauerhaft</span>
+                        : null;
+                    }
+                    return (
+                      <span className={`text-[10.5px] ${rest <= 7 ? "text-amber" : "text-textMuted"}`}>
+                        {rest === 0 ? "wird heute gelöscht" : `noch ${rest} ${rest === 1 ? "Tag" : "Tage"}`}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
+
+              {isOwn && fristTage(orgFrist) > 0 && (
+                <button
+                  onClick={async () => {
+                    const neu = !r.behalten;
+                    setRecordings((prev) => prev.map((x) => (x.id === r.id ? { ...x, behalten: neu } : x)));
+                    const fehler = await aendereGeprueft(
+                      supabase.from("call_recordings").update({ behalten: neu }).eq("id", r.id),
+                      "Das konnte nicht gespeichert werden.");
+                    if (fehler) { setError(fehler); load(true); }
+                  }}
+                  className="btn-ghost text-[11px] mb-2">
+                  {r.behalten ? "★ Bleibt dauerhaft — Frist wieder anwenden" : "☆ Dauerhaft behalten"}
+                </button>
+              )}
 
               {r.status === "evaluated" && r.evaluation_summary && (
                 <div className="mb-2">
