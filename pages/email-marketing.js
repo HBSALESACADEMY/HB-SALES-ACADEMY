@@ -92,7 +92,9 @@ export default function EmailMarketing() {
         .select("*, erfasser:user_id(full_name), versender:verschickt_von(full_name)")
         .is("geloescht_am", null)
         .order("created_at", { ascending: false }).limit(1000),
-      supabase.from("profiles").select("id, full_name").eq("organization_id", orgId),
+      fuehrung
+        ? supabase.from("profiles").select("id, full_name").eq("organization_id", orgId)
+        : Promise.resolve({ data: [] }),
     ]);
     const { data: org } = await supabase.from("organizations").select("*").eq("id", orgId).maybeSingle();
     // Die Kennung wird zum Speichern der Vorlagen gebraucht.
@@ -417,7 +419,7 @@ export default function EmailMarketing() {
             { wert: "alle", label: "Alle", anzahl: kontakte.length },
           ]}
         />
-        {personen.length > 1 && (
+        {leitung && personen.length > 1 && (
           <>
             <span className="text-[11px] text-textMuted">Von:</span>
             <MehrfachAuswahl eintraege={personen} ausgewaehlt={wer} onChange={setWer} alleText="Alle Vertriebler" />
