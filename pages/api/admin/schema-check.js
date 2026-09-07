@@ -1,7 +1,7 @@
 import { requireUser } from "../../../lib/supabaseServer";
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { istFuehrungsrolle } from "../../../lib/rollen";
-import { ERWARTUNGEN } from "../../../lib/schemaErwartung";
+import { ERWARTUNGEN, WERT_ERWARTUNGEN } from "../../../lib/schemaErwartung";
 
 // Prüft, ob die Datenbank das kann, was die Anwendung von ihr erwartet.
 //
@@ -30,6 +30,24 @@ export default async function handler(req, res) {
       ergebnisse.push({ ...e, vorhanden: !error, meldung: error?.message || null });
     } catch (fehler) {
       ergebnisse.push({ ...e, vorhanden: false, meldung: fehler.message });
+    }
+  }
+
+  // Und die Migrationen, die keine Spalte anlegen, sondern einen Wert
+  // ändern. Für die gilt dasselbe: sie fehlen leise.
+  for (const w of WERT_ERWARTUNGEN) {
+    try {
+      let abfrage = admin.from(w.tabelle).select(w.spalte);
+      Object.entries(w.filter || {}).forEach(([feld, wert]) => { abfrage = abfrage.eq(feld, wert); });
+      const { data, error } = await abfrage.maybeSingle();
+      ergebnisse.push({
+        ...w,
+        // Kein Eintrag heisst: die Migration, die ihn anlegt, fehlt auch.
+        vorhanden: !error && !!data && data[w.spalte] === w.erwartet,
+        meldung: error?.message || null,
+      });
+    } catch (fehler) {
+      ergebnisse.push({ ...w, vorhanden: false, meldung: fehler.message });
     }
   }
 
