@@ -4,7 +4,7 @@ import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { sendEmail } from "../../lib/email";
 import { gueltigeAdresse } from "../../lib/emailKontakt";
-import { alsHtml } from "../../lib/marketingVorlage";
+import { alsHtml, fuelleVorlage, werteFuerKontakt } from "../../lib/marketingVorlage";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -89,9 +89,21 @@ export default async function handler(req, res) {
     // Der Standardschluss der Organisation kommt unter jede Mail: Signatur,
     // Anschrift, Abmeldehinweis. An einer Stelle gepflegt statt in jeder
     // Vorlage wiederholt (migration_143).
+    // Was im Entwurf noch an Platzhaltern steht, wird hier gefüllt.
+    //
+    // Wer im Textfeld selbst "{{vertriebler}}" tippt — oder eine Signatur
+    // hineinkopiert — hatte das sonst wörtlich in der Mail stehen: die
+    // Seite füllt nur beim Öffnen der Vorlage, danach nie wieder.
+    const werte = werteFuerKontakt(kontakt, {
+      vertriebler: profil?.full_name || "",
+      organisation: org?.name || "",
+    });
+    const gefuellterText = fuelleVorlage(String(text), werte);
+    const gefuellterBetreff = fuelleVorlage(String(betreff), werte);
+
     const mitSchluss = org?.email_signatur?.trim()
-      ? `${String(text).trim()}\n\n${org.email_signatur.trim()}`
-      : String(text);
+      ? `${gefuellterText.trim()}\n\n${fuelleVorlage(org.email_signatur, werte)}`
+      : gefuellterText;
     const html = alsHtml(mitSchluss);
 
     // An sich selbst: dieselbe Mail, dieselbe Vorlage, derselbe Absender —
@@ -101,7 +113,7 @@ export default async function handler(req, res) {
 
     const versand = await sendEmail({
       to: empfaenger,
-      subject: String(betreff).trim(),
+      subject: gefuellterBetreff.trim(),
       html,
       fromName: org?.name || "HB Sales Academy",
       fromEmail: org?.email_absender || null,
@@ -137,11 +149,14 @@ export default async function handler(req, res) {
       // Welche Vorlage benutzt wurde — Grundlage für die Frage, welche
       // Vorlage Termine bringt (migration_143).
       vorlage: vorlage || null,
-      // Was rausging, gehört zum Kontakt: beim Nachfassen weiss man sonst
-      // nicht mehr, was der Kunde bekommen hat.
-      notiz: kontakt.notiz
-        ? `${kontakt.notiz}\n\n— Mail vom ${new Date(jetzt).toLocaleDateString("de-DE")}: ${String(betreff).trim()}`
-        : `Mail vom ${new Date(jetzt).toLocaleDateString("de-DE")}: ${String(betreff).trim()}`,
+      // Der Betreff der letzten Mail — bewusst in einem eigenen Feld und
+      // NICHT in der Gesprächsnotiz.
+      //
+      // Vorher wuchs die Notiz mit jedem Versand ("— Mail vom 8.9.: Test"),
+      // und weil {{notiz}} in den Vorlagen steht, landete diese Historie in
+      // der nächsten Mail beim Kunden. Nach drei Versuchen stand sie dort
+      // dreimal.
+      letzter_betreff: String(betreff).trim(),
       erinnert_am: null,
     }).eq("id", kontakt.id);
 

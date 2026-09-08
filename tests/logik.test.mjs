@@ -2308,3 +2308,27 @@ test("Anrede: Frau Schmidt statt Maria Schmidt", () => {
   assert.equal(nachnameAus("Anna Maria von Schmidt"), "Schmidt");
   assert.equal(nachnameAus(""), "");
 });
+
+test("Platzhalter werden auch im fertigen Text noch gefüllt", () => {
+  // Wer im Textfeld selbst "{{vertriebler}}" tippt oder eine Signatur
+  // hineinkopiert, hatte das sonst wörtlich in der Mail stehen: die Seite
+  // füllt nur beim Öffnen der Vorlage, danach nie wieder. Deshalb füllt der
+  // Server vor dem Versand noch einmal.
+  const werte = werteFuerKontakt({ name: "Max Muster", anrede: "herr" },
+    { vertriebler: "Ernestine", organisation: "VolkWork" });
+  const vonHand = "Hallo {{anrede}} {{nachname}},\n\nText.\n\nMit freundlichen Grüßen\n{{vertriebler}}\n{{organisation}}";
+  const fertig = fuelleVorlage(vonHand, werte);
+  assert.ok(!fertig.includes("{{"), "Es darf kein Platzhalter übrig bleiben.");
+  assert.ok(fertig.includes("Hallo Herr Muster,"));
+  assert.ok(fertig.endsWith("Ernestine\nVolkWork"));
+});
+
+test("Die Versandhistorie steht nicht in der Gesprächsnotiz", () => {
+  // Sie wuchs dort mit jedem Versand — und weil {{notiz}} in den Vorlagen
+  // steht, landete sie in der nächsten Mail beim Kunden.
+  const route = readFileSync(new URL("../pages/api/marketing-mail.js", import.meta.url), "utf8");
+  const update = route.slice(route.indexOf('from("email_kontakte").update'), route.indexOf("}).eq(\"id\", kontakt.id)"));
+  assert.ok(!/notiz:/.test(update),
+    "Der Versand darf die Gesprächsnotiz nicht verändern — sie wird in Vorlagen eingesetzt.");
+  assert.match(update, /letzter_betreff:/);
+});

@@ -755,6 +755,14 @@ export default function EmailMarketing() {
                   )}
                 </div>
                 {k.notiz && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{k.notiz}</p>}
+                {/* Was verschickt wurde, getrennt von dem, was im Gespräch
+                    gesagt wurde — sonst wächst die Notiz mit jedem Versand
+                    und landet in der nächsten Mail. */}
+                {k.letzter_betreff && (
+                  <p className="text-[11px] text-textMuted mb-2">
+                    Zuletzt verschickt: „{k.letzter_betreff}"
+                  </p>
+                )}
               </>
             )}
 
