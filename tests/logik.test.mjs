@@ -2368,3 +2368,33 @@ test("Reiterleisten laufen über die gemeinsame Komponente", () => {
   assert.deepEqual(ohne, [],
     `Diese Seiten haben eigene Reiterleisten statt der gemeinsamen: ${ohne.join(", ")}`);
 });
+
+test("Die Seitenleiste gliedert nach Tätigkeit, nicht nach Restehaufen", () => {
+  // "Team" war vorher eine Gruppe mit siebzehn Punkten: Call Tracker,
+  // Termine, Kunden, Community, Auswertung — alles, was nirgends sonst
+  // hinpasste. Eine Gruppe, in der alles steht, sortiert nichts.
+  const quelle = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
+  const block = quelle.slice(quelle.indexOf("const NAV_GROUPS = {"), quelle.indexOf("};", quelle.indexOf("const NAV_GROUPS = {")));
+
+  const zuordnung = [...block.matchAll(/"?([\w-]+)"?:\s*"([^"]+)"/g)].map((m) => ({ key: m[1], gruppe: m[2] }));
+  const proGruppe = {};
+  zuordnung.forEach((z) => { proGruppe[z.gruppe] = (proGruppe[z.gruppe] || 0) + 1; });
+
+  // Der tägliche Arbeitsweg steht beisammen.
+  ["call-tracker", "termine", "follow-up", "kunden"].forEach((k) => {
+    assert.equal(zuordnung.find((z) => z.key === k)?.gruppe, "Verkaufen", `${k} gehört zum Arbeitstag`);
+  });
+  // Führungsstoff steht getrennt vom Alltag.
+  assert.equal(zuordnung.find((z) => z.key === "auswertung")?.gruppe, "Führung");
+
+  // Keine Gruppe sammelt mehr alles ein.
+  Object.entries(proGruppe).forEach(([gruppe, anzahl]) => {
+    assert.ok(anzahl <= 13, `Die Gruppe "${gruppe}" hat ${anzahl} Punkte — das sortiert nichts mehr.`);
+  });
+
+  // Und jede Gruppe kommt in der Reihenfolge vor, sonst landet sie hinten.
+  const reihenfolge = quelle.slice(quelle.indexOf("const GRUPPEN_REIHENFOLGE"), quelle.indexOf("];", quelle.indexOf("const GRUPPEN_REIHENFOLGE")));
+  Object.keys(proGruppe).forEach((g) => {
+    assert.ok(reihenfolge.includes(`"${g}"`), `Die Gruppe "${g}" fehlt in der Reihenfolge.`);
+  });
+});

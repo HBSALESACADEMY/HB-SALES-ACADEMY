@@ -45,19 +45,51 @@ const FALLBACK_NAV = [
 // komplette Ansicht kurz durch einen Ladebildschirm ersetzt wird.
 // Kategorie-Zuordnung für die Sidebar-Unterleisten. Rein visuell — beeinflusst
 // nicht, wie Nutzer ihre Reihenfolge per Drag & Drop selbst festlegen können.
+// Gegliedert nach TÄTIGKEIT, in der Reihenfolge eines Arbeitstags.
+//
+// Vorher war "Team" ein Restehaufen aus siebzehn Punkten: Call Tracker,
+// Termine, Kunden, Community, Auswertung — alles, was nirgends sonst
+// hinpasste. Eine Gruppe, in der alles steht, sortiert nichts.
+//
+// Jetzt steht ganz oben, womit eine Vertriebsperson ihren Tag verbringt:
+// telefonieren, Termine, nachfassen. Das sind die Punkte, die zehnmal am
+// Tag angeklickt werden. Lernen kommt danach, der Austausch mit dem Team
+// darunter, und Führungsstoff steht getrennt — sonst geht er zwischen den
+// Alltagspunkten unter.
 const NAV_GROUPS = {
   dashboard: "Start",
-  courses: "Lernen", knowledge: "Lernen", roleplay: "Lernen", certificates: "Lernen", scripts: "Lernen", "roleplay-history": "Lernen",
-  "daily-challenge": "Lernen", flashcards: "Lernen", simulator: "Lernen", "leitfaden-generator": "Lernen",
-  bingo: "Lernen",
-  "einwand-trainer": "Lernen", lernpfad: "Lernen",
-  community: "Team", members: "Team", messages: "Team", leaderboard: "Team", manager: "Team", team: "Team", duel: "Team", manager: "Team", termine: "Team", "call-tracker": "Team", kunden: "Team", recordings: "Team",
-  einwandbehandlung: "Team", kalender: "Team", ziele: "Team", auswertung: "Team", "email-marketing": "Team",
-  "follow-up": "Team",
+
+  // Der Arbeitstag selbst.
+  "call-tracker": "Verkaufen", termine: "Verkaufen", "follow-up": "Verkaufen",
+  kunden: "Verkaufen", kalender: "Verkaufen", "email-marketing": "Verkaufen",
+  recordings: "Verkaufen",
+
+  // Nachschlagen und durcharbeiten.
+  courses: "Lernen", knowledge: "Lernen", scripts: "Lernen",
+  lernpfad: "Lernen", certificates: "Lernen",
+
+  // Selbst machen. Das ist etwas anderes als Lesen — und mit vierzehn
+  // Punkten unter "Lernen" fand man weder das eine noch das andere.
+  roleplay: "Üben", "roleplay-history": "Üben", simulator: "Üben",
+  flashcards: "Üben", "daily-challenge": "Üben", "einwand-trainer": "Üben",
+  einwandbehandlung: "Üben", bingo: "Üben", "leitfaden-generator": "Üben",
+
+  // Die Menschen.
+  community: "Team", members: "Team", messages: "Team", team: "Team",
+  leaderboard: "Team", duel: "Team", ziele: "Team",
+
+  // Getrennt, weil es einen anderen Zweck hat: hier wird beurteilt, nicht
+  // gearbeitet. Wer es nicht sehen darf, sieht die Gruppe gar nicht.
+  auswertung: "Führung", manager: "Führung",
+
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
   "admin-lernpfade": "Verwaltung",
 };
+
+// Die Reihenfolge der Gruppen. Ohne sie stünden sie in der Reihenfolge, in
+// der zufällig der erste Punkt jeder Gruppe auftaucht.
+const GRUPPEN_REIHENFOLGE = ["Start", "Verkaufen", "Üben", "Lernen", "Team", "Führung", "Verwaltung", "Weiteres", "Eigene Inhalte"];
 function groupFor(item) {
   return NAV_GROUPS[item.key] || (item.is_builtin ? "Weiteres" : "Eigene Inhalte");
 }
@@ -629,11 +661,19 @@ export default function Layout({ children, fullBleed }) {
   }
 
   function sortedCategories(categories) {
+    // Die eigene Reihenfolge hat Vorrang — wer die Leiste selbst sortiert
+    // hat, soll sie so behalten.
     const order = categoryOrderOverride;
-    if (!order || !order.length) return categories;
-    const ordered = order.filter((c) => categories.includes(c));
-    const remaining = categories.filter((c) => !order.includes(c));
-    return [...ordered, ...remaining];
+    if (order && order.length) {
+      const ordered = order.filter((c) => categories.includes(c));
+      const remaining = categories.filter((c) => !order.includes(c));
+      return [...ordered, ...remaining];
+    }
+    // Sonst die vorgesehene Reihenfolge: erst der Arbeitstag, dann Lernen,
+    // dann das Team.
+    const bekannt = GRUPPEN_REIHENFOLGE.filter((c) => categories.includes(c));
+    const rest = categories.filter((c) => !GRUPPEN_REIHENFOLGE.includes(c));
+    return [...bekannt, ...rest];
   }
 
   async function persistSidebarPrefs(patch) {
