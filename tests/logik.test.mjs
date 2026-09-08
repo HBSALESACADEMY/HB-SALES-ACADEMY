@@ -47,7 +47,7 @@ import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
-import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus } from "../lib/marketingVorlage.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2331,4 +2331,27 @@ test("Die Versandhistorie steht nicht in der Gesprächsnotiz", () => {
   assert.ok(!/notiz:/.test(update),
     "Der Versand darf die Gesprächsnotiz nicht verändern — sie wird in Vorlagen eingesetzt.");
   assert.match(update, /letzter_betreff:/);
+});
+
+test("Der Standardschluss kommt nicht zweimal", () => {
+  const signatur = "Mit freundlichen Grüßen\n{{vertriebler}}\n{{organisation}}";
+  const werte = { vertriebler: "Houman Honarmand", organisation: "VolkWork" };
+
+  // Vorlage OHNE Signatur: sie wird angehängt.
+  const ohne = mitSchluss("Hallo Herr Muster,\n\nText.", signatur, werte);
+  assert.ok(ohne.endsWith("Mit freundlichen Grüßen\nHouman Honarmand\nVolkWork"));
+  assert.equal((ohne.match(/Houman Honarmand/g) || []).length, 1);
+
+  // Vorlage MIT Signatur am Ende: sie wird NICHT noch einmal angehängt —
+  // sonst steht das Ende doppelt in der Mail beim Kunden.
+  const schonDrin = "Hallo Herr Muster,\n\nText.\n\nMit freundlichen Grüßen\nHouman Honarmand\nVolkWork";
+  assert.equal(mitSchluss(schonDrin, signatur, werte), schonDrin);
+
+  // Auch mit abweichenden Leerzeilen erkannt: ein Umbruch mehr darf die
+  // Erkennung nicht aushebeln.
+  const andersUmbrochen = "Text.\n\nMit freundlichen Grüßen\n\nHouman Honarmand\n\nVolkWork";
+  assert.equal(mitSchluss(andersUmbrochen, signatur, werte), andersUmbrochen);
+
+  // Ohne Signatur bleibt alles, wie es ist.
+  assert.equal(mitSchluss("Nur Text.", "", werte), "Nur Text.");
 });

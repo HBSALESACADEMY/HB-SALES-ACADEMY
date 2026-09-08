@@ -4,7 +4,7 @@ import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { sendEmail } from "../../lib/email";
 import { gueltigeAdresse } from "../../lib/emailKontakt";
-import { alsHtml, fuelleVorlage, werteFuerKontakt } from "../../lib/marketingVorlage";
+import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss } from "../../lib/marketingVorlage";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -101,10 +101,9 @@ export default async function handler(req, res) {
     const gefuellterText = fuelleVorlage(String(text), werte);
     const gefuellterBetreff = fuelleVorlage(String(betreff), werte);
 
-    const mitSchluss = org?.email_signatur?.trim()
-      ? `${gefuellterText.trim()}\n\n${fuelleVorlage(org.email_signatur, werte)}`
-      : gefuellterText;
-    const html = alsHtml(mitSchluss);
+    // Hängt den Standardschluss an — aber nur, wenn er nicht ohnehin schon
+    // im Text steht (siehe lib/marketingVorlage.js).
+    const html = alsHtml(mitSchluss(gefuellterText.trim(), org?.email_signatur || "", werte));
 
     // An sich selbst: dieselbe Mail, dieselbe Vorlage, derselbe Absender —
     // nur ein anderer Empfänger. Die Sicherheitsstufe vor dem Ernstfall.
