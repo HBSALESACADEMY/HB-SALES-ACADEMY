@@ -70,6 +70,10 @@ export default function EmailMarketing() {
   // Verwaltung — aber gebraucht wird er hier, wo man Mails verschickt.
   const [testStand, setTestStand] = useState(null);
   const [testBusy, setTestBusy] = useState(false);
+  // Welcher Kontakt aufgeklappt ist. Eine Liste, in der jeder Eintrag einen
+  // halben Bildschirm füllt, ist keine Liste — man scrollt an dem vorbei,
+  // was man sucht.
+  const [offenerKontakt, setOffenerKontakt] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -618,14 +622,39 @@ export default function EmailMarketing() {
 
       <div className="flex flex-col gap-3">
         {gefiltert.map((k) => (
-          <div key={k.id} className="card">
-            <div className="flex items-start gap-2 flex-wrap mb-1">
-              <span className="font-semibold text-textMain text-sm">{k.name}</span>
-              {k.firma && <span className="text-xs text-textMuted">{k.firma}</span>}
-              <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border ml-auto text-textMuted border-line">
+          <div key={k.id} className="card !py-2.5">
+            {/* Eine Zeile je Kontakt: Name, Firma, Status, Senden. Alles
+                Weitere erst beim Aufklappen — sonst füllt ein einzelner
+                Eintrag den Bildschirm und man findet nichts wieder. */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setOffenerKontakt(offenerKontakt === k.id ? null : k.id)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                <span className={`text-textMuted text-xs transition-transform ${offenerKontakt === k.id ? "rotate-90" : ""}`}>›</span>
+                <span className="font-semibold text-textMain text-sm truncate">{k.name}</span>
+                {k.firma && <span className="text-xs text-textMuted truncate">{k.firma}</span>}
+                {brauchtNachfassen(k) && (
+                  <span className="text-[10px] text-amber flex-shrink-0">{liegtSeitTagen(k.verschickt_am)} T.</span>
+                )}
+              </button>
+
+              <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border text-textMuted border-line flex-shrink-0">
                 {EMAIL_STATUS[k.status] || k.status}
               </span>
+
+              {/* Der Versand-Knopf steht an JEDEM Eintrag, nicht nur bei den
+                  offenen: auch ein Kontakt, der schon eine Mail bekommen
+                  hat, braucht manchmal eine zweite. */}
+              {leitung && mailFuer !== k.id && (
+                <button onClick={() => { setOffenerKontakt(k.id); starteMail(k, vorlagen[0] || null); }}
+                  className="btn text-xs flex-shrink-0" title={`Mail an ${k.email}`}>
+                  ✉️ Senden
+                </button>
+              )}
             </div>
+
+            {offenerKontakt !== k.id && mailFuer !== k.id ? null : (
+            <div className="mt-2">
             {/* Wurde ein Termin daraus, führt der Weg dorthin — sonst
                 sucht man ihn in der Terminliste zusammen. */}
             {k.lead_id && (
@@ -839,6 +868,8 @@ export default function EmailMarketing() {
                 </span>
               )}
             </div>
+            </div>
+            )}
           </div>
         ))}
       </div>

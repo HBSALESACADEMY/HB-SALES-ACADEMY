@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { EMAIL_STATUS } from "../lib/emailKontakt";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
+import { fertigeMail } from "../lib/marketingVorlage";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -96,6 +97,12 @@ export default function CallTracker() {
   // sprang sonst immer zur Termin-Frage — auch wenn man vom Vorzimmer kam,
   // wo diese Frage gar nicht gestellt wurde.
   const [emailHerkunft, setEmailHerkunft] = useState("callResult");
+  // Direkt aus dem Gespräch senden: Vorlagen der Organisation, der fertige
+  // Entwurf zum Gegenlesen, und der Kontakt, um den es geht.
+  const [vorlagen, setVorlagen] = useState([]);
+  const [mailKontakt, setMailKontakt] = useState(null);
+  const [mailEntwurf, setMailEntwurf] = useState({ vorlage: "", betreff: "", text: "" });
+  const [mailBusy, setMailBusy] = useState(false);
 
   // Ein Ort für den Einstieg ins Formular: der Wunsch nach einer E-Mail
   // kann an jeder Stelle des Gesprächs fallen — beim Vorzimmer, beim
@@ -168,6 +175,9 @@ export default function CallTracker() {
       }
       if (!mounted) return;
       if (orgRow) { setOrg(orgRow); setOrgId((v) => v || orgRow.id); }
+      // Nur mit einer Vorlage der Organisation darf ein Vertriebler selbst
+      // schreiben (siehe pages/api/marketing-mail.js).
+      setVorlagen(Array.isArray(orgRow?.email_vorlagen) ? orgRow.email_vorlagen : []);
 
       const cats = resolveObjectionCategories(orgRow);
       const prefixJetzt = storagePrefix(session.user.id);
@@ -506,18 +516,62 @@ export default function CallTracker() {
     }
     setEmailBusy(true);
     try {
-      await apiPost("/api/email-kontakt", { ...emailEntwurf, activeOrgId: orgId });
+      const { kontakt } = await apiPost("/api/email-kontakt", { ...emailEntwurf, activeOrgId: orgId });
       // Erst wenn der Kontakt sicher übergeben ist, wird gezählt — sonst
       // stünde in der Statistik ein Kontakt, den niemand bekommen hat.
       bump("email");
-      showToast("An die Organisation übergeben");
-      setEmailEntwurf({ name: "", email: "", firma: "", telefon: "", notiz: "" });
       setDublette(null);
-      zurueckZumStart();
+
+      // Gibt es Vorlagen, endet der Anruf gleich mit der Mail. Das ist der
+      // Moment, in dem das Gespräch noch frisch ist — einen Tag später
+      // schreibt die Leitung über ein Gespräch, das sie nicht geführt hat.
+      if (vorlagen.length && kontakt) {
+        waehleVorlage(kontakt, vorlagen[0]);
+        setMailKontakt(kontakt);
+        setStep("mailForm");
+      } else {
+        showToast("An die Organisation übergeben");
+        setEmailEntwurf({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+        zurueckZumStart();
+      }
     } catch (e) {
       setEmailFehler(e?.message || "Der Kontakt konnte nicht übergeben werden.");
     }
     setEmailBusy(false);
+  }
+
+  // Die Vorlage mit den Werten dieses Gesprächs füllen. Name des Kontakts
+  // und eigener Name kommen automatisch — mehr muss niemand eintippen.
+  function waehleVorlage(kontakt, vorlage) {
+    const fertig = fertigeMail(vorlage, {
+      name: kontakt.name,
+      firma: kontakt.firma,
+      notiz: kontakt.notiz,
+      vertriebler: meinProfil?.full_name || "",
+      organisation: org?.name || "",
+    }, org?.email_signatur || "");
+    setMailEntwurf({ vorlage: vorlage.name, ...fertig });
+  }
+
+  async function sendeEigeneMail() {
+    if (!mailKontakt) return;
+    setMailBusy(true);
+    setEmailFehler("");
+    try {
+      await apiPost("/api/marketing-mail", {
+        kontaktId: mailKontakt.id,
+        betreff: mailEntwurf.betreff,
+        text: mailEntwurf.text,
+        vorlage: mailEntwurf.vorlage,
+      });
+      showToast("Mail ist raus");
+      setMailKontakt(null);
+      setEmailEntwurf({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+      zurueckZumStart();
+    } catch (e) {
+      setEmailFehler(e?.message || "Die Mail konnte nicht verschickt werden.");
+    }
+    setMailBusy(false);
   }
 
   tageswechselRef.current = pruefeTageswechsel;
@@ -1226,6 +1280,53 @@ export default function CallTracker() {
                     <button onClick={() => setStep(emailHerkunft)} className="btn-ghost text-sm">Zurück</button>
                     <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
                       {emailBusy ? "Wird übergeben…" : "An die Organisation übergeben"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === "mailForm" && (
+                <>
+                  <div className="text-3xl mb-1">✉️</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Mail jetzt rausschicken?</div>
+                  <p className="text-textMuted text-xs mb-4">
+                    Name, Firma und dein Name sind schon eingesetzt. Lies kurz drüber — abgeschickt wird erst,
+                    wenn du tippst.
+                  </p>
+
+                  {vorlagen.length > 1 && (
+                    <div className="flex items-center justify-center gap-1.5 mb-3 flex-wrap">
+                      {vorlagen.map((v) => (
+                        <button key={v.name} onClick={() => waehleVorlage(mailKontakt, v)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mailEntwurf.vorlage === v.name ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                          {v.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-left mb-3">
+                    <label className="block text-xs text-textMuted mb-1">Betreff</label>
+                    <input className="input !py-2 text-sm mb-2" value={mailEntwurf.betreff}
+                      onChange={(e) => setMailEntwurf((d) => ({ ...d, betreff: e.target.value }))} />
+                    <label className="block text-xs text-textMuted mb-1">Text</label>
+                    <textarea className="input !py-2 text-sm" rows={9} value={mailEntwurf.text}
+                      onChange={(e) => setMailEntwurf((d) => ({ ...d, text: e.target.value }))} />
+                    <p className="text-[11px] text-textMuted mt-1">
+                      Geht an {mailKontakt?.email} im Namen von {org?.name || "eurer Organisation"}. Ändern
+                      darfst du; die Vorlage kommt von eurer Leitung.
+                    </p>
+                  </div>
+
+                  {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
+
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => { setMailKontakt(null); showToast("An die Organisation übergeben"); zurueckZumStart(); }}
+                      className="btn-ghost text-sm">
+                      Später — die Organisation macht das
+                    </button>
+                    <button onClick={sendeEigeneMail} disabled={mailBusy} className="btn text-sm disabled:opacity-40">
+                      {mailBusy ? "Wird verschickt…" : "Jetzt senden"}
                     </button>
                   </div>
                 </>
