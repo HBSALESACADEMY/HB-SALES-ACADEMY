@@ -47,7 +47,7 @@ import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
-import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt } from "../lib/marketingVorlage.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2286,4 +2286,25 @@ test("Doppelter Gruss wird erkannt, bevor er beim Kunden steht", () => {
     "Mit freundlichen Grüßen\n{{vertriebler}}\n{{organisation}}"
   );
   assert.equal(gut.hatDoppeltes, false);
+});
+
+test("Anrede: Frau Schmidt statt Maria Schmidt", () => {
+  // Eine Mail an einen Geschäftskontakt mit Vornamen wirkt wie
+  // Massenversand — genau das soll sie nicht.
+  const werte = werteFuerKontakt({ name: "Maria Schmidt", anrede: "frau" });
+  assert.equal(werte.anrede, "Frau");
+  assert.equal(werte.nachname, "Schmidt");
+  assert.equal(fuelleVorlage("Hallo {{anrede}} {{nachname}},", werte), "Hallo Frau Schmidt,");
+
+  // Ohne Anrede bleibt kein doppeltes Leerzeichen stehen.
+  const ohne = werteFuerKontakt({ name: "Maria Schmidt" });
+  assert.equal(fuelleVorlage("Hallo {{anrede}} {{nachname}},", ohne), "Hallo Schmidt,");
+
+  assert.equal(anredeText("herr"), "Herr");
+  assert.equal(anredeText(null), "");
+  assert.equal(anredeText("divers"), "");   // nur die zwei bekannten Werte
+  // Ein einzelnes Wort ist der Nachname — oder das Einzige, was man hat.
+  assert.equal(nachnameAus("Schmidt"), "Schmidt");
+  assert.equal(nachnameAus("Anna Maria von Schmidt"), "Schmidt");
+  assert.equal(nachnameAus(""), "");
 });

@@ -13,7 +13,7 @@ import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse } from "../lib/emailKontakt";
 import {
   fuelleVorlage, fertigeMail, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN,
-  BEISPIEL_KONTAKT, vorlagenErfolg,
+  BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt,
 } from "../lib/marketingVorlage";
 import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
@@ -202,7 +202,7 @@ export default function EmailMarketing() {
   function starteBearbeiten(k) {
     setBearbeite(k.id);
     setEntwurf({
-      name: k.name || "", email: k.email || "", firma: k.firma || "",
+      anrede: k.anrede || "", name: k.name || "", email: k.email || "", firma: k.firma || "",
       telefon: k.telefon || "", notiz: k.notiz || "",
     });
     setFehler("");
@@ -212,6 +212,7 @@ export default function EmailMarketing() {
     if (!entwurf.name.trim()) { setFehler("Der Name darf nicht leer sein."); return; }
     if (!gueltigeAdresse(entwurf.email)) { setFehler("Bitte eine gültige E-Mail-Adresse eintragen."); return; }
     const patch = {
+      anrede: entwurf.anrede === "herr" || entwurf.anrede === "frau" ? entwurf.anrede : null,
       name: entwurf.name.trim(),
       email: entwurf.email.trim(),
       firma: entwurf.firma.trim() || null,
@@ -245,13 +246,10 @@ export default function EmailMarketing() {
   // Mail schreiben. Die Vorlage wird beim Öffnen gefüllt, nicht erst beim
   // Senden: man soll sehen, was rausgeht, und es noch ändern können.
   function werteFuer(k) {
-    return {
-      name: k.name,
-      firma: k.firma,
-      notiz: k.notiz,
+    return werteFuerKontakt(k, {
       vertriebler: nameVon(k.user_id, k.erfasser?.full_name),
       organisation: orgName,
-    };
+    });
   }
 
   function starteMail(k, vorlage = null) {
@@ -722,6 +720,15 @@ export default function EmailMarketing() {
 
             {bearbeite === k.id ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                <div className="flex items-center gap-1.5">
+                  {[["", "—"], ["frau", "Frau"], ["herr", "Herr"]].map(([wert, label]) => (
+                    <button key={wert || "leer"} type="button"
+                      onClick={() => setEntwurf((d) => ({ ...d, anrede: wert }))}
+                      className={`px-2 py-1.5 rounded-lg text-xs border flex-1 ${entwurf.anrede === wert ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <input className="input !py-1.5 text-xs" placeholder="Name" value={entwurf.name}
                   onChange={(e) => setEntwurf((d) => ({ ...d, name: e.target.value }))} />
                 <input className="input !py-1.5 text-xs" placeholder="E-Mail" type="email" value={entwurf.email}

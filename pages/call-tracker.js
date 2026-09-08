@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { EMAIL_STATUS } from "../lib/emailKontakt";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
-import { fertigeMail } from "../lib/marketingVorlage";
+import { fertigeMail, werteFuerKontakt } from "../lib/marketingVorlage";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -89,7 +89,7 @@ export default function CallTracker() {
   // Zuletzt gutgeschriebenes XP — nur zum Anzeigen.
   const [xpHinweis, setXpHinweis] = useState(null);
   // Der E-Mail-Kontakt aus dem Gespräch (migration_138).
-  const [emailEntwurf, setEmailEntwurf] = useState({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+  const [emailEntwurf, setEmailEntwurf] = useState({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFehler, setEmailFehler] = useState("");
   const [dublette, setDublette] = useState(null);
@@ -109,7 +109,7 @@ export default function CallTracker() {
   // Entscheider, oder erst wenn man schon nach dem Ablehnungsgrund gefragt
   // wird.
   function starteEmailKontakt(vonSchritt) {
-    setEmailEntwurf({ name: leadDraft.name || "", email: "", firma: "", telefon: "", notiz: "" });
+    setEmailEntwurf({ anrede: "", name: leadDraft.name || "", email: "", firma: "", telefon: "", notiz: "" });
     setEmailFehler("");
     setDublette(null);
     setEmailHerkunft(vonSchritt);
@@ -531,7 +531,7 @@ export default function CallTracker() {
         setStep("mailForm");
       } else {
         showToast("An die Organisation übergeben");
-        setEmailEntwurf({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+        setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
         zurueckZumStart();
       }
     } catch (e) {
@@ -543,13 +543,10 @@ export default function CallTracker() {
   // Die Vorlage mit den Werten dieses Gesprächs füllen. Name des Kontakts
   // und eigener Name kommen automatisch — mehr muss niemand eintippen.
   function waehleVorlage(kontakt, vorlage) {
-    const fertig = fertigeMail(vorlage, {
-      name: kontakt.name,
-      firma: kontakt.firma,
-      notiz: kontakt.notiz,
+    const fertig = fertigeMail(vorlage, werteFuerKontakt(kontakt, {
       vertriebler: meinProfil?.full_name || "",
       organisation: org?.name || "",
-    }, org?.email_signatur || "");
+    }), org?.email_signatur || "");
     setMailEntwurf({ vorlage: vorlage.name, ...fertig });
   }
 
@@ -566,7 +563,7 @@ export default function CallTracker() {
       });
       showToast("Mail ist raus");
       setMailKontakt(null);
-      setEmailEntwurf({ name: "", email: "", firma: "", telefon: "", notiz: "" });
+      setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
       zurueckZumStart();
     } catch (e) {
       setEmailFehler(e?.message || "Die Mail konnte nicht verschickt werden.");
@@ -1228,6 +1225,23 @@ export default function CallTracker() {
                     Geht mit deinem Namen an die Organisation — dort wird sie verschickt und nachgehalten.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-left">
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Anrede</label>
+                      {/* "Hallo Frau Schmidt" statt "Hallo Maria Schmidt":
+                          eine Mail an einen Geschäftskontakt mit Vornamen
+                          wirkt wie Massenversand. Frei lassen ist erlaubt —
+                          wer im Gespräch nur einen Namen aufschnappt, soll
+                          nicht raten müssen. */}
+                      <div className="flex items-center gap-1.5">
+                        {[["", "—"], ["frau", "Frau"], ["herr", "Herr"]].map(([wert, label]) => (
+                          <button key={wert || "leer"} type="button"
+                            onClick={() => setEmailEntwurf((d) => ({ ...d, anrede: wert }))}
+                            className={`px-3 py-2 rounded-lg text-sm border flex-1 ${emailEntwurf.anrede === wert ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div>
                       <label className="block text-xs text-textMuted mb-1">Name *</label>
                       <input className="input !py-2 text-sm" value={emailEntwurf.name}

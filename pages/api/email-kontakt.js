@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { name, email, firma, telefon, notiz } = req.body || {};
+  const { anrede, name, email, firma, telefon, notiz } = req.body || {};
   if (!String(name || "").trim()) return res.status(400).json({ error: "Name fehlt." });
   if (!gueltigeAdresse(email)) return res.status(400).json({ error: "Keine gültige E-Mail-Adresse." });
 
@@ -54,6 +54,9 @@ export default async function handler(req, res) {
     const { data: kontakt, error } = await admin.from("email_kontakte").insert({
       organization_id: orgId,
       user_id: user.id,
+      // Nur die zwei erlaubten Werte oder gar keiner — die Datenbank
+      // lehnt alles andere ohnehin ab (migration_149).
+      anrede: anrede === "herr" || anrede === "frau" ? anrede : null,
       name: String(name).trim(),
       email: String(email).trim(),
       firma: String(firma || "").trim() || null,
