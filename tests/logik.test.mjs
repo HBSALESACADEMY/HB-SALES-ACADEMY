@@ -47,7 +47,7 @@ import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
-import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml } from "../lib/marketingVorlage.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2266,4 +2266,24 @@ test("Mail-HTML: erst maskieren, dann umbrechen", () => {
   assert.ok(boese.includes("&lt;script&gt;"));
   assert.ok(boese.includes("&amp;"));
   assert.ok(!boese.includes("<script>"));
+});
+
+test("Doppelter Gruss wird erkannt, bevor er beim Kunden steht", () => {
+  // Der häufigste Fehler beim Einrichten: Vorlage und Signatur enden beide
+  // mit Gruss und Namen — und beim Kunden steht "Honarmand - Honarmand".
+  const schlecht = doppelt(
+    "Hallo {{name}},\n\nanbei die Unterlagen.\n\nMit freundlichen Grüßen\n{{vertriebler}}",
+    "Mit freundlichen Grüßen\n{{vertriebler}}\n{{organisation}}"
+  );
+  assert.equal(schlecht.hatDoppeltes, true);
+  assert.equal(schlecht.gruss, true);
+  assert.deepEqual(schlecht.platzhalter, ["vertriebler"]);
+
+  // Richtig aufgeteilt: die Vorlage endet mit dem Inhalt, der Schluss
+  // trägt Gruss, Name und Organisation.
+  const gut = doppelt(
+    "Hallo {{name}},\n\nanbei die Unterlagen zu {{firma}}.",
+    "Mit freundlichen Grüßen\n{{vertriebler}}\n{{organisation}}"
+  );
+  assert.equal(gut.hatDoppeltes, false);
 });

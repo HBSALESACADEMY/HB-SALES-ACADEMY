@@ -1,4 +1,4 @@
-import { PLATZHALTER, unbekanntePlatzhalter } from "../lib/marketingVorlage";
+import { PLATZHALTER, unbekanntePlatzhalter, doppelt } from "../lib/marketingVorlage";
 
 // Die Mail-Vorlagen bearbeiten.
 //
@@ -6,7 +6,7 @@ import { PLATZHALTER, unbekanntePlatzhalter } from "../lib/marketingVorlage";
 // Einstellungen liegen) und den E-Mail-Marketing-Reiter (wo man merkt, dass
 // eine Vorlage fehlt). Zwei getrennte Masken für dieselbe Sache wären der
 // sichere Weg zu zwei verschiedenen Verhaltensweisen.
-export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [] }) {
+export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], signatur = "" }) {
   function aendere(i, feld, wert) {
     onChange(vorlagen.map((v, j) => (j === i ? { ...v, [feld]: wert } : v)));
   }
@@ -44,6 +44,21 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [] })
             <textarea className="input !py-1.5 text-xs" rows={7}
               placeholder={"Hallo {{name}},\n\naus unserem Gespräch: {{notiz}}\n\nViele Grüße\n{{vertriebler}}"}
               value={v.text || ""} onChange={(e) => aendere(i, "text", e.target.value)} />
+            {(() => {
+              // Was in Vorlage UND Signatur steht, kommt beim Kunden zweimal
+              // an. Hier gesagt statt dort gesehen.
+              const zweimal = doppelt(v.text || "", signatur);
+              if (!zweimal.hatDoppeltes) return null;
+              return (
+                <p className="text-[11px] text-amber mt-1">
+                  Steht doppelt: {zweimal.gruss ? "die Grussformel" : ""}
+                  {zweimal.gruss && zweimal.platzhalter.length ? " und " : ""}
+                  {zweimal.platzhalter.map((p) => `{{${p}}}`).join(", ")}
+                  {" "}— das steht auch im Standardschluss und erscheint deshalb zweimal in der Mail.
+                  Am besten hier weglassen: der Schluss gilt für alle Vorlagen.
+                </p>
+              );
+            })()}
             {unbekannt.length > 0 && (
               <p className="text-[11px] text-coral mt-1">
                 Unbekannte Platzhalter: {unbekannt.map((p) => `{{${p}}}`).join(", ")} — die stehen später

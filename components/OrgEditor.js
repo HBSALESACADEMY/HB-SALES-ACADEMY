@@ -163,6 +163,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
   // kann. Hochgeladen werden sie im E-Mail-Marketing — hier nur ausgewählt.
   const [orgAnhaenge, setOrgAnhaenge] = useState([]);
+  const [signatur, setSignatur] = useState(org.email_signatur || "");
   // Der Ablauf, der beim Gespräch mit der Entscheidung erscheint.
   const [leitfaden, setLeitfaden] = useState(() => resolveLeitfaden(org));
   const [aufnahmeFrist, setAufnahmeFrist] = useState(
@@ -297,6 +298,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         titel: s.titel.trim(), hinweis: (s.hinweis || "").trim() || null,
       })),
       email_antwort_an: antwortAn.trim() || null,
+      email_signatur: signatur.trim() || null,
       team_ranking_metric: rankingMetric === "xp" ? null : rankingMetric,
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
@@ -546,9 +548,19 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         )}
       </div>
 
+      <label className="block text-xs text-textMuted mb-1.5">Standardschluss unter jeder Mail</label>
+      <textarea className="input !py-1.5 text-xs mb-1" rows={4} value={signatur}
+        onChange={(e) => setSignatur(e.target.value)}
+        placeholder={"Mit freundlichen Grüßen\n{{vertriebler}}\n{{organisation}}\nMusterstraße 1 · 12345 Musterstadt"} />
+      <p className="text-[11px] text-textMuted mb-5">
+        Kommt automatisch unter jede Mail. Hierhin gehören Grussformel, Name und Organisation — dann stehen sie
+        genau einmal und für alle Vorlagen gleich. Die Vorlagen selbst enden mit dem letzten inhaltlichen Satz;
+        wiederholen sie den Gruss, steht er beim Kunden zweimal.
+      </p>
+
       <p className="text-[11px] text-textMuted mb-3">Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl.</p>
       <div className="mb-5">
-        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} anhaenge={orgAnhaenge} />
+        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} anhaenge={orgAnhaenge} signatur={signatur} />
       </div>
 
       </Abschnitt>

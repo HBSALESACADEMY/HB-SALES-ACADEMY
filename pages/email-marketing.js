@@ -505,7 +505,7 @@ export default function EmailMarketing() {
 
         <Aufklapper offen={vorlagenOffen}>
           <div className="mt-3">
-            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} />
+            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} signatur={signatur} />
 
             {/* Die Vorschau: der fertige Text mit einem erfundenen Kontakt.
                 So sieht man Anrede, Absätze und Signatur, bevor eine echte
