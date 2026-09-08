@@ -47,7 +47,7 @@ import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
-import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT } from "../lib/marketingVorlage.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2251,4 +2251,19 @@ test("Gesprächsablauf: Voreinstellung, eigener Ablauf, abgeschaltet", () => {
   // niemandem.
   const eigen = resolveLeitfaden({ gespraechsleitfaden: [{ titel: "Einstieg" }, { titel: "  " }, { hinweis: "ohne Titel" }] });
   assert.deepEqual(eigen.map((s) => s.titel), ["Einstieg"]);
+});
+
+test("Mail-HTML: erst maskieren, dann umbrechen", () => {
+  // Andersherum stand beim Empfänger wörtlich "<br/>" im Text — das eben
+  // eingefügte Zeichen wurde von der Maskierung wieder unschädlich gemacht.
+  const html = alsHtml("Hallo Frau Xy\n\nMit freundlichen Grüßen\nHonarmand");
+  assert.ok(html.includes("<br/>Honarmand"), "Der Umbruch muss ein echter Umbruch sein.");
+  assert.ok(!html.includes("&lt;br"), "Der Umbruch darf nicht maskiert sein.");
+  assert.equal((html.match(/<p>/g) || []).length, 2, "Leerzeile trennt Absätze.");
+
+  // Was der Mensch tippt, bleibt Text — auch wenn es nach HTML aussieht.
+  const boese = alsHtml("Preis < 100 & mehr <script>alert(1)</script>");
+  assert.ok(boese.includes("&lt;script&gt;"));
+  assert.ok(boese.includes("&amp;"));
+  assert.ok(!boese.includes("<script>"));
 });

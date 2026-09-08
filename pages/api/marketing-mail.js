@@ -4,6 +4,7 @@ import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { sendEmail } from "../../lib/email";
 import { gueltigeAdresse } from "../../lib/emailKontakt";
+import { alsHtml } from "../../lib/marketingVorlage";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -91,9 +92,7 @@ export default async function handler(req, res) {
     const mitSchluss = org?.email_signatur?.trim()
       ? `${String(text).trim()}\n\n${org.email_signatur.trim()}`
       : String(text);
-    const html = mitSchluss.split(/\n{2,}/).map((absatz) =>
-      `<p>${absatz.replace(/\n/g, "<br/>").replace(/</g, "&lt;")}</p>`
-    ).join("");
+    const html = alsHtml(mitSchluss);
 
     // An sich selbst: dieselbe Mail, dieselbe Vorlage, derselbe Absender —
     // nur ein anderer Empfänger. Die Sicherheitsstufe vor dem Ernstfall.
