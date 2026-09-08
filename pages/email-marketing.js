@@ -66,6 +66,10 @@ export default function EmailMarketing() {
   const [gewaehlteAnhaenge, setGewaehlteAnhaenge] = useState([]);
   const [anhangBusy, setAnhangBusy] = useState(false);
   const [probeStand, setProbeStand] = useState(null);
+  // Ob der Versand überhaupt eingerichtet ist. Der Knopf steht auch in der
+  // Verwaltung — aber gebraucht wird er hier, wo man Mails verschickt.
+  const [testStand, setTestStand] = useState(null);
+  const [testBusy, setTestBusy] = useState(false);
 
   async function laden() {
     setLaedt(true);
@@ -564,6 +568,42 @@ export default function EmailMarketing() {
           </div>
         </Aufklapper>
       </div>
+
+      {/* Eine falsche Absenderadresse legt den Versand still lahm. Wer hier
+          Mails verschickt, soll das mit einem Klick prüfen können, statt es
+          daran zu merken, dass eine Kundenmail nicht ankommt. */}
+      {leitung && (
+        <div className="card mb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-textMain font-semibold">Versand prüfen</span>
+            <span className="text-[11px] text-textMuted">
+              Absender: {org?.email_absender || "Standardadresse der Academy"}
+              {org?.email_antwort_an ? ` · Antworten an ${org.email_antwort_an}` : ""}
+            </span>
+            <button
+              onClick={async () => {
+                setTestBusy(true);
+                setTestStand(null);
+                try {
+                  setTestStand(await apiPost("/api/test-mail", {}));
+                } catch (e) {
+                  setTestStand({ ok: false, text: e?.message || "Die Testmail konnte nicht ausgelöst werden." });
+                }
+                setTestBusy(false);
+              }}
+              disabled={testBusy}
+              className="btn-ghost text-xs ml-auto disabled:opacity-40">
+              {testBusy ? "Wird verschickt…" : "Testmail an mich senden"}
+            </button>
+          </div>
+          {testStand && (
+            <p className={`text-[11px] mt-2 ${testStand.ok ? "text-teal" : "text-coral"}`}>{testStand.text}</p>
+          )}
+          <p className="text-[11px] text-textMuted mt-2">
+            Absender- und Antwortadresse stellst du unter Verwaltung → Organisation → E-Mail ein.
+          </p>
+        </div>
+      )}
 
       {fehler && <div className="card mb-4 border-coral/40 text-sm text-coral">{fehler}</div>}
       {laedt && <p className="text-textMuted text-sm">Lädt...</p>}
