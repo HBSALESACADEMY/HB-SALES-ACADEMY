@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import SeitenReiter from "../components/SeitenReiter";
 import Avatar from "../components/Avatar";
 import PersonenAuswahl from "../components/PersonenAuswahl";
 import LogoHintergrund from "../components/LogoHintergrund";
@@ -635,12 +636,11 @@ export default function Kalender() {
           <button onClick={() => { setAnker(new Date()); setGewaehlterTag(null); }} className="btn-ghost text-xs text-textMuted">Heute</button>
         </div>
         <div className="flex items-center gap-2">
-          {ANSICHTEN.map(([key, label]) => (
-            <button key={key} onClick={() => { setAnsicht(key); setGewaehlterTag(null); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-              {label}
-            </button>
-          ))}
+          <SeitenReiter
+            reiter={ANSICHTEN.map(([key, label]) => ({ key, label }))}
+            aktiv={ansicht}
+            onWechsel={(k) => { setAnsicht(k); setGewaehlterTag(null); }}
+          />
           <button onClick={oeffneAbo} className="btn-ghost text-xs" title="Termine im eigenen Kalender abonnieren">
             📆 Mit meinem Kalender verbinden
           </button>

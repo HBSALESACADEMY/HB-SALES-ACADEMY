@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import SeitenReiter from "../components/SeitenReiter";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -117,11 +118,11 @@ export default function Leaderboard() {
           />
         </div>
         <div className="flex items-center gap-2">
-          {[["individual", "Einzeln"], ["teams", "Teams"]].map(([key, label]) => (
-            <button key={key} onClick={() => setMode(key)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mode === key ? "bg-violet text-[var(--org-button-text,#fff)] border-violet" : "border-line text-textMuted hover:text-textMain"}`}>
-              {label}
-            </button>
-          ))}
+          <SeitenReiter
+            reiter={[{ key: "individual", label: "Einzeln" }, { key: "teams", label: "Teams" }]}
+            aktiv={mode}
+            onWechsel={setMode}
+          />
         </div>
       </div>
 

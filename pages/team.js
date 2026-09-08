@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../components/Layout";
+import SeitenReiter from "../components/SeitenReiter";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
@@ -547,12 +548,15 @@ export default function Team() {
             {/* Zwei Sichten nebeneinander: die selbst gebaute Struktur und
                 das, was sich aus den Teams von selbst ergibt. */}
             <div className={`flex items-center gap-1.5 ${organigramm.nurEigeneLinie ? "hidden" : ""}`}>
-              {[["personen", "Personen"], ["struktur", "Abteilungen"], ["teams", "Aus den Teams"]].map(([key, label]) => (
-                <button key={key} onClick={() => setAnsicht(key)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-                  {label}
-                </button>
-              ))}
+              <SeitenReiter
+                reiter={[
+                  { key: "personen", label: "Personen" },
+                  { key: "struktur", label: "Abteilungen" },
+                  { key: "teams", label: "Aus den Teams" },
+                ]}
+                aktiv={ansicht}
+                onWechsel={setAnsicht}
+              />
             </div>
           </div>
 

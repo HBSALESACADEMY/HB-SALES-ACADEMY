@@ -26,6 +26,7 @@ import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import TempoKarte from "../components/TempoKarte";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
+import SeitenReiter from "../components/SeitenReiter";
 import FilterAuswahl from "../components/FilterAuswahl";
 import { stundenRaster, stundenText } from "../lib/tageszeit";
 import { downloadCsv } from "../lib/csv";
@@ -42,7 +43,7 @@ import {
 // rechneten nur mit dem, was auf DIESEM Gerät lag, und boten weder Quartal
 // noch eigenen Zeitraum noch Diagramme. Die Statistiken können all das und
 // lesen vom Server, sind also auf jedem Gerät gleich.
-const VIEWS = [["today", "Heute"], ["statistik", "Statistiken"]];
+const VIEWS = [{ key: "today", label: "Heute", icon: "phone" }, { key: "statistik", label: "Statistiken", icon: "chart" }];
 
 const DEFAULT_BOOKING_STEPS = [
   "Terminoptionen im eigenen Buchungssystem raussuchen (idealerweise 2 Optionen)",
@@ -1010,14 +1011,7 @@ export default function CallTracker() {
         wer ein Team leitet, kann dort zusätzlich nach Team und Personen filtern und vergleichen.
       </InfoCard>
 
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
-        {VIEWS.map(([key, label]) => (
-          <button key={key} onClick={() => switchView(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${view === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <SeitenReiter reiter={VIEWS} aktiv={view} onWechsel={switchView} />
 
       {view === "statistik" ? (
         <StatistikPanel

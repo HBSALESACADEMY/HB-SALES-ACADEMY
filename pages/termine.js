@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
+import SeitenReiter from "../components/SeitenReiter";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -973,15 +974,20 @@ export default function Termine() {
         )}
       </div>
 
+      {/* Dieselbe Reiterleiste wie überall sonst — vorher sah sie auf jeder
+          Seite anders aus, und wer zwischen den Seiten wechselt, musste die
+          Bedienung jedes Mal neu suchen. */}
+      <SeitenReiter
+        reiter={[
+          { key: "liste", label: "Bevorstehend", icon: "dashboard" },
+          { key: "vergangen", label: "Vergangene", icon: "history" },
+          { key: "kalender", label: "Kalender", icon: "calendar" },
+        ]}
+        aktiv={ansicht}
+        onWechsel={setAnsicht}
+      />
+
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {/* Ansicht umschalten: gewohnte Kachel-Liste oder Monatskalender. */}
-        {[["liste", "Bevorstehend", "dashboard"], ["vergangen", "Vergangene Termine", "history"], ["kalender", "Kalender", "calendar"]].map(([key, label, icon]) => (
-          <button key={key} onClick={() => setAnsicht(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${ansicht === key ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-            <Icon name={icon} size={12} /> {label}
-          </button>
-        ))}
-        <span className="w-px h-5 bg-line mx-1" />
         {/* Zeitraum gilt nur in der Liste — im Kalender bestimmt der
             angezeigte Monat bzw. der angetippte Tag, was zu sehen ist. */}
         {ansicht === "vergangen" && (

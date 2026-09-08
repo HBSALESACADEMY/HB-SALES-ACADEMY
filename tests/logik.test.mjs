@@ -2355,3 +2355,16 @@ test("Der Standardschluss kommt nicht zweimal", () => {
   // Ohne Signatur bleibt alles, wie es ist.
   assert.equal(mitSchluss("Nur Text.", "", werte), "Nur Text.");
 });
+
+test("Reiterleisten laufen über die gemeinsame Komponente", () => {
+  // Sie sah auf jeder Seite anders aus: mal schmale Pillen, mal breitere
+  // mit Symbolen. Wer zwischen Seiten wechselt, muss die Bedienung sonst
+  // jedes Mal neu suchen — und übersieht, dass es überhaupt Reiter gibt.
+  const seiten = ["call-tracker", "termine", "kalender", "team", "leaderboard", "follow-up"];
+  const ohne = seiten.filter((name) => {
+    const quelle = readFileSync(new URL(`../pages/${name}.js`, import.meta.url), "utf8");
+    return !quelle.includes("<SeitenReiter");
+  });
+  assert.deepEqual(ohne, [],
+    `Diese Seiten haben eigene Reiterleisten statt der gemeinsamen: ${ohne.join(", ")}`);
+});
