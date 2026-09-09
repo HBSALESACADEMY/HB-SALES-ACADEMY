@@ -11,6 +11,7 @@ import { FOLLOW_KATEGORIEN, kategorieVon, liegtSeit, sortiereNachDringlichkeit }
 import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
+import Fortschrittsbalken from "../components/Fortschrittsbalken";
 
 // Follow-up: was nach dem Termin noch offen ist.
 //
@@ -48,7 +49,9 @@ export default function FollowUp() {
     // ihre eigenen Termine, die Leitung die ihrer Organisation.
     const { data, error } = await supabase.from("leads")
       .select("*").is("geloescht_am", null)
-      .in("status", ["wahrgenommen", "abgesagt"])
+      // Auch geplante: ein Kunde, dessen Check-in fällig ist, steht auf
+      // "wahrgenommen" — aber der Abschluss selbst kann jeden Status haben.
+      .in("status", ["wahrgenommen", "abgesagt", "geplant"])
       .order("appointment_at", { ascending: false }).limit(500);
     if (error) setFehler(error.message);
     setLeads(data || []);
@@ -162,6 +165,9 @@ export default function FollowUp() {
                 {leitung && nameVon(l.created_by) && <span>· {nameVon(l.created_by)}</span>}
               </div>
 
+              <div className="mb-2">
+                <Fortschrittsbalken lead={l} kompakt />
+              </div>
               {l.notes && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{l.notes}</p>}
 
               <div className="flex items-center gap-2 flex-wrap">

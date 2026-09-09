@@ -659,7 +659,7 @@ export default function Termine() {
 
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     meldeTerminAenderung(id, "bearbeitet",
-      `${neueArt === "closing" ? "Closing Call" : "Folgetermin"} mit ${original.name} am ${deutscheZeit(patch.appointment_at)} Uhr.`,
+      `${TERMIN_ARTEN.find((a) => a.key === neueArt)?.label || "Termin"} mit ${original.name} am ${deutscheZeit(patch.appointment_at)} Uhr.`,
       { zeitpunktGeaendert: true });
     setFollowUpId(null);
     setFollowUpDate("");
@@ -1315,7 +1315,9 @@ export default function Termine() {
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
                     <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
-                      {neueArt === "closing" ? "Closing Call anlegen" : "Folgetermin anlegen"}
+                      {neueArt === "closing" ? "Closing Call anlegen"
+                        : neueArt === "checkin" ? "Check-in planen"
+                        : "Folgetermin anlegen"}
                     </button>
                     <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
                   </div>
@@ -1324,7 +1326,9 @@ export default function Termine() {
                     ihrem Datum im Verlauf stehen
                     {neueArt === "closing"
                       ? ", damit in der Auswertung sichtbar bleibt, wie viele Erstgespräche bis zum Abschlussgespräch kommen."
-                      : "."}
+                      : neueArt === "checkin"
+                        ? " — der Anruf einen Monat nach dem Abschluss, mit dem der Kontakt auf 100 % kommt."
+                        : "."}
                   </p>
                 </>
               )}

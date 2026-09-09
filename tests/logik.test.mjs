@@ -48,7 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, terminFarbe, rueckeVor, verlaufVon } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, terminFarbe, rueckeVor, verlaufVon, fortschritt, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2449,7 +2449,8 @@ test("Closing Call ist eine eigene Stufe, kein Ergebnis", () => {
   // "Der Kunde überlegt noch" und "jetzt wird abgeschlossen" sahen in der
   // Liste gleich aus. Für die Frage, wo es hakt, ist genau dieser
   // Unterschied die Antwort.
-  assert.equal(TERMIN_ARTEN.length, 3);
+  // Vier Stufen: die drei bis zum Abschluss und der Check-in danach.
+  assert.equal(TERMIN_ARTEN.length, 4);
   // Ohne Angabe ist es ein Erstgespräch — bestehende Termine sollen nicht
   // umgedeutet werden.
   assert.equal(artVon({}).key, "erstgespraech");
@@ -2486,9 +2487,9 @@ test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
   // Jede Stufe hat ein Kürzel und eine eigene Farbe — beides an einer
   // Stelle, sonst laufen Kalender und Liste auseinander.
   const kuerzel = TERMIN_ARTEN.map((a) => a.kurz);
-  assert.deepEqual(kuerzel, ["ST", "FU", "CC"]);
+  assert.deepEqual(kuerzel, ["ST", "FU", "CC", "CI"]);
   const farben = TERMIN_ARTEN.map((a) => a.farbe);
-  assert.equal(new Set(farben).size, 3, "Drei Stufen brauchen drei unterscheidbare Farben.");
+  assert.equal(new Set(farben).size, 4, "Jede Stufe braucht eine unterscheidbare Farbe.");
   assert.equal(terminFarbe({ termin_art: "closing" }), TERMIN_ARTEN[2].farbe);
   assert.equal(terminFarbe({}), TERMIN_ARTEN[0].farbe);
 });
@@ -2539,4 +2540,34 @@ test("Die Auswertung zählt jede Stufe, auch die abgeschlossenen", () => {
 
   // Und der Verlauf lässt sich anzeigen.
   assert.deepEqual(verlaufVon(vorgerueckt).map((v) => v.kurz), ["ST", "FU"]);
+});
+
+test("Der Abschluss steht bei 90 Prozent, nicht bei 100", () => {
+  // Mit dem Geld ist es nicht fertig. Die letzten zehn Punkte gibt es erst,
+  // wenn einen Monat später jemand nachgefragt hat, ob alles läuft — die
+  // einzige Stufe nach dem Verkauf, und deshalb die, die ohne festen Platz
+  // im System immer vergessen wird.
+  assert.equal(fortschritt({}), 25);                                    // Termin steht
+  assert.equal(fortschritt({ termin_art: "folgetermin" }), 50);         // Kunde überlegt
+  assert.equal(fortschritt({ termin_art: "closing" }), 75);             // Abschlussgespräch
+  assert.equal(fortschritt({ outcome: "kunde" }), 90);                  // Kunde — noch nicht fertig
+  assert.equal(fortschritt({ termin_art: "checkin", status: "wahrgenommen" }), 100);
+
+  // Ein GEPLANTER Check-in ist kein geführter: erst das Gespräch zählt.
+  assert.equal(fortschritt({ termin_art: "checkin", status: "geplant" }), 90);
+  // Eine Absage ist kein Fortschritt, egal wie weit es vorher war.
+  assert.equal(fortschritt({ termin_art: "closing", outcome: "absage" }), 0);
+});
+
+test("Der Check-in wird nach einem Monat fällig — und nur bei Kunden", () => {
+  const vorTagen = (n) => new Date(Date.now() - n * 86400000).toISOString();
+
+  assert.equal(checkinFaellig({ outcome: "kunde", appointment_at: vorTagen(CHECKIN_NACH_TAGEN + 1) }), true);
+  // Frisch abgeschlossen: noch nichts zu fragen.
+  assert.equal(checkinFaellig({ outcome: "kunde", appointment_at: vorTagen(5) }), false);
+  // Kein Kunde, kein Check-in — das wäre ein Anruf ins Blaue.
+  assert.equal(checkinFaellig({ outcome: "absage", appointment_at: vorTagen(60) }), false);
+  assert.equal(checkinFaellig({ appointment_at: vorTagen(60) }), false);
+  // Läuft schon: nicht noch einmal vorschlagen.
+  assert.equal(checkinFaellig({ outcome: "kunde", termin_art: "checkin", appointment_at: vorTagen(60) }), false);
 });
