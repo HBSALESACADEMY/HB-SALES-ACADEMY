@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
-import { artVon, TERMIN_ARTEN, rueckeVor, verlaufVon } from "../lib/terminArt";
+import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, rueckeVor, verlaufVon } from "../lib/terminArt";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
@@ -26,6 +26,9 @@ import { deutscheZeit } from "../lib/terminzeit";
 import { berlinHeute, tagesBeginnZeitpunkt } from "../lib/woche";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
+// Die Farben der Stufen einmal nachschlagen, damit die Knöpfe für die
+// nächste Stufe dieselbe Farbe tragen wie der Balken und der Kalender.
+const STUFEN_FARBE = Object.fromEntries(TERMIN_ARTEN.map((a) => [a.key, a.farbe]));
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
 const OUTCOME_LABELS = { kunde: "Kunde geworden", follow_up: "Überlegt (Follow-up)", absage: "Absage" };
 const OUTCOME_COLORS = { kunde: "teal", follow_up: "violet", absage: "coral" };
@@ -840,11 +843,77 @@ export default function Termine() {
         Termine können bei Bedarf komplett gelöscht werden (inkl. zugehöriger Aufnahme).
       </InfoCard>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <button onClick={() => setShowAddForm((v) => !v)} className="btn text-xs">
-          {showAddForm ? "Abbrechen" : "+ Termin hinzufügen"}
+      {/* Dieselbe Reiterleiste wie überall sonst — vorher sah sie auf jeder
+          Seite anders aus, und wer zwischen den Seiten wechselt, musste die
+          Bedienung jedes Mal neu suchen. */}
+      <SeitenReiter
+        reiter={[
+          { key: "liste", label: "Bevorstehend", icon: "dashboard" },
+          { key: "vergangen", label: "Vergangene", icon: "history" },
+          { key: "kalender", label: "Kalender", icon: "calendar" },
+        ]}
+        aktiv={ansicht}
+        onWechsel={setAnsicht}
+      />
+
+      {/* Eine Werkzeugleiste statt vier Reihen: Suchen, Filtern, Anlegen
+          und Benachrichtigungen lagen vorher über die halbe Seite verteilt,
+          und man musste den passenden Knopf jedes Mal suchen. */}
+      <div className="card !py-2.5 mb-4 flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <Icon name="search" size={14} />
+          <input
+            className="bg-transparent border-none outline-none text-sm flex-1 text-textMain"
+            placeholder="Nach Name, Firma, Telefon oder E-Mail suchen..."
+            value={leadSearchQuery}
+            onChange={(e) => setLeadSearchQuery(e.target.value)}
+          />
+        </div>
+        {/* Zeitraum gilt nur in der Liste — im Kalender bestimmt der
+            angezeigte Monat bzw. der angetippte Tag, was zu sehen ist. */}
+        {ansicht === "liste" && (
+          <FilterAuswahl
+            etikett="Zeitraum:"
+            wert={timeFilter}
+            onChange={setTimeFilter}
+            optionen={[
+              { wert: "tag", label: "Heute" },
+              { wert: "woche", label: "Diese Woche" },
+              { wert: "monat", label: "Dieser Monat" },
+              { wert: "alle", label: "Alle" },
+            ]}
+          />
+        )}
+        {canSeeTeam && (
+          <FilterAuswahl
+            etikett="Termine:"
+            wert={viewMode}
+            onChange={setViewMode}
+            optionen={[{ wert: "own", label: "Meine" }, { wert: "team", label: "Alle im Team" }]}
+          />
+        )}
+        <input type="date" className="input !w-auto !py-1.5 text-xs" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+        <button onClick={() => setOnlyOpenTasks((v) => !v)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${onlyOpenTasks ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+          Nur mit offenen Aufgaben
         </button>
+        {(leadSearchQuery || dateFilter || timeFilter !== "woche" || onlyOpenTasks) && (
+          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); setTimeFilter("woche"); setOnlyOpenTasks(false); }} className="btn-ghost text-xs">Zurücksetzen</button>
+        )}
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={() => setShowAddForm((v) => !v)} className="btn text-xs">
+            {showAddForm ? "Abbrechen" : "+ Termin hinzufügen"}
+          </button>
+          {canSeeTeam && (
+            <button onClick={() => setShowEmailManager((v) => !v)} className="btn-ghost text-xs">
+              <Icon name="send" size={12} /> Benachrichtigungen
+            </button>
+          )}
+        </div>
       </div>
+
+      {ansicht === "vergangen" && (
+        <p className="text-[11px] text-textMuted mb-4">Alles, was vor dem heutigen Tag lag — das Jüngste zuerst.</p>
+      )}
 
       {showAddForm && (
         <div className="card mb-5">
@@ -900,20 +969,6 @@ export default function Termine() {
         </div>
       )}
 
-      {canSeeTeam && (
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <FilterAuswahl
-            etikett="Termine:"
-            wert={viewMode}
-            onChange={setViewMode}
-            optionen={[{ wert: "own", label: "Meine" }, { wert: "team", label: "Alle im Team" }]}
-          />
-          <button onClick={() => setShowEmailManager((v) => !v)} className="btn-ghost text-xs ml-auto">
-            <Icon name="send" size={12} /> Benachrichtigungen
-          </button>
-        </div>
-      )}
-
       {showEmailManager && (
         <div className="card mb-5">
           <div className="font-semibold text-textMain text-sm mb-1">E-Mail-Benachrichtigungen bei neuen Terminen</div>
@@ -947,59 +1002,6 @@ export default function Termine() {
       )}
 
       {error && <div className="card border border-coral/40 text-coral text-sm mb-4">{error}</div>}
-
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="card flex items-center gap-2 !py-2 flex-1 min-w-[200px]">
-          <Icon name="search" size={14} />
-          <input
-            className="bg-transparent border-none outline-none text-sm flex-1 text-textMain"
-            placeholder="Nach Name, Firma, Telefon oder E-Mail suchen..."
-            value={leadSearchQuery}
-            onChange={(e) => setLeadSearchQuery(e.target.value)}
-          />
-        </div>
-        <input type="date" className="input !w-auto !py-2 text-sm" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-        {(leadSearchQuery || dateFilter || timeFilter !== "woche" || onlyOpenTasks) && (
-          <button onClick={() => { setLeadSearchQuery(""); setDateFilter(""); setTimeFilter("woche"); setOnlyOpenTasks(false); }} className="btn-ghost text-xs">Filter zurücksetzen</button>
-        )}
-      </div>
-
-      {/* Dieselbe Reiterleiste wie überall sonst — vorher sah sie auf jeder
-          Seite anders aus, und wer zwischen den Seiten wechselt, musste die
-          Bedienung jedes Mal neu suchen. */}
-      <SeitenReiter
-        reiter={[
-          { key: "liste", label: "Bevorstehend", icon: "dashboard" },
-          { key: "vergangen", label: "Vergangene", icon: "history" },
-          { key: "kalender", label: "Kalender", icon: "calendar" },
-        ]}
-        aktiv={ansicht}
-        onWechsel={setAnsicht}
-      />
-
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {/* Zeitraum gilt nur in der Liste — im Kalender bestimmt der
-            angezeigte Monat bzw. der angetippte Tag, was zu sehen ist. */}
-        {ansicht === "vergangen" && (
-          <span className="text-[11px] text-textMuted">Alles, was vor dem heutigen Tag lag — das Jüngste zuerst.</span>
-        )}
-        {ansicht === "liste" && (
-          <FilterAuswahl
-            etikett="Zeitraum:"
-            wert={timeFilter}
-            onChange={setTimeFilter}
-            optionen={[
-              { wert: "tag", label: "Heute" },
-              { wert: "woche", label: "Diese Woche" },
-              { wert: "monat", label: "Dieser Monat" },
-              { wert: "alle", label: "Alle" },
-            ]}
-          />
-        )}
-        <button onClick={() => setOnlyOpenTasks((v) => !v)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${onlyOpenTasks ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-          Nur mit offenen Aufgaben
-        </button>
-      </div>
 
       {ansicht === "kalender" && (
         <Monatskalender
@@ -1105,6 +1107,15 @@ export default function Termine() {
 
               <div className="mb-3">
                 <Fortschrittsbalken lead={lead} />
+                {/* Wo der Kontakt herkommt: die abgeschlossenen Stufen mit
+                    ihrem Datum. Ohne das wüsste nach dem Weiterrücken
+                    niemand mehr, wann das Erstgespräch war. */}
+                {verlaufVon(lead).length > 0 && (
+                  <div className="text-[10px] text-textMuted mt-1">
+                    {verlaufVon(lead).map((v) => `${v.kurz} ${v.am ? new Date(v.am).toLocaleDateString("de-DE") : "—"}`).join(" → ")}
+                    {` → ${art.kurz} ${lead.appointment_at ? new Date(lead.appointment_at).toLocaleDateString("de-DE") : "—"}`}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted mb-2 items-center">
@@ -1181,8 +1192,109 @@ export default function Termine() {
                 </div>
               )}
 
+              {/* Was jetzt zu tun ist — in der Reihenfolge, in der es im
+                  Gespräch passiert: erst das Ergebnis, dann der nächste
+                  Termin, dann der Status. Vorher lagen dieselben Knöpfe in
+                  fünf gleich aussehenden Reihen ohne Beschriftung, und man
+                  musste den richtigen suchen. */}
+              <div className="rounded-xl border border-line bg-surfaceRaised/40 px-3 py-2.5 mt-2 flex flex-col gap-2">
+                <div className="flex items-start gap-2 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Ergebnis</span>
+                  <div className="flex items-center gap-2 flex-wrap flex-1">
+                    {Object.keys(OUTCOME_LABELS).map((o) => (
+                      <button key={o} disabled={lead.outcome === o && o !== "follow_up"} onClick={() => markOutcome(lead.id, o)} className="btn-ghost text-xs disabled:opacity-30">
+                        {OUTCOME_LABELS[o]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
+                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Nächster Schritt</span>
+                  <div className="flex items-center gap-2 flex-wrap flex-1">
+                    {/* Der Closing Call ist kein Ergebnis, sondern die nächste
+                        Stufe: das Gespräch, in dem abgeschlossen wird. */}
+                    <button
+                      onClick={() => { setFollowUpId(lead.id); setFollowUpDate(""); setNeueArt("closing"); }}
+                      className="btn-ghost text-xs" style={{ borderColor: `color-mix(in srgb, ${STUFEN_FARBE.closing} 45%, transparent)` }}>
+                      🤝 Closing Call
+                    </button>
+                    {/* Nach dem Abschluss fehlt noch der Anruf einen Monat
+                        später — erst der bringt den Kontakt auf 100 %. */}
+                    {lead.outcome === "kunde" && art.key !== "checkin" && (
+                      <button
+                        onClick={() => {
+                          setFollowUpId(lead.id);
+                          setNeueArt("checkin");
+                          setFollowUpDate(toLocalDatetimeValue(new Date(Date.now() + CHECKIN_NACH_TAGEN * 86400000).toISOString()));
+                        }}
+                        className="btn-ghost text-xs" style={{ borderColor: `color-mix(in srgb, ${STUFEN_FARBE.checkin} 45%, transparent)` }}>
+                        ✅ Check-in planen
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setVerschiebeId(verschiebeId === lead.id ? null : lead.id);
+                        setVerschiebeDatum(toLocalDatetimeValue(lead.appointment_at));
+                      }}
+                      className="btn-ghost text-xs">
+                      🕒 Verschieben
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
+                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Status</span>
+                  <div className="flex items-center gap-2 flex-wrap flex-1">
+                    {Object.keys(STATUS_LABELS).map((s) => (
+                      <button key={s} disabled={lead.status === s} onClick={() => updateStatus(lead.id, s)} className="btn-ghost text-xs disabled:opacity-30">
+                        {STATUS_LABELS[s]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
+                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Weiteres</span>
+                  <div className="flex items-center gap-2 flex-wrap flex-1">
+                    {/* In den eigenen Kalender: eine .ics-Datei, die Apple,
+                        Google und Outlook gleichermassen lesen — ohne Anbindung
+                        an einen einzelnen Anbieter (siehe lib/ics.js). */}
+                    {lead.appointment_at && (
+                      <button
+                        onClick={() => uebertrageInKalender(lead)}
+                        title="Als Kalender-Datei speichern und in den eigenen Kalender übernehmen"
+                        className="btn-ghost text-xs">
+                        <Icon name="calendar" size={12} /> In meinen Kalender
+                      </button>
+                    )}
+                    {lead.status === "geplant" && (
+                      <button
+                        disabled={reminderSendingId === lead.id}
+                        title="Schickt eine Erinnerungsmail an Manager/Admins und die eingetragenen Benachrichtigungs-Adressen, nicht an die Kund:in."
+                        onClick={() => sendReminder(lead)}
+                        className="btn-ghost text-xs disabled:opacity-40"
+                      >
+                        <Icon name="send" size={12} />{" "}
+                        {reminderSendingId === lead.id ? "Sende..." : reminderSentId === lead.id ? "Team erinnert ✓" : "Team erinnern"}
+                      </button>
+                    )}
+                    {lead.recording_path && (
+                      <button onClick={() => togglePlay(lead)} className="btn-ghost text-xs">
+                        <Icon name="chat" size={12} /> {playingId === lead.id ? "Aufnahme ausblenden" : "Aufnahme abspielen"}
+                      </button>
+                    )}
+                    {lead.recording_path && lead.call_notes_status !== "done" && (
+                      <button disabled={notizenLaeuftId === lead.id} onClick={() => notizenErstellen(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
+                        📝 {notizenLaeuftId === lead.id ? "Erstellt…" : "Notizen erstellen"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {verschiebeId === lead.id && (
-                <div className="pt-2 border-t border-line">
+                <div className="pt-2 mt-2 border-t border-line">
                   <label className="block text-xs text-textMuted mb-1.5">Neuer Termin-Zeitpunkt</label>
                   <div className="flex items-center gap-2 flex-wrap">
                     <input type="datetime-local" className="input !w-auto" value={verschiebeDatum} onChange={(e) => setVerschiebeDatum(e.target.value)} />
@@ -1195,53 +1307,31 @@ export default function Termine() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line">
-                {Object.keys(STATUS_LABELS).map((s) => (
-                  <button key={s} disabled={lead.status === s} onClick={() => updateStatus(lead.id, s)} className="btn-ghost text-xs disabled:opacity-30">
-                    Als „{STATUS_LABELS[s]}" markieren
-                  </button>
-                ))}
-                <button
-                  onClick={() => {
-                    setVerschiebeId(verschiebeId === lead.id ? null : lead.id);
-                    setVerschiebeDatum(toLocalDatetimeValue(lead.appointment_at));
-                  }}
-                  className="btn-ghost text-xs">
-                  🕒 Verschieben
-                </button>
-                {/* In den eigenen Kalender: eine .ics-Datei, die Apple,
-                    Google und Outlook gleichermassen lesen — ohne Anbindung
-                    an einen einzelnen Anbieter (siehe lib/ics.js). */}
-                {lead.appointment_at && (
-                  <button
-                    onClick={() => uebertrageInKalender(lead)}
-                    title="Als Kalender-Datei speichern und in den eigenen Kalender übernehmen"
-                    className="btn-ghost text-xs">
-                    <Icon name="calendar" size={12} /> In meinen Kalender
-                  </button>
-                )}
-                {lead.status === "geplant" && (
-                  <button
-                    disabled={reminderSendingId === lead.id}
-                    title="Schickt eine Erinnerungsmail an Manager/Admins und die eingetragenen Benachrichtigungs-Adressen, nicht an die Kund:in."
-                    onClick={() => sendReminder(lead)}
-                    className={`btn-ghost text-xs ${lead.recording_path ? "" : "ml-auto"} disabled:opacity-40`}
-                  >
-                    <Icon name="send" size={12} />{" "}
-                    {reminderSendingId === lead.id ? "Sende..." : reminderSentId === lead.id ? "Team erinnert ✓" : "Team erinnern"}
-                  </button>
-                )}
-                {lead.recording_path && (
-                  <button onClick={() => togglePlay(lead)} className={`btn-ghost text-xs ${lead.status === "geplant" ? "" : "ml-auto"}`}>
-                    <Icon name="chat" size={12} /> {playingId === lead.id ? "Aufnahme ausblenden" : "Aufnahme abspielen"}
-                  </button>
-                )}
-                {lead.recording_path && lead.call_notes_status !== "done" && (
-                  <button disabled={notizenLaeuftId === lead.id} onClick={() => notizenErstellen(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
-                    📝 {notizenLaeuftId === lead.id ? "Erstellt…" : "Notizen erstellen"}
-                  </button>
-                )}
-              </div>
+              {followUpId === lead.id && (
+                <div className="pt-2 mt-2 border-t border-line">
+                  <label className="block text-xs text-textMuted mb-1.5">
+                    Wann ist der {TERMIN_ARTEN.find((a) => a.key === neueArt)?.label || "Termin"}?
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input type="datetime-local" className="input !w-auto" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
+                    <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn text-xs disabled:opacity-40">
+                      {neueArt === "closing" ? "Closing Call anlegen"
+                        : neueArt === "checkin" ? "Check-in planen"
+                        : "Folgetermin anlegen"}
+                    </button>
+                    <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                  </div>
+                  <p className="text-[11px] text-textMuted mt-1.5">
+                    Der Termin rückt weiter — es entsteht kein zweiter Eintrag. Die bisherige Stufe bleibt mit
+                    ihrem Datum im Verlauf stehen
+                    {neueArt === "closing"
+                      ? ", damit in der Auswertung sichtbar bleibt, wie viele Erstgespräche bis zum Abschlussgespräch kommen."
+                      : neueArt === "checkin"
+                        ? " — der Anruf einen Monat nach dem Abschluss, mit dem der Kontakt auf 100 % kommt."
+                        : "."}
+                  </p>
+                </div>
+              )}
               {playingId === lead.id && playingUrl && <AudioPlayer src={playingUrl} />}
 
               {/* Einladungen: wer dabei sein soll, muss selbst zusagen
@@ -1291,62 +1381,6 @@ export default function Termine() {
                   </div>
                 );
               })()}
-
-              <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line mt-2">
-                {/* Auf welcher Stufe der Termin steht — ohne das sehen ein
-                    Erstgespräch und ein Abschlussgespräch gleich aus. */}
-                {lead.termin_art && lead.termin_art !== "erstgespraech" && (
-                  <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border flex-shrink-0"
-                    style={{ color: artVon(lead).farbe, borderColor: `color-mix(in srgb, ${artVon(lead).farbe} 45%, transparent)` }}>
-                    {artVon(lead).label}
-                  </span>
-                )}
-                {/* Wo der Kontakt herkommt: die abgeschlossenen Stufen mit
-                    ihrem Datum. Ohne das wüsste nach dem Weiterrücken
-                    niemand mehr, wann das Erstgespräch war. */}
-                {verlaufVon(lead).length > 0 && (
-                  <span className="text-[10px] text-textMuted flex-shrink-0">
-                    {verlaufVon(lead).map((v) => `${v.kurz} ${v.am ? new Date(v.am).toLocaleDateString("de-DE") : "—"}`).join(" → ")}
-                    {" → "}
-                  </span>
-                )}
-                <span className="text-[11px] text-textMuted flex-shrink-0">Ergebnis:</span>
-                {Object.keys(OUTCOME_LABELS).map((o) => (
-                  <button key={o} disabled={lead.outcome === o && o !== "follow_up"} onClick={() => markOutcome(lead.id, o)} className="btn-ghost text-xs disabled:opacity-30">
-                    {OUTCOME_LABELS[o]}
-                  </button>
-                ))}
-                {/* Der Closing Call ist kein Ergebnis, sondern die nächste
-                    Stufe: das Gespräch, in dem abgeschlossen wird. Deshalb
-                    steht er hier und nicht bei den Ergebnissen. */}
-                <button
-                  onClick={() => { setFollowUpId(lead.id); setFollowUpDate(""); setNeueArt("closing"); }}
-                  className="btn-ghost text-xs ml-auto" style={{ borderColor: "color-mix(in srgb, var(--theme-teal, #3FA7D6) 45%, transparent)" }}>
-                  🤝 Closing Call
-                </button>
-              </div>
-              {followUpId === lead.id && (
-                <>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
-                    <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
-                      {neueArt === "closing" ? "Closing Call anlegen"
-                        : neueArt === "checkin" ? "Check-in planen"
-                        : "Folgetermin anlegen"}
-                    </button>
-                    <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
-                  </div>
-                  <p className="text-[11px] text-textMuted mt-1">
-                    Der Termin rückt weiter — es entsteht kein zweiter Eintrag. Die bisherige Stufe bleibt mit
-                    ihrem Datum im Verlauf stehen
-                    {neueArt === "closing"
-                      ? ", damit in der Auswertung sichtbar bleibt, wie viele Erstgespräche bis zum Abschlussgespräch kommen."
-                      : neueArt === "checkin"
-                        ? " — der Anruf einen Monat nach dem Abschluss, mit dem der Kontakt auf 100 % kommt."
-                        : "."}
-                  </p>
-                </>
-              )}
 
               {(() => {
                 const comments = commentsByLead[lead.id] || [];
