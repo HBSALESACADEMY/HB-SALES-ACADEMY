@@ -62,7 +62,7 @@ export default async function handler(req, res) {
       // Termine über organization_id, nicht über die anlegende Person: wer
       // per Firmencode in mehreren Organisationen arbeitet, nähme seine
       // Termine sonst überallhin mit (migration_114).
-      admin.from("leads").select("created_by, status, outcome, appointment_at, created_at")
+      admin.from("leads").select("created_by, status, outcome, appointment_at, created_at, termin_art")
         .eq("organization_id", orgId).gte("created_at", `${von}T00:00:00`).lte("created_at", `${bis}T23:59:59`),
       // Einzelne Ereignisse mit Uhrzeit (migration_128) — die Grundlage für
       // "welcher Einwand zu welcher Stunde". Über die Personen der
@@ -158,6 +158,10 @@ export default async function handler(req, res) {
         pruefungen: pruefungJePerson[p.id] || [],
       })),
       zeilen: zeilen || [],
+      // Für den Stufen-Trichter: Erstgespräch → Folgetermin → Closing.
+      termineRoh: (termine || []).map((t) => ({
+        status: t.status, outcome: t.outcome, termin_art: t.termin_art,
+      })),
       ereignisse: ereignisse || [],
     });
   } catch (e) {

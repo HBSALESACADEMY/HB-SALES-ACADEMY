@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
+import { artVon, TERMIN_ARTEN } from "../lib/terminArt";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -43,6 +44,10 @@ export default function Termine() {
   const [playingUrl, setPlayingUrl] = useState(null);
   const [error, setError] = useState("");
   const [followUpId, setFollowUpId] = useState(null);
+  // Welche Stufe der neue Termin bekommt: Folgetermin oder Closing Call.
+  // Beides legt einen Termin an, aber es sind verschiedene Stufen im
+  // Verkauf — und für die Frage, wo es hakt, ist das der Unterschied.
+  const [neueArt, setNeueArt] = useState("folgetermin");
   const [followUpDate, setFollowUpDate] = useState("");
   const [highlightId, setHighlightId] = useState(null);
   const [notificationEmails, setNotificationEmails] = useState([]);
@@ -617,6 +622,7 @@ export default function Termine() {
       // Erst Datum für den Folgetermin abfragen, statt sofort zu speichern.
       setFollowUpId(id);
       setFollowUpDate("");
+      setNeueArt("folgetermin");
       return;
     }
     const err = await aendereGeprueft(supabase.from("leads").update({ outcome }).eq("id", id), "Das Ergebnis darf nur eintragen, wer den Termin angelegt hat, oder ein Manager.");
@@ -664,13 +670,16 @@ export default function Termine() {
       // Folgetermins zeigen so alle auf denselben Ausgangspunkt, statt eine
       // immer längere Kette zu bilden.
       follow_up_of: original.follow_up_of || original.id,
+      // Die Stufe des neuen Termins (migration_153).
+      termin_art: neueArt,
     }).select().single();
 
     if (err) { setError(err.message); return; }
     setLeads((prev) => [neuerTermin, ...prev.map((l) => (l.id === id ? { ...l, outcome: "follow_up" } : l))]);
     // Gemeldet wird der NEUE Termin — er trägt den künftigen Zeitpunkt, auf
     // den sich das Team einstellen muss.
-    meldeTerminAenderung(neuerTermin.id, "folgetermin", `Folgetermin zum Gespräch mit ${original.name}.`);
+    meldeTerminAenderung(neuerTermin.id, "folgetermin",
+      `${neueArt === "closing" ? "Closing Call" : "Folgetermin"} zum Gespräch mit ${original.name}.`);
     setFollowUpId(null);
     setFollowUpDate("");
     setExpandedLeadId(neuerTermin.id);
@@ -1289,22 +1298,44 @@ export default function Termine() {
               })()}
 
               <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-line mt-2">
+                {/* Auf welcher Stufe der Termin steht — ohne das sehen ein
+                    Erstgespräch und ein Abschlussgespräch gleich aus. */}
+                {lead.termin_art && lead.termin_art !== "erstgespraech" && (
+                  <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
+                    {artVon(lead).label}
+                  </span>
+                )}
                 <span className="text-[11px] text-textMuted flex-shrink-0">Ergebnis:</span>
                 {Object.keys(OUTCOME_LABELS).map((o) => (
                   <button key={o} disabled={lead.outcome === o && o !== "follow_up"} onClick={() => markOutcome(lead.id, o)} className="btn-ghost text-xs disabled:opacity-30">
                     {OUTCOME_LABELS[o]}
                   </button>
                 ))}
+                {/* Der Closing Call ist kein Ergebnis, sondern die nächste
+                    Stufe: das Gespräch, in dem abgeschlossen wird. Deshalb
+                    steht er hier und nicht bei den Ergebnissen. */}
+                <button
+                  onClick={() => { setFollowUpId(lead.id); setFollowUpDate(""); setNeueArt("closing"); }}
+                  className="btn-ghost text-xs ml-auto" style={{ borderColor: "color-mix(in srgb, var(--theme-teal, #3FA7D6) 45%, transparent)" }}>
+                  🤝 Closing Call
+                </button>
               </div>
               {followUpId === lead.id && (
-                <div className="flex items-center gap-2 mt-2">
-                  <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
-                  <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">Folgetermin anlegen</button>
-                  <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
-                </div>
-              )}
-              {followUpId === lead.id && (
-                <p className="text-[11px] text-textMuted mt-1">Dieser Termin bleibt erhalten; der Folgetermin wird als eigener Eintrag angelegt.</p>
+                <>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <input type="datetime-local" className="input !py-1.5 text-xs flex-1" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
+                    <button disabled={!followUpDate} onClick={() => saveFollowUp(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
+                      {neueArt === "closing" ? "Closing Call anlegen" : "Folgetermin anlegen"}
+                    </button>
+                    <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
+                  </div>
+                  <p className="text-[11px] text-textMuted mt-1">
+                    Dieser Termin bleibt erhalten; der neue wird als eigener Eintrag angelegt
+                    {neueArt === "closing"
+                      ? " — als Closing Call, damit in der Auswertung sichtbar wird, wie viele Erstgespräche bis zum Abschlussgespräch kommen."
+                      : "."}
+                  </p>
+                </>
               )}
 
               {(() => {

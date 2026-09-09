@@ -48,6 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2442,4 +2443,30 @@ test("Die Rückmeldungs-Route schützt sich mit einem Geheimnis", () => {
   assert.match(route, /return res\.status\(401\)/);
   // Ohne eingerichtetes Geheimnis nimmt sie gar nichts an.
   assert.match(route, /if \(!geheimnis\) return res\.status\(503\)/);
+});
+
+test("Closing Call ist eine eigene Stufe, kein Ergebnis", () => {
+  // "Der Kunde überlegt noch" und "jetzt wird abgeschlossen" sahen in der
+  // Liste gleich aus. Für die Frage, wo es hakt, ist genau dieser
+  // Unterschied die Antwort.
+  assert.equal(TERMIN_ARTEN.length, 3);
+  // Ohne Angabe ist es ein Erstgespräch — bestehende Termine sollen nicht
+  // umgedeutet werden.
+  assert.equal(artVon({}).key, "erstgespraech");
+  assert.equal(artVon({ termin_art: null }).key, "erstgespraech");
+  assert.equal(artVon({ termin_art: "closing" }).label, "Closing Call");
+
+  const stufen = stufenAuswertung([
+    { termin_art: null, status: "wahrgenommen" },
+    { termin_art: "closing", status: "wahrgenommen", outcome: "kunde" },
+    { termin_art: "closing", status: "wahrgenommen" },
+    { termin_art: "closing", status: "geplant" },
+  ]);
+  const closing = stufen.find((s) => s.key === "closing");
+  assert.equal(closing.gesamt, 3);
+  assert.equal(closing.wahrgenommen, 2);   // der geplante zählt nicht mit
+  assert.equal(closing.abschlussquote, 50);
+
+  // Ohne wahrgenommene Termine keine Quote — und nicht null Prozent.
+  assert.equal(stufen.find((s) => s.key === "folgetermin").abschlussquote, null);
 });

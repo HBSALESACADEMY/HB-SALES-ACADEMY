@@ -7,6 +7,7 @@ import Kreisdiagramm from "../components/Kreisdiagramm";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import TempoKarte from "../components/TempoKarte";
 import FilterAuswahl from "../components/FilterAuswahl";
+import { stufenAuswertung } from "../lib/terminArt";
 import { kursStand, kursDetails } from "../lib/kursstand";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
@@ -134,7 +135,7 @@ export default function AuswertungSeite() {
 }
 
 function Bericht({ daten, offen, setOffen }) {
-  const { personen = [], teams = [], zeilen = [], kategorien = [], ereignisse = [] } = daten;
+  const { personen = [], teams = [], zeilen = [], kategorien = [], ereignisse = [], termineRoh = [] } = daten;
 
   // Zahlen je Person, dann je Team. Beides aus denselben Zeilen, damit
   // Tabelle, Trichter und Empfehlungen nie auseinanderlaufen.
@@ -371,6 +372,49 @@ function Bericht({ daten, offen, setOffen }) {
         titel="Einwände und Termine nach Uhrzeit"
         hinweis="Die ganze Organisation, jede Zeile eine Stunde in deutscher Zeit. Rechts, wie viele Termine in dieser Stunde zustande kamen — daran hängt, wann sich Anrufen lohnt."
       />
+
+      {/* Die Stufen im Verkauf. Ein Erstgespräch und ein Abschlussgespräch
+          sahen vorher gleich aus — dabei ist genau dieser Unterschied die
+          Antwort auf die Frage, wo es hakt. */}
+      {termineRoh.length > 0 && (
+        <div className="card mb-4">
+          <div className="font-semibold text-textMain text-sm mb-1">Stufen im Verkauf</div>
+          <p className="text-xs text-textMuted mb-3">
+            Erstgespräch, Folgetermin, Closing Call — und was auf jeder Stufe daraus wird.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-textMuted text-left">
+                  <th className="font-normal pb-2 pr-3">Stufe</th>
+                  <th className="font-normal pb-2 px-2 text-right">Termine</th>
+                  <th className="font-normal pb-2 px-2 text-right">Wahrgenommen</th>
+                  <th className="font-normal pb-2 px-2 text-right">Kunden</th>
+                  <th className="font-normal pb-2 px-2 text-right">Abschlussquote</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stufenAuswertung(termineRoh).map((st) => (
+                  <tr key={st.key} className="border-t border-line">
+                    <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{st.label}</td>
+                    <td className="py-1.5 px-2 text-right font-mono">{st.gesamt}</td>
+                    <td className="py-1.5 px-2 text-right font-mono">{st.wahrgenommen}</td>
+                    <td className="py-1.5 px-2 text-right font-mono">{st.kunden}</td>
+                    <td className="py-1.5 px-2 text-right font-mono text-textMain">
+                      {st.abschlussquote === null ? "—" : `${st.abschlussquote} %`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-textMuted mt-3 leading-snug">
+            Gezählt wird je Stufe, nicht je Kette — ein Termin steht nur auf einer Stufe. Ohne wahrgenommene
+            Termine gibt es keine Quote und nicht etwa null Prozent. Termine ohne Angabe zählen als
+            Erstgespräch: das sind sie in aller Regel, und bestehende sollen nicht umgedeutet werden.
+          </p>
+        </div>
+      )}
 
       <KursKarte personen={mitZahlen} offen={offen} setOffen={setOffen} />
 
