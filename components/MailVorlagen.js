@@ -1,4 +1,4 @@
-import { PLATZHALTER, unbekanntePlatzhalter, doppelt } from "../lib/marketingVorlage";
+import { PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage";
 
 // Die Mail-Vorlagen bearbeiten.
 //
@@ -6,7 +6,7 @@ import { PLATZHALTER, unbekanntePlatzhalter, doppelt } from "../lib/marketingVor
 // Einstellungen liegen) und den E-Mail-Marketing-Reiter (wo man merkt, dass
 // eine Vorlage fehlt). Zwei getrennte Masken für dieselbe Sache wären der
 // sichere Weg zu zwei verschiedenen Verhaltensweisen.
-export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], signatur = "" }) {
+export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], signatur = "", erfolge = [] }) {
   function aendere(i, feld, wert) {
     onChange(vorlagen.map((v, j) => (j === i ? { ...v, [feld]: wert } : v)));
   }
@@ -24,6 +24,29 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
         sonst steht beim Kunden „Firma:“ ohne Firma, und daran erkennt er die Serienmail.
       </p>
 
+      {/* Die Reihenfolge bestimmt, wie die Vorlagen überall stehen: in der
+          Übersicht, im Schreibfeld und im Call Tracker. Bisher war das die
+          Reihenfolge, in der sie angelegt wurden — jetzt lässt sie sich
+          ordnen, entweder von Hand oder auf einen Klick. */}
+      {vorlagen.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-[11px] text-textMuted">Reihenfolge:</span>
+          <button onClick={() => onChange(nachNamen(vorlagen))} className="btn-ghost text-[11px]">
+            Nach Namen
+          </button>
+          {/* Nur wo Zahlen vorliegen: in der Verwaltung gibt es keine
+              Kontakte, und ein Knopf, der dort nichts täte, wäre eine
+              Lüge. */}
+          {erfolge.length > 0 && (
+            <button onClick={() => onChange(nachErfolg(vorlagen, erfolge))} className="btn-ghost text-[11px]"
+              title="Die Vorlage mit der besten Terminquote nach oben. Vorlagen ohne bewertete Fälle bleiben hinten.">
+              Nach Erfolg
+            </button>
+          )}
+          <span className="text-[11px] text-textMuted">oder mit ↑ ↓ von Hand</span>
+        </div>
+      )}
+
       {vorlagen.map((v, i) => {
         // Ein Tippfehler im Platzhalter landet sonst wörtlich in der Mail
         // beim Kunden: "Hallo {{vorname}}".
@@ -34,8 +57,19 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
         return (
           <div key={i} className="card mb-2">
             <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] text-textMuted font-mono flex-shrink-0 w-5">{i + 1}.</span>
               <input className="input !py-1.5 text-xs" placeholder="Name der Vorlage, z. B. Erstinfo"
                 value={v.name || ""} onChange={(e) => aendere(i, "name", e.target.value)} />
+              {vorlagen.length > 1 && (
+                <span className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => onChange(verschiebeVorlage(vorlagen, i, -1))} disabled={i === 0}
+                    aria-label="Nach oben" title="Nach oben"
+                    className="btn-ghost text-xs !px-2 disabled:opacity-30">↑</button>
+                  <button onClick={() => onChange(verschiebeVorlage(vorlagen, i, 1))} disabled={i === vorlagen.length - 1}
+                    aria-label="Nach unten" title="Nach unten"
+                    className="btn-ghost text-xs !px-2 disabled:opacity-30">↓</button>
+                </span>
+              )}
               <button onClick={() => onChange(vorlagen.filter((_, j) => j !== i))}
                 className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
             </div>

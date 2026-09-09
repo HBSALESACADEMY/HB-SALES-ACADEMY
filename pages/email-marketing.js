@@ -485,10 +485,13 @@ export default function EmailMarketing() {
                 Noch keine Vorlage. Ohne Vorlage schreibt jeder seinen eigenen Text — aufklappen und anlegen.
               </p>
             )}
-            {vorlagen.map((v) => {
+            {vorlagen.map((v, i) => {
               const erfolg = vorlagenErfolg(kontakte).find((e) => e.name === v.name);
               return (
-                <div key={v.name} className="flex items-start gap-2 text-xs">
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  {/* Die Nummer zeigt, dass die Reihenfolge gewollt ist und
+                      nicht zufällig — geändert wird sie beim Aufklappen. */}
+                  <span className="text-[11px] text-textMuted font-mono flex-shrink-0 w-5">{i + 1}.</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-textMain">{v.name}</div>
                     <div className="text-[11px] text-textMuted truncate">{v.betreff || "(kein Betreff)"}</div>
@@ -526,7 +529,7 @@ export default function EmailMarketing() {
 
         <Aufklapper offen={vorlagenOffen}>
           <div className="mt-3">
-            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} signatur={signatur} />
+            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} signatur={signatur} erfolge={vorlagenErfolg(kontakte)} />
 
             {/* Die Vorschau: der fertige Text mit einem erfundenen Kontakt.
                 So sieht man Anrede, Absätze und Signatur, bevor eine echte
@@ -701,7 +704,8 @@ export default function EmailMarketing() {
                   <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                     <span className="text-[11px] text-textMuted">Vorlage:</span>
                     {vorlagen.map((v, i) => (
-                      <button key={i} onClick={() => starteMail(k, v)} className="btn-ghost text-[11px]">
+                      <button key={i} onClick={() => starteMail(k, v)}
+                        className={`btn-ghost text-[11px] ${mailVorlage === v.name ? "text-amber border-amber" : ""}`}>
                         {v.name}
                       </button>
                     ))}

@@ -1304,8 +1304,8 @@ export default function CallTracker() {
 
                   {vorlagen.length > 1 && (
                     <div className="flex items-center justify-center gap-1.5 mb-3 flex-wrap">
-                      {vorlagen.map((v) => (
-                        <button key={v.name} onClick={() => waehleVorlage(mailKontakt, v)}
+                      {vorlagen.map((v, i) => (
+                        <button key={i} onClick={() => waehleVorlage(mailKontakt, v)}
                           className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mailEntwurf.vorlage === v.name ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
                           {v.name}
                         </button>

@@ -49,7 +49,7 @@ import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitf
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
 import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
-import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
+import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
 import { zeitpunktInBerlin } from "../lib/woche.js";
@@ -2582,4 +2582,34 @@ test("Der Check-in wird nach einem Monat fällig — und nur bei Kunden", () => 
   assert.equal(checkinFaellig({ appointment_at: vorTagen(60) }), false);
   // Läuft schon: nicht noch einmal vorschlagen.
   assert.equal(checkinFaellig({ outcome: "kunde", termin_art: "checkin", appointment_at: vorTagen(60) }), false);
+});
+
+test("Die Reihenfolge der Vorlagen lässt sich ordnen", () => {
+  const v = [{ name: "Nachfassen" }, { name: "Angebot" }, { name: "Erstinfo" }];
+
+  // Von Hand: die Vorlage tauscht mit ihrer Nachbarin.
+  assert.deepEqual(verschiebeVorlage(v, 2, -1).map((x) => x.name),
+    ["Nachfassen", "Erstinfo", "Angebot"]);
+  assert.deepEqual(verschiebeVorlage(v, 0, 1).map((x) => x.name),
+    ["Angebot", "Nachfassen", "Erstinfo"]);
+
+  // Über den Rand hinaus passiert nichts — und die Liste bleibt heil.
+  assert.deepEqual(verschiebeVorlage(v, 0, -1).map((x) => x.name),
+    ["Nachfassen", "Angebot", "Erstinfo"]);
+  assert.deepEqual(verschiebeVorlage(v, 2, 1).length, 3);
+
+  // Alphabetisch, mit deutschen Umlauten an der richtigen Stelle.
+  assert.deepEqual(nachNamen([{ name: "Zusage" }, { name: "Änderung" }, { name: "Angebot" }]).map((x) => x.name),
+    ["Änderung", "Angebot", "Zusage"]);
+
+  // Nach Erfolg: die beste Quote oben. Eine Vorlage ohne bewertete Fälle
+  // darf nicht vor eine mit 40 Prozent rutschen — sie landet hinten und
+  // behält dort ihre bisherige Reihenfolge.
+  const erfolge = [{ name: "Angebot", quote: 40 }, { name: "Erstinfo", quote: 70 }, { name: "Nachfassen", quote: null }];
+  assert.deepEqual(nachErfolg(v, erfolge).map((x) => x.name),
+    ["Erstinfo", "Angebot", "Nachfassen"]);
+
+  // Das Sortieren fasst die Vorlagen nicht an, es ordnet sie nur.
+  assert.deepEqual(nachNamen(v).length, 3);
+  assert.deepEqual(v.map((x) => x.name), ["Nachfassen", "Angebot", "Erstinfo"]);
 });
