@@ -433,12 +433,19 @@ export default function EmailMarketing() {
     else setAnhaenge((prev) => prev.filter((x) => x.id !== a.id));
   }
 
-  async function speichereVorlagen() {
+  /**
+   * Die Vorlagen der Organisation speichern.
+   *
+   * Nimmt die Liste als Angabe, damit auch das Löschen aus der Übersicht
+   * darüber läuft: zwei Wege zum selben Feld liefen unweigerlich
+   * auseinander.
+   */
+  async function speichereVorlagen(liste = vorlagenEntwurf, schliessen = true) {
     setVorlagenBusy(true);
     setFehler("");
     // Unvollständige verwerfen: eine Vorlage ohne Text steht sonst in der
     // Auswahl und liefert eine leere Mail.
-    const sauber = (vorlagenEntwurf || [])
+    const sauber = (liste || [])
       .filter((v) => v.name?.trim() && v.text?.trim())
       // Verweise auf gelöschte Dateien mitschleppen hiesse: die Mail
       // scheitert später an einem Anhang, den es nicht mehr gibt.
@@ -452,10 +459,25 @@ export default function EmailMarketing() {
     if (err) setFehler(err);
     else {
       setVorlagen(sauber);
-      setVorlagenEntwurf(null);
-      setVorlagenOffen(false);
+      if (schliessen) {
+        setVorlagenEntwurf(null);
+        setVorlagenOffen(false);
+      } else {
+        // Der Entwurf muss mitziehen, sonst holt das nächste Aufklappen
+        // die gelöschte Vorlage aus dem alten Entwurf zurück.
+        setVorlagenEntwurf(sauber.map((v) => ({ ...v })));
+      }
     }
     setVorlagenBusy(false);
+  }
+
+  // Eine Vorlage aus der Übersicht löschen — mit Rückfrage und sofort
+  // gespeichert. Ohne diesen Weg musste man erst die ganze Maske
+  // aufklappen, die richtige Karte suchen und danach speichern.
+  const [vorlageLoeschen, setVorlageLoeschen] = useState(null);
+  async function loescheVorlage(i) {
+    setVorlageLoeschen(null);
+    await speichereVorlagen(vorlagen.filter((_, j) => j !== i), false);
   }
 
   const gefiltert = kontakte.filter((k) => {
@@ -600,6 +622,17 @@ export default function EmailMarketing() {
                       setVorlagenOffen(true);
                     }}
                     className="btn-ghost text-[11px] flex-shrink-0">Duplizieren</button>
+                  {vorlageLoeschen === i ? (
+                    <span className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="text-[11px] text-coral">Wirklich?</span>
+                      <button onClick={() => loescheVorlage(i)} disabled={vorlagenBusy}
+                        className="btn-ghost text-[11px] text-coral border-coral/40 disabled:opacity-40">Ja, löschen</button>
+                      <button onClick={() => setVorlageLoeschen(null)} className="btn-ghost text-[11px]">Abbrechen</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setVorlageLoeschen(i)}
+                      className="btn-ghost text-[11px] text-coral flex-shrink-0">Löschen</button>
+                  )}
                 </div>
               );
             })}
@@ -639,7 +672,7 @@ export default function EmailMarketing() {
               billiger, als es später in acht Vorlagen nachzuziehen.
             </p>
             <div className="flex items-center gap-2 mt-3">
-              <button onClick={speichereVorlagen} disabled={vorlagenBusy} className="btn text-xs disabled:opacity-40">
+              <button onClick={() => speichereVorlagen()} disabled={vorlagenBusy} className="btn text-xs disabled:opacity-40">
                 {vorlagenBusy ? "Wird gespeichert…" : "Vorlagen speichern"}
               </button>
               <button onClick={() => { setVorlagenEntwurf(vorlagen.map((v) => ({ ...v }))); setVorlagenOffen(false); }}

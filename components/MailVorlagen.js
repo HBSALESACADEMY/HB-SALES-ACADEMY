@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage";
 
 // Die Mail-Vorlagen bearbeiten.
@@ -7,6 +8,11 @@ import { PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNam
 // eine Vorlage fehlt). Zwei getrennte Masken für dieselbe Sache wären der
 // sichere Weg zu zwei verschiedenen Verhaltensweisen.
 export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], signatur = "", erfolge = [] }) {
+  // Eine Rückfrage vor dem Entfernen. Eine Vorlage ist Arbeit von einer
+  // halben Stunde, und der Knopf sass neben dem Namensfeld — ein Fehlklick
+  // dort war unbemerkt weg, sobald jemand danach speicherte.
+  const [loeschen, setLoeschen] = useState(null);
+
   function aendere(i, feld, wert) {
     onChange(vorlagen.map((v, j) => (j === i ? { ...v, [feld]: wert } : v)));
   }
@@ -70,8 +76,17 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
                     className="btn-ghost text-xs !px-2 disabled:opacity-30">↓</button>
                 </span>
               )}
-              <button onClick={() => onChange(vorlagen.filter((_, j) => j !== i))}
-                className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+              {loeschen === i ? (
+                <span className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-[11px] text-coral">Wirklich?</span>
+                  <button onClick={() => { setLoeschen(null); onChange(vorlagen.filter((_, j) => j !== i)); }}
+                    className="btn-ghost text-xs text-coral border-coral/40">Ja</button>
+                  <button onClick={() => setLoeschen(null)} className="btn-ghost text-xs">Nein</button>
+                </span>
+              ) : (
+                <button onClick={() => setLoeschen(i)}
+                  className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
+              )}
             </div>
             <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
               value={v.betreff || ""} onChange={(e) => aendere(i, "betreff", e.target.value)} />
@@ -131,6 +146,12 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
 
       <button onClick={() => onChange([...vorlagen, { name: "", betreff: "", text: "" }])}
         className="btn-ghost text-xs">+ Vorlage</button>
+      {/* Gesagt, statt hinterher gemerkt: entfernt ist eine Vorlage erst,
+          wenn gespeichert wurde. Wer die Maske vorher schliesst, hat sie
+          noch. */}
+      <p className="text-[11px] text-textMuted mt-2">
+        Änderungen und Löschungen gelten erst nach dem Speichern.
+      </p>
     </>
   );
 }
