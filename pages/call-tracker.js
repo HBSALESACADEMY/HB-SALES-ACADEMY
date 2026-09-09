@@ -1319,7 +1319,7 @@ export default function CallTracker() {
                     </div>
                   )}
 
-                  {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
+                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
 
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button onClick={() => setStep(emailHerkunft)} className="btn-ghost text-sm">Zurück</button>
@@ -1403,7 +1403,7 @@ export default function CallTracker() {
                     </p>
                   </div>
 
-                  {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
+                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
 
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button onClick={() => setStep("mailWeg")} className="btn-ghost text-sm">
@@ -1430,7 +1430,7 @@ export default function CallTracker() {
                         className="btn text-sm disabled:opacity-40">{v.label}</button>
                     ))}
                   </div>
-                  {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
+                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
                   <button onClick={() => { setMailKontakt(null); zurueckZumStart(); }}
                     className="btn-ghost text-xs text-textMuted">Nicht nötig</button>
                 </>

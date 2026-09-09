@@ -289,6 +289,19 @@ export default function EmailMarketing() {
     setFehler("");
   }
 
+  /**
+   * Darf ich an diesen Kontakt selbst schreiben?
+   *
+   * Dieselbe Grenze wie in pages/api/marketing-mail.js: die Leitung an
+   * alle, alle anderen nur an ihre eigenen Kontakte und nur, wenn es eine
+   * Vorlage der Organisation gibt. Was im Namen der Firma an einen Kunden
+   * geht, legt die Leitung fest.
+   */
+  function darfSelbstSenden(k) {
+    if (leitung) return true;
+    return k.user_id === ich && vorlagen.length > 0;
+  }
+
   // Ging heute schon eine Mail an diesen Kontakt raus?
   //
   // Der Senden-Knopf steht bewusst an jedem Eintrag — manchmal braucht es
@@ -746,7 +759,10 @@ export default function EmailMarketing() {
         </div>
       )}
 
-      {fehler && <div className="card mb-4 border-coral/40 text-sm text-coral">{fehler}</div>}
+      {/* Zeilenumbrüche stehen lassen: die Absage von Resend nennt Grund,
+          Absender und den Ort der Einstellung — in einer Zeile hintereinander
+          liest das niemand. */}
+      {fehler && <div className="card mb-4 border-coral/40 text-sm text-coral whitespace-pre-line">{fehler}</div>}
       {laedt && <p className="text-textMuted text-sm">Lädt...</p>}
 
       {!laedt && gefiltert.length === 0 && (
@@ -792,11 +808,22 @@ export default function EmailMarketing() {
               {/* Der Versand-Knopf steht an JEDEM Eintrag, nicht nur bei den
                   offenen: auch ein Kontakt, der schon eine Mail bekommen
                   hat, braucht manchmal eine zweite. */}
-              {leitung && mailFuer !== k.id && (
-                <button onClick={() => { setOffenerKontakt(k.id); starteMail(k, vorlagen[0] || null); }}
+              {/* Auch die Vertriebler senden selbst — an ihre EIGENEN
+                  Kontakte und nur mit einer Vorlage der Organisation. Genau
+                  das liess der Server schon zu; nur der Knopf war
+                  ausgeblendet, und im Call Tracker ging es trotzdem. Zwei
+                  verschiedene Antworten auf dieselbe Frage. */}
+              {darfSelbstSenden(k) && mailFuer !== k.id && (
+                <button onClick={() => { setOffenerKontakt(k.id); starteMail(k, leitung ? (vorlagen[0] || null) : vorlagen[0]); }}
                   className="btn text-xs flex-shrink-0" title={`Mail an ${k.email}`}>
                   ✉️ Senden
                 </button>
+              )}
+              {/* Warum der Knopf fehlt, statt dass er einfach fehlt. */}
+              {!leitung && k.user_id === ich && !vorlagen.length && mailFuer !== k.id && (
+                <span className="text-[11px] text-textMuted flex-shrink-0">
+                  Zum Selbstsenden fehlt eine Vorlage eurer Organisation.
+                </span>
               )}
             </div>
 
@@ -822,9 +849,15 @@ export default function EmailMarketing() {
                         {v.name}
                       </button>
                     ))}
-                    <button onClick={() => starteMail(k, null)} className="btn-ghost text-[11px] text-textMuted">
-                      Leer
-                    </button>
+                    {/* "Leer" nur für die Leitung: der Server lehnt eine
+                        Mail ohne Vorlage von allen anderen ab, und ein
+                        Knopf, der in eine Fehlermeldung führt, ist keine
+                        Wahl. */}
+                    {leitung && (
+                      <button onClick={() => starteMail(k, null)} className="btn-ghost text-[11px] text-textMuted">
+                        Leer
+                      </button>
+                    )}
                   </div>
                 )}
                 <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"

@@ -125,8 +125,18 @@ export default async function handler(req, res) {
     // Mail abgelehnt hat — etwa weil die Absenderdomain nicht verifiziert
     // ist. Genau dann fasst niemand nach, weil scheinbar alles lief.
     if (versand?.error) {
+      // Den Wortlaut von Resend mitgeben, nicht nur die Vermutung.
+      //
+      // Vorher stand hier immer "Prüfe die Absenderadresse" — auch bei
+      // einem abgelaufenen Schlüssel, einer gesperrten Empfängeradresse
+      // oder einem zu grossen Anhang. Wer daraufhin die Domain prüft,
+      // sucht dann stundenlang an der falschen Stelle. Resend schreibt
+      // genau, was fehlt; das gehört auf den Bildschirm.
       return res.status(502).json({
-        error: "Der Mailversand wurde abgelehnt. Prüfe die Absenderadresse der Organisation — sie muss bei Resend verifiziert sein.",
+        error: `Der Mailversand wurde abgelehnt${versand.status ? ` (${versand.status})` : ""}: `
+          + `${versand.meldung || "kein Grund angegeben"}`
+          + `\nAbsender war: ${versand.absender || "unbekannt"}.`
+          + `\nDiese Adresse muss bei Resend verifiziert sein — sie steht unter Verwaltung → Organisation → E-Mail.`,
       });
     }
     if (versand?.skipped) {
