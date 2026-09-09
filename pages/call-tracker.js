@@ -4,7 +4,7 @@ import Icon from "../components/Icon";
 import InfoCard from "../components/InfoCard";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
-import { EMAIL_STATUS } from "../lib/emailKontakt";
+import { EMAIL_STATUS, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../lib/emailKontakt";
 import { NACHFASS_VORSCHLAEGE, faelligIn, nachfassTitel } from "../lib/nachfass";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
 import { fertigeMail, werteFuerKontakt } from "../lib/marketingVorlage";
@@ -513,13 +513,20 @@ export default function CallTracker() {
   async function speichereEmailKontakt() {
     setEmailFehler("");
     if (!emailEntwurf.name.trim()) { setEmailFehler("Bitte einen Namen eintragen."); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailEntwurf.email.trim())) {
-      setEmailFehler("Bitte eine gültige E-Mail-Adresse eintragen.");
+    // Dieselbe Prüfung wie beim Speichern und beim Senden — an einer
+    // Stelle beschrieben (lib/emailKontakt.js). Eine kopierte Adresse
+    // bringt unsichtbare Zeichen mit, die der Versanddienst ablehnt.
+    const sauberEmail = bereinigeAdresse(emailEntwurf.email);
+    if (!gueltigeAdresse(sauberEmail)) {
+      const fremd = fremdeZeichen(sauberEmail);
+      setEmailFehler(fremd.length
+        ? `Die Adresse enthält Zeichen, die kein Versanddienst annimmt (${fremd.join(", ")}). Bitte neu eintippen statt zu kopieren.`
+        : "Bitte eine gültige E-Mail-Adresse eintragen.");
       return;
     }
     setEmailBusy(true);
     try {
-      const { kontakt } = await apiPost("/api/email-kontakt", { ...emailEntwurf, activeOrgId: orgId });
+      const { kontakt } = await apiPost("/api/email-kontakt", { ...emailEntwurf, email: sauberEmail, activeOrgId: orgId });
       // Erst wenn der Kontakt sicher übergeben ist, wird gezählt — sonst
       // stünde in der Statistik ein Kontakt, den niemand bekommen hat.
       bump("email");

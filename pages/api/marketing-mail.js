@@ -3,7 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { sendEmail } from "../../lib/email";
-import { gueltigeAdresse } from "../../lib/emailKontakt";
+import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
 import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss } from "../../lib/marketingVorlage";
 
 // Die Marketing-Mail wirklich verschicken.
@@ -62,7 +62,27 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "Bitte eine Vorlage eurer Organisation verwenden." });
       }
     }
-    if (!gueltigeAdresse(kontakt.email)) return res.status(400).json({ error: "Die Adresse des Kontakts ist ungültig." });
+    // Die Adresse säubern, BEVOR sie zum Versanddienst geht — und die
+    // Zeile gleich mit reparieren.
+    //
+    // Genau hier ist es schiefgegangen: eine kopierte Adresse trug ein
+    // unsichtbares Zeichen, Resend antwortete "Invalid `to` field. The
+    // email address contains non-ASCII characters", und gesucht wurde beim
+    // Absender. Die Adresse sah ja richtig aus.
+    const sauber = bereinigeAdresse(kontakt.email);
+    if (!gueltigeAdresse(sauber)) {
+      const fremd = fremdeZeichen(sauber);
+      return res.status(400).json({
+        error: fremd.length
+          ? `Die Adresse "${kontakt.email}" enthält Zeichen, die kein Versanddienst annimmt (${fremd.join(", ")}). `
+            + "Meist stammen sie aus dem Kopieren. Adresse beim Kontakt neu eintippen."
+          : `Die Adresse "${kontakt.email}" ist keine gültige E-Mail-Adresse.`,
+      });
+    }
+    if (sauber !== kontakt.email) {
+      await admin.from("email_kontakte").update({ email: sauber }).eq("id", kontakt.id);
+      kontakt.email = sauber;
+    }
 
     const { data: org } = await admin.from("organizations")
       .select("name, email_absender, email_antwort_an, email_signatur").eq("id", orgId).maybeSingle();
@@ -136,7 +156,12 @@ export default async function handler(req, res) {
         error: `Der Mailversand wurde abgelehnt${versand.status ? ` (${versand.status})` : ""}: `
           + `${versand.meldung || "kein Grund angegeben"}`
           + `\nAbsender war: ${versand.absender || "unbekannt"}.`
-          + `\nDiese Adresse muss bei Resend verifiziert sein — sie steht unter Verwaltung → Organisation → E-Mail.`,
+          // Der Hinweis auf die Absender-Freigabe nur dann, wenn es auch
+          // darum geht. Sonst schickt er bei jedem anderen Grund auf die
+          // falsche Fährte — so ist genau diese Suche entstanden.
+          + (/domain|verif|from|sender/i.test(String(versand.meldung || ""))
+            ? `\nDiese Adresse muss bei Resend verifiziert sein — sie steht unter Verwaltung → Organisation → E-Mail.`
+            : ""),
       });
     }
     if (versand?.skipped) {

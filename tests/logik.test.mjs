@@ -2329,10 +2329,19 @@ test("Die Versandhistorie steht nicht in der Gesprächsnotiz", () => {
   // Sie wuchs dort mit jedem Versand — und weil {{notiz}} in den Vorlagen
   // steht, landete sie in der nächsten Mail beim Kunden.
   const route = readFileSync(new URL("../pages/api/marketing-mail.js", import.meta.url), "utf8");
-  const update = route.slice(route.indexOf('from("email_kontakte").update'), route.indexOf("}).eq(\"id\", kontakt.id)"));
-  assert.ok(!/notiz:/.test(update),
-    "Der Versand darf die Gesprächsnotiz nicht verändern — sie wird in Vorlagen eingesetzt.");
-  assert.match(update, /letzter_betreff:/);
+
+  // Alle Schreibvorgänge auf die Kontakte betrachten, nicht nur den ersten:
+  // die Route repariert inzwischen auch eine unsaubere Adresse, und die
+  // steht davor.
+  const bloecke = [...route.matchAll(/from\("email_kontakte"\)\s*\.update\(\{([\s\S]*?)\}\)/g)]
+    .map((m) => m[1]);
+  assert.ok(bloecke.length >= 1, "Die Route muss den Kontakt nach dem Versand fortschreiben.");
+  bloecke.forEach((b) => {
+    assert.ok(!/notiz:/.test(b),
+      "Der Versand darf die Gesprächsnotiz nicht verändern — sie wird in Vorlagen eingesetzt.");
+  });
+  assert.equal(bloecke.filter((b) => /letzter_betreff:/.test(b)).length, 1,
+    "Genau ein Schreibvorgang hält den zuletzt verschickten Betreff fest.");
 });
 
 test("Der Standardschluss kommt nicht zweimal", () => {
@@ -2664,4 +2673,33 @@ test("Die Follow-up-Meldung endet am Berliner Tagesende, nicht am Serverzeit-Tag
 
   // Und was heute spätabends in Berlin ansteht, gehört noch zu heute.
   assert.ok(new Date("2026-09-09T23:30:00+02:00").toISOString() < bis);
+});
+
+test("Adressen mit unsichtbaren Zeichen werden gesäubert, nicht verschickt", async () => {
+  const { bereinigeAdresse, fremdeZeichen, gueltigeAdresse } = await import("../lib/emailKontakt.js");
+
+  // Der echte Fall: eine kopierte Adresse trug ein Zeichen der Breite null.
+  // Sie sah richtig aus, und Resend antwortete "Invalid `to` field. The
+  // email address contains non-ASCII characters" — gesucht wurde dann beim
+  // Absender, weil die Meldung nichts anderes hergab.
+  const kopiert = "kontakt​@volkwork.de";
+  assert.equal(bereinigeAdresse(kopiert), "kontakt@volkwork.de");
+  assert.equal(gueltigeAdresse(kopiert), true, "Nach dem Säubern ist sie in Ordnung.");
+
+  // Geschützte Leerzeichen und Schreibrichtungs-Steuerzeichen ebenso.
+  assert.equal(bereinigeAdresse("‪ kontakt@volkwork.de "), "kontakt@volkwork.de");
+
+  // Was sich nicht säubern lässt, ist keine versandfähige Adresse.
+  // Umlaut-Adressen gibt es technisch, aber der Versanddienst nimmt sie
+  // nicht — und eine Adresse, an die nichts rausgeht, ist im Marketing
+  // eine Falle, die erst beim Senden zuschnappt.
+  assert.equal(gueltigeAdresse("müller@volkwork.de"), false);
+  assert.deepEqual(fremdeZeichen("müller@volkwork.de"), ["U+00FC"]);
+  assert.equal(gueltigeAdresse("ohne-at.volkwork.de"), false);
+  assert.equal(gueltigeAdresse("kontakt@volkwork.de"), true);
+
+  // Das Codepunkt-Format ist die Auskunft: ein Zeichen der Breite null
+  // lässt sich nicht anzeigen.
+  assert.deepEqual(fremdeZeichen(kopiert), ["U+200B"]);
+  assert.deepEqual(fremdeZeichen("kontakt@volkwork.de"), []);
 });

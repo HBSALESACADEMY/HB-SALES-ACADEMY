@@ -2,7 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { sendeAlarm } from "../../lib/alarm";
-import { gueltigeAdresse } from "../../lib/emailKontakt";
+import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
 
 // Kontakte aus dem Gespräch: anlegen und auf Dubletten prüfen.
 //
@@ -48,7 +48,18 @@ export default async function handler(req, res) {
 
   const { anrede, name, email, firma, telefon, notiz } = req.body || {};
   if (!String(name || "").trim()) return res.status(400).json({ error: "Name fehlt." });
-  if (!gueltigeAdresse(email)) return res.status(400).json({ error: "Keine gültige E-Mail-Adresse." });
+  // Beim Erfassen säubern, nicht erst beim Senden: eine kopierte Adresse
+  // bringt unsichtbare Zeichen mit, und wer den Fehler erst zwei Tage
+  // später beim Versand sieht, sucht ihn beim Absender.
+  const sauber = bereinigeAdresse(email);
+  if (!gueltigeAdresse(sauber)) {
+    const fremd = fremdeZeichen(sauber);
+    return res.status(400).json({
+      error: fremd.length
+        ? `Die Adresse enthält Zeichen, die kein Versanddienst annimmt (${fremd.join(", ")}). Bitte neu eintippen statt zu kopieren.`
+        : "Keine gültige E-Mail-Adresse.",
+    });
+  }
 
   try {
     const { data: kontakt, error } = await admin.from("email_kontakte").insert({
@@ -58,7 +69,7 @@ export default async function handler(req, res) {
       // lehnt alles andere ohnehin ab (migration_149).
       anrede: anrede === "herr" || anrede === "frau" ? anrede : null,
       name: String(name).trim(),
-      email: String(email).trim(),
+      email: sauber,
       firma: String(firma || "").trim() || null,
       telefon: String(telefon || "").trim() || null,
       notiz: String(notiz || "").trim() || null,

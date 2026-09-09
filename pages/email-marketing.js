@@ -10,7 +10,7 @@ import { apiPost } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
-import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse } from "../lib/emailKontakt";
+import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../lib/emailKontakt";
 import {
   fuelleVorlage, fertigeMail, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN,
   BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt,
@@ -230,11 +230,20 @@ export default function EmailMarketing() {
 
   async function speichereBearbeitung(k) {
     if (!entwurf.name.trim()) { setFehler("Der Name darf nicht leer sein."); return; }
-    if (!gueltigeAdresse(entwurf.email)) { setFehler("Bitte eine gültige E-Mail-Adresse eintragen."); return; }
+    // Die Adresse säubern statt nur trimmen: kopierte Adressen bringen
+    // unsichtbare Zeichen mit, und der Versanddienst lehnt sie später ab.
+    const sauberEmail = bereinigeAdresse(entwurf.email);
+    if (!gueltigeAdresse(sauberEmail)) {
+      const fremd = fremdeZeichen(sauberEmail);
+      setFehler(fremd.length
+        ? `Die Adresse enthält Zeichen, die kein Versanddienst annimmt (${fremd.join(", ")}). Bitte neu eintippen statt zu kopieren.`
+        : "Bitte eine gültige E-Mail-Adresse eintragen.");
+      return;
+    }
     const patch = {
       anrede: entwurf.anrede === "herr" || entwurf.anrede === "frau" ? entwurf.anrede : null,
       name: entwurf.name.trim(),
-      email: entwurf.email.trim(),
+      email: sauberEmail,
       firma: entwurf.firma.trim() || null,
       telefon: entwurf.telefon.trim() || null,
       notiz: entwurf.notiz.trim() || null,
@@ -1008,6 +1017,18 @@ export default function EmailMarketing() {
                   <a href={`mailto:${k.email}`} className="text-amber hover:underline">{k.email}</a>
                   {k.telefon && <span>{k.telefon}</span>}
                 </div>
+                {/* Vorher sichtbar statt beim Senden: eine Adresse mit
+                    unsichtbaren Zeichen sieht richtig aus und wird vom
+                    Versanddienst abgelehnt. */}
+                {!gueltigeAdresse(k.email) && (
+                  <p className="text-[11px] text-coral mb-2">
+                    Diese Adresse nimmt der Versanddienst nicht an
+                    {fremdeZeichen(bereinigeAdresse(k.email)).length
+                      ? ` — sie enthält ${fremdeZeichen(bereinigeAdresse(k.email)).join(", ")}, meist aus dem Kopieren`
+                      : ""}
+                    . Über „Bearbeiten“ neu eintippen.
+                  </p>
+                )}
                 {/* Wer den Kontakt erarbeitet hat, steht in einer eigenen
                     Zeile: daran hängt, wem der Termin später gehört. */}
                 <div className="text-[11px] text-textMuted mb-2">
