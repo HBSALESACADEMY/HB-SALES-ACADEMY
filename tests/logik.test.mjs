@@ -48,7 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, terminFarbe } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2469,4 +2469,26 @@ test("Closing Call ist eine eigene Stufe, kein Ergebnis", () => {
 
   // Ohne wahrgenommene Termine keine Quote — und nicht null Prozent.
   assert.equal(stufen.find((s) => s.key === "folgetermin").abschlussquote, null);
+});
+
+test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
+  // Der Kern: Führt Lion das Erstgespräch von Ernestines Interessent und
+  // vereinbart einen Closing Call, bleibt es Ernestines Kontakt. Im
+  // Kalender muss ihr Name stehen, nicht seiner — sonst sieht es aus, als
+  // wäre es Lions Kunde.
+  assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "closing" }, "Ernestine"),
+    "CC: Max Muster – Ernestine");
+  assert.equal(kalenderTitel({ name: "Max Muster" }, "Ernestine"),
+    "ST: Max Muster – Ernestine");
+  assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "folgetermin" }, ""),
+    "FU: Max Muster");
+
+  // Jede Stufe hat ein Kürzel und eine eigene Farbe — beides an einer
+  // Stelle, sonst laufen Kalender und Liste auseinander.
+  const kuerzel = TERMIN_ARTEN.map((a) => a.kurz);
+  assert.deepEqual(kuerzel, ["ST", "FU", "CC"]);
+  const farben = TERMIN_ARTEN.map((a) => a.farbe);
+  assert.equal(new Set(farben).size, 3, "Drei Stufen brauchen drei unterscheidbare Farben.");
+  assert.equal(terminFarbe({ termin_art: "closing" }), TERMIN_ARTEN[2].farbe);
+  assert.equal(terminFarbe({}), TERMIN_ARTEN[0].farbe);
 });

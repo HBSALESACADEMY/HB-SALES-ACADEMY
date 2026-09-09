@@ -12,6 +12,7 @@ import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel }
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { nurUhrzeit, deutscherTag, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { terminAnzeige } from "../lib/zeit";
+import { kalenderTitel, terminFarbe, artVon, TERMIN_ARTEN } from "../lib/terminArt";
 import { ladeIcsHerunter } from "../lib/ics";
 import { zeitpunktInBerlin } from "../lib/woche";
 
@@ -67,6 +68,11 @@ export default function Kalender() {
   const [bearbeitenEntwurf, setBearbeitenEntwurf] = useState(null);
 
   const heute = tagesSchluessel();
+  // Wer den Termin angelegt hat. Bei einem Folgetermin oder Closing Call
+  // ist das die Person, die den ERSTEN Termin gelegt hat — der neue erbt
+  // sie beim Anlegen. Führt jemand anderes das Gespräch, bleibt es trotzdem
+  // ihr Interessent, und genau das soll im Kalender stehen.
+  const nameVon = (id) => (daten?.personen || []).find((p) => p.id === id)?.name || "";
 
   // Der geladene Zeitraum hängt an der Ansicht — die Wochenansicht reicht
   // über den Monatswechsel hinaus.
@@ -412,6 +418,17 @@ export default function Kalender() {
         Abwesenheiten und deine Vertriebstermine stehen automatisch mit drin.
       </p>
 
+      {/* Was die Farben bedeuten. Ohne Legende rät man, und geraten wird
+          falsch. */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        {TERMIN_ARTEN.map((a) => (
+          <span key={a.key} className="flex items-center gap-1.5 text-[11px] text-textMuted">
+            <span className="w-2 h-2 rounded-full" style={{ background: a.farbe }} />
+            {a.kurz} · {a.label}
+          </span>
+        ))}
+      </div>
+
       {fehler && <div className="card mb-4 border-coral/40 text-sm text-coral">{fehler}</div>}
 
       {/* Kalender-Abo: einmal eintragen, danach hält sich der eigene
@@ -729,13 +746,17 @@ export default function Kalender() {
                         )}
                       </span>
                       <span className="flex flex-col gap-0.5 mt-0.5 leading-tight">
-                        {zeilenFuerTag(inhalt, meinStatus).slice(0, 3).map((z, k) => (
-                          <span key={k} title={z.titel} className="truncate text-[10px] px-0.5">
-                            {z.symbol} {z.titel}
+                        {zeilenFuerTag(inhalt, meinStatus, nameVon).slice(0, 3).map((z, k) => (
+                          <span key={k} title={z.titel} className="truncate text-[10px] px-0.5 flex items-center gap-1">
+                            {/* Die Farbe der Stufe: Setting, Folgetermin
+                                und Closing sind im vollen Monat sonst nicht
+                                zu unterscheiden. */}
+                            {z.farbe && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: z.farbe }} />}
+                            <span className="truncate">{z.symbol} {z.titel}</span>
                           </span>
                         ))}
-                        {zeilenFuerTag(inhalt, meinStatus).length > 3 && (
-                          <span className="text-[10px] text-textMuted px-0.5">+{zeilenFuerTag(inhalt, meinStatus).length - 3} weitere</span>
+                        {zeilenFuerTag(inhalt, meinStatus, nameVon).length > 3 && (
+                          <span className="text-[10px] text-textMuted px-0.5">+{zeilenFuerTag(inhalt, meinStatus, nameVon).length - 3} weitere</span>
                         )}
                       </span>
                     </button>
@@ -800,7 +821,7 @@ export default function Kalender() {
 // Kalender gesucht wird.
 // Das eigene Ja oder Nein gehört in die Zeile: eine Zusage, die man nur in
 // der Einladungsliste wiederfindet, sieht aus, als sei sie nie angekommen.
-function zeilenFuerTag(inhalt, meinStatus) {
+function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
   const zeichen = (quelle, id, standard) => {
     const status = meinStatus ? meinStatus(quelle, id) : null;
     if (status === "zugesagt") return "✅";
@@ -809,7 +830,14 @@ function zeilenFuerTag(inhalt, meinStatus) {
     return standard;
   };
   return [
-    ...inhalt.termine.map((t) => ({ symbol: zeichen("lead", t.id, "📞"), titel: `${uhrzeitDeutsch(t.appointment_at)} ${t.name}` })),
+    // "10:30 CC: Max Muster – Ernestine": Kürzel für die Stufe, dahinter
+    // die Person, die den ERSTEN Termin gelegt hat. Führt jemand anderes
+    // das Gespräch, bleibt es trotzdem ihr Interessent.
+    ...inhalt.termine.map((t) => ({
+      symbol: zeichen("lead", t.id, "📞"),
+      titel: `${uhrzeitDeutsch(t.appointment_at)} ${kalenderTitel(t, nameVon(t.created_by))}`,
+      farbe: terminFarbe(t),
+    })),
     ...inhalt.eintraege.map((e) => ({ symbol: zeichen("org_event", e.id, symbolFuer(e.art)), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
     // Privatkalender zuletzt: sie sind Hintergrund für die Frage "wer kann
     // wann", nicht das, wonach im Firmenkalender gesucht wird.
@@ -900,9 +928,15 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
 
       {inhalt.termine.map((t) => (
         <div key={`t-${t.id}`} className="flex items-start gap-2 py-1">
-          <span>📞</span>
+          {/* Die Farbe der Stufe statt eines Symbols für alle: Setting,
+              Folgetermin und Closing sind sonst nicht zu unterscheiden. */}
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: terminFarbe(t) }} />
+            📞
+          </span>
           <div className="flex-1 min-w-0">
             <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
+              <span className="text-textMuted">{artVon(t).kurz}: </span>
               {t.name}{t.company ? <span className="text-textMuted"> · {t.company}</span> : null}
             </div>
             <div className="text-[11px] text-textMuted">

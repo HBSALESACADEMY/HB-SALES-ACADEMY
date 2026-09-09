@@ -50,7 +50,7 @@ export default async function handler(req, res) {
         .order("von"),
       admin.from("profiles").select("id, full_name, avatar_url, geburtstag, abwesend_von, abwesend_bis")
         .eq("organization_id", orgId),
-      auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by")
+      auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by, termin_art")
         .not("appointment_at", "is", null)
         .gte("appointment_at", vonZeitpunkt)
         .lt("appointment_at", bisZeitpunkt)

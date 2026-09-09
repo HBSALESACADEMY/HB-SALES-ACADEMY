@@ -115,11 +115,11 @@ export default async function handler(req, res) {
     const eingeladenEvents = (einladungen || []).filter((e) => e.quelle === "org_event").map((e) => e.ziel_id);
 
     const [{ data: eigene }, { data: geladene }, { data: eintraege }] = await Promise.all([
-      admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by")
+      admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by, termin_art")
         .in("created_by", [...personen]).not("appointment_at", "is", null)
         .gte("appointment_at", von).lte("appointment_at", bis),
       eingeladenLeads.length
-        ? admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by").in("id", eingeladenLeads)
+        ? admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by, termin_art").in("id", eingeladenLeads)
         : Promise.resolve({ data: [] }),
       eingeladenEvents.length
         ? admin.from("org_events").select("id, titel, art, von, bis, uhrzeit, beschreibung").in("id", eingeladenEvents)
