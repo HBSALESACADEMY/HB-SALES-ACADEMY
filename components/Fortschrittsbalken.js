@@ -1,4 +1,4 @@
-import { TERMIN_ARTEN, artVon, fortschritt } from "../lib/terminArt";
+import { TERMIN_ARTEN, artVon, fortschritt, kuerzelVon } from "../lib/terminArt";
 
 // Wie weit ein Interessent gekommen ist.
 //
@@ -26,7 +26,7 @@ export default function Fortschrittsbalken({ lead, kompakt = false }) {
             return (
               <span key={a.key} title={a.hinweis}
                 className={`text-[10px] ${a.key === aktuell.key ? "text-textMain font-semibold" : erreicht ? "text-textMuted" : "text-textMuted opacity-50"}`}>
-                {erreicht ? "●" : "○"} {a.kurz}
+                {erreicht ? "●" : "○"} {kuerzelVon(a)}
               </span>
             );
           })}

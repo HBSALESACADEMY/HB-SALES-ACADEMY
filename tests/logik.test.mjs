@@ -48,7 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, terminFarbe, rueckeVor, verlaufVon, fortschritt, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2477,8 +2477,12 @@ test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
   // vereinbart einen Closing Call, bleibt es Ernestines Kontakt. Im
   // Kalender muss ihr Name stehen, nicht seiner — sonst sieht es aus, als
   // wäre es Lions Kunde.
+  // Der Closing Call trägt zusätzlich den Geldschein: in einer Liste aus
+  // zwanzig Terminen soll der eine, in dem es ums Geld geht, ins Auge
+  // springen. Nur diese eine Stufe hat ein Symbol — bekäme jede eines,
+  // wäre wieder keins auffällig.
   assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "closing" }, "Ernestine"),
-    "CC: Max Muster – Ernestine");
+    "💵 CC: Max Muster – Ernestine");
   assert.equal(kalenderTitel({ name: "Max Muster" }, "Ernestine"),
     "ST: Max Muster – Ernestine");
   assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "folgetermin" }, ""),
@@ -2488,6 +2492,9 @@ test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
   // Stelle, sonst laufen Kalender und Liste auseinander.
   const kuerzel = TERMIN_ARTEN.map((a) => a.kurz);
   assert.deepEqual(kuerzel, ["ST", "FU", "CC", "CI"]);
+  assert.deepEqual(TERMIN_ARTEN.filter((a) => a.symbol).map((a) => a.key), ["closing"],
+    "Nur der Closing Call trägt ein Symbol — sonst hebt sich keiner mehr ab.");
+  assert.deepEqual(TERMIN_ARTEN.map(kuerzelVon), ["ST", "FU", "💵 CC", "CI"]);
   const farben = TERMIN_ARTEN.map((a) => a.farbe);
   assert.equal(new Set(farben).size, 4, "Jede Stufe braucht eine unterscheidbare Farbe.");
   assert.equal(terminFarbe({ termin_art: "closing" }), TERMIN_ARTEN[2].farbe);

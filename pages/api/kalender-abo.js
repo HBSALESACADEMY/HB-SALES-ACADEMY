@@ -1,6 +1,7 @@
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { baueIcsFeed } from "../../lib/ics";
 import { istFuehrungsrolle } from "../../lib/rollen";
+import { kalenderTitel } from "../../lib/terminArt";
 
 // Der abonnierbare Kalender einer Person.
 //
@@ -141,7 +142,11 @@ export default async function handler(req, res) {
         // Bei fremden Terminen gehört der Name der Person dazu — sonst
         // stehen im Kalender zwanzig Termine, und man weiss bei keinem, wer
         // ihn wahrnimmt.
-        titel: `Termin: ${l.name}${l.company ? ` (${l.company})` : ""}`
+        // Dieselbe Schreibweise wie im Kalender der Academy — mit Kürzel
+        // und, beim Closing Call, mit dem Geldschein. Vorher stand hier
+        // nur "Termin: Name", und im eigenen Kalender sah ein
+        // Abschlussgespräch aus wie jedes andere.
+        titel: `${kalenderTitel(l)}${l.company ? ` (${l.company})` : ""}`
           + (l.created_by !== profil.id && namen.get(l.created_by) ? ` — ${namen.get(l.created_by)}` : ""),
         start: l.appointment_at,
         beschreibung: l.notes || null,

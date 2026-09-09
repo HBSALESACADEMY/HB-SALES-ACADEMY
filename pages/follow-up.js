@@ -12,7 +12,7 @@ import { deutscheZeit } from "../lib/terminzeit";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
-import { artVon } from "../lib/terminArt";
+import { artVon, kuerzelVon } from "../lib/terminArt";
 
 // Follow-up: was nach dem Termin noch offen ist.
 //
@@ -149,7 +149,7 @@ export default function FollowUp() {
             <div key={l.id} className="card !py-2.5">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className="font-semibold text-textMain text-sm">
-                  <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{art.kurz}:</span>
+                  <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>
                   {l.name}
                 </span>
                 {l.company && <span className="text-xs text-textMuted">{l.company}</span>}

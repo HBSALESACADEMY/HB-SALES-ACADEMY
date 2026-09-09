@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
-import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, rueckeVor, verlaufVon } from "../lib/terminArt";
+import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, kuerzelVon, rueckeVor, verlaufVon } from "../lib/terminArt";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
@@ -1039,7 +1039,7 @@ export default function Termine() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold text-textMain text-sm truncate">
-                    <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{art.kurz}:</span>
+                    <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>
                     {lead.name}
                   </span>
                   <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
@@ -1080,7 +1080,7 @@ export default function Termine() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     <span>
-                      <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{art.kurz}:</span>
+                      <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{kuerzelVon(art)}:</span>
                       {lead.name}
                     </span>
                     {lead.follow_up_of && (
@@ -1113,7 +1113,7 @@ export default function Termine() {
                 {verlaufVon(lead).length > 0 && (
                   <div className="text-[10px] text-textMuted mt-1">
                     {verlaufVon(lead).map((v) => `${v.kurz} ${v.am ? new Date(v.am).toLocaleDateString("de-DE") : "—"}`).join(" → ")}
-                    {` → ${art.kurz} ${lead.appointment_at ? new Date(lead.appointment_at).toLocaleDateString("de-DE") : "—"}`}
+                    {` → ${kuerzelVon(art)} ${lead.appointment_at ? new Date(lead.appointment_at).toLocaleDateString("de-DE") : "—"}`}
                   </div>
                 )}
               </div>

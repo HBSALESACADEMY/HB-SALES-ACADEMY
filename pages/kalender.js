@@ -12,7 +12,7 @@ import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel }
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { nurUhrzeit, deutscherTag, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { terminAnzeige } from "../lib/zeit";
-import { kalenderTitel, terminFarbe, artVon, TERMIN_ARTEN, rueckeVor } from "../lib/terminArt";
+import { kalenderTitel, terminFarbe, artVon, kuerzelVon, TERMIN_ARTEN, rueckeVor } from "../lib/terminArt";
 import { ladeIcsHerunter } from "../lib/ics";
 import { zeitpunktInBerlin } from "../lib/woche";
 
@@ -495,7 +495,7 @@ export default function Kalender() {
         {TERMIN_ARTEN.map((a) => (
           <span key={a.key} className="flex items-center gap-1.5 text-[11px] text-textMuted">
             <span className="w-2 h-2 rounded-full" style={{ background: a.farbe }} />
-            {a.kurz} · {a.label}
+            {kuerzelVon(a)} · {a.label}
           </span>
         ))}
       </div>
@@ -1033,7 +1033,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
           </span>
           <div className="flex-1 min-w-0">
             <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
-              <span className="text-textMuted">{artVon(v).kurz}: </span>
+              <span className="text-textMuted">{kuerzelVon(artVon(v))}: </span>
               {v.name}{v.company ? <span className="text-textMuted"> · {v.company}</span> : null}
             </div>
             <div className="text-[11px] text-textMuted">
@@ -1055,7 +1055,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
           </span>
           <div className="flex-1 min-w-0">
             <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
-              <span className="text-textMuted">{artVon(t).kurz}: </span>
+              <span className="text-textMuted">{kuerzelVon(artVon(t))}: </span>
               {t.name}{t.company ? <span className="text-textMuted"> · {t.company}</span> : null}
             </div>
             <div className="text-[11px] text-textMuted">
@@ -1076,7 +1076,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
                       style={terminEntwurf.art === a.key
                         ? { borderColor: a.farbe, background: `color-mix(in srgb, ${a.farbe} 18%, transparent)` }
                         : undefined}>
-                      {a.kurz} · {a.label}
+                      {kuerzelVon(a)} · {a.label}
                     </button>
                   ))}
                 </div>
