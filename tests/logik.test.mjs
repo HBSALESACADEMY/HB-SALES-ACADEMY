@@ -2548,7 +2548,12 @@ test("Der Abschluss steht bei 90 Prozent, nicht bei 100", () => {
   // einzige Stufe nach dem Verkauf, und deshalb die, die ohne festen Platz
   // im System immer vergessen wird.
   assert.equal(fortschritt({}), 25);                                    // Termin steht
-  assert.equal(fortschritt({ termin_art: "folgetermin" }), 50);         // Kunde überlegt
+  // Bewusst nur knapp über dem blossen Termin: ein Folgetermin heisst, dass
+  // der Kunde zögert. Auf halber Strecke stehend wäre er eine Zahl, die aus
+  // einem Zögern einen Fortschritt macht.
+  assert.equal(fortschritt({ termin_art: "folgetermin" }), 35);
+  assert.ok(fortschritt({ termin_art: "folgetermin" }) < fortschritt({ termin_art: "closing" }) - 30,
+    "Der Folgetermin muss deutlich unter dem Abschlussgespräch liegen.");
   assert.equal(fortschritt({ termin_art: "closing" }), 75);             // Abschlussgespräch
   assert.equal(fortschritt({ outcome: "kunde" }), 90);                  // Kunde — noch nicht fertig
   assert.equal(fortschritt({ termin_art: "checkin", status: "wahrgenommen" }), 100);
