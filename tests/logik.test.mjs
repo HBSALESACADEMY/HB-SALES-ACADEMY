@@ -48,7 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, terminFarbe } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, terminFarbe, rueckeVor, verlaufVon } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2491,4 +2491,52 @@ test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
   assert.equal(new Set(farben).size, 3, "Drei Stufen brauchen drei unterscheidbare Farben.");
   assert.equal(terminFarbe({ termin_art: "closing" }), TERMIN_ARTEN[2].farbe);
   assert.equal(terminFarbe({}), TERMIN_ARTEN[0].farbe);
+});
+
+test("Der Termin rückt weiter, statt sich zu verdoppeln", () => {
+  // Ein Interessent ist EIN Eintrag, der durch die Stufen wandert — sonst
+  // steht derselbe Kunde dreimal in der Liste.
+  const erst = {
+    termin_art: null,
+    appointment_at: "2026-09-03T10:00:00.000Z",
+    outcome: "follow_up",
+    status: "wahrgenommen",
+    stufen_verlauf: [],
+  };
+  const patch = rueckeVor(erst, "closing", "2026-09-12T14:00:00.000Z", "ernestine");
+
+  assert.equal(patch.termin_art, "closing");
+  assert.equal(patch.appointment_at, "2026-09-12T14:00:00.000Z");
+  // Status und Ergebnis gehören zur abgeschlossenen Stufe und stünden bei
+  // der neuen falsch.
+  assert.equal(patch.status, "geplant");
+  assert.equal(patch.outcome, null);
+
+  // Die Geschichte bleibt — genau daran scheiterte die frühere Fassung.
+  assert.equal(patch.stufen_verlauf.length, 1);
+  assert.equal(patch.stufen_verlauf[0].art, "erstgespraech");
+  assert.equal(patch.stufen_verlauf[0].am, "2026-09-03T10:00:00.000Z");
+  assert.equal(patch.stufen_verlauf[0].ergebnis, "follow_up");
+});
+
+test("Die Auswertung zählt jede Stufe, auch die abgeschlossenen", () => {
+  // Ohne den Verlauf hätte ein Kontakt, der bis zum Closing vorgerückt ist,
+  // nie ein Erstgespräch gehabt — die Tabelle zeigte lauter Closings und
+  // keine Erstgespräche.
+  const vorgerueckt = {
+    termin_art: "closing", status: "wahrgenommen", outcome: "kunde",
+    stufen_verlauf: [
+      { art: "erstgespraech", am: "2026-09-03", ergebnis: "follow_up" },
+      { art: "folgetermin", am: "2026-09-08", ergebnis: null },
+    ],
+  };
+  const stufen = stufenAuswertung([vorgerueckt]);
+  assert.equal(stufen.find((s) => s.key === "erstgespraech").gesamt, 1);
+  assert.equal(stufen.find((s) => s.key === "folgetermin").gesamt, 1);
+  assert.equal(stufen.find((s) => s.key === "closing").gesamt, 1);
+  assert.equal(stufen.find((s) => s.key === "closing").kunden, 1);
+  assert.equal(stufen.find((s) => s.key === "closing").abschlussquote, 100);
+
+  // Und der Verlauf lässt sich anzeigen.
+  assert.deepEqual(verlaufVon(vorgerueckt).map((v) => v.kurz), ["ST", "FU"]);
 });

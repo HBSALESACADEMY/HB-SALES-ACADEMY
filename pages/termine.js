@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
-import { artVon, TERMIN_ARTEN } from "../lib/terminArt";
+import { artVon, TERMIN_ARTEN, rueckeVor, verlaufVon } from "../lib/terminArt";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -631,58 +631,38 @@ export default function Termine() {
     meldeTerminAenderung(id, "ergebnis", `Ergebnis: ${OUTCOME_LABELS[outcome] || outcome}`, { outcome });
   }
 
-  // Legt einen EIGENEN Folgetermin an, der auf den ursprünglichen verweist.
-  // Früher wurde stattdessen das Datum des bestehenden Termins überschrieben —
-  // der erste Termin und sein Verlauf gingen dabei verloren.
+  // Der Termin RÜCKT WEITER, statt dass ein zweiter entsteht.
+  //
+  // Ein Interessent ist EIN Eintrag, der durch die Stufen wandert — sonst
+  // steht derselbe Kunde dreimal in der Liste, und niemand weiss, welcher
+  // Eintrag der aktuelle ist.
+  //
+  // Genau so war es früher schon einmal, und es wurde geändert, weil mit
+  // dem Datum die Geschichte verlorenging: niemand wusste mehr, wann das
+  // Erstgespräch war. Deshalb wird die abgeschlossene Stufe jetzt im
+  // Verlauf festgehalten, bevor der neue Zeitpunkt eingetragen wird
+  // (migration_154). Eine Zeile in der Liste, und trotzdem die volle
+  // Geschichte.
   async function saveFollowUp(id) {
     if (!followUpDate) return;
     const original = leads.find((l) => l.id === id);
     if (!original) return;
     setError("");
+
     const { data: { session } } = await supabase.auth.getSession();
-    const { data: profilFuerOrg } = await supabase.from("profiles")
-      .select("organization_id, is_platform_admin").eq("id", session.user.id).maybeSingle();
+    const patch = rueckeVor(original, neueArt, new Date(followUpDate).toISOString(), session?.user?.id || null);
 
-    // Der ursprüngliche Termin behält sein Datum, bekommt nur das Ergebnis.
-    // Auch hier prüfen: eine abgelehnte Änderung meldet keinen Fehler. Ohne
-    // das entstünde der Folgetermin, während der ursprüngliche weiterhin
-    // ohne Ergebnis dastünde — und niemand wüsste, warum.
-    const setzFehler = await aendereGeprueft(
-      supabase.from("leads").update({ outcome: "follow_up" }).eq("id", id),
-      "Das Ergebnis konnte nicht gesetzt werden — diesen Termin darf nur bearbeiten, wer ihn angelegt hat, oder ein Manager.");
-    if (setzFehler) { setError(setzFehler); return; }
+    const fehler = await aendereGeprueft(
+      supabase.from("leads").update(patch).eq("id", id),
+      "Diesen Termin darf nur weiterrücken, wer ihn angelegt hat, oder ein Manager.");
+    if (fehler) { setError(fehler); return; }
 
-    const { data: neuerTermin, error: err } = await supabase.from("leads").insert({
-      created_by: original.created_by,
-      // Der Folgetermin gehört in dieselbe Organisation wie der ursprüngliche
-      // (migration_114) — nicht in die Heimat-Organisation des Kontos.
-      organization_id: original.organization_id || getActiveOrgId(profilFuerOrg),
-      name: original.name,
-      phone: original.phone,
-      email: original.email,
-      company: original.company,
-      website: original.website,
-      is_decision_maker: original.is_decision_maker,
-      custom_fields: original.custom_fields || {},
-      appointment_at: new Date(followUpDate).toISOString(),
-      status: "geplant",
-      // Kette auf den URSPRÜNGLICHEN Termin: bei einem Folgetermin eines
-      // Folgetermins zeigen so alle auf denselben Ausgangspunkt, statt eine
-      // immer längere Kette zu bilden.
-      follow_up_of: original.follow_up_of || original.id,
-      // Die Stufe des neuen Termins (migration_153).
-      termin_art: neueArt,
-    }).select().single();
-
-    if (err) { setError(err.message); return; }
-    setLeads((prev) => [neuerTermin, ...prev.map((l) => (l.id === id ? { ...l, outcome: "follow_up" } : l))]);
-    // Gemeldet wird der NEUE Termin — er trägt den künftigen Zeitpunkt, auf
-    // den sich das Team einstellen muss.
-    meldeTerminAenderung(neuerTermin.id, "folgetermin",
-      `${neueArt === "closing" ? "Closing Call" : "Folgetermin"} zum Gespräch mit ${original.name}.`);
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    meldeTerminAenderung(id, "bearbeitet",
+      `${neueArt === "closing" ? "Closing Call" : "Folgetermin"} mit ${original.name} am ${deutscheZeit(patch.appointment_at)} Uhr.`,
+      { zeitpunktGeaendert: true });
     setFollowUpId(null);
     setFollowUpDate("");
-    setExpandedLeadId(neuerTermin.id);
   }
 
   // Übergibt den Termin an den Kalender des eigenen Geräts. Die Datei
@@ -1301,8 +1281,18 @@ export default function Termine() {
                 {/* Auf welcher Stufe der Termin steht — ohne das sehen ein
                     Erstgespräch und ein Abschlussgespräch gleich aus. */}
                 {lead.termin_art && lead.termin_art !== "erstgespraech" && (
-                  <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
+                  <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border flex-shrink-0"
+                    style={{ color: artVon(lead).farbe, borderColor: `color-mix(in srgb, ${artVon(lead).farbe} 45%, transparent)` }}>
                     {artVon(lead).label}
+                  </span>
+                )}
+                {/* Wo der Kontakt herkommt: die abgeschlossenen Stufen mit
+                    ihrem Datum. Ohne das wüsste nach dem Weiterrücken
+                    niemand mehr, wann das Erstgespräch war. */}
+                {verlaufVon(lead).length > 0 && (
+                  <span className="text-[10px] text-textMuted flex-shrink-0">
+                    {verlaufVon(lead).map((v) => `${v.kurz} ${v.am ? new Date(v.am).toLocaleDateString("de-DE") : "—"}`).join(" → ")}
+                    {" → "}
                   </span>
                 )}
                 <span className="text-[11px] text-textMuted flex-shrink-0">Ergebnis:</span>
@@ -1330,9 +1320,10 @@ export default function Termine() {
                     <button onClick={() => setFollowUpId(null)} className="btn-ghost text-xs">Abbrechen</button>
                   </div>
                   <p className="text-[11px] text-textMuted mt-1">
-                    Dieser Termin bleibt erhalten; der neue wird als eigener Eintrag angelegt
+                    Der Termin rückt weiter — es entsteht kein zweiter Eintrag. Die bisherige Stufe bleibt mit
+                    ihrem Datum im Verlauf stehen
                     {neueArt === "closing"
-                      ? " — als Closing Call, damit in der Auswertung sichtbar wird, wie viele Erstgespräche bis zum Abschlussgespräch kommen."
+                      ? ", damit in der Auswertung sichtbar bleibt, wie viele Erstgespräche bis zum Abschlussgespräch kommen."
                       : "."}
                   </p>
                 </>

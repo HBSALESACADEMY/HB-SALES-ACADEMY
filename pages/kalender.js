@@ -12,7 +12,7 @@ import { monatsRaster, istGleicherTag, startOfWeek, endOfWeek, tagesSchluessel }
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { nurUhrzeit, deutscherTag, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { terminAnzeige } from "../lib/zeit";
-import { kalenderTitel, terminFarbe, artVon, TERMIN_ARTEN } from "../lib/terminArt";
+import { kalenderTitel, terminFarbe, artVon, TERMIN_ARTEN, rueckeVor } from "../lib/terminArt";
 import { ladeIcsHerunter } from "../lib/ics";
 import { zeitpunktInBerlin } from "../lib/woche";
 
@@ -73,6 +73,37 @@ export default function Kalender() {
   // sie beim Anlegen. Führt jemand anderes das Gespräch, bleibt es trotzdem
   // ihr Interessent, und genau das soll im Kalender stehen.
   const nameVon = (id) => (daten?.personen || []).find((p) => p.id === id)?.name || "";
+  // Einen Termin direkt hier bearbeiten: Zeitpunkt ändern oder ihn auf die
+  // nächste Stufe rücken. Vorher musste man dafür die Seite wechseln, den
+  // Termin in der Liste suchen und den Kalender wieder aufmachen.
+  const [terminBearbeiten, setTerminBearbeiten] = useState(null);
+  const [terminEntwurf, setTerminEntwurf] = useState({ zeitpunkt: "", art: "" });
+  const [terminBusy, setTerminBusy] = useState(false);
+
+  async function speichereTermin(t) {
+    if (!terminEntwurf.zeitpunkt) return;
+    setTerminBusy(true);
+    setFehler("");
+    const neuerZeitpunkt = new Date(terminEntwurf.zeitpunkt).toISOString();
+
+    // Eine neue Stufe heisst weiterrücken — mit Eintrag im Verlauf. Bleibt
+    // die Stufe gleich, ist es schlicht eine Verschiebung.
+    const wechselt = terminEntwurf.art && terminEntwurf.art !== artVon(t).key;
+    const { data: { session } } = await supabase.auth.getSession();
+    const patch = wechselt
+      ? rueckeVor(t, terminEntwurf.art, neuerZeitpunkt, session?.user?.id || null)
+      : { appointment_at: neuerZeitpunkt };
+
+    const err = await aendereGeprueft(
+      supabase.from("leads").update(patch).eq("id", t.id),
+      "Diesen Termin darf nur ändern, wer ihn angelegt hat, oder ein Manager.");
+    if (err) setFehler(err);
+    else {
+      setTerminBearbeiten(null);
+      await laden();
+    }
+    setTerminBusy(false);
+  }
 
   // Der geladene Zeitraum hängt an der Ansicht — die Wochenansicht reicht
   // über den Monatswechsel hinaus.
@@ -792,6 +823,23 @@ export default function Kalender() {
               <TagesInhalt
                 inhalt={eintraegeAm(detailTag)}
                 meinStatus={meinStatus}
+                nameVon={nameVon}
+                terminBearbeiten={terminBearbeiten}
+                terminEntwurf={terminEntwurf}
+                setTerminEntwurf={setTerminEntwurf}
+                terminBusy={terminBusy}
+                onTerminBearbeiten={(t) => {
+                  setTerminBearbeiten(t.id);
+                  // Vorbefüllt mit dem, was gerade gilt — man ändert meist
+                  // nur eines von beidem.
+                  const d = new Date(t.appointment_at);
+                  setTerminEntwurf({
+                    zeitpunkt: new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+                    art: artVon(t).key,
+                  });
+                }}
+                onTerminSpeichern={speichereTermin}
+                onTerminAbbrechen={() => setTerminBearbeiten(null)}
                 bearbeitenId={bearbeitenId}
                 bearbeitenEntwurf={bearbeitenEntwurf}
                 setBearbeitenEntwurf={setBearbeitenEntwurf}
@@ -853,7 +901,8 @@ function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
 // Der Inhalt eines Tages — in der Wochenansicht kompakt, in der Tagesansicht
 // mit allem, was dazugehört: Beschreibung, Einladungen, Knöpfe.
 function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, selbst, einladenFuer, setEinladenFuer, onEinladen, onZuruecknehmen, onLoeschen, busy,
-  bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen }) {
+  bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen,
+  terminBearbeiten, terminEntwurf, setTerminEntwurf, onTerminBearbeiten, onTerminSpeichern, onTerminAbbrechen, terminBusy, nameVon }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
     && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0;
   if (leer) return <p className="text-textMuted text-xs">{kompakt ? "—" : "Für diesen Tag ist nichts eingetragen."}</p>;
@@ -944,8 +993,46 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
               {meinStatus && meinStatus("lead", t.id) === "zugesagt" && <span className="text-teal"> · du hast zugesagt</span>}
               {meinStatus && meinStatus("lead", t.id) === "abgesagt" && <span className="text-coral"> · du hast abgesagt</span>}
             </div>
-            {!kompakt && (
-              <button onClick={() => terminInEigenenKalender(t)} className="btn-ghost text-xs mt-1">📥 In meinen Kalender</button>
+            {/* Bearbeiten direkt hier: Zeitpunkt ändern oder auf die
+                nächste Stufe rücken. Vorher musste man dafür die Seite
+                wechseln und den Termin in der Liste suchen. */}
+            {!kompakt && terminBearbeiten === t.id ? (
+              <div className="flex flex-col gap-2 mt-2 p-2 rounded-lg border border-line">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-textMuted">Stufe:</span>
+                  {TERMIN_ARTEN.map((a) => (
+                    <button key={a.key} onClick={() => setTerminEntwurf((d) => ({ ...d, art: a.key }))}
+                      className={`px-2 py-1 rounded-full text-[11px] border ${terminEntwurf.art === a.key ? "text-textMain" : "border-line text-textMuted"}`}
+                      style={terminEntwurf.art === a.key
+                        ? { borderColor: a.farbe, background: `color-mix(in srgb, ${a.farbe} 18%, transparent)` }
+                        : undefined}>
+                      {a.kurz} · {a.label}
+                    </button>
+                  ))}
+                </div>
+                <input type="datetime-local" className="input !py-1.5 text-xs"
+                  value={terminEntwurf.zeitpunkt}
+                  onChange={(e) => setTerminEntwurf((d) => ({ ...d, zeitpunkt: e.target.value }))} />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => onTerminSpeichern(t)} disabled={terminBusy} className="btn text-xs disabled:opacity-40">
+                    {terminBusy ? "Speichert…" : "Speichern"}
+                  </button>
+                  <button onClick={onTerminAbbrechen} className="btn-ghost text-xs">Abbrechen</button>
+                  {terminEntwurf.art && terminEntwurf.art !== artVon(t).key && (
+                    <span className="text-[11px] text-textMuted w-full">
+                      Der Termin rückt auf die neue Stufe — es entsteht kein zweiter Eintrag, und die bisherige
+                      Stufe bleibt mit ihrem Datum im Verlauf stehen.
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : !kompakt && (
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <button onClick={() => terminInEigenenKalender(t)} className="btn-ghost text-xs">📥 In meinen Kalender</button>
+                {onTerminBearbeiten && (
+                  <button onClick={() => onTerminBearbeiten(t)} className="btn-ghost text-xs">Bearbeiten</button>
+                )}
+              </div>
             )}
             {!kompakt && (
               <Einladungsleiste
