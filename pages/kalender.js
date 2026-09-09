@@ -339,7 +339,7 @@ export default function Kalender() {
     const begriff = suche.trim().toLowerCase();
     if (!begriff) return true;
     const felder = [
-      eintrag.name, eintrag.titel, eintrag.company, eintrag.notiz,
+      eintrag.name, eintrag.titel, eintrag.company, eintrag.notiz, eintrag.title, eintrag.kunde,
       nameVon(eintrag.created_by), nameVon(eintrag.zustaendig), eintrag.autor,
       artVon(eintrag).label, artVon(eintrag).kurz,
     ];
@@ -347,7 +347,7 @@ export default function Kalender() {
   }
 
   function eintraegeAm(datum) {
-    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [], vergangene: [], nachfass: [] };
+    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [], vergangene: [], nachfass: [], aufgaben: [] };
     if (!daten || !datum) return leer;
     const schluessel = tagesSchluessel(datum);
     return {
@@ -358,9 +358,12 @@ export default function Kalender() {
       // Abgeschlossene Stufen: Seit ein Termin weiterrückt statt sich zu
       // verdoppeln, stünde der Tag des Erstgesprächs sonst leer da.
       vergangene: (daten.vergangeneStufen || []).filter((v) => deutscherTag(v.appointment_at) === schluessel && passtZurSuche(v)),
-      // Das Nachfassen nach einer Mail — im Kalender der zuständigen
+      // Das Follow-up nach einer Mail — im Kalender der zuständigen
       // Person, damit der Rückruf nicht nur ein guter Vorsatz bleibt.
       nachfass: (daten.nachfass || []).filter((n) => deutscherTag(n.faellig_am) === schluessel && passtZurSuche(n)),
+      // Und die Aufgaben mit Frist: eine Frist, die in keinem Kalender
+      // steht, wird am Tag der Frist entdeckt oder gar nicht.
+      aufgaben: (daten.aufgaben || []).filter((a) => deutscherTag(a.due_date) === schluessel && passtZurSuche(a)),
       geburtstage: daten.geburtstage.filter((g) => g.tag === schluessel),
       abwesend: daten.abwesenheiten.filter((a) => schluessel >= a.von && schluessel <= a.bis),
       // Termine aus privaten Kalendern (migration_134). Über Beginn UND
@@ -837,7 +840,7 @@ export default function Kalender() {
                   if (!tag) return <div key={`leer-${i}`} />;
                   const inhalt = eintraegeAm(tag);
                   const anzahl = inhalt.eintraege.length + inhalt.geburtstage.length + inhalt.termine.length
-                    + inhalt.extern.length + (inhalt.nachfass || []).length;
+                    + inhalt.extern.length + (inhalt.nachfass || []).length + (inhalt.aufgaben || []).length;
                   const istHeute = tagesSchluessel(tag) === heute;
                   const gewaehlt = gewaehlterTag && istGleicherTag(tag, gewaehlterTag);
                   return (
@@ -991,6 +994,11 @@ function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
       titel: `${uhrzeitDeutsch(n.faellig_am)} ${n.titel}`,
       vergangen: !!n.erledigt_am,
     })),
+    ...(inhalt.aufgaben || []).map((a) => ({
+      symbol: a.done ? "✓" : "✅",
+      titel: `${uhrzeitDeutsch(a.due_date)} ${a.title}`,
+      vergangen: !!a.done,
+    })),
     ...inhalt.eintraege.map((e) => ({ symbol: zeichen("org_event", e.id, symbolFuer(e.art)), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
     // Privatkalender zuletzt: sie sind Hintergrund für die Frage "wer kann
     // wann", nicht das, wonach im Firmenkalender gesucht wird.
@@ -1011,7 +1019,8 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
   onNachfassErledigt, onNachfassVerschieben, onNachfassLoeschen }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
     && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0
-    && (inhalt.vergangene || []).length === 0 && (inhalt.nachfass || []).length === 0;
+    && (inhalt.vergangene || []).length === 0 && (inhalt.nachfass || []).length === 0
+    && (inhalt.aufgaben || []).length === 0;
   if (leer) return <p className="text-textMuted text-xs">{kompakt ? "—" : "Für diesen Tag ist nichts eingetragen."}</p>;
 
   return (
@@ -1209,6 +1218,28 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
                     className="btn-ghost text-[11px] text-coral disabled:opacity-40">Löschen</button>
                 )}
               </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Aufgaben mit Frist. Abhaken geht am Termin selbst — hier steht
+          nur, dass heute etwas fällig ist, denn genau das ging bisher
+          unter. */}
+      {(inhalt.aufgaben || []).map((a) => (
+        <div key={`auf-${a.id}`} className={`flex items-start gap-2 py-1 ${a.done ? "opacity-50" : ""}`}>
+          <span>{a.done ? "✓" : "✅"}</span>
+          <div className="flex-1 min-w-0">
+            <div className={`${kompakt ? "text-[11px] truncate" : "text-sm"} ${a.done ? "text-textMuted line-through" : "text-textMain"}`}>
+              {a.title}
+            </div>
+            <div className="text-[11px] text-textMuted">
+              {terminZeile(a.due_date, kompakt)}
+              {!kompakt && a.kunde ? ` · ${a.kunde}` : ""}
+              {!kompakt && a.autor ? ` · ${a.autor}` : ""}
+            </div>
+            {!kompakt && a.lead_id && (
+              <a href={`/termine?leadId=${a.lead_id}`} className="text-[11px] text-amber hover:underline">→ zum Termin</a>
             )}
           </div>
         </div>

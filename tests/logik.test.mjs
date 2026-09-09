@@ -2614,7 +2614,7 @@ test("Die Reihenfolge der Vorlagen lässt sich ordnen", () => {
   assert.deepEqual(v.map((x) => x.name), ["Nachfassen", "Angebot", "Erstinfo"]);
 });
 
-test("Das Nachfassen bekommt einen Zeitpunkt, den ein Kalender annimmt", async () => {
+test("Das Follow-up bekommt einen Zeitpunkt, den ein Kalender annimmt", async () => {
   const { faelligIn, nachfassTitel, istFaelligesNachfassen, offeneNachfass, NACHFASS_STUNDE } =
     await import("../lib/nachfass.js");
 
@@ -2626,9 +2626,9 @@ test("Das Nachfassen bekommt einen Zeitpunkt, den ein Kalender annimmt", async (
   assert.equal(in3.getMinutes(), 0);
   assert.equal(in3.getDate(), 12);
 
-  assert.equal(nachfassTitel({ name: "Max Muster", firma: "ACME" }), "Nachfassen: Max Muster (ACME)");
-  assert.equal(nachfassTitel({ firma: "ACME" }), "Nachfassen: ACME");
-  assert.equal(nachfassTitel({}), "Nachfassen");
+  assert.equal(nachfassTitel({ name: "Max Muster", firma: "ACME" }), "Follow-up: Max Muster (ACME)");
+  assert.equal(nachfassTitel({ firma: "ACME" }), "Follow-up: ACME");
+  assert.equal(nachfassTitel({}), "Follow-up");
 
   // Ein abgehaktes Nachfassen ist nie fällig — auch wenn sein Zeitpunkt
   // längst vorbei ist. Sonst stünde die Liste voller alter Häkchen.
@@ -2647,7 +2647,7 @@ test("Das Nachfassen bekommt einen Zeitpunkt, den ein Kalender annimmt", async (
   assert.deepEqual(offeneNachfass(liste, jetzt).map((n) => n.id), ["a", "b"]);
 });
 
-test("Die Nachfass-Meldung endet am Berliner Tagesende, nicht am Serverzeit-Tagesende", async () => {
+test("Die Follow-up-Meldung endet am Berliner Tagesende, nicht am Serverzeit-Tagesende", async () => {
   const { berlinHeute, tagPlus, tagesBeginnZeitpunkt } = await import("../lib/woche.js");
 
   // Der Server läuft in UTC. Ein Rückruf, der für 00:30 Berliner Zeit

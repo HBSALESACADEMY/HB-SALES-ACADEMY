@@ -107,6 +107,19 @@ export default async function handler(req, res) {
       .lt("faellig_am", bisZeitpunkt)
       .order("faellig_am");
 
+    // Die Aufgaben zu einem Termin, die in diesem Zeitraum fällig sind.
+    //
+    // Sie standen bisher nur am Termin selbst. Eine Aufgabe mit Frist, die
+    // in keinem Kalender auftaucht, wird am Tag der Frist entdeckt oder gar
+    // nicht — dabei ist die Frist der ganze Sinn. Über den RLS-gebundenen
+    // Client: wer welche Aufgabe sieht, entscheidet die Datenbank.
+    const { data: aufgaben } = await auth.client.from("lead_tasks")
+      .select("id, title, due_date, done, assigned_to, assigned_by, lead_id, leads:lead_id(name)")
+      .not("due_date", "is", null)
+      .gte("due_date", vonZeitpunkt)
+      .lt("due_date", bisZeitpunkt)
+      .order("due_date");
+
     // Geburtstage: der Zeitraum kann mehrere Monate berühren, deshalb wird
     // für jeden Monat darin geprüft, ob der Tag hineinfällt.
     const monateImZeitraum = [];
@@ -169,6 +182,11 @@ export default async function handler(req, res) {
       // Das Nachfassen steht im Kalender der zuständigen Person — genau
       // dafür ist es da. Ohne Kalendereintrag ist ein Rückruf in drei Tagen
       // nur ein guter Vorsatz.
+      aufgaben: (aufgaben || []).map((a) => ({
+        ...a,
+        kunde: a.leads?.name || null,
+        autor: namen.get(a.assigned_to) || "Unbenannt",
+      })),
       nachfass: (nachfass || []).map((n) => ({
         ...n,
         autor: namen.get(n.zustaendig) || "Unbenannt",

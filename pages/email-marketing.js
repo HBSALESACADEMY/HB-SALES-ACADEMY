@@ -341,14 +341,17 @@ export default function EmailMarketing() {
     setMailBusy(false);
   }
 
-  // Die Maske für ein Nachfassen öffnen, sinnvoll vorbefüllt.
+  // Die Maske für ein Follow-up öffnen, sinnvoll vorbefüllt.
   //
-  // Zuständig ist die Person, die den Kontakt erarbeitet hat, nicht die,
-  // die zufällig die Mail verschickt hat: der Termin, der daraus entsteht,
-  // gehört ihr (vgl. migration_138). Zuweisen darf man nur, wen man führt —
-  // das prüft die Datenbank, nicht diese Maske.
+  // Zuständig ist, WER ES EINTRÄGT — auch wenn die Mail für jemand anderen
+  // rausging. Wer die Mail geschrieben hat, weiss, was darin stand, und
+  // ruft deshalb selbst nach. Der Kontakt gehört weiterhin der Person, die
+  // ihn erarbeitet hat (migration_138); das Follow-up ist davon getrennt.
+  //
+  // Umhängen geht trotzdem: die Leitung wählt unten eine andere Person.
+  // Zuweisen darf man nur, wen man führt — das prüft die Datenbank.
   function oeffneNachfass(k) {
-    const zustaendig = leitung && k.user_id ? k.user_id : ich;
+    const zustaendig = ich;
     setNachfassFuer(k.id);
     setNachfassEntwurf({
       titel: nachfassTitel(k),
@@ -384,7 +387,7 @@ export default function EmailMarketing() {
       setNachfassEntwurf(null);
       await laden();
     } catch (e) {
-      setFehler(e?.message || "Das Nachfassen konnte nicht gespeichert werden.");
+      setFehler(e?.message || "Das Follow-up konnte nicht gespeichert werden.");
     }
     setNachfassBusy(false);
   }
@@ -521,7 +524,7 @@ export default function EmailMarketing() {
           onChange={(v) => { setNurNachfassen(v === "nachfassen"); setNurOffene(v === "offen"); }}
           optionen={[
             { wert: "offen", label: "Nur offene", anzahl: kontakte.filter((k) => !istErledigt(k.status)).length },
-            { wert: "nachfassen", label: "Braucht Nachfassen", anzahl: kontakte.filter((k) => brauchtNachfassen(k)).length },
+            { wert: "nachfassen", label: "Braucht Follow-up", anzahl: kontakte.filter((k) => brauchtNachfassen(k)).length },
             { wert: "alle", label: "Alle", anzahl: kontakte.length },
           ]}
         />
@@ -860,10 +863,10 @@ export default function EmailMarketing() {
 
             {nachfassFuer === k.id && nachfassEntwurf && (
               <div className="card !py-2.5 mb-2 border border-amber/40">
-                <div className="text-xs font-semibold text-textMain mb-1">Nachfassen eintragen</div>
+                <div className="text-xs font-semibold text-textMain mb-1">Follow-up eintragen</div>
                 <p className="text-[11px] text-textMuted mb-2">
-                  Kommt in den Kalender der zuständigen Person — auch im abonnierten Kalender auf dem Handy —
-                  und wird am Tag der Fälligkeit gemeldet.
+                  Kommt in deinen Kalender — auch in den abonnierten auf dem Handy — und meldet sich am Tag
+                  der Fälligkeit. Du hast die Mail geschrieben, also weisst du, was darin stand.
                 </p>
                 <div className="flex items-center gap-1.5 flex-wrap mb-2">
                   {NACHFASS_VORSCHLAEGE.map((v) => (
@@ -885,16 +888,21 @@ export default function EmailMarketing() {
                     nichts auszuwählen, und ein Feld mit einer einzigen
                     Möglichkeit ist nur im Weg. */}
                 {leitung && personen.length > 1 ? (
+                  <>
+                  <label className="block text-[11px] text-textMuted mb-1">Wer macht das Follow-up?</label>
                   <select className="input !py-1.5 text-xs mb-2"
                     value={nachfassEntwurf.zustaendig || ich}
                     onChange={(e) => setNachfassEntwurf((d) => ({ ...d, zustaendig: e.target.value }))}>
-                    {personen.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}{p.id === ich ? " (ich)" : ""}</option>
+                    {/* Ich stehe immer zur Wahl, auch wenn ich per
+                        Firmencode hier arbeite und deshalb nicht in der
+                        Personenliste dieser Organisation auftauche. */}
+                    <option value={ich}>Ich</option>
+                    {personen.filter((p) => p.id !== ich).map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
-                ) : (
-                  <p className="text-[11px] text-textMuted mb-2">Kommt in deinen Kalender.</p>
-                )}
+                  </>
+                ) : null}
                 <div className="flex items-center gap-2">
                   <button onClick={() => speichereNachfass(k)} disabled={nachfassBusy}
                     className="btn text-xs disabled:opacity-40">
@@ -951,7 +959,7 @@ export default function EmailMarketing() {
                     {ZUSTELLUNG_LABELS[k.zustellung]}
                     {k.zustellung_am ? ` · ${deutscheZeit(k.zustellung_am)} Uhr` : ""}
                     {k.zustellung_grund ? ` · ${k.zustellung_grund}` : ""}
-                    {istGescheitert(k.zustellung) ? " — hier hilft kein Nachfassen, sondern eine Korrektur der Adresse." : ""}
+                    {istGescheitert(k.zustellung) ? " — hier hilft kein Follow-up, sondern eine Korrektur der Adresse." : ""}
                   </p>
                 )}
                 {k.letzter_betreff && (
@@ -978,7 +986,7 @@ export default function EmailMarketing() {
                     <button onClick={() => starteBearbeiten(k)} className="btn-ghost text-xs">Bearbeiten</button>
                   )}
                   {nachfassFuer !== k.id && (
-                    <button onClick={() => oeffneNachfass(k)} className="btn-ghost text-xs">📌 Nachfassen</button>
+                    <button onClick={() => oeffneNachfass(k)} className="btn-ghost text-xs">📌 Follow-up</button>
                   )}
                   <button onClick={() => loesche(k)} className="btn-ghost text-xs text-coral">Löschen</button>
                   {!leitung && k.status !== "offen" && (

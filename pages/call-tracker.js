@@ -591,11 +591,11 @@ export default function CallTracker() {
         titel: nachfassTitel(mailKontakt),
         notiz: mailKontakt.notiz || null,
       });
-      showToast("Nachfassen steht im Kalender");
+      showToast("Follow-up steht im Kalender");
       setMailKontakt(null);
       zurueckZumStart();
     } catch (e) {
-      setEmailFehler(e?.message || "Das Nachfassen konnte nicht gespeichert werden.");
+      setEmailFehler(e?.message || "Das Follow-up konnte nicht gespeichert werden.");
     }
     setNachfassBusy(false);
   }
@@ -1371,7 +1371,7 @@ export default function CallTracker() {
               {step === "nachfass" && (
                 <>
                   <div className="text-3xl mb-1">📌</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wann rufst du nach?</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wann ist dein Follow-up?</div>
                   <p className="text-textMuted text-xs mb-4">
                     Kommt in deinen Kalender — auch in den abonnierten auf dem Handy — und meldet sich am
                     Tag der Fälligkeit. Ohne Eintrag geht der Rückruf unter.

@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [pendingFriendReqs, setPendingFriendReqs] = useState([]);
   const [friendReqBusyId, setFriendReqBusyId] = useState(null);
   const [upcomingLeads, setUpcomingLeads] = useState([]);
+  const [meineFollowUps, setMeineFollowUps] = useState([]);
   const [teamUpcomingLeads, setTeamUpcomingLeads] = useState([]);
   const [myMentions, setMyMentions] = useState([]);
   const [myOpenTasks, setMyOpenTasks] = useState([]);
@@ -292,6 +293,16 @@ export default function Dashboard() {
         .gte("appointment_at", nowIso).order("appointment_at", { ascending: true }).limit(5);
       setUpcomingLeads(myLeads || []);
 
+      // Die Follow-ups, für die ich zuständig bin — fällige und die der
+      // nächsten Tage. Sie stehen im Kalender, aber morgens schaut man
+      // hierher, und was hier nicht steht, passiert erst, wenn es zu spät
+      // ist.
+      const { data: followUps } = await supabase.from("nachfass_termine")
+        .select("id, titel, faellig_am, kontakt_id, lead_id")
+        .eq("zustaendig", uid).is("erledigt_am", null)
+        .order("faellig_am", { ascending: true }).limit(10);
+      setMeineFollowUps(followUps || []);
+
       const canManageLeads = me?.role === "manager" || me?.role === "backend" || me?.is_admin || me?.is_platform_admin;
       if (canManageLeads) {
         // Eigene Termine werden schon oben in "Anstehende Termine" gezeigt —
@@ -527,7 +538,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {(myOpenTasks.length > 0 || upcomingLeads.length > 0) && (
+          {(myOpenTasks.length > 0 || upcomingLeads.length > 0 || meineFollowUps.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
               <div className="text-[11px] uppercase tracking-wide text-textMuted">Heute</div>
               {myOpenTasks.length > 0 && (
@@ -550,6 +561,31 @@ export default function Dashboard() {
                       );
                     })}
                     {myOpenTasks.length > 3 && <span className="text-xs text-textMuted">+{myOpenTasks.length - 3} weitere</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Die Follow-ups nach einer Mail. Sie stehen im Kalender —
+                  aber morgens schaut man hierher, und was hier nicht steht,
+                  passiert erst, wenn es zu spät ist. Überfälliges auffällig,
+                  denn genau das ist die Information. */}
+              {meineFollowUps.length > 0 && (
+                <div className="">
+                  <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/kalender")}>📌 Meine Follow-ups</div>
+                  <div className="flex flex-col gap-2">
+                    {meineFollowUps.slice(0, 3).map((n) => {
+                      const ueberfaellig = new Date(n.faellig_am) < new Date();
+                      return (
+                        <div key={n.id} onClick={() => router.push("/email-marketing")}
+                          className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 cursor-pointer ${ueberfaellig ? "border-coral/50 bg-coral/5" : "border-line"}`}>
+                          <span className="text-sm text-textMain flex-1 truncate">{n.titel}</span>
+                          <span className={`text-xs font-mono flex-shrink-0 ${ueberfaellig ? "text-coral" : "text-textMuted"}`}>
+                            {new Date(n.faellig_am).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(n.faellig_am).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {meineFollowUps.length > 3 && <span className="text-xs text-textMuted">+{meineFollowUps.length - 3} weitere</span>}
                   </div>
                 </div>
               )}

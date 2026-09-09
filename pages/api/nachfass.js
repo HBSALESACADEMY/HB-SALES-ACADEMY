@@ -78,9 +78,9 @@ export default async function handler(req, res) {
         if (adresse && willMeldung(empfaenger, "aufgaben")) {
           await sendEmail({
             to: adresse,
-            subject: `Nachfassen am ${wann}: ${titel.trim()}`,
+            subject: `Follow-up am ${wann}: ${titel.trim()}`,
             html:
-              `<p><strong>${profil?.full_name || "Jemand"}</strong> hat dir ein Nachfassen eingetragen:</p>` +
+              `<p><strong>${profil?.full_name || "Jemand"}</strong> hat dir ein Follow-up eingetragen:</p>` +
               `<p><strong>${titel.trim()}</strong><br/>Fällig: ${wann}</p>` +
               (notiz?.trim() ? `<p>${notiz.trim()}</p>` : "") +
               (appUrl ? `<p><a href="${appUrl}/kalender" target="_blank" rel="noopener noreferrer">Im Kalender ansehen →</a></p>` : ""),
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
         const kanal = org?.telegram_marketing_chat_id || org?.telegram_chat_id;
         if (kanal) {
           await sendeAlarm(
-            `📌 Nachfassen für ${ziel.full_name || "jemanden"}: ${titel.trim()}\nFällig: ${wann}`
+            `📌 Follow-up für ${ziel.full_name || "jemanden"}: ${titel.trim()}\nFällig: ${wann}`
             + (appUrl ? `\n${appUrl}/kalender` : ""),
             kanal,
           );
@@ -107,6 +107,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, eintrag });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: e.message || "Das Nachfassen konnte nicht gespeichert werden." });
+    return res.status(500).json({ error: e.message || "Das Follow-up konnte nicht gespeichert werden." });
   }
 }
