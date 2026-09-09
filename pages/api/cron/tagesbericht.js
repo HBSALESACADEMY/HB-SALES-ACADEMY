@@ -3,6 +3,7 @@ import { baueTagesbericht } from "../../../lib/tagesbericht";
 import { sendeAlarm } from "../../../lib/alarm";
 import { erinnereAnNachfassen } from "../../../lib/nachfassErinnerung";
 import { raeumeAufnahmenAuf } from "../../../lib/aufnahmenAufraeumen";
+import { erinnereAnNachfassTermine } from "../../../lib/nachfassTermineErinnerung";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -53,6 +54,16 @@ export default async function handler(req, res) {
       console.error("Nachfass-Erinnerung fehlgeschlagen:", e.message);
     }
 
+    // Und die eingetragenen Nachfass-Termine, die heute dran sind. Sie
+    // stehen zwar im Kalender — aber wer morgens nicht hineinschaut, sieht
+    // sie erst abends, und dann ist der Rückruf für heute erledigt.
+    let nachfassTermine = { erinnert: 0 };
+    try {
+      nachfassTermine = await erinnereAnNachfassTermine(admin);
+    } catch (e) {
+      console.error("Nachfass-Termine melden fehlgeschlagen:", e.message);
+    }
+
     // Fällige Aufnahmen entfernen. Auch das darf den Bericht nicht
     // nachträglich als gescheitert dastehen lassen.
     let aufgeraeumt = { geloescht: 0 };
@@ -62,7 +73,7 @@ export default async function handler(req, res) {
       console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
     }
 
-    return res.status(200).json({ ok: true, nachfassen, aufgeraeumt });
+    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, aufgeraeumt });
   } catch (e) {
     console.error("Tagesbericht fehlgeschlagen:", e.message);
     await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);

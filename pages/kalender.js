@@ -265,6 +265,20 @@ export default function Kalender() {
     setBusy(false);
   }
 
+  // Ein Nachfassen abhaken. Es bleibt im Kalender stehen, nur blass und
+  // durchgestrichen: dass es erledigt IST, ist die Information — löscht man
+  // es, sieht der Tag aus, als wäre nie etwas gewesen.
+  async function nachfassErledigt(n) {
+    setBusy(true);
+    const meldung = await aendereGeprueft(
+      supabase.from("nachfass_termine").update({ erledigt_am: new Date().toISOString() }).eq("id", n.id),
+      "Abhaken darf nur, wer zuständig ist oder es eingetragen hat."
+    );
+    if (meldung) setFehler(meldung);
+    await laden(true);
+    setBusy(false);
+  }
+
   async function einladungZuruecknehmen(einladungId) {
     const meldung = await loescheGeprueft(
       supabase.from("termin_einladungen").delete().eq("id", einladungId),
@@ -296,15 +310,15 @@ export default function Kalender() {
     const begriff = suche.trim().toLowerCase();
     if (!begriff) return true;
     const felder = [
-      eintrag.name, eintrag.titel, eintrag.company,
-      nameVon(eintrag.created_by), eintrag.autor,
+      eintrag.name, eintrag.titel, eintrag.company, eintrag.notiz,
+      nameVon(eintrag.created_by), nameVon(eintrag.zustaendig), eintrag.autor,
       artVon(eintrag).label, artVon(eintrag).kurz,
     ];
     return felder.filter(Boolean).some((f) => String(f).toLowerCase().includes(begriff));
   }
 
   function eintraegeAm(datum) {
-    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [], vergangene: [] };
+    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [], vergangene: [], nachfass: [] };
     if (!daten || !datum) return leer;
     const schluessel = tagesSchluessel(datum);
     return {
@@ -315,6 +329,9 @@ export default function Kalender() {
       // Abgeschlossene Stufen: Seit ein Termin weiterrückt statt sich zu
       // verdoppeln, stünde der Tag des Erstgesprächs sonst leer da.
       vergangene: (daten.vergangeneStufen || []).filter((v) => deutscherTag(v.appointment_at) === schluessel && passtZurSuche(v)),
+      // Das Nachfassen nach einer Mail — im Kalender der zuständigen
+      // Person, damit der Rückruf nicht nur ein guter Vorsatz bleibt.
+      nachfass: (daten.nachfass || []).filter((n) => deutscherTag(n.faellig_am) === schluessel && passtZurSuche(n)),
       geburtstage: daten.geburtstage.filter((g) => g.tag === schluessel),
       abwesend: daten.abwesenheiten.filter((a) => schluessel >= a.von && schluessel <= a.bis),
       // Termine aus privaten Kalendern (migration_134). Über Beginn UND
@@ -790,7 +807,8 @@ export default function Kalender() {
                 {monatsRaster(anker).map((tag, i) => {
                   if (!tag) return <div key={`leer-${i}`} />;
                   const inhalt = eintraegeAm(tag);
-                  const anzahl = inhalt.eintraege.length + inhalt.geburtstage.length + inhalt.termine.length + inhalt.extern.length;
+                  const anzahl = inhalt.eintraege.length + inhalt.geburtstage.length + inhalt.termine.length
+                    + inhalt.extern.length + (inhalt.nachfass || []).length;
                   const istHeute = tagesSchluessel(tag) === heute;
                   const gewaehlt = gewaehlterTag && istGleicherTag(tag, gewaehlterTag);
                   return (
@@ -880,6 +898,7 @@ export default function Kalender() {
                 }}
                 onTerminSpeichern={speichereTermin}
                 onTerminAbbrechen={() => setTerminBearbeiten(null)}
+                onNachfassErledigt={nachfassErledigt}
                 bearbeitenId={bearbeitenId}
                 bearbeitenEntwurf={bearbeitenEntwurf}
                 setBearbeitenEntwurf={setBearbeitenEntwurf}
@@ -935,6 +954,12 @@ function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
       farbe: terminFarbe(v),
       vergangen: true,
     })),
+    // Das Nachfassen: erledigte blass und abgehakt, offene mit Pinnadel.
+    ...(inhalt.nachfass || []).map((n) => ({
+      symbol: n.erledigt_am ? "✓" : "📌",
+      titel: `${uhrzeitDeutsch(n.faellig_am)} ${n.titel}`,
+      vergangen: !!n.erledigt_am,
+    })),
     ...inhalt.eintraege.map((e) => ({ symbol: zeichen("org_event", e.id, symbolFuer(e.art)), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
     // Privatkalender zuletzt: sie sind Hintergrund für die Frage "wer kann
     // wann", nicht das, wonach im Firmenkalender gesucht wird.
@@ -951,10 +976,11 @@ function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
 // mit allem, was dazugehört: Beschreibung, Einladungen, Knöpfe.
 function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, selbst, einladenFuer, setEinladenFuer, onEinladen, onZuruecknehmen, onLoeschen, busy,
   bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen,
-  terminBearbeiten, terminEntwurf, setTerminEntwurf, onTerminBearbeiten, onTerminSpeichern, onTerminAbbrechen, terminBusy, nameVon }) {
+  terminBearbeiten, terminEntwurf, setTerminEntwurf, onTerminBearbeiten, onTerminSpeichern, onTerminAbbrechen, terminBusy, nameVon,
+  onNachfassErledigt }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
     && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0
-    && (inhalt.vergangene || []).length === 0;
+    && (inhalt.vergangene || []).length === 0 && (inhalt.nachfass || []).length === 0;
   if (leer) return <p className="text-textMuted text-xs">{kompakt ? "—" : "Für diesen Tag ist nichts eingetragen."}</p>;
 
   return (
@@ -1112,6 +1138,30 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
                 offen={einladenFuer === `lead:${t.id}`}
                 setOffen={setEinladenFuer} onEinladen={onEinladen} onZuruecknehmen={onZuruecknehmen} busy={busy}
               />
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Das Nachfassen nach einer Mail. Steht im Kalender der zuständigen
+          Person — ohne Kalendereintrag ist ein Rückruf in drei Tagen nur
+          ein guter Vorsatz. */}
+      {(inhalt.nachfass || []).map((n) => (
+        <div key={`nf-${n.id}`} className={`flex items-start gap-2 py-1 ${n.erledigt_am ? "opacity-50" : ""}`}>
+          <span>{n.erledigt_am ? "✓" : "📌"}</span>
+          <div className="flex-1 min-w-0">
+            <div className={`${kompakt ? "text-[11px] truncate" : "text-sm"} ${n.erledigt_am ? "text-textMuted line-through" : "text-textMain"}`}>
+              {n.titel}
+            </div>
+            <div className="text-[11px] text-textMuted">
+              {terminZeile(n.faellig_am, kompakt)}
+              {!kompakt && n.autor ? ` · ${n.autor}` : ""}
+              {!kompakt && n.erstellerName && n.erstellt_von !== n.zustaendig ? ` · eingetragen von ${n.erstellerName}` : ""}
+            </div>
+            {!kompakt && n.notiz && <div className="text-[11px] text-textMuted mt-0.5">{n.notiz}</div>}
+            {!kompakt && onNachfassErledigt && !n.erledigt_am && (
+              <button onClick={() => onNachfassErledigt(n)} disabled={busy}
+                className="btn-ghost text-[11px] mt-1 disabled:opacity-40">Erledigt</button>
             )}
           </div>
         </div>

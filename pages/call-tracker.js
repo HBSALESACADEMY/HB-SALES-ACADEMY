@@ -5,6 +5,7 @@ import InfoCard from "../components/InfoCard";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { EMAIL_STATUS } from "../lib/emailKontakt";
+import { NACHFASS_VORSCHLAEGE, faelligIn, nachfassTitel } from "../lib/nachfass";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
 import { fertigeMail, werteFuerKontakt } from "../lib/marketingVorlage";
 import { getActiveOrgId } from "../lib/activeOrg";
@@ -102,6 +103,7 @@ export default function CallTracker() {
   // Entwurf zum Gegenlesen, und der Kontakt, um den es geht.
   const [vorlagen, setVorlagen] = useState([]);
   const [mailKontakt, setMailKontakt] = useState(null);
+  const [nachfassBusy, setNachfassBusy] = useState(false);
   const [mailEntwurf, setMailEntwurf] = useState({ vorlage: "", betreff: "", text: "" });
   const [mailBusy, setMailBusy] = useState(false);
 
@@ -563,13 +565,39 @@ export default function CallTracker() {
         vorlage: mailEntwurf.vorlage,
       });
       showToast("Mail ist raus");
-      setMailKontakt(null);
       setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
-      zurueckZumStart();
+      // Nicht gleich zurück: "ich schicke Ihnen was" ist erst die halbe
+      // Arbeit, und der Rückruf danach ist genau das, was ohne Eintrag
+      // untergeht. Der Kontakt bleibt dafür noch einen Schritt stehen.
+      setStep("nachfass");
     } catch (e) {
       setEmailFehler(e?.message || "Die Mail konnte nicht verschickt werden.");
     }
     setMailBusy(false);
+  }
+
+  // Ein Nachfassen für sich selbst eintragen. Es landet im eigenen
+  // Kalender — auch im abonnierten auf dem Handy — und wird am Tag der
+  // Fälligkeit gemeldet.
+  async function trageNachfassEin(tage) {
+    if (!mailKontakt) return;
+    setNachfassBusy(true);
+    setEmailFehler("");
+    try {
+      await apiPost("/api/nachfass", {
+        kontaktId: mailKontakt.id,
+        zustaendig: userId,
+        faelligAm: faelligIn(tage).toISOString(),
+        titel: nachfassTitel(mailKontakt),
+        notiz: mailKontakt.notiz || null,
+      });
+      showToast("Nachfassen steht im Kalender");
+      setMailKontakt(null);
+      zurueckZumStart();
+    } catch (e) {
+      setEmailFehler(e?.message || "Das Nachfassen konnte nicht gespeichert werden.");
+    }
+    setNachfassBusy(false);
   }
 
   tageswechselRef.current = pruefeTageswechsel;
@@ -1337,6 +1365,26 @@ export default function CallTracker() {
                       {mailBusy ? "Wird verschickt…" : "Jetzt senden"}
                     </button>
                   </div>
+                </>
+              )}
+
+              {step === "nachfass" && (
+                <>
+                  <div className="text-3xl mb-1">📌</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wann rufst du nach?</div>
+                  <p className="text-textMuted text-xs mb-4">
+                    Kommt in deinen Kalender — auch in den abonnierten auf dem Handy — und meldet sich am
+                    Tag der Fälligkeit. Ohne Eintrag geht der Rückruf unter.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap mb-3">
+                    {NACHFASS_VORSCHLAEGE.map((v) => (
+                      <button key={v.tage} onClick={() => trageNachfassEin(v.tage)} disabled={nachfassBusy}
+                        className="btn text-sm disabled:opacity-40">{v.label}</button>
+                    ))}
+                  </div>
+                  {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
+                  <button onClick={() => { setMailKontakt(null); zurueckZumStart(); }}
+                    className="btn-ghost text-xs text-textMuted">Nicht nötig</button>
                 </>
               )}
 

@@ -2613,3 +2613,36 @@ test("Die Reihenfolge der Vorlagen lässt sich ordnen", () => {
   assert.deepEqual(nachNamen(v).length, 3);
   assert.deepEqual(v.map((x) => x.name), ["Nachfassen", "Angebot", "Erstinfo"]);
 });
+
+test("Das Nachfassen bekommt einen Zeitpunkt, den ein Kalender annimmt", async () => {
+  const { faelligIn, nachfassTitel, istFaelligesNachfassen, offeneNachfass, NACHFASS_STUNDE } =
+    await import("../lib/nachfass.js");
+
+  // Mit Uhrzeit, nicht nur mit Datum: ein Kalendereintrag ohne Uhrzeit
+  // hängt als Ganztagesbalken über allem und wird genau deshalb übersehen.
+  const jetzt = new Date("2026-09-09T14:35:00");
+  const in3 = faelligIn(3, jetzt);
+  assert.equal(in3.getHours(), NACHFASS_STUNDE);
+  assert.equal(in3.getMinutes(), 0);
+  assert.equal(in3.getDate(), 12);
+
+  assert.equal(nachfassTitel({ name: "Max Muster", firma: "ACME" }), "Nachfassen: Max Muster (ACME)");
+  assert.equal(nachfassTitel({ firma: "ACME" }), "Nachfassen: ACME");
+  assert.equal(nachfassTitel({}), "Nachfassen");
+
+  // Ein abgehaktes Nachfassen ist nie fällig — auch wenn sein Zeitpunkt
+  // längst vorbei ist. Sonst stünde die Liste voller alter Häkchen.
+  const vorbei = { faellig_am: "2026-09-01T09:00:00Z" };
+  assert.equal(istFaelligesNachfassen(vorbei, jetzt), true);
+  assert.equal(istFaelligesNachfassen({ ...vorbei, erledigt_am: "2026-09-02T10:00:00Z" }, jetzt), false);
+  assert.equal(istFaelligesNachfassen({ faellig_am: "2026-12-01T09:00:00Z" }, jetzt), false);
+
+  // Das Älteste zuerst: was am längsten liegt, drängt am meisten.
+  const liste = [
+    { id: "b", faellig_am: "2026-09-08T09:00:00Z" },
+    { id: "a", faellig_am: "2026-09-02T09:00:00Z" },
+    { id: "c", faellig_am: "2026-12-01T09:00:00Z" },
+    { id: "d", faellig_am: "2026-09-03T09:00:00Z", erledigt_am: "2026-09-03T12:00:00Z" },
+  ];
+  assert.deepEqual(offeneNachfass(liste, jetzt).map((n) => n.id), ["a", "b"]);
+});

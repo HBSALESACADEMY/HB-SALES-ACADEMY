@@ -18,6 +18,7 @@ import {
 import { deutscheZeit } from "../lib/terminzeit";
 import { ZUSTELLUNG_LABELS, istGescheitert, darfNochSenden } from "../lib/zustellung";
 import { downloadCsv } from "../lib/csv";
+import { nachfassTitel, faelligIn, NACHFASS_VORSCHLAEGE } from "../lib/nachfass";
 import { feldFarbe } from "../lib/diagrammFarben";
 import { resolveLeadFields, resolveCoreRequired } from "../lib/leadFields";
 
@@ -79,6 +80,14 @@ export default function EmailMarketing() {
   // Mal gesendet werden soll.
   const [nochmalFuer, setNochmalFuer] = useState(null);
 
+  // Das Nachfassen nach der Mail (migration_156). Es steht bewusst hier und
+  // nicht nur als Notiz: nur ein Eintrag im Kalender der zuständigen Person
+  // überlebt den Tag.
+  const [nachfassFuer, setNachfassFuer] = useState(null);
+  const [nachfassEntwurf, setNachfassEntwurf] = useState(null);
+  const [nachfassBusy, setNachfassBusy] = useState(false);
+  const [nachfassListe, setNachfassListe] = useState([]);
+
   async function laden() {
     setLaedt(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -119,6 +128,13 @@ export default function EmailMarketing() {
     const { data: dateien } = await supabase.from("email_anhaenge")
       .select("*").order("created_at", { ascending: false });
     setAnhaenge(dateien || []);
+
+    // Was schon zum Nachfassen eingetragen ist. Wer wessen Eintrag sieht,
+    // entscheidet die Datenbank — die eigenen immer, fremde nur, wer die
+    // Person führt.
+    const { data: nachfassZeilen } = await supabase.from("nachfass_termine")
+      .select("*").order("faellig_am");
+    setNachfassListe(nachfassZeilen || []);
     if (err) setFehler(err.message);
     setKontakte(zeilen || []);
 
@@ -313,12 +329,73 @@ export default function EmailMarketing() {
         setMailFuer(null);
         setMail({ betreff: "", text: "" });
         setGewaehlteAnhaenge([]);
+        // Direkt im Anschluss fragen, nicht später erinnern: "ich schicke
+        // Ihnen was" ist erst die halbe Arbeit, und der Rückruf danach ist
+        // genau das, was ohne Eintrag untergeht.
+        oeffneNachfass(k);
         await laden();
       }
     } catch (e) {
       setFehler(e?.message || "Die Mail konnte nicht verschickt werden.");
     }
     setMailBusy(false);
+  }
+
+  // Die Maske für ein Nachfassen öffnen, sinnvoll vorbefüllt.
+  //
+  // Zuständig ist die Person, die den Kontakt erarbeitet hat, nicht die,
+  // die zufällig die Mail verschickt hat: der Termin, der daraus entsteht,
+  // gehört ihr (vgl. migration_138). Zuweisen darf man nur, wen man führt —
+  // das prüft die Datenbank, nicht diese Maske.
+  function oeffneNachfass(k) {
+    const zustaendig = leitung && k.user_id ? k.user_id : ich;
+    setNachfassFuer(k.id);
+    setNachfassEntwurf({
+      titel: nachfassTitel(k),
+      notiz: "",
+      zustaendig,
+      faellig: alsFeldwert(faelligIn(NACHFASS_VORSCHLAEGE[0].tage)),
+    });
+  }
+
+  // Ein Zeitpunkt im Format des Datumsfeldes — in Ortszeit, sonst
+  // verschiebt sich der vorgeschlagene Termin um die Zeitzone.
+  function alsFeldwert(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  async function speichereNachfass(k) {
+    if (!nachfassEntwurf?.faellig || !nachfassEntwurf?.titel?.trim()) {
+      setFehler("Zeitpunkt und Titel dürfen nicht leer sein.");
+      return;
+    }
+    setNachfassBusy(true);
+    setFehler("");
+    try {
+      await apiPost("/api/nachfass", {
+        kontaktId: k.id,
+        leadId: k.lead_id || null,
+        zustaendig: nachfassEntwurf.zustaendig || ich,
+        faelligAm: new Date(nachfassEntwurf.faellig).toISOString(),
+        titel: nachfassEntwurf.titel,
+        notiz: nachfassEntwurf.notiz,
+      });
+      setNachfassFuer(null);
+      setNachfassEntwurf(null);
+      await laden();
+    } catch (e) {
+      setFehler(e?.message || "Das Nachfassen konnte nicht gespeichert werden.");
+    }
+    setNachfassBusy(false);
+  }
+
+  async function hakeNachfassAb(n) {
+    const meldung = await aendereGeprueft(
+      supabase.from("nachfass_termine").update({ erledigt_am: new Date().toISOString() }).eq("id", n.id),
+      "Abhaken darf nur, wer zuständig ist oder es eingetragen hat."
+    );
+    if (meldung) { setFehler(meldung); return; }
+    await laden();
   }
 
   // Anhänge: direkt in den Speicher, wie bei den Aufnahmen — dazu ein
@@ -766,6 +843,69 @@ export default function EmailMarketing() {
               </div>
             )}
 
+            {/* Was zu diesem Kontakt schon zum Nachfassen eingetragen ist.
+                Direkt am Kontakt und nicht nur im Kalender: hier steht man,
+                wenn man überlegt, ob noch etwas offen ist. */}
+            {nachfassListe.filter((n) => n.kontakt_id === k.id).map((n) => (
+              <div key={n.id} className={`flex items-center gap-2 text-[11px] mb-1 ${n.erledigt_am ? "text-textMuted line-through" : "text-textMain"}`}>
+                <span>{n.erledigt_am ? "✓" : "📌"}</span>
+                <span className="flex-1 min-w-0 truncate">
+                  {n.titel} · {deutscheZeit(n.faellig_am)} Uhr · {nameVon(n.zustaendig)}
+                </span>
+                {!n.erledigt_am && (
+                  <button onClick={() => hakeNachfassAb(n)} className="btn-ghost text-[11px] flex-shrink-0">Erledigt</button>
+                )}
+              </div>
+            ))}
+
+            {nachfassFuer === k.id && nachfassEntwurf && (
+              <div className="card !py-2.5 mb-2 border border-amber/40">
+                <div className="text-xs font-semibold text-textMain mb-1">Nachfassen eintragen</div>
+                <p className="text-[11px] text-textMuted mb-2">
+                  Kommt in den Kalender der zuständigen Person — auch im abonnierten Kalender auf dem Handy —
+                  und wird am Tag der Fälligkeit gemeldet.
+                </p>
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                  {NACHFASS_VORSCHLAEGE.map((v) => (
+                    <button key={v.tage}
+                      onClick={() => setNachfassEntwurf((d) => ({ ...d, faellig: alsFeldwert(faelligIn(v.tage)) }))}
+                      className="btn-ghost text-[11px]">{v.label}</button>
+                  ))}
+                  <input type="datetime-local" className="input !w-auto !py-1.5 text-xs"
+                    value={nachfassEntwurf.faellig}
+                    onChange={(e) => setNachfassEntwurf((d) => ({ ...d, faellig: e.target.value }))} />
+                </div>
+                <input className="input !py-1.5 text-xs mb-2" placeholder="Was ist zu tun?"
+                  value={nachfassEntwurf.titel}
+                  onChange={(e) => setNachfassEntwurf((d) => ({ ...d, titel: e.target.value }))} />
+                <input className="input !py-1.5 text-xs mb-2" placeholder="Notiz (optional)"
+                  value={nachfassEntwurf.notiz}
+                  onChange={(e) => setNachfassEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
+                {/* Zuweisen kann nur, wer jemanden führt — sonst gibt es
+                    nichts auszuwählen, und ein Feld mit einer einzigen
+                    Möglichkeit ist nur im Weg. */}
+                {leitung && personen.length > 1 ? (
+                  <select className="input !py-1.5 text-xs mb-2"
+                    value={nachfassEntwurf.zustaendig || ich}
+                    onChange={(e) => setNachfassEntwurf((d) => ({ ...d, zustaendig: e.target.value }))}>
+                    {personen.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}{p.id === ich ? " (ich)" : ""}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-[11px] text-textMuted mb-2">Kommt in deinen Kalender.</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <button onClick={() => speichereNachfass(k)} disabled={nachfassBusy}
+                    className="btn text-xs disabled:opacity-40">
+                    {nachfassBusy ? "Wird eingetragen…" : "Eintragen"}
+                  </button>
+                  <button onClick={() => { setNachfassFuer(null); setNachfassEntwurf(null); }}
+                    className="btn-ghost text-xs text-textMuted">Nicht jetzt</button>
+                </div>
+              </div>
+            )}
+
             {bearbeite === k.id ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                 <div className="flex items-center gap-1.5">
@@ -836,6 +976,9 @@ export default function EmailMarketing() {
                       können. */}
                   {(leitung || k.status === "offen") && (
                     <button onClick={() => starteBearbeiten(k)} className="btn-ghost text-xs">Bearbeiten</button>
+                  )}
+                  {nachfassFuer !== k.id && (
+                    <button onClick={() => oeffneNachfass(k)} className="btn-ghost text-xs">📌 Nachfassen</button>
                   )}
                   <button onClick={() => loesche(k)} className="btn-ghost text-xs text-coral">Löschen</button>
                   {!leitung && k.status !== "offen" && (

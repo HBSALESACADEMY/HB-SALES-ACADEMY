@@ -194,6 +194,38 @@ test("Wer eigene Zeilen sehen darf, darf sie auch ändern und löschen", () => {
   });
 });
 
+test("Das Nachfassen sperrt niemanden aus den eigenen Zeilen aus", () => {
+  const sql = readFileSync(new URL("../supabase/migration_156_nachfass_termine.sql", import.meta.url), "utf8");
+
+  // Ohne Schutz wäre die Tabelle für jede angemeldete Person frei lesbar —
+  // samt Kundennamen aus fremden Organisationen.
+  assert.match(sql, /alter table nachfass_termine enable row level security/);
+
+  // Dieselbe Falle wie bei Duellen, Aufnahmen und E-Mail-Kontakten: neben
+  // "= auth.uid()" stand dort zusätzlich eine Organisationsbedingung, und
+  // wer unter einem fremden Firmencode arbeitete, kam an seine eigenen
+  // Zeilen nicht mehr heran.
+  const eigene = sql.match(/create policy "nachfass_termine_(select|update|delete)_own"[\s\S]*?;/g) || [];
+  assert.equal(eigene.length, 3, "Eigene Zeilen brauchen Lesen, Ändern und Löschen.");
+  eigene.forEach((regel) => {
+    assert.match(regel, /auth\.uid\(\) = zustaendig/);
+    assert.ok(!/sieht_person|aktive_org|organization_id/.test(regel),
+      `Diese Regel hängt eine Organisationsbedingung an die eigenen Zeilen: ${regel.slice(0, 90)}`);
+  });
+
+  // Zuweisen nur an Personen, die man führt — sonst schiebt jede
+  // Vertriebsperson jeder anderen Arbeit in den Kalender. Und die
+  // Mandanten-Grenze steht davor.
+  const insert = sql.match(/create policy "nachfass_termine_insert"[\s\S]*?;/)?.[0] || "";
+  assert.match(insert, /organization_id is not distinct from aktive_org\(auth\.uid\(\)\)/);
+  assert.match(insert, /erstellt_von = auth\.uid\(\)/);
+  assert.match(insert, /sieht_person\(zustaendig\)/);
+  assert.match(insert, /ist_fuehrungsrolle\(auth\.uid\(\)\)|is_team_lead_of\(zustaendig, auth\.uid\(\)\)/);
+
+  // Und die Führungsrolle bleibt an die Mandanten-Grenze gebunden.
+  assert.match(sql, /nachfass_termine_select_leitung[\s\S]*?sieht_person\(zustaendig\)/);
+});
+
 // Die häufigste Fehlerursache in diesem Projekt: Supabase WIRFT nicht,
 // es gibt den Fehler als Feld zurück. Wer ihn nicht abfragt, sieht eine
 // abgelehnte Änderung als Erfolg — die Seite meldet nichts, und beim

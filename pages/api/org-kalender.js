@@ -98,6 +98,15 @@ export default async function handler(req, res) {
       });
     });
 
+    // Das Nachfassen nach einer Mail (migration_156). Über den
+    // RLS-gebundenen Client: wer wessen Nachfassen sieht, entscheidet die
+    // Datenbank — die eigenen immer, fremde nur, wer die Person führt.
+    const { data: nachfass } = await auth.client.from("nachfass_termine")
+      .select("id, titel, notiz, faellig_am, erledigt_am, zustaendig, erstellt_von, kontakt_id, lead_id")
+      .gte("faellig_am", vonZeitpunkt)
+      .lt("faellig_am", bisZeitpunkt)
+      .order("faellig_am");
+
     // Geburtstage: der Zeitraum kann mehrere Monate berühren, deshalb wird
     // für jeden Monat darin geprüft, ob der Tag hineinfällt.
     const monateImZeitraum = [];
@@ -157,6 +166,14 @@ export default async function handler(req, res) {
       // Erstgespräch war, wäre sonst leer. Dabei hat es stattgefunden, und
       // wer im Kalender zurückblättert, sucht genau das.
       vergangeneStufen: vergangene,
+      // Das Nachfassen steht im Kalender der zuständigen Person — genau
+      // dafür ist es da. Ohne Kalendereintrag ist ein Rückruf in drei Tagen
+      // nur ein guter Vorsatz.
+      nachfass: (nachfass || []).map((n) => ({
+        ...n,
+        autor: namen.get(n.zustaendig) || "Unbenannt",
+        erstellerName: namen.get(n.erstellt_von) || "Unbenannt",
+      })),
       einladungen: einladungen.map((e) => ({
         ...e,
         name: namen.get(e.person_id) || "Unbenannt",

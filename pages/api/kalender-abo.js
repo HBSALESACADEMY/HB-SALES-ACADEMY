@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     const eingeladenLeads = (einladungen || []).filter((e) => e.quelle === "lead").map((e) => e.ziel_id);
     const eingeladenEvents = (einladungen || []).filter((e) => e.quelle === "org_event").map((e) => e.ziel_id);
 
-    const [{ data: eigene }, { data: geladene }, { data: eintraege }] = await Promise.all([
+    const [{ data: eigene }, { data: geladene }, { data: eintraege }, { data: nachfass }] = await Promise.all([
       admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by, termin_art")
         .is("geloescht_am", null)
         .in("created_by", [...personen]).not("appointment_at", "is", null)
@@ -126,6 +126,13 @@ export default async function handler(req, res) {
       eingeladenEvents.length
         ? admin.from("org_events").select("id, titel, art, von, bis, uhrzeit, beschreibung").in("id", eingeladenEvents)
         : Promise.resolve({ data: [] }),
+      // Das Nachfassen nach einer Mail (migration_156). Es gehört genauso
+      // in den eigenen Kalender wie ein Termin — der Rückruf in drei Tagen
+      // ist ja gerade das, was ohne Eintrag untergeht.
+      admin.from("nachfass_termine")
+        .select("id, titel, notiz, faellig_am, erledigt_am, zustaendig")
+        .in("zustaendig", [...personen])
+        .gte("faellig_am", von).lte("faellig_am", bis),
     ]);
 
     // Doppelte vermeiden: wer zu seinem eigenen Termin eingeladen ist,
@@ -151,6 +158,19 @@ export default async function handler(req, res) {
         start: l.appointment_at,
         beschreibung: l.notes || null,
         abgesagt: l.status === "abgesagt",
+      });
+    });
+
+    (nachfass || []).forEach((n) => {
+      termine.push({
+        uid: `nachfass-${n.id}@hb-sales-academy.de`,
+        // Erledigtes bleibt drin, aber sichtbar erledigt: verschwände es,
+        // sähe der Tag im eigenen Kalender aus, als wäre nie etwas gewesen.
+        titel: `${n.erledigt_am ? "✓ " : "📌 "}${n.titel}`
+          + (n.zustaendig !== profil.id && namen.get(n.zustaendig) ? ` — ${namen.get(n.zustaendig)}` : ""),
+        start: n.faellig_am,
+        dauerMinuten: 15,
+        beschreibung: n.notiz || null,
       });
     });
 
