@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
 import { artVon, TERMIN_ARTEN, rueckeVor, verlaufVon } from "../lib/terminArt";
+import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
 import Avatar from "../components/Avatar";
@@ -1022,6 +1023,9 @@ export default function Termine() {
           const leadComments = commentsByLead[lead.id] || [];
           const leadTasks = tasksByLead[lead.id] || [];
           const openTaskCount = leadTasks.filter((t) => !t.done).length;
+          // Die Stufe gehört an den Namen: "CC: Max Muster" sagt auf einen
+          // Blick, worum es in diesem Termin geht.
+          const art = artVon(lead);
 
           if (!isExpanded) {
             return (
@@ -1032,13 +1036,17 @@ export default function Termine() {
                 className={`card text-left flex flex-col gap-1.5 hover:-translate-y-0.5 transition ${isHighlighted ? "ring-2 ring-amber" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-display font-semibold text-textMain text-sm truncate">{lead.name}</span>
+                  <span className="font-display font-semibold text-textMain text-sm truncate">
+                    <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{art.kurz}:</span>
+                    {lead.name}
+                  </span>
                   <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
                 </div>
                 {companyField && getLeadFieldValue(lead, companyField) && (
                   <div className="text-xs text-textMuted truncate">{getLeadFieldValue(lead, companyField)}</div>
                 )}
                 <div className="text-xs font-mono text-textMain">{formatAppointment(lead.appointment_at)}</div>
+                <Fortschrittsbalken lead={lead} kompakt />
                 {viewMode === "team" && owner && (
                   <div className="flex items-center gap-1.5 text-xs text-textMuted mt-0.5">
                     <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
@@ -1069,7 +1077,10 @@ export default function Termine() {
               <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
-                    {lead.name}
+                    <span>
+                      <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{art.kurz}:</span>
+                      {lead.name}
+                    </span>
                     {lead.follow_up_of && (
                       <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">
                         Folgetermin
@@ -1090,6 +1101,10 @@ export default function Termine() {
                   )}
                 </div>
                 <div className="text-xs font-mono text-textMain flex-shrink-0">{formatAppointment(lead.appointment_at)}</div>
+              </div>
+
+              <div className="mb-3">
+                <Fortschrittsbalken lead={lead} />
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted mb-2 items-center">
