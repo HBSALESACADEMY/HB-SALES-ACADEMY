@@ -50,7 +50,7 @@ export default async function handler(req, res) {
         .order("von"),
       admin.from("profiles").select("id, full_name, avatar_url, geburtstag, abwesend_von, abwesend_bis")
         .eq("organization_id", orgId),
-      auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by, termin_art")
+      auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by, termin_art, stufen_verlauf")
         .not("appointment_at", "is", null)
         .gte("appointment_at", vonZeitpunkt)
         .lt("appointment_at", bisZeitpunkt)
@@ -66,6 +66,35 @@ export default async function handler(req, res) {
     // (migration_113). Deshalb kommen sie über den RLS-gebundenen Client
     // und nicht über den Admin-Zugang.
     const sichtbareTermine = termine || [];
+
+    // Auch Termine, deren AKTUELLER Zeitpunkt ausserhalb des Zeitraums
+    // liegt, können abgeschlossene Stufen darin haben: ein Closing Call im
+    // Oktober hatte sein Erstgespräch im September.
+    const { data: mitVerlauf } = await auth.client.from("leads")
+      .select("id, name, company, created_by, termin_art, stufen_verlauf")
+      .not("stufen_verlauf", "eq", "[]")
+      .limit(500);
+
+    const vergangene = [];
+    (mitVerlauf || []).forEach((l) => {
+      (Array.isArray(l.stufen_verlauf) ? l.stufen_verlauf : []).forEach((v, i) => {
+        if (!v?.am) return;
+        const tag = String(v.am).slice(0, 10);
+        if (tag < von || tag > bis) return;
+        vergangene.push({
+          // Eigene Kennung je Stufe: zwei abgeschlossene Stufen desselben
+          // Termins dürfen sich im Kalender nicht überschreiben.
+          id: `${l.id}-stufe-${i}`,
+          lead_id: l.id,
+          name: l.name,
+          company: l.company,
+          created_by: l.created_by,
+          termin_art: v.art,
+          appointment_at: v.am,
+          ergebnis: v.ergebnis || null,
+        });
+      });
+    });
 
     // Geburtstage: der Zeitraum kann mehrere Monate berühren, deshalb wird
     // für jeden Monat darin geprüft, ob der Tag hineinfällt.
@@ -119,6 +148,13 @@ export default async function handler(req, res) {
     return res.status(200).json({
       eintraege: gefiltert.map((e) => ({ ...e, autor: namen.get(e.created_by) || "Unbenannt" })),
       termine: sichtbareTermine.map((t) => ({ ...t, autor: namen.get(t.created_by) || "Unbenannt" })),
+      // Die abgeschlossenen Stufen an ihrem eigenen Datum.
+      //
+      // Seit ein Termin weiterrückt statt sich zu verdoppeln, steht im
+      // Kalender nur noch der aktuelle Zeitpunkt — der Tag, an dem das
+      // Erstgespräch war, wäre sonst leer. Dabei hat es stattgefunden, und
+      // wer im Kalender zurückblättert, sucht genau das.
+      vergangeneStufen: vergangene,
       einladungen: einladungen.map((e) => ({
         ...e,
         name: namen.get(e.person_id) || "Unbenannt",

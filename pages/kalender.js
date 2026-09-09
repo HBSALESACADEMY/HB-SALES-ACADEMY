@@ -79,6 +79,10 @@ export default function Kalender() {
   const [terminBearbeiten, setTerminBearbeiten] = useState(null);
   const [terminEntwurf, setTerminEntwurf] = useState({ zeitpunkt: "", art: "" });
   const [terminBusy, setTerminBusy] = useState(false);
+  // Suche über den ganzen Zeitraum: Wer einen bestimmten Kunden sucht,
+  // blättert sonst Monat für Monat durch — und findet ihn erst, wenn er den
+  // Tag zufällig trifft.
+  const [suche, setSuche] = useState("");
 
   async function speichereTermin(t) {
     if (!terminEntwurf.zeitpunkt) return;
@@ -285,15 +289,32 @@ export default function Kalender() {
 
   // --- Zusammenstellen -----------------------------------------------------
 
+  // Passt dieser Eintrag zur Suche? Verglichen wird über alles, wonach man
+  // suchen würde: Kundenname, Firma, die Person, die den Termin gelegt hat,
+  // und die Stufe.
+  function passtZurSuche(eintrag) {
+    const begriff = suche.trim().toLowerCase();
+    if (!begriff) return true;
+    const felder = [
+      eintrag.name, eintrag.titel, eintrag.company,
+      nameVon(eintrag.created_by), eintrag.autor,
+      artVon(eintrag).label, artVon(eintrag).kurz,
+    ];
+    return felder.filter(Boolean).some((f) => String(f).toLowerCase().includes(begriff));
+  }
+
   function eintraegeAm(datum) {
-    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [] };
+    const leer = { eintraege: [], termine: [], geburtstage: [], abwesend: [], extern: [], vergangene: [] };
     if (!daten || !datum) return leer;
     const schluessel = tagesSchluessel(datum);
     return {
-      eintraege: daten.eintraege.filter((e) => schluessel >= e.von && schluessel <= (e.bis || e.von)),
+      eintraege: daten.eintraege.filter((e) => schluessel >= e.von && schluessel <= (e.bis || e.von) && passtZurSuche(e)),
       // Nach deutscher Zeit einsortiert — sonst rutscht ein Abendtermin für
       // jemanden im Ausland auf den falschen Tag.
-      termine: (daten.termine || []).filter((t) => deutscherTag(t.appointment_at) === schluessel),
+      termine: (daten.termine || []).filter((t) => deutscherTag(t.appointment_at) === schluessel && passtZurSuche(t)),
+      // Abgeschlossene Stufen: Seit ein Termin weiterrückt statt sich zu
+      // verdoppeln, stünde der Tag des Erstgesprächs sonst leer da.
+      vergangene: (daten.vergangeneStufen || []).filter((v) => deutscherTag(v.appointment_at) === schluessel && passtZurSuche(v)),
       geburtstage: daten.geburtstage.filter((g) => g.tag === schluessel),
       abwesend: daten.abwesenheiten.filter((a) => schluessel >= a.von && schluessel <= a.bis),
       // Termine aus privaten Kalendern (migration_134). Über Beginn UND
@@ -448,6 +469,25 @@ export default function Kalender() {
         Was die ganze Firma angeht — Besprechungen, Schulungen, Messen, Feiertage. Geburtstage,
         Abwesenheiten und deine Vertriebstermine stehen automatisch mit drin.
       </p>
+
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <input
+          className="input !py-1.5 text-xs !w-auto flex-1 min-w-[12rem]"
+          placeholder="Im Kalender suchen: Kunde, Firma, Vertriebler, Stufe…"
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+        />
+        {suche && (
+          <>
+            <button onClick={() => setSuche("")} className="btn-ghost text-xs">Suche zurücksetzen</button>
+            <span className="text-[11px] text-textMuted">
+              {/* Ohne Rückmeldung sieht ein leerer Monat nach einem Fehler
+                  aus statt nach einer Suche ohne Treffer. */}
+              Es werden nur passende Einträge angezeigt.
+            </span>
+          </>
+        )}
+      </div>
 
       {/* Was die Farben bedeuten. Ohne Legende rät man, und geraten wird
           falsch. */}
@@ -778,7 +818,7 @@ export default function Kalender() {
                       </span>
                       <span className="flex flex-col gap-0.5 mt-0.5 leading-tight">
                         {zeilenFuerTag(inhalt, meinStatus, nameVon).slice(0, 3).map((z, k) => (
-                          <span key={k} title={z.titel} className="truncate text-[10px] px-0.5 flex items-center gap-1">
+                          <span key={k} title={z.titel} className={`truncate text-[10px] px-0.5 flex items-center gap-1 ${z.vergangen ? "opacity-50" : ""}`}>
                             {/* Die Farbe der Stufe: Setting, Folgetermin
                                 und Closing sind im vollen Monat sonst nicht
                                 zu unterscheiden. */}
@@ -886,6 +926,15 @@ function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
       titel: `${uhrzeitDeutsch(t.appointment_at)} ${kalenderTitel(t, nameVon(t.created_by))}`,
       farbe: terminFarbe(t),
     })),
+    // Was an diesem Tag stattgefunden hat und inzwischen weitergerückt ist.
+    // Blass, weil es Vergangenheit ist — aber sichtbar, denn stattgefunden
+    // hat es.
+    ...(inhalt.vergangene || []).map((v) => ({
+      symbol: "✓",
+      titel: `${uhrzeitDeutsch(v.appointment_at)} ${kalenderTitel(v, nameVon(v.created_by))}`,
+      farbe: terminFarbe(v),
+      vergangen: true,
+    })),
     ...inhalt.eintraege.map((e) => ({ symbol: zeichen("org_event", e.id, symbolFuer(e.art)), titel: e.uhrzeit ? `${e.uhrzeit} ${e.titel}` : e.titel })),
     // Privatkalender zuletzt: sie sind Hintergrund für die Frage "wer kann
     // wann", nicht das, wonach im Firmenkalender gesucht wird.
@@ -904,7 +953,8 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
   bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen,
   terminBearbeiten, terminEntwurf, setTerminEntwurf, onTerminBearbeiten, onTerminSpeichern, onTerminAbbrechen, terminBusy, nameVon }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
-    && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0;
+    && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0
+    && (inhalt.vergangene || []).length === 0;
   if (leer) return <p className="text-textMuted text-xs">{kompakt ? "—" : "Für diesen Tag ist nichts eingetragen."}</p>;
 
   return (
@@ -974,6 +1024,26 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
           )}
         </div>
       )))}
+
+      {(inhalt.vergangene || []).map((v) => (
+        <div key={`v-${v.id}`} className="flex items-start gap-2 py-1 opacity-60">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: terminFarbe(v) }} />
+            ✓
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
+              <span className="text-textMuted">{artVon(v).kurz}: </span>
+              {v.name}{v.company ? <span className="text-textMuted"> · {v.company}</span> : null}
+            </div>
+            <div className="text-[11px] text-textMuted">
+              hat stattgefunden{nameVon && nameVon(v.created_by) ? ` · ${nameVon(v.created_by)}` : ""}
+              {v.ergebnis ? ` · ${v.ergebnis === "kunde" ? "Kunde geworden" : v.ergebnis === "follow_up" ? "überlegt" : "Absage"}` : ""}
+              {" · der Termin ist inzwischen weitergerückt"}
+            </div>
+          </div>
+        </div>
+      ))}
 
       {inhalt.termine.map((t) => (
         <div key={`t-${t.id}`} className="flex items-start gap-2 py-1">
