@@ -47,6 +47,7 @@ import { kursStand, kursDetails, moduleGesamt } from "../lib/kursstand.js";
 import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_TAGE } from "../lib/aufnahmeFrist.js";
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
+import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2397,4 +2398,48 @@ test("Die Seitenleiste gliedert nach Tätigkeit, nicht nach Restehaufen", () => 
   Object.keys(proGruppe).forEach((g) => {
     assert.ok(reihenfolge.includes(`"${g}"`), `Die Gruppe "${g}" fehlt in der Reihenfolge.`);
   });
+});
+
+// --- Rückmeldungen des Mailversands ---------------------------------------
+
+test("Rückmeldungen: nur was zählt, wird übernommen", () => {
+  assert.equal(zustandFuer("email.delivered"), "zugestellt");
+  assert.equal(zustandFuer("email.bounced"), "unzustellbar");
+  assert.equal(zustandFuer("email.complained"), "beschwerde");
+  // Öffnungsraten sind ungenau — eine Zahl, der man nicht trauen kann, ist
+  // schlimmer als keine.
+  assert.equal(zustandFuer("email.opened"), null);
+  assert.equal(zustandFuer("unbekannt"), null);
+  Object.values(zustandFuer("email.sent") ? { a: "angenommen" } : {}).forEach(() => {});
+  Object.keys(ZUSTELLUNG_LABELS).forEach((k) => assert.ok(ZUSTELLUNG_LABELS[k].length > 3));
+});
+
+test("Eine unzustellbare Adresse kommt nicht in die Nachfass-Liste", () => {
+  // Sonst erinnert die Academy in fünf Tagen daran, einer toten Adresse
+  // hinterherzutelefonieren.
+  const vorTagen = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  const offen = { status: "verschickt", verschickt_am: vorTagen(10) };
+  assert.equal(brauchtNachfassen(offen), true);
+  assert.equal(brauchtNachfassen({ ...offen, zustellung: "unzustellbar" }), false);
+  assert.equal(brauchtNachfassen({ ...offen, zustellung: "beschwerde" }), false);
+  assert.equal(brauchtNachfassen({ ...offen, zustellung: "zugestellt" }), true);
+
+  assert.equal(istGescheitert("unzustellbar"), true);
+  assert.equal(istGescheitert("zugestellt"), false);
+  // Nach einer Beschwerde geht dorthin nichts mehr raus — das ist die
+  // Bedingung dafür, dass die eigene Domain zustellbar bleibt.
+  assert.equal(darfNochSenden({ zustellung: "beschwerde" }), false);
+  assert.equal(darfNochSenden({ zustellung: "unzustellbar" }), true);
+  assert.equal(darfNochSenden({}), true);
+});
+
+test("Die Rückmeldungs-Route schützt sich mit einem Geheimnis", () => {
+  // Sie hat keine Anmeldung — der Versanddienst ruft sie auf. Eine offene
+  // Route, über die jeder den Zustand fremder Kontakte umschreiben könnte,
+  // wäre schlimmer als keine Rückmeldung.
+  const route = readFileSync(new URL("../pages/api/versand-rueckmeldung.js", import.meta.url), "utf8");
+  assert.match(route, /RESEND_WEBHOOK_SECRET/);
+  assert.match(route, /return res\.status\(401\)/);
+  // Ohne eingerichtetes Geheimnis nimmt sie gar nichts an.
+  assert.match(route, /if \(!geheimnis\) return res\.status\(503\)/);
 });

@@ -16,6 +16,7 @@ import {
   BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt,
 } from "../lib/marketingVorlage";
 import { deutscheZeit } from "../lib/terminzeit";
+import { ZUSTELLUNG_LABELS, istGescheitert, darfNochSenden } from "../lib/zustellung";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
 import { resolveLeadFields, resolveCoreRequired } from "../lib/leadFields";
@@ -74,6 +75,9 @@ export default function EmailMarketing() {
   // halben Bildschirm füllt, ist keine Liste — man scrollt an dem vorbei,
   // was man sucht.
   const [offenerKontakt, setOffenerKontakt] = useState(null);
+  // Für welchen Kontakt gerade nachgefragt wird, ob wirklich ein zweites
+  // Mal gesendet werden soll.
+  const [nochmalFuer, setNochmalFuer] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -269,8 +273,27 @@ export default function EmailMarketing() {
     setFehler("");
   }
 
+  // Ging heute schon eine Mail an diesen Kontakt raus?
+  //
+  // Der Senden-Knopf steht bewusst an jedem Eintrag — manchmal braucht es
+  // eine zweite Mail. Zweimal am selben Tag ist aber fast immer ein
+  // Versehen, und beim Kunden sieht es nach Nachlässigkeit aus.
+  function heuteSchonVerschickt(k) {
+    if (!k.verschickt_am) return false;
+    return new Date(k.verschickt_am).toDateString() === new Date().toDateString();
+  }
+
   async function sendeMail(k, anMichSelbst = false) {
     if (!mail.betreff.trim() || !mail.text.trim()) { setFehler("Betreff und Text dürfen nicht leer sein."); return; }
+    if (!anMichSelbst && !darfNochSenden(k)) {
+      setFehler("Dieser Kontakt hat die Mail als Spam gemeldet — dorthin geht nichts mehr raus.");
+      return;
+    }
+    if (!anMichSelbst && heuteSchonVerschickt(k) && nochmalFuer !== k.id) {
+      setNochmalFuer(k.id);
+      return;
+    }
+    setNochmalFuer(null);
     setMailBusy(true);
     setProbeStand(null);
     try {
@@ -636,9 +659,19 @@ export default function EmailMarketing() {
                 )}
               </button>
 
-              <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border text-textMuted border-line flex-shrink-0">
-                {EMAIL_STATUS[k.status] || k.status}
-              </span>
+              {/* Was aus der Mail wurde. Eine unzustellbare Adresse sah
+                  vorher aus wie eine erfolgreiche — und landete in der
+                  Nachfass-Liste. */}
+              {istGescheitert(k.zustellung) ? (
+                <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-coral/50 text-coral flex-shrink-0"
+                  title={k.zustellung_grund || ""}>
+                  {ZUSTELLUNG_LABELS[k.zustellung]}
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border text-textMuted border-line flex-shrink-0">
+                  {EMAIL_STATUS[k.status] || k.status}
+                </span>
+              )}
 
               {/* Der Versand-Knopf steht an JEDEM Eintrag, nicht nur bei den
                   offenen: auch ein Kontakt, der schon eine Mail bekommen
@@ -714,6 +747,17 @@ export default function EmailMarketing() {
                     {signatur ? " Der Standardschluss steht schon im Text." : ""}
                   </span>
                   {probeStand && <span className="text-[11px] text-teal w-full">{probeStand}</span>}
+                  {nochmalFuer === k.id && (
+                    <div className="w-full card border-amber/50">
+                      <div className="text-xs text-textMain mb-2">
+                        An {k.name} ging heute schon eine Mail ({deutscheZeit(k.verschickt_am)} Uhr). Trotzdem senden?
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => sendeMail(k)} className="btn-ghost text-xs">Ja, noch einmal</button>
+                        <button onClick={() => setNochmalFuer(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -758,6 +802,14 @@ export default function EmailMarketing() {
                 {/* Was verschickt wurde, getrennt von dem, was im Gespräch
                     gesagt wurde — sonst wächst die Notiz mit jedem Versand
                     und landet in der nächsten Mail. */}
+                {k.zustellung && (
+                  <p className={`text-[11px] mb-2 ${istGescheitert(k.zustellung) ? "text-coral" : "text-textMuted"}`}>
+                    {ZUSTELLUNG_LABELS[k.zustellung]}
+                    {k.zustellung_am ? ` · ${deutscheZeit(k.zustellung_am)} Uhr` : ""}
+                    {k.zustellung_grund ? ` · ${k.zustellung_grund}` : ""}
+                    {istGescheitert(k.zustellung) ? " — hier hilft kein Nachfassen, sondern eine Korrektur der Adresse." : ""}
+                  </p>
+                )}
                 {k.letzter_betreff && (
                   <p className="text-[11px] text-textMuted mb-2">
                     Zuletzt verschickt: „{k.letzter_betreff}"

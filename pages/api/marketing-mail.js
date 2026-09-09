@@ -148,6 +148,12 @@ export default async function handler(req, res) {
       // Welche Vorlage benutzt wurde — Grundlage für die Frage, welche
       // Vorlage Termine bringt (migration_143).
       vorlage: vorlage || null,
+      // Die Kennung des Versanddienstes — nur mit ihr lässt sich eine
+      // spätere Rückmeldung dem richtigen Kontakt zuordnen (migration_152).
+      versand_id: versand?.id || null,
+      zustellung: "angenommen",
+      zustellung_am: jetzt,
+      zustellung_grund: null,
       // Der Betreff der letzten Mail — bewusst in einem eigenen Feld und
       // NICHT in der Gesprächsnotiz.
       //
