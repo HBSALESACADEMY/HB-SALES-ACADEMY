@@ -2694,12 +2694,33 @@ test("Adressen mit unsichtbaren Zeichen werden gesäubert, nicht verschickt", as
   // nicht — und eine Adresse, an die nichts rausgeht, ist im Marketing
   // eine Falle, die erst beim Senden zuschnappt.
   assert.equal(gueltigeAdresse("müller@volkwork.de"), false);
-  assert.deepEqual(fremdeZeichen("müller@volkwork.de"), ["U+00FC"]);
+  assert.deepEqual(fremdeZeichen("müller@volkwork.de"), ["U+00FC (ü)"]);
   assert.equal(gueltigeAdresse("ohne-at.volkwork.de"), false);
   assert.equal(gueltigeAdresse("kontakt@volkwork.de"), true);
 
   // Das Codepunkt-Format ist die Auskunft: ein Zeichen der Breite null
   // lässt sich nicht anzeigen.
-  assert.deepEqual(fremdeZeichen(kopiert), ["U+200B"]);
+  assert.deepEqual(fremdeZeichen(kopiert), ["U+200B (Zeichen der Breite null)"]);
   assert.deepEqual(fremdeZeichen("kontakt@volkwork.de"), []);
+});
+
+test("Der Gedankenstrich in einer Adresse wird zum Bindestrich", async () => {
+  const { bereinigeAdresse, gueltigeAdresse, fremdeZeichen } = await import("../lib/emailKontakt.js");
+
+  // Word und Outlook machen beim Tippen aus "bauplanung-nord" ein
+  // "bauplanung–nord". Die Adresse sieht danach fast gleich aus, und der
+  // Versanddienst lehnt sie ab.
+  //
+  // Die Umwandlung ist sicher: im Domainnamen ist ausser Buchstaben,
+  // Ziffern und dem Bindestrich nichts erlaubt — ein Gedankenstrich kann
+  // dort nie gemeint sein.
+  assert.equal(bereinigeAdresse("bpn@bauplanung–nord.de"), "bpn@bauplanung-nord.de");
+  assert.equal(bereinigeAdresse("bpn@bauplanung—nord.de"), "bpn@bauplanung-nord.de");
+  assert.equal(bereinigeAdresse("bpn@bauplanung−nord.de"), "bpn@bauplanung-nord.de");
+  assert.equal(gueltigeAdresse("bpn@bauplanung–nord.de"), true);
+
+  // Der Name des Zeichens gehört in die Meldung: "U+2013" sagt niemandem
+  // etwas, "Gedankenstrich" sagt sofort, wonach man sucht.
+  assert.deepEqual(fremdeZeichen("bpn@bauplanung–nord.de"), ["U+2013 (Gedankenstrich)"]);
+  assert.deepEqual(fremdeZeichen("müller@x.de"), ["U+00FC (ü)"]);
 });

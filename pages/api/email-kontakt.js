@@ -27,7 +27,9 @@ export default async function handler(req, res) {
 
   // --- Dublettenprüfung ---
   if (req.method === "GET") {
-    const adresse = String(req.query.email || "").trim().toLowerCase();
+    // Gesäubert vergleichen, sonst bleibt eine Dublette mit
+    // Gedankenstrich statt Bindestrich unentdeckt.
+    const adresse = bereinigeAdresse(req.query.email).toLowerCase();
     if (!gueltigeAdresse(adresse)) return res.status(200).json({ kontakt: null });
     const { data } = await admin.from("email_kontakte")
       .select("id, user_id, status, created_at")

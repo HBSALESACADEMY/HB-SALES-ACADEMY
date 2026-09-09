@@ -501,7 +501,10 @@ export default function CallTracker() {
   // Information für die Organisation und kein Grund, den Kontakt zu
   // verwerfen.
   async function pruefeDublette(adresse) {
-    const sauber = String(adresse || "").trim().toLowerCase();
+    // Gesäubert vergleichen: sonst gilt "bauplanung–nord.de" mit
+    // Gedankenstrich als andere Adresse als dieselbe mit Bindestrich, und
+    // die Dublette bliebe unentdeckt.
+    const sauber = bereinigeAdresse(adresse).toLowerCase();
     setDublette(null);
     if (!sauber.includes("@")) return;
     try {
@@ -517,6 +520,10 @@ export default function CallTracker() {
     // Stelle beschrieben (lib/emailKontakt.js). Eine kopierte Adresse
     // bringt unsichtbare Zeichen mit, die der Versanddienst ablehnt.
     const sauberEmail = bereinigeAdresse(emailEntwurf.email);
+    // Die Korrektur sichtbar machen, statt sie still zu speichern: wer aus
+    // Word kopiert hat, soll sehen, dass aus dem Gedankenstrich ein
+    // Bindestrich wurde.
+    if (sauberEmail !== emailEntwurf.email) setEmailEntwurf((d) => ({ ...d, email: sauberEmail }));
     if (!gueltigeAdresse(sauberEmail)) {
       const fremd = fremdeZeichen(sauberEmail);
       setEmailFehler(fremd.length
