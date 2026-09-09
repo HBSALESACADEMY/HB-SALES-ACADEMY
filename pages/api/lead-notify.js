@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   try {
     // Über den RLS-gebundenen Client: wer den Termin nicht sehen darf, kann
     // auch keine Meldung dazu auslösen.
-    const { data: lead } = await client.from("leads").select("*").eq("id", leadId).maybeSingle();
+    const { data: lead } = await client.from("leads").select("*").is("geloescht_am", null).eq("id", leadId).maybeSingle();
     if (!lead) return res.status(404).json({ error: "Termin nicht gefunden — oder kein Zugriff." });
 
     const admin = getAdminSupabase();

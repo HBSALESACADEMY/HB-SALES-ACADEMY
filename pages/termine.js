@@ -146,7 +146,7 @@ export default function Termine() {
     // erwähnte Personen), statt dass der Deep-Link ins Leere läuft.
     const deepLinkId = router.query.leadId;
     if (deepLinkId && !leadRows.some((l) => l.id === deepLinkId)) {
-      const { data: extraLead } = await supabase.from("leads").select("*").eq("id", deepLinkId).maybeSingle();
+      const { data: extraLead } = await supabase.from("leads").select("*").is("geloescht_am", null).eq("id", deepLinkId).maybeSingle();
       if (extraLead) leadRows = [extraLead, ...leadRows];
     }
     setLeads(leadRows);

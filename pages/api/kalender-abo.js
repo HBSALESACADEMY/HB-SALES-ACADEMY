@@ -116,10 +116,11 @@ export default async function handler(req, res) {
 
     const [{ data: eigene }, { data: geladene }, { data: eintraege }] = await Promise.all([
       admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by, termin_art")
+        .is("geloescht_am", null)
         .in("created_by", [...personen]).not("appointment_at", "is", null)
         .gte("appointment_at", von).lte("appointment_at", bis),
       eingeladenLeads.length
-        ? admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by, termin_art").in("id", eingeladenLeads)
+        ? admin.from("leads").select("id, name, company, appointment_at, status, notes, created_by, termin_art").is("geloescht_am", null).in("id", eingeladenLeads)
         : Promise.resolve({ data: [] }),
       eingeladenEvents.length
         ? admin.from("org_events").select("id, titel, art, von, bis, uhrzeit, beschreibung").in("id", eingeladenEvents)

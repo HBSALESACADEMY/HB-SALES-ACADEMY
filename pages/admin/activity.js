@@ -101,7 +101,7 @@ export default function AdminActivity() {
       scoped(supabase.from("roleplay_sessions").select("*").order("created_at", { ascending: false }).limit(100)),
       scoped(supabase.from("community_posts").select("*").order("created_at", { ascending: false }).limit(100)),
       scoped(supabase.from("community_comments").select("*").order("created_at", { ascending: false }).limit(100)),
-      scoped(supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(100), "created_by"),
+      scoped(supabase.from("leads").select("*").is("geloescht_am", null).order("created_at", { ascending: false }).limit(100), "created_by"),
       scoped(supabase.from("lead_comments").select("*").order("created_at", { ascending: false }).limit(100)),
       scoped(supabase.from("lead_tasks").select("*").order("created_at", { ascending: false }).limit(100), "assigned_by"),
       // Weitere Spuren, die es längst gibt und die bisher niemand ansah.
@@ -123,7 +123,7 @@ export default function AdminActivity() {
     // Zeilen von leadRows enthalten.
     const referencedLeadIds = [...new Set([...(leadComments || []).map((c) => c.lead_id), ...(leadTasks || []).map((t) => t.lead_id)])];
     const { data: referencedLeads } = referencedLeadIds.length
-      ? await supabase.from("leads").select("id, name").in("id", referencedLeadIds)
+      ? await supabase.from("leads").select("id, name").is("geloescht_am", null).in("id", referencedLeadIds)
       : { data: [] };
     const leadNameById = {};
     (referencedLeads || []).forEach((l) => { leadNameById[l.id] = l.name; });

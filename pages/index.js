@@ -287,7 +287,7 @@ export default function Dashboard() {
       // Anstehende Termine — eigene für alle, teamweite zusätzlich für
       // Manager/Admins/Backend (RLS scoped bereits auf die eigene Organisation).
       const nowIso = new Date().toISOString();
-      const { data: myLeads } = await supabase.from("leads").select("id, name, company, appointment_at")
+      const { data: myLeads } = await supabase.from("leads").select("id, name, company, appointment_at").is("geloescht_am", null)
         .eq("created_by", uid).eq("status", "geplant").not("appointment_at", "is", null)
         .gte("appointment_at", nowIso).order("appointment_at", { ascending: true }).limit(5);
       setUpcomingLeads(myLeads || []);
@@ -296,7 +296,7 @@ export default function Dashboard() {
       if (canManageLeads) {
         // Eigene Termine werden schon oben in "Anstehende Termine" gezeigt —
         // hier ausschließen, sonst tauchen sie doppelt auf.
-        const { data: teamLeads } = await supabase.from("leads").select("id, name, company, appointment_at, created_by")
+        const { data: teamLeads } = await supabase.from("leads").select("id, name, company, appointment_at, created_by").is("geloescht_am", null)
           .eq("status", "geplant").not("appointment_at", "is", null).neq("created_by", uid)
           .gte("appointment_at", nowIso).order("appointment_at", { ascending: true }).limit(8);
         const creatorIds = [...new Set((teamLeads || []).map((l) => l.created_by))];
@@ -338,7 +338,7 @@ export default function Dashboard() {
 
       const [{ data: nameProfiles }, { data: mentionLeads }] = await Promise.all([
         allNameIds.length ? supabase.from("profiles").select("id, full_name").in("id", allNameIds) : Promise.resolve({ data: [] }),
-        allLeadIds.length ? supabase.from("leads").select("id, name").in("id", allLeadIds) : Promise.resolve({ data: [] }),
+        allLeadIds.length ? supabase.from("leads").select("id, name").is("geloescht_am", null).in("id", allLeadIds) : Promise.resolve({ data: [] }),
       ]);
       const nameById = {};
       (nameProfiles || []).forEach((p) => { nameById[p.id] = p.full_name; });

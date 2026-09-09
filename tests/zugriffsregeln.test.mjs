@@ -235,3 +235,44 @@ test("Kein schreibender Datenbankaufruf verschluckt seinen Fehler", () => {
   assert.deepEqual(ungeprueft, [],
     `Diese Schreibvorgänge prüfen ihr Ergebnis nicht — eine abgelehnte Änderung sieht dort aus wie ein Erfolg: ${ungeprueft.join(", ")}`);
 });
+
+// Ein gelöschter Termin liegt im Papierkorb (migration_145): die Zeile
+// bleibt stehen, damit ein Versehen rückgängig zu machen ist. Genau das
+// macht ihn aber gefährlich — wer beim Lesen nicht danach fragt, bekommt
+// ihn zurück, und der gelöschte Termin steht weiter im Kalender, auf dem
+// Startbildschirm und in der Auswertung. Sichtbar gelöscht ist er erst,
+// wenn JEDE Abfrage ihn ausschliesst.
+test("Kein Lesezugriff holt gelöschte Termine zurück", () => {
+  // Wo ein gelöschter Termin absichtlich dazugehört.
+  const ausnahmen = {
+    "pages/api/export-data.js":
+      "Datenauskunft: sie muss alles enthalten, was über die Person gespeichert ist — auch den Papierkorb.",
+    "lib/aufnahmenAufraeumen.js":
+      "Der Aufräumjob muss gelöschte Termine gerade sehen, um ihre Aufnahmen wegzuräumen.",
+    "pages/api/delete-own-account.js":
+      "Beim Kontolöschen müssen die Aufnahmen ALLER Termine weg, auch die im Papierkorb.",
+  };
+
+  const ordner = [new URL("../pages/", import.meta.url), new URL("../lib/", import.meta.url)];
+  const offen = [];
+
+  for (const basis of ordner) {
+    const dateien = readdirSync(basis, { recursive: true })
+      .filter((n) => typeof n === "string" && n.endsWith(".js"));
+    for (const name of dateien) {
+      const pfad = `${basis.pathname.endsWith("/pages/") ? "pages" : "lib"}/${name}`;
+      if (ausnahmen[pfad]) continue;
+      const zeilen = readFileSync(new URL(name, basis), "utf8").split("\n");
+      zeilen.forEach((zeile, i) => {
+        if (!/from\("leads"\)\s*\.?\s*$|from\("leads"\)\.select\(/.test(zeile)) return;
+        // Die Abfrage steht selten in einer Zeile — die folgenden Zeilen
+        // gehören dazu, bis der Aufruf endet.
+        const umfeld = zeilen.slice(i, i + 8).join("\n");
+        if (!umfeld.includes('geloescht_am')) offen.push(`${pfad}:${i + 1}`);
+      });
+    }
+  }
+
+  assert.deepEqual(offen, [],
+    `Diese Abfragen holen gelöschte Termine mit — sie stehen dann weiter im Kalender und in den Zahlen: ${offen.join(", ")}`);
+});

@@ -62,7 +62,7 @@ export default function Recordings() {
     const [{ data, error: err }, { data: leadRows }] = await Promise.all([
       // Obergrenze, damit die Liste nicht unbegrenzt mit der Zeit mitwächst.
       supabase.from("call_recordings").select("*").order("created_at", { ascending: false }).limit(300),
-      supabase.from("leads").select("id, name, company").eq("created_by", session.user.id).order("created_at", { ascending: false }),
+      supabase.from("leads").select("id, name, company").is("geloescht_am", null).eq("created_by", session.user.id).order("created_at", { ascending: false }),
     ]);
     if (err) setError(err.message);
     setRecordings(data || []);

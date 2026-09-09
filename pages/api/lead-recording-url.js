@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
   try {
     const admin = getAdminSupabase();
-    const { data: lead } = await admin.from("leads").select("created_by, recording_path").eq("id", leadId).maybeSingle();
+    const { data: lead } = await admin.from("leads").select("created_by, recording_path").is("geloescht_am", null).eq("id", leadId).maybeSingle();
     if (!lead || !lead.recording_path) return res.status(404).json({ error: "Keine Aufnahme gefunden." });
 
     if (lead.created_by !== user.id) {

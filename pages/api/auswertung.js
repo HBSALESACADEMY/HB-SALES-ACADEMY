@@ -62,7 +62,7 @@ export default async function handler(req, res) {
       // Termine über organization_id, nicht über die anlegende Person: wer
       // per Firmencode in mehreren Organisationen arbeitet, nähme seine
       // Termine sonst überallhin mit (migration_114).
-      admin.from("leads").select("created_by, status, outcome, appointment_at, created_at, termin_art")
+      admin.from("leads").select("created_by, status, outcome, appointment_at, created_at, termin_art").is("geloescht_am", null)
         .eq("organization_id", orgId).gte("created_at", `${von}T00:00:00`).lte("created_at", `${bis}T23:59:59`),
       // Einzelne Ereignisse mit Uhrzeit (migration_128) — die Grundlage für
       // "welcher Einwand zu welcher Stunde". Über die Personen der

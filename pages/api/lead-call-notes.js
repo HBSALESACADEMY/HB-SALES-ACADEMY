@@ -36,7 +36,7 @@ export default async function handler(req, res) {
   try {
     // Über den RLS-gebundenen Client: wer den Termin nicht sehen darf, kann
     // auch keine Notizen dazu anstossen.
-    const { data: lead } = await auth.client.from("leads").select("id, recording_path").eq("id", leadId).maybeSingle();
+    const { data: lead } = await auth.client.from("leads").select("id, recording_path").is("geloescht_am", null).eq("id", leadId).maybeSingle();
     if (!lead) return res.status(404).json({ error: "Termin nicht gefunden — oder kein Zugriff." });
     if (!lead.recording_path) return res.status(400).json({ error: "Zu diesem Termin gibt es keine Aufnahme." });
 

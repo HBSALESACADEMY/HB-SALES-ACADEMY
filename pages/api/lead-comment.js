@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (!leadId || !content?.trim()) return res.status(400).json({ error: "Kommentar darf nicht leer sein." });
 
   try {
-    const { data: lead, error: leadErr } = await client.from("leads").select("id, name, created_by").eq("id", leadId).maybeSingle();
+    const { data: lead, error: leadErr } = await client.from("leads").select("id, name, created_by").is("geloescht_am", null).eq("id", leadId).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return res.status(404).json({ error: "Termin nicht gefunden — oder kein Zugriff." });
 

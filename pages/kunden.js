@@ -72,7 +72,7 @@ export default function Kunden() {
     setCanDeleteTeam(!!(me?.role === "manager" || me?.is_admin || me?.is_platform_admin));
     if (me?.role === "backend" && viewMode === "own") { setViewMode("team"); return; }
 
-    let query = supabase.from("leads").select("*").eq("outcome", outcomeTab).order("created_at", { ascending: false });
+    let query = supabase.from("leads").select("*").is("geloescht_am", null).eq("outcome", outcomeTab).order("created_at", { ascending: false });
     if (!(canManage && viewMode === "team")) query = query.eq("created_by", session.user.id);
     const { data: rows, error: err } = await query;
     if (err) setError(err.message);

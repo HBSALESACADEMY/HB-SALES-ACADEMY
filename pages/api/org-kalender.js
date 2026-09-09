@@ -51,6 +51,7 @@ export default async function handler(req, res) {
       admin.from("profiles").select("id, full_name, avatar_url, geburtstag, abwesend_von, abwesend_bis")
         .eq("organization_id", orgId),
       auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by, termin_art, stufen_verlauf")
+        .is("geloescht_am", null)
         .not("appointment_at", "is", null)
         .gte("appointment_at", vonZeitpunkt)
         .lt("appointment_at", bisZeitpunkt)
@@ -72,6 +73,7 @@ export default async function handler(req, res) {
     // Oktober hatte sein Erstgespräch im September.
     const { data: mitVerlauf } = await auth.client.from("leads")
       .select("id, name, company, created_by, termin_art, stufen_verlauf")
+      .is("geloescht_am", null)
       .not("stufen_verlauf", "eq", "[]")
       .limit(500);
 
