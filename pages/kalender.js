@@ -279,6 +279,35 @@ export default function Kalender() {
     setBusy(false);
   }
 
+  // Verschieben: um einen Tag weiter, gleiche Uhrzeit. Bewusst ein Klick
+  // und kein Formular — ein Rückruf rutscht meistens um einen Tag, und wer
+  // dafür ein Datumsfeld ausfüllen muss, hakt ihn stattdessen ab.
+  async function nachfassVerschieben(n) {
+    setBusy(true);
+    const neu = new Date(new Date(n.faellig_am).getTime() + 86400000).toISOString();
+    const meldung = await aendereGeprueft(
+      supabase.from("nachfass_termine")
+        // Neu melden: nach dem Verschieben ist die alte Meldung
+        // gegenstandslos, und die neue soll am neuen Tag kommen.
+        .update({ faellig_am: neu, erinnert_am: null }).eq("id", n.id),
+      "Verschieben darf nur, wer zuständig ist oder es eingetragen hat."
+    );
+    if (meldung) setFehler(meldung);
+    await laden(true);
+    setBusy(false);
+  }
+
+  async function nachfassLoeschen(n) {
+    setBusy(true);
+    const meldung = await loescheGeprueft(
+      supabase.from("nachfass_termine").delete().eq("id", n.id),
+      "Löschen darf nur, wer zuständig ist oder es eingetragen hat."
+    );
+    if (meldung) setFehler(meldung);
+    await laden(true);
+    setBusy(false);
+  }
+
   async function einladungZuruecknehmen(einladungId) {
     const meldung = await loescheGeprueft(
       supabase.from("termin_einladungen").delete().eq("id", einladungId),
@@ -899,6 +928,8 @@ export default function Kalender() {
                 onTerminSpeichern={speichereTermin}
                 onTerminAbbrechen={() => setTerminBearbeiten(null)}
                 onNachfassErledigt={nachfassErledigt}
+                onNachfassVerschieben={nachfassVerschieben}
+                onNachfassLoeschen={nachfassLoeschen}
                 bearbeitenId={bearbeitenId}
                 bearbeitenEntwurf={bearbeitenEntwurf}
                 setBearbeitenEntwurf={setBearbeitenEntwurf}
@@ -977,7 +1008,7 @@ function zeilenFuerTag(inhalt, meinStatus, nameVon = () => "") {
 function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, selbst, einladenFuer, setEinladenFuer, onEinladen, onZuruecknehmen, onLoeschen, busy,
   bearbeitenId, bearbeitenEntwurf, setBearbeitenEntwurf, onBearbeiten, onBearbeitenSpeichern, onBearbeitenAbbrechen,
   terminBearbeiten, terminEntwurf, setTerminEntwurf, onTerminBearbeiten, onTerminSpeichern, onTerminAbbrechen, terminBusy, nameVon,
-  onNachfassErledigt }) {
+  onNachfassErledigt, onNachfassVerschieben, onNachfassLoeschen }) {
   const leer = inhalt.eintraege.length === 0 && inhalt.geburtstage.length === 0
     && inhalt.termine.length === 0 && inhalt.abwesend.length === 0 && inhalt.extern.length === 0
     && (inhalt.vergangene || []).length === 0 && (inhalt.nachfass || []).length === 0;
@@ -1159,9 +1190,25 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
               {!kompakt && n.erstellerName && n.erstellt_von !== n.zustaendig ? ` · eingetragen von ${n.erstellerName}` : ""}
             </div>
             {!kompakt && n.notiz && <div className="text-[11px] text-textMuted mt-0.5">{n.notiz}</div>}
-            {!kompakt && onNachfassErledigt && !n.erledigt_am && (
-              <button onClick={() => onNachfassErledigt(n)} disabled={busy}
-                className="btn-ghost text-[11px] mt-1 disabled:opacity-40">Erledigt</button>
+            {!kompakt && !n.erledigt_am && (
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {onNachfassErledigt && (
+                  <button onClick={() => onNachfassErledigt(n)} disabled={busy}
+                    className="btn-ghost text-[11px] disabled:opacity-40">Erledigt</button>
+                )}
+                {/* Verschieben statt löschen und neu anlegen: ein Rückruf
+                    rutscht ständig, und wer ihn dafür jedes Mal neu
+                    eintippen muss, trägt ihn irgendwann gar nicht mehr
+                    ein. */}
+                {onNachfassVerschieben && (
+                  <button onClick={() => onNachfassVerschieben(n)} disabled={busy}
+                    className="btn-ghost text-[11px] disabled:opacity-40">🕒 Verschieben</button>
+                )}
+                {onNachfassLoeschen && (
+                  <button onClick={() => onNachfassLoeschen(n)} disabled={busy}
+                    className="btn-ghost text-[11px] text-coral disabled:opacity-40">Löschen</button>
+                )}
+              </div>
             )}
           </div>
         </div>

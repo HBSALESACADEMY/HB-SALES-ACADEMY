@@ -2646,3 +2646,22 @@ test("Das Nachfassen bekommt einen Zeitpunkt, den ein Kalender annimmt", async (
   ];
   assert.deepEqual(offeneNachfass(liste, jetzt).map((n) => n.id), ["a", "b"]);
 });
+
+test("Die Nachfass-Meldung endet am Berliner Tagesende, nicht am Serverzeit-Tagesende", async () => {
+  const { berlinHeute, tagPlus, tagesBeginnZeitpunkt } = await import("../lib/woche.js");
+
+  // Der Server läuft in UTC. Ein Rückruf, der für 00:30 Berliner Zeit
+  // eingetragen ist, liegt in der Sommerzeit noch am UTC-Vortag — mit
+  // einem Tagesende nach Serverzeit würde er einen Tag zu früh gemeldet.
+  const jetzt = new Date("2026-09-09T05:00:00Z");           // 07:00 in Berlin
+  const bis = tagesBeginnZeitpunkt(tagPlus(berlinHeute(jetzt), 1));
+
+  const morgenFruehBerlin = "2026-09-10T00:30:00+02:00";    // = 09.09. 22:30 UTC
+  assert.ok(new Date(morgenFruehBerlin).toISOString() < "2026-09-09T23:59:59Z",
+    "Voraussetzung des Tests: nach Serverzeit fiele dieser Rückruf noch auf heute.");
+  assert.ok(new Date(morgenFruehBerlin).toISOString() >= bis,
+    "Ein Rückruf für morgen früh darf heute noch nicht gemeldet werden.");
+
+  // Und was heute spätabends in Berlin ansteht, gehört noch zu heute.
+  assert.ok(new Date("2026-09-09T23:30:00+02:00").toISOString() < bis);
+});
