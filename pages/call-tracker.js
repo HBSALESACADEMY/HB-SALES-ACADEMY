@@ -525,13 +525,20 @@ export default function CallTracker() {
       bump("email");
       setDublette(null);
 
-      // Gibt es Vorlagen, endet der Anruf gleich mit der Mail. Das ist der
-      // Moment, in dem das Gespräch noch frisch ist — einen Tag später
-      // schreibt die Leitung über ein Gespräch, das sie nicht geführt hat.
+      // Jetzt die Entscheidung, nicht später: selbst schicken oder an die
+      // Organisation weitergeben.
+      //
+      // Vorher landete man mit Vorlagen sofort im Mailformular, und der Weg
+      // zurück hiess "Später — die Organisation macht das". Die Wahl stand
+      // damit erst hinter einer Tür, die schon zugefallen war. Es ist aber
+      // eine echte Weggabelung, und sie gehört an die Stelle, an der die
+      // Angaben frisch auf dem Bildschirm stehen.
+      //
+      // Ohne Vorlage gibt es nichts zu wählen: dann kann nur die
+      // Organisation schreiben.
       if (vorlagen.length && kontakt) {
-        waehleVorlage(kontakt, vorlagen[0]);
         setMailKontakt(kontakt);
-        setStep("mailForm");
+        setStep("mailWeg");
       } else {
         showToast("An die Organisation übergeben");
         setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
@@ -1293,7 +1300,9 @@ export default function CallTracker() {
                       value={emailEntwurf.notiz}
                       onChange={(e) => setEmailEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
                     <p className="text-[11px] text-textMuted mt-1">
-                      Ohne Notiz schreibt die Organisation eine Mail ins Blaue — das merkt der Kontakt sofort.
+                      Ohne Notiz wird die Mail ins Blaue geschrieben — das merkt der Kontakt sofort. Das gilt
+                      auch dann, wenn du sie gleich selbst schickst: bis dahin ist das Gespräch schon zwei
+                      Anrufe her.
                     </p>
                   </div>
 
@@ -1314,10 +1323,50 @@ export default function CallTracker() {
 
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button onClick={() => setStep(emailHerkunft)} className="btn-ghost text-sm">Zurück</button>
+                    {/* Der Knopf sagt, was als Nächstes passiert. Gibt es
+                        Vorlagen, folgt die Frage, wer die Mail schickt —
+                        dann wäre "An die Organisation übergeben" hier eine
+                        Behauptung, die nicht stimmt. */}
                     <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
-                      {emailBusy ? "Wird übergeben…" : "An die Organisation übergeben"}
+                      {emailBusy ? "Wird gespeichert…" : vorlagen.length ? "Weiter" : "An die Organisation übergeben"}
                     </button>
                   </div>
+                </>
+              )}
+
+              {step === "mailWeg" && (
+                <>
+                  <div className="text-3xl mb-1">✉️</div>
+                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wer schickt die Mail?</div>
+                  {/* Die Angaben noch einmal, damit die Entscheidung nicht
+                      im Blindflug fällt. */}
+                  <p className="text-textMuted text-xs mb-4">
+                    {mailKontakt?.name}
+                    {mailKontakt?.firma ? ` · ${mailKontakt.firma}` : ""}
+                    {mailKontakt?.email ? ` · ${mailKontakt.email}` : ""}
+                  </p>
+
+                  <div className="flex flex-col gap-2 mb-3">
+                    <button
+                      onClick={() => { waehleVorlage(mailKontakt, vorlagen[0]); setStep("mailForm"); }}
+                      className="btn text-sm">
+                      ✉️ Ich schicke sie selbst
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMailKontakt(null);
+                        setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
+                        showToast("An die Organisation übergeben");
+                        zurueckZumStart();
+                      }}
+                      className="btn-ghost text-sm">
+                      📮 An die Organisation weitergeben
+                    </button>
+                  </div>
+                  <p className="text-textMuted text-[11px]">
+                    Der Kontakt ist gespeichert — beides geht, und die Organisation sieht ihn so oder so im
+                    E-Mail-Marketing.
+                  </p>
                 </>
               )}
 
@@ -1357,9 +1406,8 @@ export default function CallTracker() {
                   {emailFehler && <p className="text-xs text-coral mb-2">{emailFehler}</p>}
 
                   <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => { setMailKontakt(null); showToast("An die Organisation übergeben"); zurueckZumStart(); }}
-                      className="btn-ghost text-sm">
-                      Später — die Organisation macht das
+                    <button onClick={() => setStep("mailWeg")} className="btn-ghost text-sm">
+                      Zurück
                     </button>
                     <button onClick={sendeEigeneMail} disabled={mailBusy} className="btn text-sm disabled:opacity-40">
                       {mailBusy ? "Wird verschickt…" : "Jetzt senden"}
