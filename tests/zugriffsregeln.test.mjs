@@ -342,3 +342,23 @@ test("Wo eine Mail entsteht, wird der Name des Absenders mitgeladen", () => {
       + "Die Zeile mit dem Platzhalter fällt dann weg, und die Mail geht ohne Namen raus.");
   });
 });
+
+// Ein Kalender beantwortet "was habe ICH heute zu tun". Die Datenbank gibt
+// der Führung auch die Follow-ups der geführten Personen heraus — richtig
+// für Listen und Auswertungen, falsch im Kalender: zwanzig fremde Rückrufe
+// verdecken die eigenen drei, und dann macht man den Kalender nicht mehr auf.
+test("Im Kalender steht nur das eigene Follow-up", () => {
+  const stellen = [
+    ["../pages/api/org-kalender.js", 'eq("zustaendig", auth.user.id)'],
+    ["../pages/api/kalender-abo.js", 'eq("zustaendig", profil.id)'],
+  ];
+
+  stellen.forEach(([datei, eingrenzung]) => {
+    const quelle = readFileSync(new URL(datei, import.meta.url), "utf8");
+    const abfrage = quelle.match(/from\("nachfass_termine"\)[\s\S]{0,400}?;/);
+    assert.ok(abfrage, `${datei}: keine Abfrage auf die Follow-ups gefunden — Test veraltet?`);
+    assert.ok(abfrage[0].includes(eingrenzung),
+      `${datei} holt Follow-ups ohne Eingrenzung auf die eigene Person. `
+      + "Die Führung bekäme die Rückrufe des ganzen Teams in den eigenen Kalender.");
+  });
+});

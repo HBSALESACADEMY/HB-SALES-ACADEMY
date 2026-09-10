@@ -1195,7 +1195,9 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
             </div>
             <div className="text-[11px] text-textMuted">
               {terminZeile(n.faellig_am, kompakt)}
-              {!kompakt && n.autor ? ` · ${n.autor}` : ""}
+              {/* Der eigene Name gehört nicht dazu — im Kalender steht nur
+                  das eigene Follow-up. Wer es eingetragen hat, schon: das
+                  beantwortet "warum steht das hier". */}
               {!kompakt && n.erstellerName && n.erstellt_von !== n.zustaendig ? ` · eingetragen von ${n.erstellerName}` : ""}
             </div>
             {!kompakt && n.notiz && <div className="text-[11px] text-textMuted mt-0.5">{n.notiz}</div>}

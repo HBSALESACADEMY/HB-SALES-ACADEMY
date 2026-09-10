@@ -98,11 +98,20 @@ export default async function handler(req, res) {
       });
     });
 
-    // Das Nachfassen nach einer Mail (migration_156). Über den
-    // RLS-gebundenen Client: wer wessen Nachfassen sieht, entscheidet die
-    // Datenbank — die eigenen immer, fremde nur, wer die Person führt.
+    // Das Follow-up nach einer Mail (migration_156) — NUR das eigene.
+    //
+    // Die Datenbank gibt der Führung auch die Follow-ups der geführten
+    // Personen heraus, und das ist richtig: für Listen und Auswertungen
+    // braucht es das. Im Kalender ist es falsch. Ein Kalender beantwortet
+    // "was habe ICH heute zu tun"; stehen dort zwanzig fremde Rückrufe
+    // drin, findet man die eigenen drei nicht mehr, und dann macht man den
+    // Kalender nicht mehr auf.
+    //
+    // Wer ein Follow-up für jemanden einträgt, sieht es deshalb auch nicht
+    // im eigenen Kalender — es steht im Kalender der Person, die anruft.
     const { data: nachfass } = await auth.client.from("nachfass_termine")
       .select("id, titel, notiz, faellig_am, erledigt_am, zustaendig, erstellt_von, kontakt_id, lead_id")
+      .eq("zustaendig", auth.user.id)
       .gte("faellig_am", vonZeitpunkt)
       .lt("faellig_am", bisZeitpunkt)
       .order("faellig_am");
