@@ -78,7 +78,11 @@ export default async function handler(req, res) {
         if (adresse && willMeldung(empfaenger, "aufgaben")) {
           await sendEmail({
             to: adresse,
-            subject: `Follow-up am ${wann}: ${titel.trim()}`,
+            // Der Titel trägt das Wort schon ("Follow-up: Dirk Reuters").
+            // Ein zweites davor ergab "Follow-up am 14.09.2026, 08:00 Uhr:
+            // Follow-up: Dirk Reuters" — in der Betreffzeile eines
+            // Postfachs sieht das nach einem Fehler aus.
+            subject: `${titel.trim()} — ${wann}`,
             html:
               `<p><strong>${profil?.full_name || "Jemand"}</strong> hat dir ein Follow-up eingetragen:</p>` +
               `<p><strong>${titel.trim()}</strong><br/>Fällig: ${wann}</p>` +
