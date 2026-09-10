@@ -160,9 +160,15 @@ export default function CallTracker() {
       if (!session || !mounted) return;
       setUserId(session.user.id);
 
-      // Für den Hinweis auf eigene Ablehnungsgründe (nur Leitung).
+      // Für den Hinweis auf eigene Ablehnungsgründe (nur Leitung) — und
+      // für den eigenen Namen unter der Mail.
+      //
+      // Der Name fehlte hier, und weil eine Zeile mit einem leeren
+      // Platzhalter wegfällt (lib/marketingVorlage.js), ging die Mail ohne
+      // Absendernamen raus. Nicht mit einer Lücke, sondern ohne die Zeile —
+      // deshalb sah der Text im Vorschaufeld vollständig aus.
       const { data: meineRolle } = await supabase.from("profiles")
-        .select("role, is_admin, is_platform_admin, booking_url").eq("id", session.user.id).maybeSingle();
+        .select("role, is_admin, is_platform_admin, booking_url, full_name").eq("id", session.user.id).maybeSingle();
       setDarfOrgVerwalten(istFuehrungsrolle(meineRolle));
       setMeinProfil(meineRolle);
 
@@ -1415,6 +1421,16 @@ export default function CallTracker() {
                       Geht an {mailKontakt?.email} im Namen von {org?.name || "eurer Organisation"}. Ändern
                       darfst du; die Vorlage kommt von eurer Leitung.
                     </p>
+                    {/* Ohne Namen im Profil fällt die Zeile mit dem
+                        Platzhalter ersatzlos weg — die Mail sieht dann
+                        vollständig aus und ist ohne Absender. Gesagt, bevor
+                        sie rausgeht. */}
+                    {!meinProfil?.full_name && (
+                      <p className="text-[11px] text-coral mt-1">
+                        In deinem Profil steht kein Name. Die Mail geht ohne deinen Namen raus — trag ihn
+                        unter Profil ein und öffne die Vorlage danach neu.
+                      </p>
+                    )}
                   </div>
 
                   {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}

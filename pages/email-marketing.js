@@ -299,6 +299,20 @@ export default function EmailMarketing() {
   }
 
   /**
+   * Das nächste offene Follow-up zu diesem Kontakt.
+   *
+   * Es steht in der Zeile, nicht erst im aufgeklappten Eintrag: die Frage
+   * "ist hier schon jemand dran?" stellt sich beim Überfliegen der Liste,
+   * und wer sie durch Aufklappen von zwanzig Einträgen beantworten muss,
+   * beantwortet sie nicht.
+   */
+  function offenesFollowUp(k) {
+    return nachfassListe
+      .filter((n) => n.kontakt_id === k.id && !n.erledigt_am)
+      .sort((a, b) => String(a.faellig_am).localeCompare(String(b.faellig_am)))[0] || null;
+  }
+
+  /**
    * Darf ich an diesen Kontakt selbst schreiben?
    *
    * Dieselbe Grenze wie in pages/api/marketing-mail.js: die Leitung an
@@ -799,6 +813,22 @@ export default function EmailMarketing() {
                   <span className="text-[10px] text-amber flex-shrink-0">{liegtSeitTagen(k.verschickt_am)} T.</span>
                 )}
               </button>
+
+              {/* Wann das Follow-up ansteht, und für wen. Überfälliges rot:
+                  genau das ist die Information, wegen der man hinsieht. */}
+              {(() => {
+                const n = offenesFollowUp(k);
+                if (!n) return null;
+                const ueberfaellig = new Date(n.faellig_am) < new Date();
+                return (
+                  <span
+                    title={`${n.titel} · ${nameVon(n.zustaendig)}`}
+                    className={`text-[10px] rounded px-1.5 py-0.5 border flex-shrink-0 ${ueberfaellig ? "text-coral border-coral/50" : "text-textMuted border-line"}`}>
+                    📌 {deutscheZeit(n.faellig_am)}
+                    {n.zustaendig !== ich ? ` · ${nameVon(n.zustaendig)}` : ""}
+                  </span>
+                );
+              })()}
 
               {/* Was aus der Mail wurde. Eine unzustellbare Adresse sah
                   vorher aus wie eine erfolgreiche — und landete in der

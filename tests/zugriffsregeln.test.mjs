@@ -308,3 +308,37 @@ test("Kein Lesezugriff holt gelöschte Termine zurück", () => {
   assert.deepEqual(offen, [],
     `Diese Abfragen holen gelöschte Termine mit — sie stehen dann weiter im Kalender und in den Zahlen: ${offen.join(", ")}`);
 });
+
+// Ein Platzhalter ohne Wert lässt seine Zeile ersatzlos wegfallen
+// (lib/marketingVorlage.js). Das ist richtig — "Firma:" ohne Firma verrät
+// die Serienmail. Es heisst aber auch: fehlt der Name in den Daten, geht
+// die Mail ohne Absendernamen raus und SIEHT VOLLSTÄNDIG AUS. Genau so ist
+// es im Call Tracker passiert: das Profil wurde ohne full_name geladen,
+// während an anderer Stelle derselben Datei Namen geladen wurden — deshalb
+// fiel es beim Lesen nicht auf.
+test("Wo eine Mail entsteht, wird der Name des Absenders mitgeladen", () => {
+  const stellen = [
+    {
+      datei: "../pages/call-tracker.js",
+      verwendung: "vertriebler: meinProfil?.full_name",
+      // Genau die Abfrage, die dieses Profil füllt — nicht irgendeine.
+      abfrage: /const \{ data: meineRolle \} = await supabase\s*\.?\s*\n?\s*\.from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)/,
+    },
+    {
+      datei: "../pages/api/marketing-mail.js",
+      verwendung: "vertriebler: profil?.full_name",
+      abfrage: /const \{ data: profil \} = await admin\s*\.?\s*\n?\s*\.from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)/,
+    },
+  ];
+
+  stellen.forEach(({ datei, verwendung, abfrage }) => {
+    const quelle = readFileSync(new URL(datei, import.meta.url), "utf8");
+    assert.ok(quelle.includes(verwendung), `${datei}: "${verwendung}" nicht gefunden — Test veraltet?`);
+
+    const treffer = quelle.match(abfrage);
+    assert.ok(treffer, `${datei}: die Abfrage für dieses Profil nicht gefunden — Test veraltet?`);
+    assert.ok(treffer[1].includes("full_name"),
+      `${datei} baut eine Mail mit dem Absendernamen, lädt ihn aber nicht mit: "${treffer[1]}". `
+      + "Die Zeile mit dem Platzhalter fällt dann weg, und die Mail geht ohne Namen raus.");
+  });
+});
