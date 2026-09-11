@@ -2982,3 +2982,36 @@ test("Die Terminliste bündelt nach Tagen, Heute zuerst benannt", async () => {
   // gehört nicht über das, was heute ansteht.
   assert.equal(gruppen[gruppen.length - 1].titel, "Ohne Zeitpunkt");
 });
+
+test("Der Vergleichszeitraum ist gleich lang und schliesst lückenlos an", async () => {
+  const { vorherigerZeitraum, tageImZeitraum, differenz, vergleichsText, vergleichsName } =
+    await import("../lib/vergleich.js");
+
+  // Gleich lang ist die Bedingung: eine Woche gegen einen Vormonat zu
+  // stellen ergibt eine Zahl, die immer dramatisch aussieht und nichts
+  // bedeutet. Lückenlos, damit kein Tag doppelt zählt oder herausfällt.
+  assert.deepEqual(vorherigerZeitraum({ von: "2026-09-05", bis: "2026-09-11" }),
+    { von: "2026-08-29", bis: "2026-09-04" });
+  assert.equal(tageImZeitraum("2026-09-05", "2026-09-11"), 7);
+  assert.equal(tageImZeitraum("2026-08-29", "2026-09-04"), 7);
+
+  // Ein einzelner Tag vergleicht sich mit gestern — auch über den
+  // Monatswechsel.
+  assert.deepEqual(vorherigerZeitraum({ von: "2026-09-01", bis: "2026-09-01" }),
+    { von: "2026-08-31", bis: "2026-08-31" });
+  assert.equal(vorherigerZeitraum({}), null);
+
+  // Ohne Vorwert gibt es KEINE Prozentzahl. Von null auf drei sind nicht
+  // "unendlich Prozent mehr" und auch nicht "100 % mehr" — es ist neu.
+  assert.equal(differenz(3, 0).prozent, null);
+  assert.match(vergleichsText(differenz(3, 0), "der Vorwoche"), /^neu gegenüber/);
+  assert.equal(differenz(312, 264).prozent, 18);
+  assert.match(vergleichsText(differenz(312, 264), "der Vorwoche"), /^\+48 \(\+18 %\)/);
+  assert.match(vergleichsText(differenz(2, 8), "der Vorwoche"), /^−6 \(−75 %\)/);
+  assert.match(vergleichsText(differenz(5, 5), "der Vorwoche"), /^unverändert/);
+  assert.equal(differenz(5, 5).richtung, "gleich");
+
+  // Im Dativ, denn der Name steht hinter "gegenüber".
+  assert.equal(vergleichsName("woche"), "den 7 Tagen davor");
+  assert.equal(vergleichsName("heute"), "gestern");
+});

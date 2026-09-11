@@ -17,6 +17,7 @@ import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { buchungslink, kurzform } from "../lib/buchungslink";
 import { meldeStoerung } from "../lib/fehlerMelden";
 import { berlinHeute, tagPlus } from "../lib/woche";
+import { vorherigerZeitraum, differenz, vergleichsText, vergleichsName } from "../lib/vergleich";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
@@ -879,6 +880,21 @@ export default function CallTracker() {
         .in("user_id", allIds).gte("log_date", von).lte("log_date", bis)
         .limit(ZEILEN_GRENZE);
 
+      // Und derselbe Zeitraum davor, gleich lang und lückenlos anschliessend.
+      //
+      // Eine Zahl allein sagt nichts: "312 Anwahlen" ist gut oder schlecht,
+      // je nachdem, was letzte Woche war — und das weiss niemand auswendig.
+      // Roh geladen wie die aktuellen Zeilen, damit die Filter nach Team und
+      // Person auch für den Vergleich gelten. Sonst stünde unter der Zahl
+      // einer Person die Veränderung des ganzen Teams.
+      const davor = vorherigerZeitraum({ von, bis });
+      const { data: logsVorher } = davor
+        ? await supabase.from("call_log_days")
+          .select("user_id, log_date, counts, reasons")
+          .in("user_id", allIds).gte("log_date", davor.von).lte("log_date", davor.bis)
+          .limit(ZEILEN_GRENZE)
+        : { data: [] };
+
       // Die eigenen E-Mail-Kontakte: was aus ihnen geworden ist. Wer einen
       // Kontakt abgibt, hört sonst nie wieder davon — und fragt beim
       // nächsten Anruf entsprechend seltener nach der Adresse.
@@ -903,6 +919,9 @@ export default function CallTracker() {
         // Aufschlüsselung nach Tagen rechnen daraus alles selbst, ohne bei
         // jeder Auswahl neu beim Server nachzufragen.
         logs: logs || [],
+        logsVorher: logsVorher || [],
+        vergleichZeitraum: davor,
+        zeitraumArt: art,
         ereignisse: ereignisse || [],
         meineKontakte: meineKontakte || [],
         // Angeschnitten? Dann sagt die Auswertung das, statt zu wenig zu
@@ -1841,6 +1860,16 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
     });
   });
 
+  // Dieselbe Summe für den Zeitraum davor — mit DENSELBEN Filtern.
+  // Sonst stünde unter der Zahl einer Person die Veränderung des ganzen
+  // Teams, und die Anzeige wäre schlimmer als keine.
+  const gesamtVorher = {};
+  FIELDS.forEach((f) => { gesamtVorher[f.key] = 0; });
+  (state.logsVorher || []).filter((l) => sichtbareIds.has(l.user_id)).forEach((l) => {
+    FIELDS.forEach((f) => { gesamtVorher[f.key] += l.counts?.[f.key] || 0; });
+  });
+  const vergleichName = vergleichsName(state.zeitraumArt);
+
   // Der eigene Eintrag trägt seinen Namen und dahinter "(Du)". So findet
   // man sich in der Liste wieder, auch wenn man mit einem zweiten Konto
   // hineinschaut und nach dem eigenen Namen sucht.
@@ -2094,6 +2123,18 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         </p>
       )}
 
+      {/* Womit verglichen wird, einmal gesagt statt an jeder Kachel. */}
+      {state.vergleichZeitraum && (
+        <p className="text-[11px] text-textMuted mb-2">
+          Veränderung gegenüber {vergleichName}
+          {" ("}
+          {new Date(`${state.vergleichZeitraum.von}T12:00:00`).toLocaleDateString("de-DE")}
+          {" – "}
+          {new Date(`${state.vergleichZeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}
+          {")"}
+        </p>
+      )}
+
       {/* "davon" steht bewusst dabei: terminiert und negativ sind Ergebnisse
           bereits gezählter Gespräche, keine zusätzlichen Anrufe. */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2">
@@ -2107,6 +2148,24 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
               <div className="text-xl font-display font-semibold" style={{ color: feldFarbe(f.key) }}>
                 {gesamt[f.key] || 0}
               </div>
+              {/* Die Veränderung direkt unter der Zahl. Grün heisst mehr,
+                  rot weniger — ausser bei den Kennzahlen, bei denen mehr
+                  schlechter ist: mehr nicht erreichte Anrufe und mehr
+                  negativ verlaufene Gespräche sind kein Fortschritt. */}
+              {(() => {
+                const d = differenz(gesamt[f.key] || 0, gesamtVorher[f.key] || 0);
+                if (d.richtung === "gleich" && d.wert === 0) return null;
+                const schlechterWennMehr = f.key === "nicht" || f.key === "negativ";
+                const gut = schlechterWennMehr ? d.delta < 0 : d.delta > 0;
+                return (
+                  <div className={`text-[10px] leading-tight mb-1 ${d.richtung === "gleich" ? "text-textMuted" : gut ? "text-teal" : "text-coral"}`}
+                    title={vergleichsText(d, vergleichName)}>
+                    {d.richtung === "gleich" ? "unverändert"
+                      : d.davor === 0 ? "neu"
+                      : `${d.delta > 0 ? "+" : "−"}${Math.abs(d.delta)}${d.prozent === null ? "" : ` · ${d.delta > 0 ? "+" : "−"}${Math.abs(d.prozent)} %`}`}
+                  </div>
+                );
+              })()}
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
                 <span className="text-[11px] text-textMuted leading-tight flex-1">
