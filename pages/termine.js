@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
-import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
+import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, ROLLEN_NAMEN, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
 import { namensHinweis } from "../lib/kundenname";
 import { istKundentermin } from "../lib/terminArt";
 import { gruppiereNachTag } from "../lib/terminGruppen";
@@ -1264,7 +1264,10 @@ export default function Termine() {
                           onChange={(e) => setzeSchritt(lead, schritt.key, e.target.checked)}
                           className="w-3.5 h-3.5" />
                         <span className={getan ? "text-textMain" : "text-textMuted"}>{schritt.label}</span>
-                        {!darf && <span className="text-[10px] text-textMuted">(Leitung)</span>}
+                        {/* Wer abhakt, steht an jedem Schritt — nicht nur
+                            dort, wo es gerade nicht geht. Sonst erfährt man
+                            die Regel erst, wenn man dagegen läuft. */}
+                        <span className="text-[10px] text-textMuted">({ROLLEN_NAMEN[schritt.rolle]})</span>
                       </label>
                     );
                   })}

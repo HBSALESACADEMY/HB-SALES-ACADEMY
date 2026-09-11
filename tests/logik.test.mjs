@@ -2590,6 +2590,16 @@ test("Die Schritte zwischen den Gesprächen bewegen den Balken", () => {
   assert.deepEqual(WEGMARKEN.map((m) => m.kurz),
     ["SB", "ST", "FU", "CB", "CC", "KD", "PU", "CI"]);
 
+  // Wer abhakt, steht an jedem Schritt. Die Bestätigungen und der Check-in
+  // gehören dem Vertrieb, die Projektumsetzung der Leitung: wer verkauft
+  // hat, ist nicht die Person, die beurteilt, ob geliefert wurde.
+  assert.deepEqual(SCHRITTE.map((x) => [x.key, x.rolle]), [
+    ["setting_bestaetigt", "vertrieb"],
+    ["closing_bestaetigt", "vertrieb"],
+    ["projektumsetzung", "leitung"],
+    ["checkin_erledigt", "vertrieb"],
+  ]);
+
   // Die höchste erreichte Marke zählt, nicht die letzte. Wer den Closing
   // Call schon bestätigt hat, aber noch im Setting Call steht, ist weiter
   // als 25 % — ein Balken, der beim Abhaken zurückspringt, wird nicht mehr
@@ -2608,8 +2618,13 @@ test("Die Schritte zwischen den Gesprächen bewegen den Balken", () => {
 
   // Nach dem Abschluss die Umsetzung, danach der Check-in.
   assert.equal(fortschritt(mitHaken(["projektumsetzung"], { outcome: "kunde", termin_art: "closing" })), 95);
+  // Der Check-in zählt als Haken des Vertriebs. Hat der Termin dazu
+  // stattgefunden, gilt er als abgehakt — sonst müsste man zweimal
+  // dasselbe bestätigen.
   assert.equal(fortschritt(mitHaken(["projektumsetzung"],
     { outcome: "kunde", termin_art: "checkin", status: "wahrgenommen" })), 100);
+  assert.equal(fortschritt(mitHaken(["checkin_erledigt"], { outcome: "kunde", termin_art: "closing" })), 100);
+  assert.equal(fortschritt({ outcome: "kunde", termin_art: "checkin", status: "geplant" }), 85);
 
   // Ein übersprungener Haken bleibt offen sichtbar — genau das ist die
   // Information: der Termin wurde nie bestätigt.
