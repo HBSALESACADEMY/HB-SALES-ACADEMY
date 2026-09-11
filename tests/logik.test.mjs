@@ -2920,3 +2920,40 @@ test("Ein persönlicher Termin bekommt nicht die Maske eines Kunden", async () =
   const zurueck = stufenAuswertung([{ ...privat, kein_kundentermin: false }]);
   assert.equal(zurueck.find((s) => s.key === "erstgespraech").gesamt, 1);
 });
+
+test("Die Terminliste bündelt nach Tagen, Heute zuerst benannt", async () => {
+  const { gruppiereNachTag, tagesTitel } = await import("../lib/terminGruppen.js");
+  const jetzt = new Date("2026-09-11T10:00:00+02:00");
+
+  // Drei Wörter beantworten die Frage, die man an eine Terminliste stellt,
+  // ohne dass jemand ein Datum umrechnen muss.
+  assert.equal(tagesTitel("2026-09-11", jetzt), "Heute");
+  assert.equal(tagesTitel("2026-09-12", jetzt), "Morgen");
+  assert.equal(tagesTitel("2026-09-10", jetzt), "Gestern");
+  assert.equal(tagesTitel("2026-09-18", jetzt), "Freitag, 18. September");
+  assert.equal(tagesTitel(null, jetzt), "Ohne Zeitpunkt");
+
+  // Die Liste kommt sortiert herein, und die Gruppen behalten diese
+  // Reihenfolge: bevorstehend aufsteigend, vergangen absteigend. Hier wird
+  // gebündelt, nicht umsortiert — sonst stünde in der
+  // Vergangenheitsansicht plötzlich das Älteste oben.
+  const gruppen = gruppiereNachTag([
+    { id: "heute", appointment_at: "2026-09-11T08:30:00Z" },
+    { id: "heute2", appointment_at: "2026-09-11T14:00:00Z" },
+    // Nach DEUTSCHEM Tag: 22:30 UTC ist in Berlin schon der Folgetag. Auf
+    // einem anders eingestellten Rechner rutschte der Termin sonst in die
+    // falsche Gruppe.
+    { id: "spaet", appointment_at: "2026-09-11T22:30:00Z" },
+    { id: "ohne", appointment_at: null },
+  ], jetzt);
+
+  assert.deepEqual(gruppen.map((g) => g.titel), ["Heute", "Morgen", "Ohne Zeitpunkt"]);
+  assert.deepEqual(gruppen[0].leads.map((l) => l.id), ["heute", "heute2"]);
+  assert.deepEqual(gruppen[1].leads.map((l) => l.id), ["spaet"]);
+  assert.equal(gruppen[0].istHeute, true);
+  assert.equal(gruppen[1].istHeute, false);
+
+  // Termine ohne Zeitpunkt ans Ende: eine Gruppe, die nie dringend ist,
+  // gehört nicht über das, was heute ansteht.
+  assert.equal(gruppen[gruppen.length - 1].titel, "Ohne Zeitpunkt");
+});

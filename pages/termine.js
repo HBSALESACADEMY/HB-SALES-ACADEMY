@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
@@ -6,6 +6,7 @@ import SeitenReiter from "../components/SeitenReiter";
 import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
 import { namensHinweis } from "../lib/kundenname";
 import { istKundentermin } from "../lib/terminArt";
+import { gruppiereNachTag } from "../lib/terminGruppen";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
@@ -24,7 +25,7 @@ import { ABSTAND } from "../lib/autoRefresh";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { formatiereDatum, formatiereUhrzeit, terminAnzeige } from "../lib/zeit";
-import { deutscheZeit } from "../lib/terminzeit";
+import { deutscheZeit, nurUhrzeit, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { berlinHeute, tagesBeginnZeitpunkt } from "../lib/woche";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
@@ -824,6 +825,16 @@ export default function Termine() {
     return zusatz ? `${haupt} Uhr (bei dir ${zusatz})` : `${haupt} Uhr`;
   }
 
+  // In der Liste steht die Uhrzeit allein: der Tag steht schon in der
+  // Überschrift darüber. Ihn an jeder Karte zu wiederholen ist die Art von
+  // Ballast, wegen der man eine Liste nicht mehr überfliegt.
+  function nurZeit(iso) {
+    if (!iso) return "ohne Zeitpunkt";
+    const { zusatz } = terminAnzeige(iso);
+    const uhr = nurUhrzeit(iso, DEUTSCHE_ZONE);
+    return zusatz ? `${uhr} Uhr (bei dir ${zusatz})` : `${uhr} Uhr`;
+  }
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
   // Abgeleitet aus der pro Organisation anpassbaren Feld-Konfiguration:
@@ -891,9 +902,11 @@ export default function Termine() {
 
   // Bei den vergangenen Terminen steht das Jüngste oben — geladen wird
   // aufsteigend, was dort die ältesten nach vorne holen würde.
+  // Einmal gebündelt, nicht bei jedem Rendern zweimal.
   const sichtbareLeads = ansicht === "vergangen"
     ? [...filteredLeads].sort((a, b) => String(b.appointment_at).localeCompare(String(a.appointment_at)))
     : filteredLeads;
+  const gruppen = gruppiereNachTag(sichtbareLeads);
 
   return (
     <Layout>
@@ -1086,8 +1099,29 @@ export default function Termine() {
         />
       )}
 
+      {/* Nach Tagen gebündelt. Eine Liste aus dreissig gleich aussehenden
+          Karten beantwortet die Frage nicht, die man an eine Terminliste
+          stellt: was ist heute, was morgen. Man liest dann jedes Datum
+          einzeln — und irgendwann liest man die Liste gar nicht mehr. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {sichtbareLeads.map((lead) => {
+        {gruppen.map((gruppe) => (
+          <Fragment key={gruppe.schluessel}>
+          <div className="sm:col-span-2 lg:col-span-3 flex items-baseline gap-2 flex-wrap mt-2 first:mt-0">
+            <span className={`text-sm font-display font-semibold ${gruppe.istHeute ? "text-amber" : "text-textMain"}`}>
+              {gruppe.titel}
+            </span>
+            {/* Das Datum auch hinter "Heute": drei Wörter beantworten die
+                Frage schneller, aber welcher Tag es ist, will man trotzdem
+                wissen. */}
+            {gruppe.datum && gruppe.datum !== gruppe.titel && (
+              <span className="text-[11px] text-textMuted">{gruppe.datum}</span>
+            )}
+            <span className="text-[11px] text-textMuted ml-auto">
+              {gruppe.leads.length} {gruppe.leads.length === 1 ? "Termin" : "Termine"}
+            </span>
+            <span className="w-full border-t border-line" />
+          </div>
+          {gruppe.leads.map((lead) => {
           const owner = profileMap[lead.created_by];
           const statusColor = STATUS_COLORS[lead.status];
           const isHighlighted = highlightId === lead.id;
@@ -1122,7 +1156,7 @@ export default function Termine() {
                 {companyField && getLeadFieldValue(lead, companyField) && (
                   <div className="text-xs text-textMuted truncate">{getLeadFieldValue(lead, companyField)}</div>
                 )}
-                <div className="text-xs font-mono text-textMain">{formatAppointment(lead.appointment_at)}</div>
+                <div className="text-xs font-mono text-textMain">{nurZeit(lead.appointment_at)}</div>
                 {kundentermin && <Fortschrittsbalken lead={lead} kompakt />}
                 {viewMode === "team" && owner && (
                   <div className="flex items-center gap-1.5 text-xs text-textMuted mt-0.5">
@@ -1671,7 +1705,9 @@ export default function Termine() {
               )}
             </div>
           );
-        })}
+          })}
+          </Fragment>
+        ))}
         {sichtbareLeads.length === 0 && leads.length > 0 && (
           <p className="text-textMuted text-sm">
             {ansicht === "vergangen" ? "Keine vergangenen Termine gefunden."
