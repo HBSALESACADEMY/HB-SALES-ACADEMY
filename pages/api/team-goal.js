@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   // Rolle oder eine fehlende Migration. Hier wird jede einzeln geprüft und
   // die tatsächlichen Werte werden genannt.
   if (aktion === "aendern" || aktion === "loeschen") {
-    return await aendernOderLoeschen({ req, res, auth, aktion, zielId, title, target, bis });
+    return await aendernOderLoeschen({ req, res, auth, aktion, zielId, title, target, von, bis });
   }
 
   if (!teamId || !title?.trim() || !target) return res.status(400).json({ error: "Team, Titel und Zielwert sind erforderlich." });
@@ -128,7 +128,7 @@ async function darfZielVerwalten(admin, ich, userId, team, ziel) {
   return { ok: true };
 }
 
-async function aendernOderLoeschen({ res, auth, aktion, zielId, title, target, bis }) {
+async function aendernOderLoeschen({ res, auth, aktion, zielId, title, target, von, bis }) {
   if (!zielId) return res.status(400).json({ error: "zielId erforderlich." });
   const admin = getAdminSupabase();
   const { data: ich } = await auth.client.from("profiles")
@@ -150,10 +150,26 @@ async function aendernOderLoeschen({ res, auth, aktion, zielId, title, target, b
   }
 
   if (!title?.trim() || !target) return res.status(400).json({ error: "Titel und Zielwert sind erforderlich." });
+
+  // Auch der BEGINN lässt sich ändern, nicht nur das Ende.
+  //
+  // Vorher ging nur "bis". Wer den Zeitraum eines Ziels verschieben wollte,
+  // musste es löschen und neu anlegen — und verlor damit den bisher
+  // gezählten Fortschritt, obwohl sich nur ein Datum ändern sollte.
+  const neuerBeginn = von || ziel.starts_on || ziel.week_start;
+  const neuesEnde = bis || ziel.ends_on || null;
+  if (neuesEnde && neuerBeginn && neuesEnde < neuerBeginn) {
+    return res.status(400).json({ error: "Der Zeitraum ist ungültig — das Ende darf nicht vor dem Beginn liegen." });
+  }
+
   const { error } = await admin.from("team_goals").update({
     title: String(title).trim().slice(0, 200),
     target_count: Math.max(1, Math.round(Number(target) || 0)),
-    ends_on: bis || null,
+    starts_on: neuerBeginn,
+    // week_start bleibt mitgeführt, damit nichts bricht, was noch danach
+    // fragt (migration_96).
+    week_start: neuerBeginn,
+    ends_on: neuesEnde,
   }).eq("id", zielId);
   if (error) throw error;
   return res.status(200).json({ ok: true });

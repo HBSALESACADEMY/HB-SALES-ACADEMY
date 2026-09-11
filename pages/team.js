@@ -36,7 +36,7 @@ export default function Team() {
   const [offenesZiel, setOffenesZiel] = useState(null);
   const [vergangeneOffen, setVergangeneOffen] = useState(null);
   const [zielFormular, setZielFormular] = useState(null);
-  const [zielEntwurf, setZielEntwurf] = useState({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
+  const [zielEntwurf, setZielEntwurf] = useState({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "", person: "" });
   const [zielBusy, setZielBusy] = useState(false);
   const [zielFrei, setZielFrei] = useState(false);
   const [zielBearbeiten, setZielBearbeiten] = useState(null);
@@ -120,10 +120,13 @@ export default function Team() {
     setLoading(false);
   }
 
-  // Eigenes Ziel anlegen (migration_97). Läuft über den normalen Client:
-  // die Zugriffsregeln lassen ausschliesslich Ziele durch, die auf die
-  // eigene Person lauten — ein Team-Ziel liesse sich hier nicht setzen.
-  async function speichereEigenesZiel(teamId) {
+  // Ein Ziel anlegen — für sich selbst oder, wer das Team führt, für das
+  // Team oder eine einzelne Person (migration_96/97).
+  //
+  // Wer wem ein Ziel setzen darf, entscheidet der Server
+  // (pages/api/team-goal.js) und nicht diese Maske: hier wird nur
+  // ausgeblendet, was ohnehin abgelehnt würde.
+  async function speichereEigenesZiel(teamId, darfFuerTeam = false) {
     if (!zielEntwurf.titel.trim() || !zielEntwurf.ziel) return;
     const raum = zielEntwurf.zeitraum === "frei"
       ? { von: zielEntwurf.von, bis: zielEntwurf.bis }
@@ -137,7 +140,11 @@ export default function Team() {
       // Siehe pages/api/team-goal.js: benennt den Grund, wenn es abgelehnt wird.
       await apiPost("/api/team-goal", {
         teamId, title: zielEntwurf.titel, metric: zielEntwurf.metrik, target: zielEntwurf.ziel,
-        von: raum.von, bis: raum.bis, personId: selfId,
+        von: raum.von, bis: raum.bis,
+        // Ohne Leitungsrecht immer für sich selbst — alles andere lehnt der
+        // Server ab, und ein Formular, das in eine Absage führt, ist keine
+        // Wahl.
+        personId: darfFuerTeam ? (zielEntwurf.person || null) : selfId,
       });
     } catch (e) {
       setZielBusy(false);
@@ -146,7 +153,7 @@ export default function Team() {
     }
     setZielBusy(false);
     setZielFormular(null);
-    setZielEntwurf({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "" });
+    setZielEntwurf({ titel: "", metrik: "anwahlen", ziel: 100, zeitraum: "woche", von: "", bis: "", person: "" });
     await load();
   }
 
@@ -387,9 +394,23 @@ export default function Team() {
                       <>
                         <input className="input !w-auto" type="date" value={zielEntwurf.von}
                           onChange={(e) => setZielEntwurf((z) => ({ ...z, von: e.target.value }))} />
+                        <span className="text-xs text-textMuted">bis</span>
                         <input className="input !w-auto" type="date" value={zielEntwurf.bis}
                           onChange={(e) => setZielEntwurf((z) => ({ ...z, bis: e.target.value }))} />
                       </>
+                    )}
+                    {/* Für wen. Wer das Team führt, setzt hier auch Ziele
+                        fürs ganze Team — vorher ging das nur auf der
+                        Manager-Seite, und wer sein Team hier vor sich
+                        hatte, konnte sich nur selbst ein Ziel geben. */}
+                    {t.darfZiele && (
+                      <select className="input !w-auto" value={zielEntwurf.person}
+                        onChange={(e) => setZielEntwurf((z) => ({ ...z, person: e.target.value }))}>
+                        <option value="">Für das ganze Team</option>
+                        {(t.mitglieder || []).map((m) => (
+                          <option key={m.id} value={m.id}>Nur für {m.name}{m.id === selfId ? " (dich)" : ""}</option>
+                        ))}
+                      </select>
                     )}
                   </div>
                   {zielFrei && (
@@ -398,15 +419,21 @@ export default function Team() {
                       onUebernehmen={(e) => { setZielEntwurf((z) => ({ ...z, titel: e.title, metrik: e.metric, ziel: e.target })); setZielFrei(false); }} />
                   )}
                   <div className="flex items-center gap-2">
-                    <button disabled={zielBusy} onClick={() => speichereEigenesZiel(t.id)} className="btn text-xs disabled:opacity-40">
+                    <button disabled={zielBusy} onClick={() => speichereEigenesZiel(t.id, !!t.darfZiele)} className="btn text-xs disabled:opacity-40">
                       {zielBusy ? "Speichert..." : "Ziel setzen"}
                     </button>
                     <button onClick={() => setZielFormular(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
                   </div>
-                  <p className="text-[11px] text-textMuted">Gilt nur für dich. Sichtbar für dich und deine Teamleitung.</p>
+                  <p className="text-[11px] text-textMuted">
+                    {t.darfZiele
+                      ? "Ohne Auswahl gilt das Ziel für das ganze Team. Den Zeitraum bestimmst du über „Eigener Zeitraum“."
+                      : "Gilt nur für dich. Sichtbar für dich und deine Teamleitung."}
+                  </p>
                 </div>
               ) : (
-                <button onClick={() => setZielFormular(t.id)} className="btn-ghost text-xs mt-2">+ Eigenes Ziel setzen</button>
+                <button onClick={() => setZielFormular(t.id)} className="btn-ghost text-xs mt-2">
+                  {t.darfZiele ? "+ Ziel setzen" : "+ Eigenes Ziel setzen"}
+                </button>
               )}
 
               {t.vergangeneZiele?.length > 0 && (

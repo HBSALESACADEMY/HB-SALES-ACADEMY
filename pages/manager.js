@@ -360,13 +360,14 @@ export default function Manager() {
     const patch = {
       title: goalPatch.title.trim(),
       target_count: Number(goalPatch.target_count),
+      starts_on: goalPatch.starts_on || null,
       ends_on: goalPatch.ends_on || null,
     };
     try {
       // Siehe pages/api/team-goal.js: nennt bei einer Ablehnung den Grund.
       await apiPost("/api/team-goal", {
         aktion: "aendern", zielId: id,
-        title: patch.title, target: patch.target_count, bis: patch.ends_on,
+        title: patch.title, target: patch.target_count, von: patch.starts_on, bis: patch.ends_on,
       });
     } catch (e) { alert(e.message || "Die Änderung konnte nicht gespeichert werden."); return; }
     setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
@@ -609,7 +610,14 @@ export default function Manager() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <input className="input !w-20 !py-1 text-sm" type="number" min="1" value={goalPatch?.target_count || ""}
                           onChange={(e) => setGoalPatch((p) => ({ ...p, target_count: e.target.value }))} />
-                        <span className="text-xs text-textMuted">{goalMetricLabel(g.metric)} bis</span>
+                        {/* Beginn UND Ende. Vorher liess sich nur das Ende
+                            ändern — wer den Zeitraum verschieben wollte,
+                            musste löschen und neu anlegen und verlor dabei
+                            den bisher gezählten Fortschritt. */}
+                        <span className="text-xs text-textMuted">{goalMetricLabel(g.metric)} von</span>
+                        <input className="input !w-auto !py-1 text-sm" type="date" value={goalPatch?.starts_on || ""}
+                          onChange={(e) => setGoalPatch((p) => ({ ...p, starts_on: e.target.value }))} />
+                        <span className="text-xs text-textMuted">bis</span>
                         <input className="input !w-auto !py-1 text-sm" type="date" value={goalPatch?.ends_on || ""}
                           onChange={(e) => setGoalPatch((p) => ({ ...p, ends_on: e.target.value }))} />
                         <button onClick={() => saveGoalEdit(g.id)} className="btn text-xs">Speichern</button>
@@ -631,7 +639,7 @@ export default function Manager() {
                         </div>
                       </div>
                       <span className="text-xs text-textMuted flex-shrink-0">{g.target_count} {goalMetricLabel(g.metric)}</span>
-                      <button onClick={() => { setGoalEdit(g.id); setGoalPatch({ title: g.title, target_count: g.target_count, ends_on: g.ends_on || "" }); }}
+                      <button onClick={() => { setGoalEdit(g.id); setGoalPatch({ title: g.title, target_count: g.target_count, starts_on: g.starts_on || g.week_start || "", ends_on: g.ends_on || "" }); }}
                         className="btn-ghost text-xs flex-shrink-0">Bearbeiten</button>
                       <button onClick={() => deleteGoal(g.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
                     </div>
