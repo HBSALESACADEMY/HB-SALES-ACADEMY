@@ -58,18 +58,20 @@ export default async function handler(req, res) {
 }
 
 /**
- * Die Bestätigung vor einem Gespräch.
+ * Ein abgehakter Schritt an einem Termin.
+ *
+ * Welche Schritte gemeldet werden, steht am Schritt selbst (SCHRITTE.meldet
+ * in lib/terminArt.js) — die beiden Bestätigungen und der Check-in. Nicht
+ * die Projektumsetzung: die hakt die Leitung selbst ab und weiss es damit
+ * bereits.
  *
  * Ausdrücklich OHNE Abgleich mit der aktuellen Stufe: Wer die
  * Closing-Bestätigung setzt, während der Termin noch auf der Setting-Stufe
  * steht, hat trotzdem bestätigt. Vorher fiel genau diese Meldung still
  * unter den Tisch.
- *
- * Die Projektumsetzung und der Check-in sind keine Terminbestätigungen und
- * haben in diesem Kanal nichts zu suchen.
  */
 async function terminText({ client, admin, leadId, schritt }) {
-  const gemeint = SCHRITTE.find((x) => x.key === schritt && x.vorStufe);
+  const gemeint = SCHRITTE.find((x) => x.key === schritt && x.meldet);
   if (!gemeint) return null;
 
   const { data: lead } = await client.from("leads")

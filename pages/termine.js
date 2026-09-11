@@ -669,7 +669,7 @@ export default function Termine() {
     // Nebenher und ohne Warten: eine Meldung darf den Haken nicht
     // aufhalten. Der Text wird auf dem Server gebaut, damit hier niemand
     // einen beliebigen in den Kanal der Organisation schreiben kann.
-    if (erledigt && SCHRITTE.find((x) => x.key === key)?.vorStufe) {
+    if (erledigt && SCHRITTE.find((x) => x.key === key)?.meldet) {
       apiPost("/api/bestaetigung-melden", { leadId: lead.id, schritt: key })
         .catch((e) => console.error("Bestätigung melden:", e.message));
     }

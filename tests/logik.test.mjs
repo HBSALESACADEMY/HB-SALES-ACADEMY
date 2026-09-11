@@ -2882,7 +2882,8 @@ test("Die Morgenliste nennt nur, was morgen noch unbestätigt ist", async () => 
 
   // Die einzelne Bestätigung nennt Termin, Person und Zeitpunkt — die
   // Gruppe soll ohne Rückfrage wissen, wann es stattfindet.
-  const einzeln = bestaetigungsText(termin({ company: "ACME" }), "Ernestine");
+  const einzeln = bestaetigungsText(termin({ company: "ACME" }), "Ernestine",
+    { key: "setting_bestaetigt", label: "Setting Call bestätigt", vorStufe: "erstgespraech" });
   assert.match(einzeln, /Setting Call mit Max Muster \(ACME\) von Ernestine bestätigt/);
   assert.match(einzeln, /findet am .* statt\./);
 });
@@ -2900,6 +2901,19 @@ test("Die Meldung nennt den bestätigten Schritt, nicht die aktuelle Stufe", asy
   assert.match(bestaetigungsText(aufSetting, "Ernestine", closing), /^✅ Closing Call mit Max Muster/);
   const setting = SCHRITTE.find((x) => x.key === "setting_bestaetigt");
   assert.match(bestaetigungsText(aufSetting, "Ernestine", setting), /^✅ Setting Call mit Max Muster/);
+
+  // Welche Schritte überhaupt gemeldet werden, steht am Schritt. Die
+  // Projektumsetzung nicht: die hakt die Leitung selbst ab und weiss es
+  // damit bereits — eine Meldung wäre eine Nachricht an den Absender.
+  assert.deepEqual(SCHRITTE.filter((x) => x.meldet).map((x) => x.key),
+    ["setting_bestaetigt", "closing_bestaetigt", "checkin_erledigt"]);
+
+  // Eine Bestätigung schaut nach vorn und nennt den Zeitpunkt. Der
+  // Check-in schaut zurück — dort wäre "findet statt am" schlicht falsch.
+  const checkin = SCHRITTE.find((x) => x.key === "checkin_erledigt");
+  const ciText = bestaetigungsText(aufSetting, "Ernestine", checkin);
+  assert.match(ciText, /^✅ Check-in erledigt: Max Muster von Ernestine\.$/);
+  assert.ok(!/findet am/.test(ciText));
 
   // Ein erledigtes Follow-up geht in denselben Kanal: es ist dieselbe
   // Frage — hat sich jemand gekümmert.
