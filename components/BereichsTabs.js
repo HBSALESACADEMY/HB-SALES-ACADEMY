@@ -24,7 +24,6 @@ export const UEBEN = [
   { label: "Flashcards", route: "/flashcards", icon: "library" },
   { label: "Tages-Challenge", route: "/daily-challenge", icon: "flame" },
   { label: "Quiz-Duell", route: "/duel", icon: "target" },
-  { label: "Cold Call Bingo", route: "/bingo", icon: "target" },
 ];
 
 export default function BereichsTabs({ tabs }) {

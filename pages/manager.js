@@ -45,10 +45,6 @@ export default function Manager() {
   const [goalPatch, setGoalPatch] = useState(null);
   const [rolleEdit, setRolleEdit] = useState(null);
   const [rolleWert, setRolleWert] = useState("");
-  const [pairs, setPairs] = useState([]);
-  const [pairMentorId, setPairMentorId] = useState("");
-  const [pairMenteeId, setPairMenteeId] = useState("");
-  const [pairingBusy, setPairingBusy] = useState(false);
   const [callStats, setCallStats] = useState([]);
 
   const [allProfiles, setAllProfiles] = useState([]);
@@ -181,16 +177,6 @@ export default function Manager() {
 
     // Nach den MITGLIEDERN des Teams filtern, nicht nach der zuweisenden
     // Person: sonst sieht ein Manager nur die Paare, die er selbst angelegt
-    // hat, und ein fremdes Team wirkt so, als gäbe es dort kein Mentoring
-    // (migration_103).
-    const idsFuerPaare = memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"];
-    const { data: existingPairs } = await supabase.from("mentor_pairs")
-      .select("*, mentor:mentor_id(full_name), mentee:mentee_id(full_name)")
-      .in("mentee_id", idsFuerPaare).eq("active", true);
-    // Team-Lead selbst mit aufnehmen — sonst verschwindet ein Paar, in dem
-    // man sich selbst als Mentor/Mentee eingetragen hat, aus der Anzeige.
-    const teamMemberIdSet = new Set([...memberIds, session.user.id]);
-    setPairs((existingPairs || []).filter((p) => teamMemberIdSet.has(p.mentor_id) && teamMemberIdSet.has(p.mentee_id)));
 
     // Derselbe Schlüssel, den der Call Tracker schreibt (lib/callTracker.js)
     // — mit UTC wurde nachts die Zeile eines anderen Tages abgefragt.
@@ -421,23 +407,7 @@ export default function Manager() {
     URL.revokeObjectURL(url);
   }
 
-  async function formPair() {
-    if (!pairMentorId || !pairMenteeId || pairMentorId === pairMenteeId) return;
-    setPairingBusy(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const { error } = await supabase.from("mentor_pairs").insert({ mentor_id: pairMentorId, mentee_id: pairMenteeId, manager_id: session.user.id, active: true });
-    if (error) alert(error.message);
-    else { setPairMentorId(""); setPairMenteeId(""); }
-    await loadTeamData(selectedTeamId, session);
-    setPairingBusy(false);
-  }
 
-  async function dissolvePair(pairId) {
-    const error = await aendereGeprueft(supabase.from("mentor_pairs").update({ active: false }).eq("id", pairId), "Das Auflösen wurde abgelehnt — nur die zuweisende Person oder eine Führungsrolle darf das.");
-    if (error) { alert(error); return; }
-    const { data: { session } } = await supabase.auth.getSession();
-    await loadTeamData(selectedTeamId, session);
-  }
 
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
@@ -457,7 +427,6 @@ export default function Manager() {
   );
   // team enthält seit Neuestem auch die eigene Person — die frühere
   // Sonderbehandlung ("Ich" vorneweg) würde sie sonst doppelt anbieten.
-  const mentorCandidates = team;
   // Für den Hinweis unten zählt nur, ob AUSSER der Leitung jemand da ist.
   const andereMitglieder = team.filter((m) => m.id !== selfId);
 
@@ -719,36 +688,6 @@ export default function Manager() {
                 Dieses Team hat noch keine Mitglieder. Ein Ziel bleibt dann für alle unsichtbar und der
                 Fortschritt steht dauerhaft auf 0 — füge zuerst unten Mitglieder hinzu.
               </p>
-            )}
-          </div>
-
-          <div className="card mb-5">
-            <div className="font-semibold text-textMain text-sm mb-3">🤝 Mentoring-Paare</div>
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <select className="input !w-auto flex-1 min-w-[140px]" value={pairMentorId} onChange={(e) => setPairMentorId(e.target.value)}>
-                <option value="">Mentor wählen...</option>
-                {mentorCandidates.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
-              </select>
-              <span className="text-textMuted text-xs">→</span>
-              <select className="input !w-auto flex-1 min-w-[140px]" value={pairMenteeId} onChange={(e) => setPairMenteeId(e.target.value)}>
-                <option value="">Mentee wählen...</option>
-                {mentorCandidates.map((m) => <option key={m.id} value={m.id}>{m.full_name || "Unbenannt"}</option>)}
-              </select>
-              <button disabled={pairingBusy || !pairMentorId || !pairMenteeId || pairMentorId === pairMenteeId} onClick={formPair} className="btn-ghost text-xs disabled:opacity-40 flex-shrink-0">
-                {pairingBusy ? "..." : "Paar bilden"}
-              </button>
-            </div>
-            {pairs.length === 0 ? (
-              <p className="text-textMuted text-sm">Noch keine Paare gebildet.</p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {pairs.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2 text-sm text-textMuted">
-                    <span className="flex-1"><span className="text-textMain">{p.mentor?.full_name}</span> → <span className="text-textMain">{p.mentee?.full_name}</span></span>
-                    <button onClick={() => dissolvePair(p.id)} className="btn-ghost text-xs text-coral">Auflösen</button>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
 

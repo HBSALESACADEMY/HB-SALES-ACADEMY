@@ -44,7 +44,6 @@ export default async function handler(req, res) {
     // Zugehörigkeiten zur alten Organisation aufräumen, die sonst verwaist wären.
     await admin.from("team_members").delete().eq("user_id", targetId);
     await admin.from("team_requests").delete().eq("requester_id", targetId);
-    await admin.from("mentor_pairs").update({ active: false }).or(`mentor_id.eq.${targetId},mentee_id.eq.${targetId}`);
 
     return res.status(200).json({ ok: true });
   } catch (e) {

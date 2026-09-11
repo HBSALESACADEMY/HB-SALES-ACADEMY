@@ -42,12 +42,11 @@ export default function ProfileModal({ userId, onClose }) {
       setFriendship(fr);
       setIsBlocked(!!blockRow);
 
-      const [{ count: roleplayCount }, { count: certCount }, { count: quizCount }, { data: myPosts }, { count: mentorCount }] = await Promise.all([
+      const [{ count: roleplayCount }, { count: certCount }, { count: quizCount }, { data: myPosts }] = await Promise.all([
         supabase.from("roleplay_sessions").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("exam_results").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("passed", true),
         supabase.from("quiz_results").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("community_posts").select("id").eq("user_id", userId),
-        supabase.from("mentor_pairs").select("id", { count: "exact", head: true }).eq("mentor_id", userId).eq("active", true),
       ]);
       let kudosReceived = 0;
       if (myPosts && myPosts.length) {
@@ -56,7 +55,7 @@ export default function ProfileModal({ userId, onClose }) {
       }
       setBadges(computeBadges({
         roleplayCount: roleplayCount || 0, certCount: certCount || 0, totalCourses: COURSES.length,
-        streak: effectiveStreak(profile?.streak_count, profile?.last_challenge_date), quizCount: quizCount || 0, kudosReceived, isMentor: (mentorCount || 0) > 0,
+        streak: effectiveStreak(profile?.streak_count, profile?.last_challenge_date), quizCount: quizCount || 0, kudosReceived,
       }));
 
       setLoading(false);

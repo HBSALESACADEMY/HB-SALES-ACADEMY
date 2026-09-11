@@ -32,7 +32,6 @@ const FALLBACK_NAV = [
   { id: "knowledge", label: "Wissen", icon: "library", route: "/knowledge", is_builtin: true, requires_manager: false },
   { id: "kalender", label: "Kalender", icon: "calendar", route: "/kalender", is_builtin: true, requires_manager: false },
   { id: "follow-up", label: "Follow-up", icon: "history", route: "/follow-up", is_builtin: true, requires_manager: false },
-  { id: "bingo", label: "Cold Call Bingo", icon: "target", route: "/bingo", is_builtin: true, requires_manager: false },
   { id: "ziele", label: "Ziele", icon: "target", route: "/ziele", is_builtin: true, requires_manager: false },
   { id: "auswertung", label: "Auswertung", icon: "chart", route: "/auswertung", is_builtin: true, requires_manager: true },
   { id: "email-marketing", label: "E-Mail Marketing", icon: "send", route: "/email-marketing", is_builtin: true, requires_manager: false },
@@ -72,7 +71,7 @@ const NAV_GROUPS = {
   // Punkten unter "Lernen" fand man weder das eine noch das andere.
   roleplay: "Üben", "roleplay-history": "Üben", simulator: "Üben",
   flashcards: "Üben", "daily-challenge": "Üben", "einwand-trainer": "Üben",
-  einwandbehandlung: "Üben", bingo: "Üben", "leitfaden-generator": "Üben",
+  einwandbehandlung: "Üben", "leitfaden-generator": "Üben",
 
   // Die Menschen.
   community: "Team", members: "Team", messages: "Team", team: "Team",

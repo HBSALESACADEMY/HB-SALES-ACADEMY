@@ -1,0 +1,22 @@
+-- Cold Call Bingo und die Mentoring-Paare sind entfallen.
+--
+-- Beides war im Betrieb nicht in Gebrauch. Eine Funktion, die niemand
+-- nutzt, kostet trotzdem: sie steht in der Navigation, sie will erklärt
+-- werden, und bei jeder Änderung muss jemand prüfen, ob er sie kaputt
+-- gemacht hat.
+--
+-- Die Tabellen werden ABSICHTLICH NICHT gelöscht. Ein "drop table" ist
+-- unumkehrbar, und was darin steht, ist nach dem Ausbau der Oberfläche
+-- ohnehin unerreichbar. Wer die Tabellen wirklich los werden will, führt
+-- die beiden Zeilen unten von Hand aus — nachdem er nachgesehen hat, was
+-- drinsteht.
+--
+--   select count(*) from bingo_karten;
+--   select count(*) from mentor_pairs;
+--
+--   drop table if exists bingo_karten;
+--   drop table if exists mentor_pairs;
+
+-- Den Menüpunkt ausblenden, falls er in der Datenbank steht: sonst bliebe
+-- er in der Navigation und führte auf eine Seite, die es nicht mehr gibt.
+update nav_items set visible = false where key = 'bingo';

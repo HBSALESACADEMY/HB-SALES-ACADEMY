@@ -42,8 +42,6 @@ export default function Team() {
   const [zielBearbeiten, setZielBearbeiten] = useState(null);
   const [zielPatch, setZielPatch] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
-  const [mentor, setMentor] = useState(null);
-  const [mentees, setMentees] = useState([]);
 
   async function leaveTeam(teamId) {
     if (!confirm("Team wirklich verlassen? Du kannst später jederzeit eine neue Team-Anfrage stellen.")) return;
@@ -100,13 +98,6 @@ export default function Team() {
     } catch (e) {
       setOrganigramm(null);
     }
-
-    const [{ data: pair }, { data: myMentees }] = await Promise.all([
-      supabase.from("mentor_pairs").select("*, mentor:mentor_id(full_name, avatar_url)").eq("mentee_id", session.user.id).eq("active", true).maybeSingle(),
-      supabase.from("mentor_pairs").select("*, mentee:mentee_id(full_name, avatar_url)").eq("mentor_id", session.user.id).eq("active", true),
-    ]);
-    setMentor(pair);
-    setMentees(myMentees || []);
 
     // Ab hier gelten die Ziele als gesehen — der Zähler in der Navigation
     // verschwindet damit (gleiches Muster wie bei der Community).
@@ -254,7 +245,7 @@ export default function Team() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Mein Team</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-6">Wettbewerb, Ziele und Mentoring für deine Teams.</p>
+      <p className="text-textMuted text-sm mb-6">Wettbewerb und Ziele für deine Teams.</p>
 
       {fehler && <div className="card mb-5 border-coral/40 text-sm text-coral">{fehler}</div>}
 
@@ -647,23 +638,6 @@ export default function Team() {
         <span className="text-xs text-textMuted flex-shrink-0">öffnen →</span>
       </div>
 
-      {(mentor || mentees.length > 0) && (
-        <div className="card">
-          <div className="font-semibold text-textMain text-sm mb-3">🤝 Mentoring</div>
-          {mentor && (
-            <div className="flex items-center gap-3 mb-2 cursor-pointer" onClick={() => openProfile(mentor.mentor_id)}>
-              <Avatar name={mentor.mentor?.full_name || "?"} src={mentor.mentor?.avatar_url} size={32} />
-              <div className="text-sm"><span className="text-textMuted">Dein Mentor: </span><span className="text-textMain font-medium">{mentor.mentor?.full_name}</span></div>
-            </div>
-          )}
-          {mentees.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 cursor-pointer" onClick={() => openProfile(m.mentee_id)}>
-              <Avatar name={m.mentee?.full_name || "?"} src={m.mentee?.avatar_url} size={32} />
-              <div className="text-sm"><span className="text-textMuted">Du bist Mentor für: </span><span className="text-textMain font-medium">{m.mentee?.full_name}</span></div>
-            </div>
-          ))}
-        </div>
-      )}
     </Layout>
   );
 }

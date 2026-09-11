@@ -14,7 +14,7 @@ const STEPS = [
   {
     emoji: "👥",
     title: "Team & Community",
-    body: "In \"Team\" findest du deine Kolleg:innen, Team-Ziele und Mentoring. In der Community teilt ihr Erfolge und Tipps — schau öfter vorbei!",
+    body: "In \"Team\" findest du deine Kolleg:innen und die Team-Ziele. In der Community teilt ihr Erfolge und Tipps — schau öfter vorbei!",
   },
   {
     emoji: "💬",
