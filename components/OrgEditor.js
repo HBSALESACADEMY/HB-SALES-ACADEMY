@@ -167,6 +167,10 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [chatSuche, setChatSuche] = useState(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [telegramStand, setTelegramStand] = useState(null);
+  // Wie die eingetragenen Gruppen heissen. In den Feldern steht sonst nur
+  // eine nackte Nummer, und eine Kennung im falschen Feld merkt man erst,
+  // wenn die Nachricht in der falschen Gruppe steht.
+  const [chatNamen, setChatNamen] = useState({});
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
@@ -277,14 +281,21 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
     setChatBusy(true);
     setTelegramStand(null);
     try {
-      const { chats } = await apiGet("/api/admin/telegram-chats");
+      const { chats, namen } = await apiGet(`/api/admin/telegram-chats?ids=${encodeURIComponent(eingetrageneChats.join(","))}`);
       // Einzelchats sind hier nicht gemeint: die Meldungen gehen an ein
       // Team, nicht an eine Person.
       setChatSuche({ chats: (chats || []).filter((c) => c.art !== "private") });
+      setChatNamen(namen || {});
     } catch (e) {
       setChatSuche({ fehler: e?.message || "Die Suche ist fehlgeschlagen." });
     }
     setChatBusy(false);
+  }
+
+  // Der Name einer eingetragenen Gruppe, sobald er bekannt ist.
+  function chatName(id) {
+    const k = String(id || "").trim();
+    return k ? chatNamen[k] : null;
   }
 
   // Eine Testnachricht in den Kanal. Eine falsch eingetragene Kennung
@@ -301,6 +312,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
     }
     setChatBusy(false);
   }
+
+  const eingetrageneChats = [telegramChatId, telegramMarketingId, telegramBestaetigungId, telegramAbschlussId]
+    .map((x) => x.trim()).filter(Boolean);
 
   async function save() {
     if (!name.trim() || !slug.trim()) return;
@@ -613,12 +627,14 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           Bot-Schlüssel bleibt dabei auf dem Server. */}
       <div className="card !py-2.5 mb-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-textMain font-semibold flex-1">Chat-ID einer Gruppe finden</span>
+          <span className="text-xs text-textMain font-semibold flex-1">Chat-IDs finden und prüfen</span>
           <button type="button" onClick={sucheChats} disabled={chatBusy} className="btn-ghost text-xs disabled:opacity-40">
             {chatBusy ? "Sucht…" : "Gruppen suchen"}
           </button>
         </div>
         <p className="text-[11px] text-textMuted mt-1">
+          Die Suche holt auch die NAMEN der schon eingetragenen Gruppen und schreibt sie unter die Felder —
+          in einer nackten Nummer sieht man nicht, welche Gruppe gemeint ist.
           Lade <strong>@HBSalesAcademy_bot</strong> in deine Telegram-Gruppe ein und schreibe dort eine
           Nachricht, in der du <strong>@HBSalesAcademy_bot</strong> erwähnst. Dann hier suchen. Der Bot sieht
           aus Datenschutzgründen nur Nachrichten, die ihn nennen.
@@ -668,6 +684,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         <button type="button" onClick={() => testeKanal(telegramChatId, "allgemein")} disabled={chatBusy || !telegramChatId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
+      {chatName(telegramChatId) && (
+        <p className="text-[11px] text-teal">Gruppe: {chatName(telegramChatId)}</p>
+      )}
       <p className="text-[11px] text-textMuted mb-5">
         Ist hier eine Chat-ID hinterlegt, gehen „Neuer Termin" und „Team erinnern" zusätzlich zur E-Mail auch dorthin —
         am besten in eine Telegram-Gruppe des Vertriebsteams. Dazu <strong>@HBSalesAcademy_bot</strong> in die Gruppe
@@ -681,6 +700,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         <button type="button" onClick={() => testeKanal(telegramMarketingId, "marketing")} disabled={chatBusy || !telegramMarketingId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
+      {chatName(telegramMarketingId) && (
+        <p className="text-[11px] text-teal">Gruppe: {chatName(telegramMarketingId)}</p>
+      )}
       <p className="text-[11px] text-textMuted mb-5">
         Bittet jemand im Gespräch um Unterlagen, geht die Meldung hierhin — mit Adresse, Notiz und dem Namen des
         Vertrieblers. Diese Meldungen haben einen anderen Adressaten als „Termin verschoben“: hier muss jemand
@@ -695,6 +717,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         <button type="button" onClick={() => testeKanal(telegramBestaetigungId, "bestaetigung")} disabled={chatBusy || !telegramBestaetigungId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
+      {chatName(telegramBestaetigungId) && (
+        <p className="text-[11px] text-teal">Gruppe: {chatName(telegramBestaetigungId)}</p>
+      )}
       <p className="text-[11px] text-textMuted mb-5">
         Zwei Sorten Meldung gehen hierhin. Jeden Morgen die Liste der Termine von MORGEN, die noch niemand
         bestätigt hat — mit Uhrzeit, Kunde und zuständigem Vertriebler. Und jede einzelne Bestätigung, sobald
@@ -710,6 +735,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         <button type="button" onClick={() => testeKanal(telegramAbschlussId, "abschluss")} disabled={chatBusy || !telegramAbschlussId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
+      {chatName(telegramAbschlussId) && (
+        <p className="text-[11px] text-teal">Gruppe: {chatName(telegramAbschlussId)}</p>
+      )}
       <p className="text-[11px] text-textMuted mb-5">
         Nur „Kunde geworden“. Ein Kanal, in dem ausschliesslich gute Nachrichten stehen, wird gelesen — im
         allgemeinen Kanal lag der Abschluss zwischen Verschiebungen und Absagen. Leer lassen = er läuft dort mit.

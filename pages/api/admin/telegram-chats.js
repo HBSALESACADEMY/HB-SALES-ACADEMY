@@ -42,6 +42,25 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: daten?.description || "Telegram hat die Anfrage abgelehnt." });
     }
 
+    // Zusätzlich: Wie heissen die Gruppen, die schon eingetragen SIND?
+    //
+    // In den Feldern steht eine nackte Nummer wie "-1001234567890". Welche
+    // Gruppe das ist, weiss niemand — und eine Kennung im falschen Feld
+    // merkt man erst, wenn die Nachricht in der falschen Gruppe steht.
+    const namen = {};
+    const gefragt = String(req.query.ids || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 10);
+    await Promise.all(gefragt.map(async (id) => {
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(id)}`);
+        const d = await r.json();
+        namen[id] = d?.ok
+          ? (d.result?.title || [d.result?.first_name, d.result?.last_name].filter(Boolean).join(" ") || d.result?.username || "Ohne Namen")
+          : (d?.description || "Nicht erreichbar");
+      } catch (e) {
+        namen[id] = "Nicht erreichbar";
+      }
+    }));
+
     const chats = new Map();
     (daten.result || []).forEach((u) => {
       const chat = u.message?.chat || u.my_chat_member?.chat || u.channel_post?.chat;
@@ -53,7 +72,7 @@ export default async function handler(req, res) {
       });
     });
 
-    return res.status(200).json({ chats: [...chats.values()] });
+    return res.status(200).json({ chats: [...chats.values()], namen });
   } catch (e) {
     console.error("Telegram-Chats konnten nicht geladen werden:", e.message);
     return res.status(500).json({ error: e.message || "Die Suche ist fehlgeschlagen." });
