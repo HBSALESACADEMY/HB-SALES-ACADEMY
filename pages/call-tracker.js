@@ -17,7 +17,7 @@ import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { buchungslink, kurzform } from "../lib/buchungslink";
 import { meldeStoerung } from "../lib/fehlerMelden";
 import { berlinHeute, tagPlus } from "../lib/woche";
-import { vorherigerZeitraum, differenz, vergleichsText, vergleichsName } from "../lib/vergleich";
+import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidung, differenz, vergleichsText } from "../lib/vergleich";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
@@ -80,6 +80,12 @@ export default function CallTracker() {
 
   const [teamState, setTeamState] = useState({ status: "idle", members: [], reasons: [] });
   const [teamZeitraum, setTeamZeitraum] = useState("woche");
+  // Womit verglichen wird, wählt die Person selbst. "Zeitraum davor" ist
+  // die Voreinstellung, weil sie immer stimmt — ob diese Woche mit der
+  // Vorwoche oder mit derselben Woche im Vormonat zu vergleichen ist,
+  // hängt vom Geschäft ab und nicht von einer Voreinstellung.
+  const [vergleichsArt, setVergleichsArt] = useState("davor");
+  const [eigenerVergleich, setEigenerVergleich] = useState({ von: "", bis: "" });
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
   // Wurde ein angefangener Anruf wieder aufgenommen? Dann steht ein Hinweis
@@ -806,7 +812,7 @@ export default function CallTracker() {
     return z === "heute" ? 0 : z === "monat" ? 30 : 7;
   }
 
-  async function loadTeam(art = teamZeitraum, eigen = eigenerZeitraum) {
+  async function loadTeam(art = teamZeitraum, eigen = eigenerZeitraum, vArt = vergleichsArt, vEigen = eigenerVergleich) {
     setTeamState({ status: "loading", members: [], reasons: [] });
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -888,7 +894,7 @@ export default function CallTracker() {
       // Roh geladen wie die aktuellen Zeilen, damit die Filter nach Team und
       // Person auch für den Vergleich gelten. Sonst stünde unter der Zahl
       // einer Person die Veränderung des ganzen Teams.
-      const davor = vorherigerZeitraum({ von, bis });
+      const davor = vergleichsZeitraum(vArt, { von, bis }, vEigen);
       const { data: logsVorher } = davor
         ? await supabase.from("call_log_days")
           .select("user_id, log_date, counts, reasons")
@@ -923,6 +929,11 @@ export default function CallTracker() {
         logsVorher: logsVorher || [],
         vergleichZeitraum: davor,
         zeitraumArt: art,
+        vergleichsArt: vArt,
+        // Ein Vergleich mit sich selbst ist keiner: 30 Tage gegen "die
+        // Woche davor" teilen 23 Tage, und die Veränderung wirkt dann
+        // immer klein. Das gehört benannt.
+        ueberschneidung: davor ? ueberschneidung({ von, bis }, davor) : 0,
         ereignisse: ereignisse || [],
         meineKontakte: meineKontakte || [],
         // Angeschnitten? Dann sagt die Auswertung das, statt zu wenig zu
@@ -1094,6 +1105,13 @@ export default function CallTracker() {
           state={teamState}
           zeitraum={teamZeitraum}
           eigener={eigenerZeitraum}
+          vergleichsArt={vergleichsArt}
+          eigenerVergleich={eigenerVergleich}
+          onVergleich={(v) => { setVergleichsArt(v); loadTeam(teamZeitraum, eigenerZeitraum, v, eigenerVergleich); }}
+          onEigenerVergleich={(e) => {
+            setEigenerVergleich(e);
+            if (e.von && e.bis) loadTeam(teamZeitraum, eigenerZeitraum, "eigen", e);
+          }}
           lokaleTage={lokaleTage}
           nachtragen={nachtragen}
           onNachtragen={trageNach}
@@ -1804,7 +1822,8 @@ export default function CallTracker() {
   );
 }
 
-function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokaleTage, nachtragen, onNachtragen }) {
+function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokaleTage, nachtragen, onNachtragen,
+  vergleichsArt, eigenerVergleich, onVergleich, onEigenerVergleich }) {
   // Welche Kachel aufgeklappt ist. Immer nur eine: zwei offene Listen
   // untereinander vergleicht man ohnehin nicht.
   const [offeneKachel, setOffeneKachel] = useState(null);
@@ -1869,7 +1888,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
   (state.logsVorher || []).filter((l) => sichtbareIds.has(l.user_id)).forEach((l) => {
     FIELDS.forEach((f) => { gesamtVorher[f.key] += l.counts?.[f.key] || 0; });
   });
-  const vergleichName = vergleichsName(state.zeitraumArt);
+  const vergleichName = vergleichsArtName(state.vergleichsArt, state.zeitraumArt);
 
   // Der eigene Eintrag trägt seinen Namen und dahinter "(Du)". So findet
   // man sich in der Liste wieder, auch wenn man mit einem zweiten Konto
@@ -2040,6 +2059,27 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         </div>
       )}
 
+      {/* Womit verglichen wird, wählt man selbst. Ob diese Woche gegen die
+          Vorwoche oder gegen dieselbe Woche im Vormonat zu stellen ist,
+          hängt vom Geschäft ab. */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <FilterAuswahl
+          etikett="Vergleich mit:"
+          wert={vergleichsArt}
+          onChange={onVergleich}
+          optionen={VERGLEICHS_ARTEN.map(([key, label]) => ({ wert: key, label }))}
+        />
+        {vergleichsArt === "eigen" && (
+          <>
+            <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigenerVergleich?.von || ""}
+              onChange={(e) => onEigenerVergleich({ ...eigenerVergleich, von: e.target.value })} />
+            <span className="text-xs text-textMuted">bis</span>
+            <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigenerVergleich?.bis || ""}
+              onChange={(e) => onEigenerVergleich({ ...eigenerVergleich, bis: e.target.value })} />
+          </>
+        )}
+      </div>
+
       {/* Team und Person: der Team-Filter engt zuerst ein, die Personenliste
           zeigt danach nur noch, wer dort drin ist. Wer niemanden führt, sieht
           nur sich selbst — dann wäre jeder Filter ein Knopf ohne Wahl. */}
@@ -2133,6 +2173,15 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
           {" – "}
           {new Date(`${state.vergleichZeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}
           {")"}
+          {/* Überschneiden sich die Zeiträume, stecken dieselben Tage in
+              beiden Zahlen — die Veränderung wirkt dann immer klein, und
+              zwar unabhängig davon, was passiert ist. */}
+          {state.ueberschneidung > 0 && (
+            <span className="text-amber">
+              {" · "}Achtung: {state.ueberschneidung} {state.ueberschneidung === 1 ? "Tag steckt" : "Tage stecken"} in
+              beiden Zeiträumen — die Veränderung fällt dadurch kleiner aus.
+            </span>
+          )}
         </p>
       )}
 

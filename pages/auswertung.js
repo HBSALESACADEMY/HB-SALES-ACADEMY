@@ -14,7 +14,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
-import { vorherigerZeitraum, differenz, vergleichsName } from "../lib/vergleich";
+import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidung, differenz } from "../lib/vergleich";
 import { berlinHeute } from "../lib/woche";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import {
@@ -52,6 +52,11 @@ export default function AuswertungSeite() {
   const [fehler, setFehler] = useState(null);
   const [zeitraum, setZeitraum] = useState("woche");
   const [eigener, setEigener] = useState({ von: "", bis: "" });
+  // Womit verglichen wird, wählt die Person selbst — Woche, Monat, Jahr
+  // oder ein eigener Zeitraum. "Zeitraum davor" bleibt die Voreinstellung,
+  // weil sie immer stimmt.
+  const [vergleichsArt, setVergleichsArt] = useState("davor");
+  const [eigenerVergleich, setEigenerVergleich] = useState({ von: "", bis: "" });
   const [offen, setOffen] = useState(null);
 
   useEffect(() => {
@@ -73,7 +78,7 @@ export default function AuswertungSeite() {
       setDaten(null);
       setVergleich(null);
       const { von, bis } = zeitraumGrenzen(zeitraum, { von: eigener.von, bis: eigener.bis });
-      const davor = vorherigerZeitraum({ von, bis });
+      const davor = vergleichsZeitraum(vergleichsArt, { von, bis }, eigenerVergleich);
       try {
         // Zwei Abrufe statt eines: eine Zahl ohne Vorwoche ist eine Zahl
         // ohne Aussage. Der Vergleich darf aber nicht die Auswertung
@@ -92,7 +97,7 @@ export default function AuswertungSeite() {
       }
     })();
     return () => { aktiv = false; };
-  }, [darf, zeitraum, eigener.von, eigener.bis]);
+  }, [darf, zeitraum, eigener.von, eigener.bis, vergleichsArt, eigenerVergleich.von, eigenerVergleich.bis]);
 
   if (darf === null) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
@@ -144,9 +149,28 @@ export default function AuswertungSeite() {
         </div>
       )}
 
+      {/* Womit verglichen wird, wählt man selbst. */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <FilterAuswahl
+          etikett="Vergleich mit:"
+          wert={vergleichsArt}
+          onChange={setVergleichsArt}
+          optionen={VERGLEICHS_ARTEN.map(([key, label]) => ({ wert: key, label }))}
+        />
+        {vergleichsArt === "eigen" && (
+          <>
+            <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigenerVergleich.von}
+              onChange={(e) => setEigenerVergleich({ ...eigenerVergleich, von: e.target.value })} />
+            <span className="text-xs text-textMuted">bis</span>
+            <input type="date" className="input !w-auto !py-1.5 text-xs" value={eigenerVergleich.bis}
+              onChange={(e) => setEigenerVergleich({ ...eigenerVergleich, bis: e.target.value })} />
+          </>
+        )}
+      </div>
+
       {fehler && <div className="card border border-coral/40 text-coral text-sm mb-4">{fehler}</div>}
       {!daten && !fehler && <p className="text-textMuted text-sm">Zahlen werden zusammengestellt...</p>}
-      {daten && <Bericht daten={daten} vorZeitraum={vergleich} vergleichName={vergleichsName(zeitraum)} offen={offen} setOffen={setOffen} />}
+      {daten && <Bericht daten={daten} vorZeitraum={vergleich} vergleichName={vergleichsArtName(vergleichsArt, zeitraum)} offen={offen} setOffen={setOffen} />}
     </Layout>
   );
 }
@@ -181,6 +205,7 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
   // nicht vom Server vorverdichtet, sonst laufen die beiden Zahlen
   // auseinander, sobald sich hier etwas an der Summierung ändert.
   const gesamtVorher = summiere(vorZeitraum?.zeilen || []);
+  const ueberlappung = vorZeitraum ? ueberschneidung(daten.zeitraum, vorZeitraum.zeitraum) : 0;
   const stufen = trichter(gesamt);
   const eng = engpass(stufen);
   const vergleich = benchmark(teamsMitZahlen);
@@ -233,6 +258,13 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
           <span className="text-[11px] text-textMuted">
             {new Date(`${daten.zeitraum.von}T12:00:00`).toLocaleDateString("de-DE")} – {new Date(`${daten.zeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}
           </span>
+          {/* Überschneiden sich die Zeiträume, stecken dieselben Tage in
+              beiden Zahlen — die Veränderung wirkt dann immer klein. */}
+          {ueberlappung > 0 && (
+            <span className="text-[11px] text-amber">
+              {ueberlappung} {ueberlappung === 1 ? "Tag steckt" : "Tage stecken"} in beiden Zeiträumen
+            </span>
+          )}
           <button onClick={exportiere} className="btn-ghost text-xs ml-auto">
             <Icon name="download" size={12} /> Für Excel herunterladen
           </button>
@@ -252,6 +284,11 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
                 {vorZeitraum && (
                   <th className="font-normal pb-2 px-2 text-right whitespace-nowrap">
                     gegenüber {vergleichName}
+                    <span className="block text-[10px] text-textMuted font-normal">
+                      {new Date(`${vorZeitraum.zeitraum.von}T12:00:00`).toLocaleDateString("de-DE")}
+                      {" – "}
+                      {new Date(`${vorZeitraum.zeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}
+                    </span>
                   </th>
                 )}
               </tr>

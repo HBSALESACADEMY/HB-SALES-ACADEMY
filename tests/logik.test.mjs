@@ -3059,3 +3059,38 @@ test("Die Wochentags-Analyse gibt keine Quote auf drei Anrufe", async () => {
   // Und ohne Vergleichsmöglichkeit gar keine Aussage.
   assert.equal(wochentagsBefund(wochentagsRaster([])), null);
 });
+
+test("Der Vergleichszeitraum lässt sich selbst wählen", async () => {
+  const { vergleichsZeitraum, verschiebeUmMonate, ueberschneidung, vergleichsArtName } =
+    await import("../lib/vergleich.js");
+  const woche = { von: "2026-09-05", bis: "2026-09-11" };
+
+  // Woche, Monat und Jahr verschieben denselben Zeitraum zurück: dieselbe
+  // Länge, nur früher. "Zeitraum davor" schliesst dagegen lückenlos an.
+  assert.deepEqual(vergleichsZeitraum("woche", woche), { von: "2026-08-29", bis: "2026-09-04" });
+  assert.deepEqual(vergleichsZeitraum("monat", woche), { von: "2026-08-05", bis: "2026-08-11" });
+  assert.deepEqual(vergleichsZeitraum("jahr", woche), { von: "2025-09-05", bis: "2025-09-11" });
+  assert.deepEqual(vergleichsZeitraum("davor", woche), { von: "2026-08-29", bis: "2026-09-04" });
+  assert.equal(vergleichsZeitraum("keiner", woche), null);
+
+  // Ein eigener Zeitraum, auch verkehrt herum eingegeben.
+  assert.deepEqual(vergleichsZeitraum("eigen", woche, { von: "2026-01-31", bis: "2026-01-01" }),
+    { von: "2026-01-01", bis: "2026-01-31" });
+  assert.equal(vergleichsZeitraum("eigen", woche, { von: "2026-01-01" }), null);
+
+  // Der 31. März minus ein Monat ist der 28. Februar, nicht der 3. März.
+  // Über Millisekunden gerechnet käme genau das heraus.
+  assert.equal(verschiebeUmMonate("2026-03-31", 1), "2026-02-28");
+  assert.equal(verschiebeUmMonate("2026-01-15", 1), "2025-12-15");
+  assert.equal(verschiebeUmMonate("2026-09-05", 12), "2025-09-05");
+
+  // Ein Vergleich mit sich selbst ist keiner: 30 Tage gegen "die Woche
+  // davor" teilen 23 Tage, und die Veränderung wirkt dann immer klein.
+  const monat = { von: "2026-08-13", bis: "2026-09-11" };
+  assert.equal(ueberschneidung(monat, vergleichsZeitraum("woche", monat)), 23);
+  assert.equal(ueberschneidung(monat, vergleichsZeitraum("davor", monat)), 0);
+
+  // Der Name steht hinter "gegenüber" und damit im Dativ.
+  assert.equal(vergleichsArtName("woche"), "der Woche davor");
+  assert.equal(vergleichsArtName("davor", "woche"), "den 7 Tagen davor");
+});
