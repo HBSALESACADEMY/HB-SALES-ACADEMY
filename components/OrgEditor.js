@@ -628,6 +628,42 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
 
       <Abschnitt id="benachrichtigungen" aktiv={bereich} titel="Benachrichtigungen" hinweis="Wohin Meldungen über neue Termine und Erinnerungen gehen.">
 
+      {/* Welche Meldung wohin geht — einmal als Tabelle. Vorher stand das
+          verteilt unter den vier Feldern, und die Frage "wo landet ein
+          Abschluss" liess sich nur beantworten, indem man alle vier
+          Hinweistexte las. */}
+      <div className="card !py-2.5 mb-4">
+        <div className="text-xs text-textMain font-semibold mb-2">Welche Meldung geht wohin</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <tbody className="text-textMuted">
+              {[
+                ["Neuer Termin, verschoben, abgesagt", "Termine"],
+                ["Team erinnern", "Termine"],
+                ["Tagesbericht", "Termine"],
+                ["E-Mail-Kontakt aus dem Gespräch", "E-Mail"],
+                ["Follow-up zugewiesen oder fällig", "E-Mail"],
+                ["Setting Call bestätigt", "Bestätigungen"],
+                ["Closing Call bestätigt", "Bestätigungen"],
+                ["Check-in erledigt", "Bestätigungen"],
+                ["Follow-up erledigt", "Bestätigungen"],
+                ["Morgens: Termine von morgen ohne Bestätigung", "Bestätigungen"],
+                ["Kunde geworden", "Abschlüsse"],
+              ].map(([was, wohin]) => (
+                <tr key={was} className="border-t border-line">
+                  <td className="py-1 pr-3">{was}</td>
+                  <td className="py-1 text-textMain whitespace-nowrap">{wohin}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-textMuted mt-2">
+          Bleibt ein Feld leer, läuft die Meldung über den Kanal „Termine“ mit. Ist auch der leer, geht sie
+          nur per E-Mail raus, soweit es für diese Meldung eine gibt.
+        </p>
+      </div>
+
       {/* Die Kennung suchen, statt sie irgendwo abzuschreiben. Der
           Bot-Schlüssel bleibt dabei auf dem Server. */}
       <div className="card !py-2.5 mb-4">
@@ -637,17 +673,35 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
             {chatBusy ? "Sucht…" : "Gruppen suchen"}
           </button>
         </div>
-        <p className="text-[11px] text-textMuted mt-1">
-          Lade <strong>@HBSalesAcademy_bot</strong> in die Gruppe ein und schreibe dort den Code dieser
-          Organisation zusammen mit <strong>@HBSalesAcademy_bot</strong>. Dann hier suchen. Gelistet wird nur,
-          wo dieser Code in den letzten 30 Minuten stand — so findet niemand die Gruppen einer anderen
-          Organisation. Der Bot sieht aus Datenschutzgründen ohnehin nur Nachrichten, die ihn nennen.
-        </p>
+        {/* Die Anleitung als Schrittfolge statt als Absatz: Wer eine Gruppe
+            anbindet, macht das einmal im Jahr und liest dabei mit — ein
+            Fliesstext zwingt ihn, sich die Reihenfolge selbst
+            herauszuziehen. */}
+        <ol className="text-[11px] text-textMuted mt-2 flex flex-col gap-1 list-decimal pl-4">
+          <li>In Telegram eine Gruppe anlegen, zum Beispiel „Vertrieb Terminbestätigungen“.</li>
+          <li><strong>@HBSalesAcademy_bot</strong> in die Gruppe einladen.</li>
+          <li>
+            In der Gruppe den Code dieser Organisation schreiben, zusammen mit der Erwähnung des Bots
+            {gruppenCode ? " (siehe unten)" : ""}.
+          </li>
+          <li>Hier auf <strong>Gruppen suchen</strong> klicken. Die Gruppe erscheint mit ihrer Kennung.</li>
+          <li>Auf den Knopf des passenden Kanals klicken — Termine, E-Mail, Bestätigungen oder Abschlüsse.</li>
+          <li>Unten auf <strong>Speichern</strong> klicken. Vorher gilt nichts.</li>
+          <li>Mit <strong>Test</strong> neben dem Feld prüfen: kommt die Nachricht in der Gruppe an, stimmt alles.</li>
+        </ol>
+
         {gruppenCode && (
           <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mt-2">
             In der Gruppe schreiben: <strong className="font-mono">{gruppenCode} @HBSalesAcademy_bot</strong>
           </p>
         )}
+
+        <p className="text-[11px] text-textMuted mt-2">
+          Warum der Code: Ein Bot bedient alle Organisationen dieser Academy. Gelistet wird deshalb nur, wo
+          dieser Code in den letzten 30 Minuten stand — so findet niemand die Gruppen einer anderen
+          Organisation. Der Bot sieht aus Datenschutzgründen ohnehin nur Nachrichten, die ihn nennen.
+          Ein Bot genügt für alle Organisationen; für eine neue lädst du denselben Bot in deren Gruppen ein.
+        </p>
         <p className="text-[11px] text-textMuted mt-1">
           Die Suche holt ausserdem die Namen der schon eingetragenen Gruppen und schreibt sie unter die Felder
           — in einer nackten Nummer sieht man nicht, welche Gruppe gemeint ist.
