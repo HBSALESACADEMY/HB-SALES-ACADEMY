@@ -670,8 +670,12 @@ export default function Termine() {
     // aufhalten. Der Text wird auf dem Server gebaut, damit hier niemand
     // einen beliebigen in den Kanal der Organisation schreiben kann.
     if (erledigt && SCHRITTE.find((x) => x.key === key)?.meldet) {
+      // Ging die Meldung nicht raus, muss das dastehen. Vorher landete
+      // der Grund in der Browserkonsole — man hakte ab, in der Gruppe kam
+      // nichts an, und niemand erfuhr warum.
       apiPost("/api/bestaetigung-melden", { leadId: lead.id, schritt: key })
-        .catch((e) => console.error("Bestätigung melden:", e.message));
+        .then((antwort) => { if (antwort?.hinweis) setError(`Der Haken ist gespeichert, aber die Telegram-Meldung ging nicht raus: ${antwort.hinweis}`); })
+        .catch((e) => setError(`Der Haken ist gespeichert, aber die Telegram-Meldung ging nicht raus: ${e.message}`));
     }
   }
 

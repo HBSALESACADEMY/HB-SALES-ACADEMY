@@ -70,14 +70,20 @@ export default async function handler(req, res) {
     if (activeOrgId && (me?.is_platform_admin || activeOrgId === me?.organization_id)) orgId = activeOrgId;
     if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
-    const { data: org } = await admin.from("organizations").select("name, telegram_chat_id").eq("id", orgId).maybeSingle();
+    const { data: org } = await admin.from("organizations")
+      .select("name, telegram_chat_id, telegram_abschluss_chat_id").eq("id", orgId).maybeSingle();
     const wer = me?.full_name || "Ein Teammitglied";
     const terminDeutsch = lead.appointment_at ? `${deutscheZeit(lead.appointment_at)} Uhr` : "kein Zeitpunkt";
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     // Nach dem Löschen führt der Link ins Leere — dann weglassen.
     const link = appUrl && ereignis !== "geloescht" ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
-    if (org?.telegram_chat_id) {
+    // Ein Abschluss geht in den Abschluss-Kanal, wenn es einen gibt
+    // (migration_160). Er lag vorher zwischen Verschiebungen und Absagen —
+    // die einzige Meldung, auf die ein Vertriebsteam hinarbeitet, stand
+    // zwischen lauter Organisatorischem.
+    const kanal = (grund === "kunde" && org?.telegram_abschluss_chat_id) || org?.telegram_chat_id;
+    if (kanal) {
       const text = [
         `${GRUND_TITEL[grund] || TITEL[ereignis]}: ${lead.name}` + (lead.company ? ` (${lead.company})` : ""),
         beschreibung ? beschreibung : null,
@@ -86,7 +92,7 @@ export default async function handler(req, res) {
         `Termin: ${terminDeutsch}`,
         link ? `\n${link}` : null,
       ].filter((z) => z !== null).join("\n");
-      await sendeAlarm(text, org.telegram_chat_id);
+      await sendeAlarm(text, kanal);
     }
 
     return res.status(200).json({ ok: true, gemeldet: true, grund: MELDENSWERT[grund] });

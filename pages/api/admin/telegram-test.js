@@ -18,6 +18,7 @@ const NAMEN = {
   allgemein: "den allgemeinen Kanal",
   marketing: "den Kanal für E-Mail-Kontakte",
   bestaetigung: "den Kanal für Terminbestätigungen",
+  abschluss: "den Kanal für Abschlüsse",
 };
 
 export default async function handler(req, res) {

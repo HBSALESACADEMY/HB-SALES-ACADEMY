@@ -159,6 +159,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
   const [telegramBestaetigungId, setTelegramBestaetigungId] = useState(org.telegram_bestaetigung_chat_id || "");
+  const [telegramAbschlussId, setTelegramAbschlussId] = useState(org.telegram_abschluss_chat_id || "");
   // Chat-Kennungen suchen und ausprobieren. Ohne beides lautet die
   // Anleitung "ruf api.telegram.org/bot SCHLÜSSEL /getUpdates auf" — den
   // Bot-Schlüssel in eine Adresszeile zu tippen ist für eine Kennung, die
@@ -325,6 +326,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       telegram_chat_id: telegramChatId.trim() || null,
       telegram_marketing_chat_id: telegramMarketingId.trim() || null,
       telegram_bestaetigung_chat_id: telegramBestaetigungId.trim() || null,
+      telegram_abschluss_chat_id: telegramAbschlussId.trim() || null,
       // Nur vollständige Vorlagen: eine ohne Text steht sonst in der
       // Auswahl und liefert eine leere Mail.
       email_vorlagen: vorlagen.filter((v) => v.name?.trim() && v.text?.trim()),
@@ -635,6 +637,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
             <button onClick={() => setTelegramChatId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Termine</button>
             <button onClick={() => setTelegramMarketingId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">E-Mail</button>
             <button onClick={() => setTelegramBestaetigungId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Bestätigungen</button>
+            <button onClick={() => setTelegramAbschlussId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Abschlüsse</button>
           </div>
         ))}
         {telegramStand && (
@@ -682,6 +685,18 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         jemand den Haken setzt. Steht morgens nichts Offenes an, kommt auch keine Nachricht: eine tägliche
         „nichts zu tun“-Meldung wird nach einer Woche weggewischt, und mit ihr die, auf die es ankommt.
         Leer lassen = sie laufen über den allgemeinen Kanal mit.
+      </p>
+
+      <label className="block text-xs text-textMuted mb-1.5">Telegram für Abschlüsse (optional)</label>
+      <div className="flex items-center gap-2 mb-1">
+        <input className="input flex-1" value={telegramAbschlussId} onChange={(e) => setTelegramAbschlussId(e.target.value)}
+          placeholder="z. B. -1007777777777" />
+        <button onClick={() => testeKanal(telegramAbschlussId, "abschluss")} disabled={chatBusy || !telegramAbschlussId.trim()}
+          className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
+      </div>
+      <p className="text-[11px] text-textMuted mb-5">
+        Nur „Kunde geworden“. Ein Kanal, in dem ausschliesslich gute Nachrichten stehen, wird gelesen — im
+        allgemeinen Kanal lag der Abschluss zwischen Verschiebungen und Absagen. Leer lassen = er läuft dort mit.
       </p>
 
       </Abschnitt>

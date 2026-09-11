@@ -293,7 +293,8 @@ export default function Kalender() {
   // Nebenher und ohne Warten: eine Meldung darf den Haken nicht aufhalten.
   function meldeFollowUp(id) {
     apiPost("/api/bestaetigung-melden", { nachfassId: id })
-      .catch((e) => console.error("Follow-up melden:", e.message));
+      .then((antwort) => { if (antwort?.hinweis) setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${antwort.hinweis}`); })
+      .catch((e) => setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${e.message}`));
   }
 
   // Verschieben: um einen Tag weiter, gleiche Uhrzeit. Bewusst ein Klick

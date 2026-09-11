@@ -438,7 +438,8 @@ export default function EmailMarketing() {
     // dieselbe Frage wie bei den Terminbestätigungen (migration_158).
     // Nebenher und ohne Warten: eine Meldung darf den Haken nicht aufhalten.
     apiPost("/api/bestaetigung-melden", { nachfassId: n.id })
-      .catch((e) => console.error("Follow-up melden:", e.message));
+      .then((antwort) => { if (antwort?.hinweis) setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${antwort.hinweis}`); })
+      .catch((e) => setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${e.message}`));
     await laden();
   }
 
