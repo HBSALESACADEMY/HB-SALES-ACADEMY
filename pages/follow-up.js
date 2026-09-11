@@ -149,7 +149,7 @@ export default function FollowUp() {
             <div key={l.id} className="card !py-2.5">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className="font-semibold text-textMain text-sm">
-                  <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>
+                  {kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>}
                   {l.name}
                 </span>
                 {l.company && <span className="text-xs text-textMuted">{l.company}</span>}

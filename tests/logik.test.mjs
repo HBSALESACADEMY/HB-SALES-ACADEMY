@@ -2460,14 +2460,12 @@ test("Closing Call ist eine eigene Stufe, kein Ergebnis", () => {
   // Unterschied die Antwort.
   // Vier Stufen: die drei bis zum Abschluss und der Check-in danach.
   assert.equal(TERMIN_ARTEN.length, 4);
-  // Ohne Angabe ist es ein Erstgespräch — bestehende Termine sollen nicht
-  // umgedeutet werden.
-  assert.equal(artVon({}).key, "erstgespraech");
-  assert.equal(artVon({ termin_art: null }).key, "erstgespraech");
+  // Ohne Angabe wird nichts geraten: siehe "Ein Termin ohne Stufe wird
+  // nicht zum Setting Call erklärt".
   assert.equal(artVon({ termin_art: "closing" }).label, "Closing Call");
 
   const stufen = stufenAuswertung([
-    { termin_art: null, status: "wahrgenommen" },
+    { termin_art: "erstgespraech", status: "wahrgenommen" },
     { termin_art: "closing", status: "wahrgenommen", outcome: "kunde" },
     { termin_art: "closing", status: "wahrgenommen" },
     { termin_art: "closing", status: "geplant" },
@@ -2492,7 +2490,7 @@ test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
   // wäre wieder keins auffällig.
   assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "closing" }, "Ernestine"),
     "💵 CC: Max Muster – Ernestine");
-  assert.equal(kalenderTitel({ name: "Max Muster" }, "Ernestine"),
+  assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "erstgespraech" }, "Ernestine"),
     "ST: Max Muster – Ernestine");
   assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "folgetermin" }, ""),
     "FU: Max Muster");
@@ -2507,14 +2505,17 @@ test("Im Kalender steht die Stufe und der ursprüngliche Vertriebler", () => {
   const farben = TERMIN_ARTEN.map((a) => a.farbe);
   assert.equal(new Set(farben).size, 4, "Jede Stufe braucht eine unterscheidbare Farbe.");
   assert.equal(terminFarbe({ termin_art: "closing" }), TERMIN_ARTEN[2].farbe);
-  assert.equal(terminFarbe({}), TERMIN_ARTEN[0].farbe);
+  // Ohne Stufe ein neutrales Grau statt der Farbe des Erstgesprächs: eine
+  // Farbe, die eine Stufe behauptet, ist dieselbe Vermutung wie ein Kürzel.
+  assert.equal(terminFarbe({ termin_art: "erstgespraech" }), TERMIN_ARTEN[0].farbe);
+  assert.notEqual(terminFarbe({}), TERMIN_ARTEN[0].farbe);
 });
 
 test("Der Termin rückt weiter, statt sich zu verdoppeln", () => {
   // Ein Interessent ist EIN Eintrag, der durch die Stufen wandert — sonst
   // steht derselbe Kunde dreimal in der Liste.
   const erst = {
-    termin_art: null,
+    termin_art: "erstgespraech",
     appointment_at: "2026-09-03T10:00:00.000Z",
     outcome: "follow_up",
     status: "wahrgenommen",
@@ -2563,7 +2564,7 @@ test("Der Abschluss steht bei 85 Prozent, nicht bei 100", () => {
   // Projektumsetzung und der Anruf einen Monat später — die beiden
   // Schritte nach dem Verkauf, und deshalb die, die ohne festen Platz im
   // System immer vergessen werden.
-  assert.equal(fortschritt({}), 25);                                    // Setting Call
+  assert.equal(fortschritt({ termin_art: "erstgespraech" }), 25);       // Setting Call
   // Bewusst nur knapp über dem blossen Termin: ein Folgetermin heisst, dass
   // der Kunde zögert. Auf halber Strecke stehend wäre er eine Zahl, die aus
   // einem Zögern einen Fortschritt macht.
@@ -2601,8 +2602,9 @@ test("Die Schritte zwischen den Gesprächen bewegen den Balken", () => {
 
   // Der Haken vor dem Setting Call liegt unter dem Gespräch selbst: erst
   // bestätigen, dann sprechen.
-  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: null })), 25);
-  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { stufen_verlauf: [] , termin_art: undefined })), 25);
+  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: "erstgespraech" })), 25);
+  // Ohne Stufe zählt nur der Haken selbst.
+  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: null })), 10);
 
   // Nach dem Abschluss die Umsetzung, danach der Check-in.
   assert.equal(fortschritt(mitHaken(["projektumsetzung"], { outcome: "kunde", termin_art: "closing" })), 95);
@@ -2831,4 +2833,90 @@ test("Die Morgenliste nennt nur, was morgen noch unbestätigt ist", async () => 
   const einzeln = bestaetigungsText(termin({ company: "ACME" }), "Ernestine");
   assert.match(einzeln, /Setting Call mit Max Muster \(ACME\) von Ernestine bestätigt/);
   assert.match(einzeln, /findet am .* statt\./);
+});
+
+test("Ein Termin ohne Stufe wird nicht zum Setting Call erklärt", async () => {
+  const { OHNE_STUFE } = await import("../lib/terminArt.js");
+
+  // Der Anlass: In der Liste stand "ST: https://meet.google.com/…" —
+  // ein echter Termin, aber kein Erstgespräch. Die Stufe war leer, und die
+  // Anzeige machte daraus ein Erstgespräch. Geraten und als Tatsache
+  // angezeigt, in Liste, Kalender und Auswertung.
+  assert.equal(artVon({}).key, "unbestimmt");
+  assert.equal(artVon({ termin_art: null }).key, "unbestimmt");
+  assert.equal(artVon({ termin_art: "erstgespraech" }).key, "erstgespraech");
+
+  // Kein Kürzel heisst: kein Präfix im Kalendertitel. Ein ": " vor dem
+  // Namen sähe nach einem Fehler aus, ein erfundenes "ST" wäre einer.
+  assert.equal(kuerzelVon(OHNE_STUFE), "");
+  assert.equal(kalenderTitel({ name: "Max Muster" }, "Ernestine"), "Max Muster – Ernestine");
+  assert.equal(kalenderTitel({ name: "Max Muster", termin_art: "erstgespraech" }, ""), "ST: Max Muster");
+
+  // Und kein Fortschritt: ein Termin, von dem niemand weiss, was er ist,
+  // ist kein Viertel des Weges.
+  assert.equal(fortschritt({}), 0);
+  assert.equal(fortschritt({ termin_art: "erstgespraech" }), 25);
+
+  // In der Auswertung ein eigener Eimer statt der Erstgespräche — sonst
+  // besteht die wichtigste Zahl des Trichters aus Vermutungen.
+  const mitLeeren = stufenAuswertung([{}, {}, { termin_art: "closing" }]);
+  assert.equal(mitLeeren.find((s) => s.key === "erstgespraech").gesamt, 0);
+  assert.equal(mitLeeren.find((s) => s.key === "unbestimmt").gesamt, 2);
+
+  // Gibt es keine, taucht die Zeile gar nicht auf: "Ohne Stufe: 0" in
+  // jeder Auswertung wäre Ballast.
+  const ohneLeere = stufenAuswertung([{ termin_art: "erstgespraech" }]);
+  assert.equal(ohneLeere.some((s) => s.key === "unbestimmt"), false);
+});
+
+test("Ein Name, der wie ein Link aussieht, wird angemerkt", async () => {
+  const { namensHinweis, wirktWieLink } = await import("../lib/kundenname.js");
+
+  // Beim Terminieren liegen Buchungslink und Namensfeld nebeneinander.
+  // Was in die Zwischenablage gehört, landet dann im Feld daneben — und
+  // der Kunde heisst danach überall "https://meet.google.com/…".
+  assert.equal(wirktWieLink("https://meet.google.com/bcn-euvp-ray"), true);
+  assert.equal(wirktWieLink("www.firma.de"), true);
+  assert.equal(wirktWieLink("meet.google.com/abc"), true);
+
+  // Und kein Fehlalarm bei echten Namen. "Müller & Co." hat einen Punkt,
+  // ist aber keine Adresse.
+  assert.equal(wirktWieLink("Max Muster"), false);
+  assert.equal(wirktWieLink("Müller & Co."), false);
+  assert.equal(wirktWieLink("Dr. Karl-Heinz von Müller"), false);
+  assert.equal(namensHinweis("Max Muster"), null);
+
+  // Eine Adresse im Namensfeld ist derselbe Griff daneben.
+  assert.match(namensHinweis("max@firma.de"), /E-Mail-Adresse/);
+  assert.match(namensHinweis("https://meet.google.com/x"), /Link/);
+});
+
+test("Ein persönlicher Termin bekommt nicht die Maske eines Kunden", async () => {
+  const { istKundentermin } = await import("../lib/terminArt.js");
+  const { kategorieVon } = await import("../lib/followUp.js");
+  const { fehltBestaetigung } = await import("../lib/bestaetigung.js");
+
+  // Der Anlass: eine persönliche Erinnerung mit einem Meet-Link stand in
+  // der Terminliste — mit Stufe, Fortschrittsbalken, Ergebnis und Closing
+  // Call. Nicht nur unnütz: die Auswertung zählte einen Verkaufsvorgang,
+  // den es nie gab, und die Quoten des Teams wurden dadurch schlechter.
+  const privat = { kein_kundentermin: true, termin_art: "erstgespraech", status: "wahrgenommen" };
+
+  assert.equal(istKundentermin({}), true);
+  assert.equal(istKundentermin(privat), false);
+
+  // Kein Weg zum Abschluss, kein Nachfassen, keine Bestätigung.
+  assert.equal(fortschritt(privat), 0);
+  assert.equal(kategorieVon(privat), null);
+  assert.equal(fehltBestaetigung({ ...privat, status: "geplant" }), false);
+
+  // Und vor allem: nicht im Trichter. Sonst besteht die wichtigste Zahl
+  // des Vertriebs aus Terminen, die nie welche waren.
+  const stufen = stufenAuswertung([privat, { termin_art: "erstgespraech", status: "wahrgenommen" }]);
+  assert.equal(stufen.find((s) => s.key === "erstgespraech").gesamt, 1);
+
+  // Derselbe Termin als Kundentermin zählt wieder mit — die Markierung
+  // lässt sich zurücknehmen.
+  const zurueck = stufenAuswertung([{ ...privat, kein_kundentermin: false }]);
+  assert.equal(zurueck.find((s) => s.key === "erstgespraech").gesamt, 1);
 });

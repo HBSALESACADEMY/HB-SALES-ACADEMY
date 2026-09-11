@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { EMAIL_STATUS, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../lib/emailKontakt";
 import { NACHFASS_VORSCHLAEGE, faelligIn, nachfassTitel } from "../lib/nachfass";
+import { namensHinweis } from "../lib/kundenname";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
 import { fertigeMail, werteFuerKontakt } from "../lib/marketingVorlage";
 import { getActiveOrgId } from "../lib/activeOrg";
@@ -1591,6 +1592,12 @@ export default function CallTracker() {
                     <div>
                       <label className="block text-xs text-textMuted mb-1">Name *</label>
                       <input className="input !py-2 text-sm" placeholder="Vor- und Nachname" value={leadDraft.name} onChange={(e) => setLeadDraft((d) => ({ ...d, name: e.target.value }))} />
+                      {/* Der Buchungslink liegt hier daneben, und was in die
+                          Zwischenablage gehört, landet dann im Feld. In der
+                          Liste heisst der Kunde danach "https://meet.google…". */}
+                      {namensHinweis(leadDraft.name) && (
+                        <p className="text-[11px] text-amber mt-1 text-left">{namensHinweis(leadDraft.name)}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs text-textMuted mb-1">Telefon{coreRequired.phone ? " *" : ""}</label>

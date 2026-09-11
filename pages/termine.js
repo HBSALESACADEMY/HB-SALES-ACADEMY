@@ -4,6 +4,8 @@ import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
 import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
+import { namensHinweis } from "../lib/kundenname";
+import { istKundentermin } from "../lib/terminArt";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
@@ -614,6 +616,35 @@ export default function Termine() {
     }));
   }
 
+  // Die Stufe eines Termins nachtragen, der keine hat.
+  //
+  // Ausdrücklich OHNE Verlaufseintrag: der Termin bekommt seine erste
+  // Stufe, er rückt nicht weiter. Ihn weiterrücken zu lassen schriebe ein
+  // abgeschlossenes Gespräch in den Verlauf, das nie stattgefunden hat.
+  // Einen Termin als persönlich markieren — oder zurück.
+  //
+  // Danach verschwindet die ganze Kundenmaske: keine Stufe, kein
+  // Fortschritt, kein Ergebnis, kein Closing Call, keine Auswertung. Er
+  // steht weiter im Kalender, denn dort gehört er hin.
+  async function setzeKundentermin(lead, istKunde) {
+    const patch = { kein_kundentermin: !istKunde };
+    const fehler = await aendereGeprueft(
+      supabase.from("leads").update(patch).eq("id", lead.id),
+      "Das darf nur ändern, wer den Termin angelegt hat, oder ein Manager.",
+    );
+    if (fehler) { setError(fehler); return; }
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, ...patch } : l)));
+  }
+
+  async function setzeStufe(lead, key) {
+    const fehler = await aendereGeprueft(
+      supabase.from("leads").update({ termin_art: key }).eq("id", lead.id),
+      "Die Stufe darf nur setzen, wer den Termin angelegt hat, oder ein Manager.",
+    );
+    if (fehler) { setError(fehler); return; }
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, termin_art: key } : l)));
+  }
+
   // Einen Schritt abhaken oder den Haken wieder entfernen.
   //
   // Über aendereGeprueft, weil beides schiefgehen kann: die Zugriffsregeln
@@ -820,6 +851,12 @@ export default function Termine() {
     const matchesTasks = !onlyOpenTasks || (tasksByLead[lead.id] || []).some((t) => !t.done);
     if (!matchesQuery || !matchesTasks) return false;
 
+    // Persönliche Termine haben einen eigenen Reiter. Unter "Termine"
+    // stehen Kundentermine — sonst sucht man seinen Interessenten zwischen
+    // Zahnarztterminen, und die Zahlen darüber stimmen auch nicht mehr.
+    if (ansicht === "sonstige") return !istKundentermin(lead);
+    if (!istKundentermin(lead)) return false;
+
     // Vergangene Termine haben einen eigenen Ordner. Wer keinen Zeitpunkt
     // hat, ist nicht vorbei — der bleibt bei den bevorstehenden stehen.
     const istVergangen = !!lead.appointment_at && new Date(lead.appointment_at) < heuteBeginn;
@@ -880,6 +917,7 @@ export default function Termine() {
           { key: "liste", label: "Bevorstehend", icon: "dashboard" },
           { key: "vergangen", label: "Vergangene", icon: "history" },
           { key: "kalender", label: "Kalender", icon: "calendar" },
+          { key: "sonstige", label: "Persönliche", icon: "lock" },
         ]}
         aktiv={ansicht}
         onWechsel={setAnsicht}
@@ -954,6 +992,9 @@ export default function Termine() {
             <div>
               <label className="block text-xs text-textMuted mb-1">Name *</label>
               <input className="input !py-1.5 text-xs" placeholder="Vor- und Nachname" value={addDraft.name} onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))} />
+              {namensHinweis(addDraft.name) && (
+                <p className="text-[11px] text-amber mt-1">{namensHinweis(addDraft.name)}</p>
+              )}
             </div>
             <div>
               <label className="block text-xs text-textMuted mb-1">Telefon{coreRequired.phone ? " *" : ""}</label>
@@ -1057,6 +1098,10 @@ export default function Termine() {
           // Die Stufe gehört an den Namen: "CC: Max Muster" sagt auf einen
           // Blick, worum es in diesem Termin geht.
           const art = artVon(lead);
+          // Ein persönlicher Termin bekommt nicht die Maske eines
+          // Interessenten. Keine Stufe, kein Balken, kein Ergebnis, kein
+          // Closing Call — er steht hier nur, weil er einen Zeitpunkt hat.
+          const kundentermin = istKundentermin(lead);
 
           if (!isExpanded) {
             return (
@@ -1068,7 +1113,8 @@ export default function Termine() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold text-textMain text-sm truncate">
-                    <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>
+                    {kundentermin && kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>}
+                    {!kundentermin && <span className="mr-1" title="Persönlicher Termin">📎</span>}
                     {lead.name}
                   </span>
                   <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
@@ -1077,7 +1123,7 @@ export default function Termine() {
                   <div className="text-xs text-textMuted truncate">{getLeadFieldValue(lead, companyField)}</div>
                 )}
                 <div className="text-xs font-mono text-textMain">{formatAppointment(lead.appointment_at)}</div>
-                <Fortschrittsbalken lead={lead} kompakt />
+                {kundentermin && <Fortschrittsbalken lead={lead} kompakt />}
                 {viewMode === "team" && owner && (
                   <div className="flex items-center gap-1.5 text-xs text-textMuted mt-0.5">
                     <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} /> {owner.full_name || "Unbenannt"}
@@ -1109,7 +1155,8 @@ export default function Termine() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     <span>
-                      <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{kuerzelVon(art)}:</span>
+                      {kundentermin && kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{kuerzelVon(art)}:</span>}
+                      {!kundentermin && <span className="mr-1" title="Persönlicher Termin">📎</span>}
                       {lead.name}
                     </span>
                     {lead.follow_up_of && (
@@ -1134,12 +1181,43 @@ export default function Termine() {
                 <div className="text-xs font-mono text-textMain flex-shrink-0">{formatAppointment(lead.appointment_at)}</div>
               </div>
 
+              {/* Persönlicher Termin: nur der Schalter, sonst nichts von
+                  der Kundenmaske. */}
+              {!kundentermin && (
+                <div className="flex items-center gap-2 flex-wrap mb-3 text-xs text-textMuted">
+                  <span>📎 Persönlicher Termin — ohne Stufe, ohne Ergebnis, nicht in der Auswertung.</span>
+                  <button onClick={() => setzeKundentermin(lead, true)} className="btn-ghost text-xs">
+                    Doch ein Kundentermin
+                  </button>
+                </div>
+              )}
+
+              {kundentermin && (
               <div className="mb-3">
                 <Fortschrittsbalken lead={lead} />
 
                 {/* Die Schritte zwischen den Gesprächen. Sie stehen direkt
                     unter dem Balken, weil sie ihn bewegen — ein Haken, den
                     man erst nach dem Scrollen findet, wird nicht gesetzt. */}
+                {/* Termine aus der Zeit vor den Stufen tragen keine. Früher
+                    galten sie als Setting Call — das war geraten und stand
+                    als Tatsache in Liste, Kalender und Auswertung. Jetzt
+                    stehen sie ohne Kürzel da, und die Stufe lässt sich mit
+                    einem Klick nachtragen. Ohne Verlaufseintrag: der Termin
+                    bekommt seine erste Stufe, er rückt nicht weiter. */}
+                {art.key === "unbestimmt" && (
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                    <span className="text-[11px] text-textMuted">Keine Stufe hinterlegt:</span>
+                    {TERMIN_ARTEN.map((a) => (
+                      <button key={a.key} onClick={() => setzeStufe(lead, a.key)}
+                        className="px-2 py-1 rounded-full text-[11px] border border-line text-textMuted hover:text-textMain"
+                        style={{ borderColor: `color-mix(in srgb, ${a.farbe} 45%, transparent)` }}>
+                        {kuerzelVon(a)} · {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap mt-2">
                   {SCHRITTE.map((schritt) => {
                     const getan = schrittErledigt(lead, schritt.key);
@@ -1167,6 +1245,7 @@ export default function Termine() {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted mb-2 items-center">
                 {lead.phone && <span>📞 {lead.phone}</span>}
@@ -1248,6 +1327,7 @@ export default function Termine() {
                   fünf gleich aussehenden Reihen ohne Beschriftung, und man
                   musste den richtigen suchen. */}
               <div className="rounded-xl border border-line bg-surfaceRaised/40 px-3 py-2.5 mt-2 flex flex-col gap-2">
+                {kundentermin && (
                 <div className="flex items-start gap-2 flex-wrap">
                   <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Ergebnis</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
@@ -1259,19 +1339,23 @@ export default function Termine() {
                   </div>
                 </div>
 
+                )}
+
                 <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
                   <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Nächster Schritt</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
                     {/* Der Closing Call ist kein Ergebnis, sondern die nächste
                         Stufe: das Gespräch, in dem abgeschlossen wird. */}
+                    {kundentermin && (
                     <button
                       onClick={() => { setFollowUpId(lead.id); setFollowUpDate(""); setNeueArt("closing"); }}
                       className="btn-ghost text-xs" style={{ borderColor: `color-mix(in srgb, ${STUFEN_FARBE.closing} 45%, transparent)` }}>
                       🤝 Closing Call
                     </button>
+                    )}
                     {/* Nach dem Abschluss fehlt noch der Anruf einen Monat
                         später — erst der bringt den Kontakt auf 100 %. */}
-                    {lead.outcome === "kunde" && art.key !== "checkin" && (
+                    {kundentermin && lead.outcome === "kunde" && art.key !== "checkin" && (
                       <button
                         onClick={() => {
                           setFollowUpId(lead.id);
@@ -1531,7 +1615,12 @@ export default function Termine() {
               {editingLeadId === lead.id && (
                 <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-line">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input className="input !py-1.5 text-xs" placeholder="Name" value={editDraft.name} onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))} />
+                    <div>
+                      <input className="input !py-1.5 text-xs w-full" placeholder="Name" value={editDraft.name} onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))} />
+                      {namensHinweis(editDraft.name) && (
+                        <p className="text-[11px] text-amber mt-1">{namensHinweis(editDraft.name)}</p>
+                      )}
+                    </div>
                     <input className="input !py-1.5 text-xs" placeholder="Telefon" value={editDraft.phone} onChange={(e) => setEditDraft((d) => ({ ...d, phone: e.target.value }))} />
                     <input type="datetime-local" className="input !py-1.5 text-xs" value={editDraft.appointment_at} onChange={(e) => setEditDraft((d) => ({ ...d, appointment_at: e.target.value }))} />
                     {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
@@ -1554,6 +1643,16 @@ export default function Termine() {
               )}
               {(lead.created_by === selfId || canSeeTeam) && (
                 <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-line">
+                  {/* Der Ausweg aus der Kundenmaske. Nicht jeder Termin
+                      ist ein Verkaufsvorgang — eine Erinnerung an sich
+                      selbst mit Stufe, Balken und Abschlussgespräch ist
+                      Unsinn, und in der Auswertung zählt sie als Vorgang,
+                      den es nie gab. */}
+                  {kundentermin && editingLeadId !== lead.id && (
+                    <button onClick={() => setzeKundentermin(lead, false)} className="btn-ghost text-xs mr-auto">
+                      📎 Kein Kundentermin
+                    </button>
+                  )}
                   {editingLeadId !== lead.id && (
                     <button onClick={() => startEditLead(lead)} className="btn-ghost text-xs">Bearbeiten</button>
                   )}
@@ -1575,7 +1674,9 @@ export default function Termine() {
         })}
         {sichtbareLeads.length === 0 && leads.length > 0 && (
           <p className="text-textMuted text-sm">
-            {ansicht === "vergangen" ? "Keine vergangenen Termine gefunden." : "Keine bevorstehenden Termine gefunden."}
+            {ansicht === "vergangen" ? "Keine vergangenen Termine gefunden."
+              : ansicht === "sonstige" ? "Keine persönlichen Termine — hier landet, was du über „Kein Kundentermin“ aussortierst."
+              : "Keine bevorstehenden Termine gefunden."}
           </p>
         )}
         {leads.length === 0 && <p className="text-textMuted text-sm">Noch keine Termine erfasst — beim "Terminiert"-Klick im Call Tracker landen sie hier.</p>}

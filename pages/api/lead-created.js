@@ -63,6 +63,10 @@ export default async function handler(req, res) {
       created_by: user.id,
       organization_id: effectiveOrgId,
       name, phone, email,
+      // Die Stufe steht beim Anlegen fest, statt später geraten zu werden.
+      // Vorher war sie leer, und die Anzeige machte daraus überall ein
+      // "ST:" — auch bei Terminen, die nie ein Erstgespräch waren.
+      termin_art: "erstgespraech",
       ...columnUpdates,
       custom_fields: customFields,
       recording_path: recordingPath || null,

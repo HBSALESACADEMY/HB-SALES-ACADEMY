@@ -92,11 +92,19 @@ export default function Kalender() {
 
     // Eine neue Stufe heisst weiterrücken — mit Eintrag im Verlauf. Bleibt
     // die Stufe gleich, ist es schlicht eine Verschiebung.
-    const wechselt = terminEntwurf.art && terminEntwurf.art !== artVon(t).key;
+    //
+    // Ausnahme: Ein Termin OHNE Stufe rückt nicht weiter, er bekommt seine
+    // erste. Ihn weiterrücken zu lassen schriebe eine abgeschlossene Stufe
+    // in den Verlauf, die es nie gab — und in der Auswertung stünde ein
+    // Gespräch, das nicht stattgefunden hat.
+    const bisher = artVon(t).key;
+    const wechselt = terminEntwurf.art && terminEntwurf.art !== bisher;
     const { data: { session } } = await supabase.auth.getSession();
-    const patch = wechselt
-      ? rueckeVor(t, terminEntwurf.art, neuerZeitpunkt, session?.user?.id || null)
-      : { appointment_at: neuerZeitpunkt };
+    const patch = !wechselt
+      ? { appointment_at: neuerZeitpunkt }
+      : bisher === "unbestimmt"
+        ? { termin_art: terminEntwurf.art, appointment_at: neuerZeitpunkt }
+        : rueckeVor(t, terminEntwurf.art, neuerZeitpunkt, session?.user?.id || null);
 
     const err = await aendereGeprueft(
       supabase.from("leads").update(patch).eq("id", t.id),
@@ -1099,7 +1107,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
           </span>
           <div className="flex-1 min-w-0">
             <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
-              <span className="text-textMuted">{kuerzelVon(artVon(v))}: </span>
+              {kuerzelVon(artVon(v)) && <span className="text-textMuted">{kuerzelVon(artVon(v))}: </span>}
               {v.name}{v.company ? <span className="text-textMuted"> · {v.company}</span> : null}
             </div>
             <div className="text-[11px] text-textMuted">
@@ -1121,7 +1129,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
           </span>
           <div className="flex-1 min-w-0">
             <div className={kompakt ? "text-[11px] text-textMain truncate" : "text-sm text-textMain"}>
-              <span className="text-textMuted">{kuerzelVon(artVon(t))}: </span>
+              {kuerzelVon(artVon(t)) && <span className="text-textMuted">{kuerzelVon(artVon(t))}: </span>}
               {t.name}{t.company ? <span className="text-textMuted"> · {t.company}</span> : null}
             </div>
             <div className="text-[11px] text-textMuted">
@@ -1154,7 +1162,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
                     {terminBusy ? "Speichert…" : "Speichern"}
                   </button>
                   <button onClick={onTerminAbbrechen} className="btn-ghost text-xs">Abbrechen</button>
-                  {terminEntwurf.art && terminEntwurf.art !== artVon(t).key && (
+                  {terminEntwurf.art && terminEntwurf.art !== artVon(t).key && artVon(t).key !== "unbestimmt" && (
                     <span className="text-[11px] text-textMuted w-full">
                       Der Termin rückt auf die neue Stufe — es entsteht kein zweiter Eintrag, und die bisherige
                       Stufe bleibt mit ihrem Datum im Verlauf stehen.

@@ -119,6 +119,9 @@ export default function Kunden() {
       website: form.website.trim() || null,
       notes: form.notes.trim() || null,
       outcome: "kunde",
+      // Ein von Hand angelegter Bestandskunde ist kein Erstgespräch. Ohne
+      // Stufe steht er ohne Kürzel da — geraten wird nichts.
+      termin_art: null,
     });
     if (err) { setError(err.message); setSaving(false); return; }
     setForm(emptyForm);

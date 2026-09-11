@@ -113,6 +113,9 @@ export default async function handler(req, res) {
       // was gerade getippt wurde, hat Vorrang vor dem, was beim Anruf
       // notiert war.
       company: spalten.company ?? kontakt.firma,
+      // Ein Termin aus dem Marketing ist ein Erstgespräch — die Stufe wird
+      // hier gesetzt und nicht später aus dem Fehlen einer Angabe geraten.
+      termin_art: "erstgespraech",
       ...spalten,
       custom_fields: custom,
       notes: spalten.notes ? `${notizen}\n\n${spalten.notes}` : notizen,
