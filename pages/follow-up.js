@@ -68,10 +68,15 @@ export default function FollowUp() {
 
   useEffect(() => { laden(); }, []);
 
+  // Ein zweites Tippen nimmt das Ergebnis zurück — wie in der Terminliste.
+  // Ein versehentliches "Kunde geworden" liess sich sonst nur durch ein
+  // anderes, ebenso falsches Ergebnis ersetzen, und ein falscher Abschluss
+  // verfälscht die Quote des ganzen Teams.
   async function setzeErgebnis(lead, outcome) {
-    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, outcome } : l)));
+    const neu = lead.outcome === outcome ? null : outcome;
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, outcome: neu } : l)));
     const err = await aendereGeprueft(
-      supabase.from("leads").update({ outcome }).eq("id", lead.id),
+      supabase.from("leads").update({ outcome: neu }).eq("id", lead.id),
       "Das Ergebnis konnte nicht gesetzt werden.");
     if (err) { setFehler(err); laden(); }
   }
@@ -180,9 +185,10 @@ export default function FollowUp() {
                     dort geht es um einen neuen Zeitpunkt. */}
                 {reiter !== "abgesagt" && ERGEBNISSE.map((e) => (
                   <button key={e.wert} onClick={() => setzeErgebnis(l, e.wert)}
+                    title={l.outcome === e.wert ? "Nochmal tippen, um das Ergebnis zurückzunehmen" : undefined}
                     className={`btn-ghost text-xs ${l.outcome === e.wert ? "text-textMain" : ""}`}
                     style={l.outcome === e.wert ? { borderColor: feldFarbe("termin") } : undefined}>
-                    {e.label}
+                    {l.outcome === e.wert ? "✓ " : ""}{e.label}
                   </button>
                 ))}
                 <a href={`/termine?leadId=${l.id}`} className="btn-ghost text-xs ml-auto">

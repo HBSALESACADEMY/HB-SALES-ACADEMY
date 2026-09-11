@@ -682,18 +682,33 @@ export default function Termine() {
     meldeTerminAenderung(id, "status", `Neuer Status: ${STATUS_LABELS[status] || status}`, { status });
   }
 
-  async function markOutcome(id, outcome) {
-    if (outcome === "follow_up") {
+  /**
+   * Das Ergebnis setzen — oder mit einem zweiten Tippen zurücknehmen.
+   *
+   * Vorher war der gewählte Knopf gesperrt: ein versehentliches "Kunde
+   * geworden" liess sich nicht mehr entfernen, nur durch ein anderes,
+   * ebenso falsches Ergebnis ersetzen. Auf dem Handy ist ein Fehlgriff
+   * eine Fingerbreite weit weg, und ein falscher Abschluss verfälscht die
+   * Quote des ganzen Teams.
+   */
+  async function markOutcome(lead, outcome) {
+    const id = lead.id;
+    const zuruecknehmen = lead.outcome === outcome;
+
+    if (outcome === "follow_up" && !zuruecknehmen) {
       // Erst Datum für den Folgetermin abfragen, statt sofort zu speichern.
       setFollowUpId(id);
       setFollowUpDate("");
       setNeueArt("folgetermin");
       return;
     }
-    const err = await aendereGeprueft(supabase.from("leads").update({ outcome }).eq("id", id), "Das Ergebnis darf nur eintragen, wer den Termin angelegt hat, oder ein Manager.");
+
+    const neu = zuruecknehmen ? null : outcome;
+    const err = await aendereGeprueft(supabase.from("leads").update({ outcome: neu }).eq("id", id), "Das Ergebnis darf nur eintragen, wer den Termin angelegt hat, oder ein Manager.");
     if (err) { setError(err); return; }
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome } : l)));
-    meldeTerminAenderung(id, "ergebnis", `Ergebnis: ${OUTCOME_LABELS[outcome] || outcome}`, { outcome });
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, outcome: neu } : l)));
+    meldeTerminAenderung(id, "ergebnis",
+      neu ? `Ergebnis: ${OUTCOME_LABELS[neu] || neu}` : "Das Ergebnis wurde zurückgenommen.", { outcome: neu });
   }
 
   // Der Termin RÜCKT WEITER, statt dass ein zweiter entsteht.
@@ -1368,11 +1383,18 @@ export default function Termine() {
                 <div className="flex items-start gap-2 flex-wrap">
                   <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Ergebnis</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
-                    {Object.keys(OUTCOME_LABELS).map((o) => (
-                      <button key={o} disabled={lead.outcome === o && o !== "follow_up"} onClick={() => markOutcome(lead.id, o)} className="btn-ghost text-xs disabled:opacity-30">
-                        {OUTCOME_LABELS[o]}
-                      </button>
-                    ))}
+                    {/* Das gewählte Ergebnis ist hervorgehoben, nicht
+                        gesperrt: ein zweites Tippen nimmt es zurück. */}
+                    {Object.keys(OUTCOME_LABELS).map((o) => {
+                      const gewaehlt = lead.outcome === o;
+                      return (
+                        <button key={o} onClick={() => markOutcome(lead, o)}
+                          title={gewaehlt ? "Nochmal tippen, um das Ergebnis zurückzunehmen" : undefined}
+                          className={`btn-ghost text-xs ${gewaehlt ? `text-${OUTCOME_COLORS[o]} border-${OUTCOME_COLORS[o]}` : ""}`}>
+                          {gewaehlt ? "✓ " : ""}{OUTCOME_LABELS[o]}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
