@@ -6,6 +6,7 @@ import Icon from "../components/Icon";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import WochentagAnalyse from "../components/WochentagAnalyse";
+import VergleichsDiagramm from "../components/VergleichsDiagramm";
 import TempoKarte from "../components/TempoKarte";
 import FilterAuswahl from "../components/FilterAuswahl";
 import { stufenAuswertung } from "../lib/terminArt";
@@ -447,6 +448,26 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
           Anwahlen (migration_136). Absolute Zahlen sagen, wie viel jemand
           geschafft hat; das Tempo sagt, wie dicht er dabei gearbeitet hat. */}
       <TempoKarte ereignisse={ereignisse} personen={mitZahlen} />
+
+      {vorZeitraum && (
+        <VergleichsDiagramm
+          felder={[
+            { key: "anwahlen", label: "Anwahlen" },
+            { key: "erreicht", label: "Ans Telefon gegangen" },
+            { key: "nicht", label: "Nicht erreicht", wenigerIstBesser: true },
+            { key: "termin", label: "Termine" },
+            { key: "negativ", label: "Negativ verlaufen", wenigerIstBesser: true },
+          ]}
+          jetzt={gesamt}
+          davor={gesamtVorher}
+          farbe={feldFarbe}
+          name={vergleichName}
+          titel="Vergleich der Zeiträume"
+          hinweis={ueberlappung > 0
+            ? `Achtung: ${ueberlappung} ${ueberlappung === 1 ? "Tag steckt" : "Tage stecken"} in beiden Zeiträumen — die Veränderung fällt dadurch kleiner aus.`
+            : null}
+        />
+      )}
 
       <WochentagAnalyse zeilen={zeilen} titel="Wochentage: wann ist die Entscheidung erreichbar?" />
 

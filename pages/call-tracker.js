@@ -28,6 +28,7 @@ import { saeubere, MAX_LAENGE } from "../lib/grundVorschlag";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import WochentagAnalyse from "../components/WochentagAnalyse";
+import VergleichsDiagramm from "../components/VergleichsDiagramm";
 import TempoKarte from "../components/TempoKarte";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
@@ -2470,6 +2471,25 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
         personen={sichtbare.length > 1 ? mitglieder : []}
       />
+
+      {/* Die Veränderung als Bild statt als Zahl neben der Zahl. Zwei
+          Balken übereinander beantworten "mehr oder weniger" ohne Rechnen. */}
+      {state.vergleichZeitraum && (
+        <VergleichsDiagramm
+          felder={FIELDS.map((f) => ({
+            key: f.key, label: f.label,
+            wenigerIstBesser: f.key === "nicht" || f.key === "negativ",
+          }))}
+          jetzt={gesamt}
+          davor={gesamtVorher}
+          farbe={feldFarbe}
+          name={vergleichName}
+          titel="Vergleich der Zeiträume"
+          hinweis={state.ueberschneidung > 0
+            ? `Achtung: ${state.ueberschneidung} ${state.ueberschneidung === 1 ? "Tag steckt" : "Tage stecken"} in beiden Zeiträumen — die Veränderung fällt dadurch kleiner aus.`
+            : null}
+        />
+      )}
 
       {/* Dieselben Zeilen wie die Kacheln, nur nach Wochentag gebündelt. */}
       <WochentagAnalyse zeilen={zeilen} />
