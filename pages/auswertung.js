@@ -5,6 +5,7 @@ import Aufklapper from "../components/Aufklapper";
 import Icon from "../components/Icon";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
+import WochentagAnalyse from "../components/WochentagAnalyse";
 import TempoKarte from "../components/TempoKarte";
 import FilterAuswahl from "../components/FilterAuswahl";
 import { stufenAuswertung } from "../lib/terminArt";
@@ -13,6 +14,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
+import { vorherigerZeitraum, differenz, vergleichsName } from "../lib/vergleich";
 import { berlinHeute } from "../lib/woche";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import {
@@ -44,6 +46,9 @@ const KPI_ZEILEN = [
 export default function AuswertungSeite() {
   const [darf, setDarf] = useState(null);
   const [daten, setDaten] = useState(null);
+  // Derselbe Abruf für den Zeitraum davor — die Einordnung, ohne die jede
+  // Zahl für sich steht.
+  const [vergleich, setVergleich] = useState(null);
   const [fehler, setFehler] = useState(null);
   const [zeitraum, setZeitraum] = useState("woche");
   const [eigener, setEigener] = useState({ von: "", bis: "" });
@@ -66,10 +71,22 @@ export default function AuswertungSeite() {
     (async () => {
       setFehler(null);
       setDaten(null);
+      setVergleich(null);
       const { von, bis } = zeitraumGrenzen(zeitraum, { von: eigener.von, bis: eigener.bis });
+      const davor = vorherigerZeitraum({ von, bis });
       try {
+        // Zwei Abrufe statt eines: eine Zahl ohne Vorwoche ist eine Zahl
+        // ohne Aussage. Der Vergleich darf aber nicht die Auswertung
+        // aufhalten — scheitert er, steht die Seite trotzdem da, nur ohne
+        // die Veränderungen.
         const antwort = await apiGet(`/api/auswertung?von=${von}&bis=${bis}`);
         if (aktiv) setDaten(antwort);
+        if (davor) {
+          try {
+            const vorwoche = await apiGet(`/api/auswertung?von=${davor.von}&bis=${davor.bis}`);
+            if (aktiv) setVergleich(vorwoche);
+          } catch (e) { if (aktiv) setVergleich(null); }
+        }
       } catch (e) {
         if (aktiv) setFehler(e?.message || "Die Auswertung konnte nicht geladen werden.");
       }
@@ -129,12 +146,12 @@ export default function AuswertungSeite() {
 
       {fehler && <div className="card border border-coral/40 text-coral text-sm mb-4">{fehler}</div>}
       {!daten && !fehler && <p className="text-textMuted text-sm">Zahlen werden zusammengestellt...</p>}
-      {daten && <Bericht daten={daten} offen={offen} setOffen={setOffen} />}
+      {daten && <Bericht daten={daten} vorZeitraum={vergleich} vergleichName={vergleichsName(zeitraum)} offen={offen} setOffen={setOffen} />}
     </Layout>
   );
 }
 
-function Bericht({ daten, offen, setOffen }) {
+function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
   const { personen = [], teams = [], zeilen = [], kategorien = [], ereignisse = [], termineRoh = [] } = daten;
 
   // Zahlen je Person, dann je Team. Beides aus denselben Zeilen, damit
@@ -160,6 +177,10 @@ function Bericht({ daten, offen, setOffen }) {
 
   const gesamt = summiere(zeilen);
   const gesamtQuoten = berechneQuoten(gesamt);
+  // Dieselbe Summe für den Zeitraum davor, aus demselben Abruf gerechnet —
+  // nicht vom Server vorverdichtet, sonst laufen die beiden Zahlen
+  // auseinander, sobald sich hier etwas an der Summierung ändert.
+  const gesamtVorher = summiere(vorZeitraum?.zeilen || []);
   const stufen = trichter(gesamt);
   const eng = engpass(stufen);
   const vergleich = benchmark(teamsMitZahlen);
@@ -228,6 +249,11 @@ function Bericht({ daten, offen, setOffen }) {
                   </th>
                 ))}
                 <th className="font-normal pb-2 px-2 text-right whitespace-nowrap border-l border-line">Gesamt</th>
+                {vorZeitraum && (
+                  <th className="font-normal pb-2 px-2 text-right whitespace-nowrap">
+                    gegenüber {vergleichName}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -242,6 +268,25 @@ function Bericht({ daten, offen, setOffen }) {
                   <td className="py-1.5 px-2 text-right font-mono font-semibold text-textMain border-l border-line">
                     {wert(gesamt, gesamtQuoten, zeile)}
                   </td>
+                  {/* Die Veränderung nur bei den Zählwerten. Bei einer Quote
+                      wäre eine Differenz aus zwei Quoten irreführend —
+                      "+4 %" hiesse dort mal Prozentpunkte, mal Prozent vom
+                      Vorwert, je nachdem wie man es liest. */}
+                  {vorZeitraum && (
+                    <td className="py-1.5 px-2 text-right font-mono text-[11px] whitespace-nowrap">
+                      {zeile.art !== "zahl" ? <span className="text-textMuted">—</span> : (() => {
+                        const d = differenz(gesamt[zeile.key] || 0, gesamtVorher[zeile.key] || 0);
+                        if (d.richtung === "gleich") return <span className="text-textMuted">±0</span>;
+                        if (d.davor === 0) return <span className="text-teal">neu</span>;
+                        return (
+                          <span className={d.delta > 0 ? "text-teal" : "text-coral"}>
+                            {d.delta > 0 ? "+" : "−"}{Math.abs(d.delta)}
+                            {d.prozent === null ? "" : ` · ${d.delta > 0 ? "+" : "−"}${Math.abs(d.prozent)} %`}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                  )}
                 </tr>
               ))}
               {teamsMitZahlen.length === 0 && (
@@ -365,6 +410,8 @@ function Bericht({ daten, offen, setOffen }) {
           Anwahlen (migration_136). Absolute Zahlen sagen, wie viel jemand
           geschafft hat; das Tempo sagt, wie dicht er dabei gearbeitet hat. */}
       <TempoKarte ereignisse={ereignisse} personen={mitZahlen} />
+
+      <WochentagAnalyse zeilen={zeilen} titel="Wochentage: wann ist die Entscheidung erreichbar?" />
 
       <TageszeitAnalyse
         ereignisse={ereignisse}

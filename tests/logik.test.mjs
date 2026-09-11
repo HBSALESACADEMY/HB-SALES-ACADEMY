@@ -3015,3 +3015,47 @@ test("Der Vergleichszeitraum ist gleich lang und schliesst lückenlos an", async
   assert.equal(vergleichsName("woche"), "den 7 Tagen davor");
   assert.equal(vergleichsName("heute"), "gestern");
 });
+
+test("Die Wochentags-Analyse gibt keine Quote auf drei Anrufe", async () => {
+  const { wochentagsRaster, besterTag, wochentagsBefund, MINDESTENS_JE_TAG } =
+    await import("../lib/wochentage.js");
+
+  const raster = wochentagsRaster([
+    // Montag: viel telefoniert, selten beim Chef gelandet.
+    { log_date: "2026-09-07", counts: { anwahlen: 40, erreicht: 20, entscheider: 4, weitergeleitet: 2, termin: 2 } },
+    // Donnerstag: gleich viel telefoniert, dreimal so oft bei der Entscheidung.
+    { log_date: "2026-09-10", counts: { anwahlen: 40, erreicht: 25, entscheider: 12, weitergeleitet: 6, termin: 5 } },
+    // Samstag: drei Anrufe, einer beim Chef. Das wären "33 %" — und eine
+    // Empfehlung, samstags zu telefonieren.
+    { log_date: "2026-09-12", counts: { anwahlen: 3, erreicht: 2, entscheider: 1, weitergeleitet: 0, termin: 1 } },
+  ]);
+
+  const mo = raster[0], don = raster[3], sa = raster[5];
+  // "Bei der Entscheidung" ist abgeleitet: direkt erreicht plus
+  // durchgestellt. Nicht zusätzlich gebucht, sonst wäre die Summe der
+  // Zähler grösser als "erreicht".
+  assert.equal(mo.beiEntscheidung, 6);
+  assert.equal(don.beiEntscheidung, 18);
+  assert.equal(mo.entscheiderQuote, 15);
+  assert.equal(don.entscheiderQuote, 45);
+
+  // Zu dünne Grundlage: keine Quote, kein Strich in der Statistik.
+  assert.equal(sa.anwahlen < MINDESTENS_JE_TAG, true);
+  assert.equal(sa.entscheiderQuote, null);
+  assert.equal(besterTag(raster).name, "Donnerstag");
+
+  const befund = wochentagsBefund(raster);
+  assert.match(befund.text, /^Donnerstags landen 45 %/);
+  assert.match(befund.text, /montags nur 15 %/);
+  assert.equal(befund.abstand, 30);
+
+  // Unter fünf Punkten Unterschied ist es Rauschen und keine Empfehlung.
+  const knapp = wochentagsRaster([
+    { log_date: "2026-09-07", counts: { anwahlen: 40, entscheider: 8, weitergeleitet: 0 } },
+    { log_date: "2026-09-10", counts: { anwahlen: 40, entscheider: 9, weitergeleitet: 0 } },
+  ]);
+  assert.equal(wochentagsBefund(knapp), null);
+
+  // Und ohne Vergleichsmöglichkeit gar keine Aussage.
+  assert.equal(wochentagsBefund(wochentagsRaster([])), null);
+});

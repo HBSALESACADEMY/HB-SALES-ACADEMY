@@ -27,6 +27,7 @@ import { merkeEreignis, nimmEreignisZurueck } from "../lib/callEreignis";
 import { saeubere, MAX_LAENGE } from "../lib/grundVorschlag";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
+import WochentagAnalyse from "../components/WochentagAnalyse";
 import TempoKarte from "../components/TempoKarte";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
@@ -2420,6 +2421,9 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
         personen={sichtbare.length > 1 ? mitglieder : []}
       />
+
+      {/* Dieselben Zeilen wie die Kacheln, nur nach Wochentag gebündelt. */}
+      <WochentagAnalyse zeilen={zeilen} />
 
       <TageszeitAnalyse
         ereignisse={(state.ereignisse || []).filter((e) => sichtbareIds.has(e.user_id))}
