@@ -434,6 +434,11 @@ export default function EmailMarketing() {
       "Abhaken darf nur, wer zuständig ist oder es eingetragen hat."
     );
     if (meldung) { setFehler(meldung); return; }
+    // Dass sich jemand gekümmert hat, gehört in den Bestätigungs-Kanal —
+    // dieselbe Frage wie bei den Terminbestätigungen (migration_158).
+    // Nebenher und ohne Warten: eine Meldung darf den Haken nicht aufhalten.
+    apiPost("/api/bestaetigung-melden", { nachfassId: n.id })
+      .catch((e) => console.error("Follow-up melden:", e.message));
     await laden();
   }
 

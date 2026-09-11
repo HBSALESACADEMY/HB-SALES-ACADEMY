@@ -283,8 +283,17 @@ export default function Kalender() {
       "Abhaken darf nur, wer zuständig ist oder es eingetragen hat."
     );
     if (meldung) setFehler(meldung);
+    else meldeFollowUp(n.id);
     await laden(true);
     setBusy(false);
+  }
+
+  // Dass sich jemand gekümmert hat, gehört in den Bestätigungs-Kanal —
+  // dieselbe Frage wie bei den Terminbestätigungen (migration_158).
+  // Nebenher und ohne Warten: eine Meldung darf den Haken nicht aufhalten.
+  function meldeFollowUp(id) {
+    apiPost("/api/bestaetigung-melden", { nachfassId: id })
+      .catch((e) => console.error("Follow-up melden:", e.message));
   }
 
   // Verschieben: um einen Tag weiter, gleiche Uhrzeit. Bewusst ein Klick

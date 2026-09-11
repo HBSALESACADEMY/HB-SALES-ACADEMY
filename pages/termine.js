@@ -670,7 +670,7 @@ export default function Termine() {
     // aufhalten. Der Text wird auf dem Server gebaut, damit hier niemand
     // einen beliebigen in den Kanal der Organisation schreiben kann.
     if (erledigt && SCHRITTE.find((x) => x.key === key)?.vorStufe) {
-      apiPost("/api/schritt-melden", { leadId: lead.id, schritt: key })
+      apiPost("/api/bestaetigung-melden", { leadId: lead.id, schritt: key })
         .catch((e) => console.error("Bestätigung melden:", e.message));
     }
   }

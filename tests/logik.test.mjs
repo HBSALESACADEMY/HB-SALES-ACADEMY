@@ -2887,6 +2887,29 @@ test("Die Morgenliste nennt nur, was morgen noch unbestätigt ist", async () => 
   assert.match(einzeln, /findet am .* statt\./);
 });
 
+test("Die Meldung nennt den bestätigten Schritt, nicht die aktuelle Stufe", async () => {
+  const { bestaetigungsText, followUpErledigtText } = await import("../lib/bestaetigung.js");
+  const { SCHRITTE } = await import("../lib/terminArt.js");
+
+  // Wer die Closing-Bestätigung setzt, während der Termin noch auf der
+  // Setting-Stufe steht, hat trotzdem das Closing bestätigt. Vorher stand
+  // in der Meldung "Setting Call bestätigt" — das Gegenteil dessen, was
+  // getan wurde.
+  const aufSetting = { name: "Max Muster", termin_art: "erstgespraech", appointment_at: "2026-09-12T08:30:00Z" };
+  const closing = SCHRITTE.find((x) => x.key === "closing_bestaetigt");
+  assert.match(bestaetigungsText(aufSetting, "Ernestine", closing), /^✅ Closing Call mit Max Muster/);
+  const setting = SCHRITTE.find((x) => x.key === "setting_bestaetigt");
+  assert.match(bestaetigungsText(aufSetting, "Ernestine", setting), /^✅ Setting Call mit Max Muster/);
+
+  // Ein erledigtes Follow-up geht in denselben Kanal: es ist dieselbe
+  // Frage — hat sich jemand gekümmert.
+  const text = followUpErledigtText(
+    { titel: "Follow-up: Dirk Reuters", faellig_am: "2026-09-14T06:00:00Z" }, "Ernestine");
+  assert.match(text, /^✅ Follow-up erledigt von Ernestine: Follow-up: Dirk Reuters/);
+  assert.match(text, /fällig war .* Uhr\.$/);
+  assert.match(followUpErledigtText({ titel: "Ohne Datum" }), /^✅ Follow-up erledigt: Ohne Datum\.$/);
+});
+
 test("Ein Termin ohne Stufe wird nicht zum Setting Call erklärt", async () => {
   const { OHNE_STUFE } = await import("../lib/terminArt.js");
 
