@@ -159,6 +159,13 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
   const [telegramBestaetigungId, setTelegramBestaetigungId] = useState(org.telegram_bestaetigung_chat_id || "");
+  // Chat-Kennungen suchen und ausprobieren. Ohne beides lautet die
+  // Anleitung "ruf api.telegram.org/bot SCHLÜSSEL /getUpdates auf" — den
+  // Bot-Schlüssel in eine Adresszeile zu tippen ist für eine Kennung, die
+  // man einmal braucht, ein schlechter Tausch.
+  const [chatSuche, setChatSuche] = useState(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [telegramStand, setTelegramStand] = useState(null);
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
@@ -261,6 +268,37 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   function resetLeadFields() {
     setLeadFields(DEFAULT_LEAD_FIELDS);
     setUseCustomLeadFields(false);
+  }
+
+  // Die Gruppen holen, die der Bot kennt. Der Schlüssel bleibt auf dem
+  // Server — herein kommen nur Name, Art und Kennung.
+  async function sucheChats() {
+    setChatBusy(true);
+    setTelegramStand(null);
+    try {
+      const { chats } = await apiGet("/api/admin/telegram-chats");
+      // Einzelchats sind hier nicht gemeint: die Meldungen gehen an ein
+      // Team, nicht an eine Person.
+      setChatSuche({ chats: (chats || []).filter((c) => c.art !== "private") });
+    } catch (e) {
+      setChatSuche({ fehler: e?.message || "Die Suche ist fehlgeschlagen." });
+    }
+    setChatBusy(false);
+  }
+
+  // Eine Testnachricht in den Kanal. Eine falsch eingetragene Kennung
+  // merkt man sonst erst, wenn die erste echte Meldung ausbleibt — und
+  // eine ausbleibende Meldung sieht aus wie "es gab nichts zu melden".
+  async function testeKanal(chatId, zweck) {
+    setChatBusy(true);
+    setTelegramStand(null);
+    try {
+      await apiPost("/api/admin/telegram-test", { chatId: chatId.trim(), zweck });
+      setTelegramStand({ ok: true, text: "Testnachricht ist raus — steht sie in der Gruppe, stimmt die Chat-ID." });
+    } catch (e) {
+      setTelegramStand({ ok: false, text: e?.message || "Die Testnachricht konnte nicht verschickt werden." });
+    }
+    setChatBusy(false);
   }
 
   async function save() {
@@ -568,9 +606,49 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       </Abschnitt>
 
       <Abschnitt id="benachrichtigungen" aktiv={bereich} titel="Benachrichtigungen" hinweis="Wohin Meldungen über neue Termine und Erinnerungen gehen.">
+
+      {/* Die Kennung suchen, statt sie irgendwo abzuschreiben. Der
+          Bot-Schlüssel bleibt dabei auf dem Server. */}
+      <div className="card !py-2.5 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-textMain font-semibold flex-1">Chat-ID einer Gruppe finden</span>
+          <button onClick={sucheChats} disabled={chatBusy} className="btn-ghost text-xs disabled:opacity-40">
+            {chatBusy ? "Sucht…" : "Gruppen suchen"}
+          </button>
+        </div>
+        <p className="text-[11px] text-textMuted mt-1">
+          Lade <strong>@HBSalesAcademy_bot</strong> in deine Telegram-Gruppe ein und schreibe dort eine
+          Nachricht, in der du <strong>@HBSalesAcademy_bot</strong> erwähnst. Dann hier suchen. Der Bot sieht
+          aus Datenschutzgründen nur Nachrichten, die ihn nennen.
+        </p>
+        {chatSuche?.fehler && <p className="text-[11px] text-coral mt-2">{chatSuche.fehler}</p>}
+        {chatSuche?.chats?.length === 0 && (
+          <p className="text-[11px] text-textMuted mt-2">
+            Keine Gruppe gefunden. Telegram gibt nur die letzten Nachrichten heraus — schreibe in der Gruppe
+            noch einmal mit @HBSalesAcademy_bot und suche erneut.
+          </p>
+        )}
+        {chatSuche?.chats?.map((c) => (
+          <div key={c.id} className="flex items-center gap-2 flex-wrap text-xs mt-2 pt-2 border-t border-line">
+            <span className="text-textMain flex-1 min-w-0 truncate">{c.titel}</span>
+            <span className="font-mono text-textMuted flex-shrink-0">{c.id}</span>
+            <button onClick={() => setTelegramChatId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Termine</button>
+            <button onClick={() => setTelegramMarketingId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">E-Mail</button>
+            <button onClick={() => setTelegramBestaetigungId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Bestätigungen</button>
+          </div>
+        ))}
+        {telegramStand && (
+          <p className={`text-[11px] mt-2 ${telegramStand.ok ? "text-teal" : "text-coral"}`}>{telegramStand.text}</p>
+        )}
+      </div>
+
       <label className="block text-xs text-textMuted mb-1.5">Telegram für Termin-Benachrichtigungen (optional)</label>
-      <input className="input mb-1" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)}
-        placeholder="z. B. -1001234567890" />
+      <div className="flex items-center gap-2 mb-1">
+        <input className="input flex-1" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)}
+          placeholder="z. B. -1001234567890" />
+        <button onClick={() => testeKanal(telegramChatId, "allgemein")} disabled={chatBusy || !telegramChatId.trim()}
+          className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
+      </div>
       <p className="text-[11px] text-textMuted mb-5">
         Ist hier eine Chat-ID hinterlegt, gehen „Neuer Termin" und „Team erinnern" zusätzlich zur E-Mail auch dorthin —
         am besten in eine Telegram-Gruppe des Vertriebsteams. Dazu <strong>@HBSalesAcademy_bot</strong> in die Gruppe
@@ -578,8 +656,12 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       </p>
 
       <label className="block text-xs text-textMuted mb-1.5">Telegram für E-Mail-Kontakte (optional)</label>
-      <input className="input mb-1" value={telegramMarketingId} onChange={(e) => setTelegramMarketingId(e.target.value)}
-        placeholder="z. B. -1009876543210" />
+      <div className="flex items-center gap-2 mb-1">
+        <input className="input flex-1" value={telegramMarketingId} onChange={(e) => setTelegramMarketingId(e.target.value)}
+          placeholder="z. B. -1009876543210" />
+        <button onClick={() => testeKanal(telegramMarketingId, "marketing")} disabled={chatBusy || !telegramMarketingId.trim()}
+          className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
+      </div>
       <p className="text-[11px] text-textMuted mb-5">
         Bittet jemand im Gespräch um Unterlagen, geht die Meldung hierhin — mit Adresse, Notiz und dem Namen des
         Vertrieblers. Diese Meldungen haben einen anderen Adressaten als „Termin verschoben“: hier muss jemand
@@ -588,8 +670,12 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       </p>
 
       <label className="block text-xs text-textMuted mb-1.5">Telegram für Terminbestätigungen (optional)</label>
-      <input className="input mb-1" value={telegramBestaetigungId} onChange={(e) => setTelegramBestaetigungId(e.target.value)}
-        placeholder="z. B. -1005555555555" />
+      <div className="flex items-center gap-2 mb-1">
+        <input className="input flex-1" value={telegramBestaetigungId} onChange={(e) => setTelegramBestaetigungId(e.target.value)}
+          placeholder="z. B. -1005555555555" />
+        <button onClick={() => testeKanal(telegramBestaetigungId, "bestaetigung")} disabled={chatBusy || !telegramBestaetigungId.trim()}
+          className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
+      </div>
       <p className="text-[11px] text-textMuted mb-5">
         Zwei Sorten Meldung gehen hierhin. Jeden Morgen die Liste der Termine von MORGEN, die noch niemand
         bestätigt hat — mit Uhrzeit, Kunde und zuständigem Vertriebler. Und jede einzelne Bestätigung, sobald
