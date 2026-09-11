@@ -2785,3 +2785,50 @@ test("Der Gedankenstrich in einer Adresse wird zum Bindestrich", async () => {
   assert.deepEqual(fremdeZeichen("bpn@bauplanung–nord.de"), ["U+2013 (Gedankenstrich)"]);
   assert.deepEqual(fremdeZeichen("müller@x.de"), ["U+00FC (ü)"]);
 });
+
+test("Die Morgenliste nennt nur, was morgen noch unbestätigt ist", async () => {
+  const { morgenlisteText, fehltBestaetigung, bestaetigungsText, schrittZurStufe } =
+    await import("../lib/bestaetigung.js");
+
+  // Vor dem Setting Call und vor dem Closing Call wird bestätigt, sonst
+  // nirgends. Ein Folgetermin ist kein Termin, den man vorher bestätigt.
+  assert.equal(schrittZurStufe("erstgespraech").key, "setting_bestaetigt");
+  assert.equal(schrittZurStufe("closing").key, "closing_bestaetigt");
+  assert.equal(schrittZurStufe("folgetermin"), null);
+  assert.equal(schrittZurStufe("checkin"), null);
+
+  const termin = (zusatz) => ({
+    name: "Max Muster", appointment_at: "2026-09-12T08:30:00Z",
+    status: "geplant", termin_art: "erstgespraech", created_by: "a", ...zusatz,
+  });
+
+  assert.equal(fehltBestaetigung(termin()), true);
+  // Abgehakt: nichts mehr zu tun.
+  assert.equal(fehltBestaetigung(termin({ schritte: { setting_bestaetigt: { am: "x" } } })), false);
+  // Schon gelaufen oder abgesagt: eine Erinnerung wäre die Aufforderung,
+  // etwas Sinnloses zu tun.
+  assert.equal(fehltBestaetigung(termin({ status: "wahrgenommen" })), false);
+  assert.equal(fehltBestaetigung(termin({ status: "abgesagt" })), false);
+
+  // Ist alles bestätigt, kommt gar keine Nachricht. Eine tägliche "nichts
+  // zu tun"-Meldung wird nach einer Woche weggewischt, und mit ihr die,
+  // auf die es ankommt.
+  assert.equal(morgenlisteText([termin({ schritte: { setting_bestaetigt: { am: "x" } } })]), null);
+  assert.equal(morgenlisteText([]), null);
+
+  const text = morgenlisteText(
+    [termin(), termin({ name: "Eva Klein", termin_art: "closing", created_by: "b" })],
+    (id) => ({ a: "Ernestine", b: "Lion" }[id]),
+  );
+  assert.match(text, /2 Termine sind noch nicht bestätigt/);
+  assert.match(text, /Setting Call:/);
+  assert.match(text, /Closing Call:/);
+  assert.match(text, /Max Muster — Ernestine/);
+  assert.match(text, /Eva Klein — Lion/);
+
+  // Die einzelne Bestätigung nennt Termin, Person und Zeitpunkt — die
+  // Gruppe soll ohne Rückfrage wissen, wann es stattfindet.
+  const einzeln = bestaetigungsText(termin({ company: "ACME" }), "Ernestine");
+  assert.match(einzeln, /Setting Call mit Max Muster \(ACME\) von Ernestine bestätigt/);
+  assert.match(einzeln, /findet am .* statt\./);
+});

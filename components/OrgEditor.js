@@ -158,6 +158,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [bookingUrl, setBookingUrl] = useState(org.booking_url || "");
   const [telegramChatId, setTelegramChatId] = useState(org.telegram_chat_id || "");
   const [telegramMarketingId, setTelegramMarketingId] = useState(org.telegram_marketing_chat_id || "");
+  const [telegramBestaetigungId, setTelegramBestaetigungId] = useState(org.telegram_bestaetigung_chat_id || "");
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
@@ -285,6 +286,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       booking_url: bookingUrl.trim() || null,
       telegram_chat_id: telegramChatId.trim() || null,
       telegram_marketing_chat_id: telegramMarketingId.trim() || null,
+      telegram_bestaetigung_chat_id: telegramBestaetigungId.trim() || null,
       // Nur vollständige Vorlagen: eine ohne Text steht sonst in der
       // Auswahl und liefert eine leere Mail.
       email_vorlagen: vorlagen.filter((v) => v.name?.trim() && v.text?.trim()),
@@ -583,6 +585,17 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         Vertrieblers. Diese Meldungen haben einen anderen Adressaten als „Termin verschoben“: hier muss jemand
         eine Mail schreiben. In einem gemeinsamen Kanal gehen beide Sorten unter. Leer lassen = sie laufen über
         den Kanal darüber mit.
+      </p>
+
+      <label className="block text-xs text-textMuted mb-1.5">Telegram für Terminbestätigungen (optional)</label>
+      <input className="input mb-1" value={telegramBestaetigungId} onChange={(e) => setTelegramBestaetigungId(e.target.value)}
+        placeholder="z. B. -1005555555555" />
+      <p className="text-[11px] text-textMuted mb-5">
+        Zwei Sorten Meldung gehen hierhin. Jeden Morgen die Liste der Termine von MORGEN, die noch niemand
+        bestätigt hat — mit Uhrzeit, Kunde und zuständigem Vertriebler. Und jede einzelne Bestätigung, sobald
+        jemand den Haken setzt. Steht morgens nichts Offenes an, kommt auch keine Nachricht: eine tägliche
+        „nichts zu tun“-Meldung wird nach einer Woche weggewischt, und mit ihr die, auf die es ankommt.
+        Leer lassen = sie laufen über den allgemeinen Kanal mit.
       </p>
 
       </Abschnitt>
