@@ -16,7 +16,7 @@ export default function Fortschrittsbalken({ lead, kompakt = false }) {
   const erreicht = erreichteMarken(lead);
   const verloren = istVerloren(lead);
 
-  // Bei einer Absage zeigt der Balken, WIE WEIT es kam, und sagt dazu, dass
+  // Ohne Abschluss zeigt der Balken, WIE WEIT es kam, und sagt dazu, dass
   // es dort geendet hat. Vorher stand er auf null, während daneben zwei
   // geführte Gespräche als erreicht markiert waren — zwei Angaben, die
   // einander widersprachen.
@@ -29,8 +29,15 @@ export default function Fortschrittsbalken({ lead, kompakt = false }) {
           <div className={`h-full rounded-full transition-all duration-500 ${verloren ? "opacity-50" : ""}`}
             style={{ width: `${wert}%`, background: farbe }} />
         </div>
-        <span className={`text-[11px] flex-shrink-0 font-mono ${verloren ? "text-coral" : "text-textMuted"}`}>
-          {verloren ? `Absage bei ${wert} %` : `${wert} %`}
+        <span className={`text-[11px] flex-shrink-0 font-mono ${verloren ? "text-coral" : "text-textMuted"}`}
+          title={verloren && wert === 0
+            ? "Es ist kein Schritt als erledigt eingetragen — steht der Termin auf „Wahrgenommen“?"
+            : undefined}>
+          {/* "Absage bei 0 %" las sich wie ein Fehler: das Wort stammte noch
+              aus der Zeit vor „Kein Abschluss“, und die Null daneben sah aus
+              wie eine kaputte Zahl. Ohne erledigten Schritt gibt es nichts
+              zu beziffern — dann steht dort nur das Ergebnis. */}
+          {!verloren ? `${wert} %` : wert > 0 ? `Kein Abschluss bei ${wert} %` : "Kein Abschluss"}
         </span>
       </div>
 

@@ -2584,7 +2584,7 @@ test("Der Abschluss steht bei 85 Prozent, nicht bei 100", () => {
   // Ein GEPLANTER Check-in ist kein geführter: erst das Gespräch zählt.
   // Er fällt dann auf das zurück, was wirklich erreicht ist.
   assert.equal(fortschritt({ termin_art: "checkin", status: "geplant", outcome: "kunde" }), 85);
-  // Eine Absage löscht den Weg nicht, den der Kontakt gegangen ist.
+  // "Kein Abschluss" löscht den Weg nicht, den der Kontakt gegangen ist.
   //
   // Vorher gab der Fortschritt hier 0 zurück — der Balken war leer, während
   // daneben die Marken für Setting Call und Closing Call als erreicht
