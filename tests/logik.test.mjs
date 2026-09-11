@@ -48,7 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN, SCHRITTE, WEGMARKEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, erreichteMarken, darfSchritt, schrittPatch, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, SCHRITTE, WEGMARKEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, erreichteMarken, darfSchritt, schrittPatch, istVerloren, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2578,8 +2578,18 @@ test("Der Abschluss steht bei 85 Prozent, nicht bei 100", () => {
   // Ein GEPLANTER Check-in ist kein geführter: erst das Gespräch zählt.
   // Er fällt dann auf das zurück, was wirklich erreicht ist.
   assert.equal(fortschritt({ termin_art: "checkin", status: "geplant", outcome: "kunde" }), 85);
-  // Eine Absage ist kein Fortschritt, egal wie weit es vorher war.
-  assert.equal(fortschritt({ termin_art: "closing", outcome: "absage" }), 0);
+  // Eine Absage löscht den Weg nicht, den der Kontakt gegangen ist.
+  //
+  // Vorher gab der Fortschritt hier 0 zurück — der Balken war leer, während
+  // daneben die Marken für Setting Call und Closing Call als erreicht
+  // dastanden. Zwei Angaben, die einander widersprachen: die eine sagte
+  // "nichts passiert", die andere "zwei Gespräche geführt". Beide stimmen
+  // für sich, also zeigt der Balken jetzt, wie weit es kam, und sagt dazu,
+  // dass es dort geendet hat.
+  assert.equal(fortschritt({ termin_art: "closing", outcome: "absage" }), 70);
+  assert.equal(istVerloren({ termin_art: "closing", outcome: "absage" }), true);
+  assert.equal(istVerloren({ termin_art: "closing" }), false);
+  assert.equal(istVerloren({ outcome: "kunde" }), false);
 });
 
 test("Die Schritte zwischen den Gesprächen bewegen den Balken", () => {
