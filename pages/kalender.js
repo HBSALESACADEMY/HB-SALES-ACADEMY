@@ -13,6 +13,7 @@ import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { nurUhrzeit, deutscherTag, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { terminAnzeige } from "../lib/zeit";
 import { kalenderTitel, terminFarbe, artVon, kuerzelVon, TERMIN_ARTEN, rueckeVor } from "../lib/terminArt";
+import { ergebnisLabel } from "../lib/ergebnis";
 import { ladeIcsHerunter } from "../lib/ics";
 import { zeitpunktInBerlin } from "../lib/woche";
 
@@ -1122,7 +1123,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
             </div>
             <div className="text-[11px] text-textMuted">
               hat stattgefunden{nameVon && nameVon(v.created_by) ? ` · ${nameVon(v.created_by)}` : ""}
-              {v.ergebnis ? ` · ${v.ergebnis === "kunde" ? "Kunde geworden" : v.ergebnis === "follow_up" ? "überlegt" : "Absage"}` : ""}
+              {v.ergebnis ? ` · ${ergebnisLabel(v.ergebnis)}` : ""}
               {" · der Termin ist inzwischen weitergerückt"}
             </div>
           </div>

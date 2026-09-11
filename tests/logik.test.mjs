@@ -3158,3 +3158,33 @@ test("Der Vergleichszeitraum lässt sich selbst wählen", async () => {
   assert.equal(vergleichsArtName("woche"), "der Woche davor");
   assert.equal(vergleichsArtName("davor", "woche"), "den 7 Tagen davor");
 });
+
+test("Ergebnis und Status heissen nicht beide fast gleich", async () => {
+  const { ERGEBNISSE, ERGEBNIS_LABELS, ergebnisLabel } = await import("../lib/ergebnis.js");
+
+  // Ein Termin hat einen STATUS — geplant, wahrgenommen, abgesagt — und
+  // ein ERGEBNIS. In derselben Karte standen "Abgesagt" und "Absage"
+  // nebeneinander und meinten Verschiedenes: das eine, dass das Gespräch
+  // nicht stattfand, das andere, dass es stattfand und nichts daraus
+  // wurde. Wer das verwechselt, verfälscht beide Zahlen.
+  const statusWoerter = ["Geplant", "Wahrgenommen", "Abgesagt"];
+  ERGEBNISSE.forEach((e) => {
+    statusWoerter.forEach((wort) => {
+      assert.ok(!e.label.toLowerCase().startsWith(wort.slice(0, 5).toLowerCase()),
+        `Das Ergebnis "${e.label}" liest sich wie der Status "${wort}".`);
+    });
+  });
+
+  assert.deepEqual(ERGEBNISSE.map((e) => e.wert), ["kunde", "follow_up", "absage"]);
+  assert.equal(ERGEBNIS_LABELS.absage, "Kein Abschluss");
+  assert.equal(ergebnisLabel("kunde"), "Kunde geworden");
+  // Kein Ergebnis ist auch eine Auskunft — aber keine Bezeichnung.
+  assert.equal(ergebnisLabel(null), "");
+  assert.equal(ergebnisLabel("quatsch"), "");
+
+  // Jedes Ergebnis erklärt sich selbst. "Kein Abschluss" deckt kein
+  // Interesse, kein Budget und den falschen Zeitpunkt ab — das muss
+  // dastehen, sonst sucht jemand einen vierten Knopf.
+  ERGEBNISSE.forEach((e) => assert.ok(e.hinweis?.length > 10, `Zu "${e.label}" fehlt der Hinweis.`));
+  assert.match(ERGEBNIS_LABELS.absage && ERGEBNISSE[2].hinweis, /kein Interesse/);
+});

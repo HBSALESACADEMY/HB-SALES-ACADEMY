@@ -13,6 +13,7 @@ import AudioPlayer from "../components/AudioPlayer";
 import { DEFAULT_LEAD_FIELDS, resolveLeadFields, getLeadFieldValue } from "../lib/leadFields";
 import { terminMitZusatz } from "../lib/terminzeit";
 import { getZeitzone } from "../lib/zeit";
+import { ergebnisLabel } from "../lib/ergebnis";
 
 const STATUS_LABEL = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
 // Diese Felder stehen schon im Kopf oder als eigene Zeile — sie sollen nicht
@@ -23,7 +24,7 @@ const emptyForm = { name: "", phone: "", email: "", company: "", website: "", no
 
 const TABS = [
   ["kunde", "Kunden"],
-  ["absage", "Absagen"],
+  ["absage", "Ohne Abschluss"],
 ];
 
 export default function Kunden() {
@@ -214,7 +215,7 @@ export default function Kunden() {
     <Layout>
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Erfolge und Abschlüsse</h1>
       <div className="brand-stripe w-16 mb-4" />
-      <p className="text-textMuted text-sm mb-5">Kunden, die aus einem Termin geworden sind — oder direkt manuell eingetragen. Absagen findest du im entsprechenden Reiter.</p>
+      <p className="text-textMuted text-sm mb-5">Kunden, die aus einem Termin geworden sind — oder direkt manuell eingetragen. Wo es nicht zum Abschluss kam, steht im Reiter daneben.</p>
 
       <div className="flex items-center gap-2 mb-3">
         {TABS.map(([key, label]) => (
@@ -303,7 +304,7 @@ export default function Kunden() {
                       <span className="font-display font-semibold text-textMain">{c.name}</span>
                     </div>
                     <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 flex-shrink-0 border ${outcomeTab === "kunde" ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
-                      {outcomeTab === "kunde" ? "Kunde" : "Absage"}
+                      {outcomeTab === "kunde" ? "Kunde" : ergebnisLabel("absage")}
                     </span>
                   </button>
                   {offen && (
@@ -402,7 +403,7 @@ export default function Kunden() {
           <p className="text-textMuted text-sm">
             {outcomeTab === "kunde"
               ? 'Noch keine Kunden — markiere einen Termin unter "Termine" als "Kunde geworden" oder trage einen Erfolg oben direkt manuell ein.'
-              : 'Noch keine Absagen — markiere einen Termin unter "Termine" als "Absage".'}
+              : `Noch nichts hier — markiere einen Termin unter „Termine“ als „${ergebnisLabel("absage")}“.`}
           </p>
         )}
       </div>

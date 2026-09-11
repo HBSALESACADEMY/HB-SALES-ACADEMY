@@ -13,6 +13,7 @@ import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import { artVon, kuerzelVon } from "../lib/terminArt";
+import { ERGEBNISSE } from "../lib/ergebnis";
 
 // Follow-up: was nach dem Termin noch offen ist.
 //
@@ -21,11 +22,7 @@ import { artVon, kuerzelVon } from "../lib/terminArt";
 // Zeitpunkt weg ist, nicht der Kontakt. Beides verschwand bisher in der
 // langen Terminliste zwischen den bevorstehenden Terminen — und damit aus
 // dem Kopf.
-const ERGEBNISSE = [
-  { wert: "kunde", label: "Kunde geworden" },
-  { wert: "follow_up", label: "Überlegt es sich" },
-  { wert: "absage", label: "Absage" },
-];
+
 
 export default function FollowUp() {
   const [leads, setLeads] = useState([]);
@@ -185,7 +182,7 @@ export default function FollowUp() {
                     dort geht es um einen neuen Zeitpunkt. */}
                 {reiter !== "abgesagt" && ERGEBNISSE.map((e) => (
                   <button key={e.wert} onClick={() => setzeErgebnis(l, e.wert)}
-                    title={l.outcome === e.wert ? "Nochmal tippen, um das Ergebnis zurückzunehmen" : undefined}
+                    title={l.outcome === e.wert ? "Nochmal tippen, um das Ergebnis zurückzunehmen" : e.hinweis}
                     className={`btn-ghost text-xs ${l.outcome === e.wert ? "text-textMain" : ""}`}
                     style={l.outcome === e.wert ? { borderColor: feldFarbe("termin") } : undefined}>
                     {l.outcome === e.wert ? "✓ " : ""}{e.label}

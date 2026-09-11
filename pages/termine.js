@@ -5,6 +5,7 @@ import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
 import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, ROLLEN_NAMEN, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
 import { namensHinweis } from "../lib/kundenname";
+import { ERGEBNIS_LABELS, ERGEBNISSE } from "../lib/ergebnis";
 import { istKundentermin } from "../lib/terminArt";
 import { gruppiereNachTag } from "../lib/terminGruppen";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
@@ -33,7 +34,9 @@ const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesa
 // nächste Stufe dieselbe Farbe tragen wie der Balken und der Kalender.
 const STUFEN_FARBE = Object.fromEntries(TERMIN_ARTEN.map((a) => [a.key, a.farbe]));
 const STATUS_COLORS = { geplant: "amber", wahrgenommen: "teal", abgesagt: "coral" };
-const OUTCOME_LABELS = { kunde: "Kunde geworden", follow_up: "Überlegt (Follow-up)", absage: "Absage" };
+// Die Bezeichnungen stehen in lib/ergebnis.js — sie standen hier und in
+// drei weiteren Dateien und liefen bereits auseinander.
+const OUTCOME_LABELS = ERGEBNIS_LABELS;
 const OUTCOME_COLORS = { kunde: "teal", follow_up: "violet", absage: "coral" };
 
 export default function Termine() {
@@ -1393,7 +1396,9 @@ export default function Termine() {
                       const gewaehlt = lead.outcome === o;
                       return (
                         <button key={o} onClick={() => markOutcome(lead, o)}
-                          title={gewaehlt ? "Nochmal tippen, um das Ergebnis zurückzunehmen" : undefined}
+                          title={gewaehlt
+                            ? "Nochmal tippen, um das Ergebnis zurückzunehmen"
+                            : ERGEBNISSE.find((e) => e.wert === o)?.hinweis}
                           className={`btn-ghost text-xs ${gewaehlt ? `text-${OUTCOME_COLORS[o]} border-${OUTCOME_COLORS[o]}` : ""}`}>
                           {gewaehlt ? "✓ " : ""}{OUTCOME_LABELS[o]}
                         </button>
