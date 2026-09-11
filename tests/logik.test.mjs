@@ -2564,14 +2564,20 @@ test("Der Abschluss steht bei 85 Prozent, nicht bei 100", () => {
   // Projektumsetzung und der Anruf einen Monat später — die beiden
   // Schritte nach dem Verkauf, und deshalb die, die ohne festen Platz im
   // System immer vergessen werden.
-  assert.equal(fortschritt({ termin_art: "erstgespraech" }), 25);       // Setting Call
+  // Ein bloss eingetragener Termin ist noch keine Leistung, sondern ein
+  // Vorhaben. Er zählte früher als erreichtes Gespräch — die Kette stand
+  // damit auf einem Viertel, bevor irgendjemand etwas getan hatte, und die
+  // Bestätigung davor bewegte den Balken nicht mehr.
+  assert.equal(fortschritt({ termin_art: "erstgespraech", status: "geplant" }), 0);
+  assert.equal(fortschritt({ termin_art: "erstgespraech", status: "wahrgenommen" }), 25);
   // Bewusst nur knapp über dem blossen Termin: ein Folgetermin heisst, dass
   // der Kunde zögert. Auf halber Strecke stehend wäre er eine Zahl, die aus
   // einem Zögern einen Fortschritt macht.
-  assert.equal(fortschritt({ termin_art: "folgetermin" }), 35);
-  assert.ok(fortschritt({ termin_art: "folgetermin" }) < fortschritt({ termin_art: "closing" }) - 30,
+  assert.equal(fortschritt({ termin_art: "folgetermin", status: "wahrgenommen" }), 35);
+  assert.ok(fortschritt({ termin_art: "folgetermin", status: "wahrgenommen" })
+    < fortschritt({ termin_art: "closing", status: "wahrgenommen" }) - 30,
     "Der Folgetermin muss deutlich unter dem Abschlussgespräch liegen.");
-  assert.equal(fortschritt({ termin_art: "closing" }), 70);             // Abschlussgespräch
+  assert.equal(fortschritt({ termin_art: "closing", status: "wahrgenommen" }), 70);
   assert.equal(fortschritt({ outcome: "kunde" }), 85);                  // Kunde — noch nicht fertig
   assert.equal(fortschritt({ termin_art: "checkin", status: "wahrgenommen" }), 100);
 
@@ -2586,8 +2592,8 @@ test("Der Abschluss steht bei 85 Prozent, nicht bei 100", () => {
   // "nichts passiert", die andere "zwei Gespräche geführt". Beide stimmen
   // für sich, also zeigt der Balken jetzt, wie weit es kam, und sagt dazu,
   // dass es dort geendet hat.
-  assert.equal(fortschritt({ termin_art: "closing", outcome: "absage" }), 70);
-  assert.equal(istVerloren({ termin_art: "closing", outcome: "absage" }), true);
+  assert.equal(fortschritt({ termin_art: "closing", status: "wahrgenommen", outcome: "absage" }), 70);
+  assert.equal(istVerloren({ termin_art: "closing", status: "wahrgenommen", outcome: "absage" }), true);
   assert.equal(istVerloren({ termin_art: "closing" }), false);
   assert.equal(istVerloren({ outcome: "kunde" }), false);
 });
@@ -2620,25 +2626,46 @@ test("Die Schritte zwischen den Gesprächen bewegen den Balken", () => {
   });
   assert.equal(fortschritt(mitHaken(["closing_bestaetigt"], { termin_art: "erstgespraech" })), 50);
 
+  // Der Balken füllt sich in der Reihenfolge, in der gearbeitet wird: jeder
+  // Schritt bewegt ihn, und keiner bewegt ihn zurück.
+  const kette = [
+    { l: { termin_art: "erstgespraech", status: "geplant" }, wert: 0 },
+    { l: mitHaken(["setting_bestaetigt"], { termin_art: "erstgespraech", status: "geplant" }), wert: 10 },
+    { l: mitHaken(["setting_bestaetigt"], { termin_art: "erstgespraech", status: "wahrgenommen" }), wert: 25 },
+    { l: mitHaken(["setting_bestaetigt", "closing_bestaetigt"],
+      { termin_art: "closing", status: "geplant", stufen_verlauf: [{ art: "erstgespraech" }] }), wert: 50 },
+    { l: mitHaken(["setting_bestaetigt", "closing_bestaetigt"],
+      { termin_art: "closing", status: "wahrgenommen", stufen_verlauf: [{ art: "erstgespraech" }] }), wert: 70 },
+    { l: { termin_art: "closing", status: "wahrgenommen", outcome: "kunde" }, wert: 85 },
+    { l: mitHaken(["projektumsetzung"], { termin_art: "closing", status: "wahrgenommen", outcome: "kunde" }), wert: 95 },
+    { l: mitHaken(["projektumsetzung", "checkin_erledigt"],
+      { termin_art: "closing", status: "wahrgenommen", outcome: "kunde" }), wert: 100 },
+  ];
+  kette.forEach(({ l, wert }) => assert.equal(fortschritt(l), wert));
+  kette.forEach((s, i) => {
+    if (i === 0) return;
+    assert.ok(s.wert > kette[i - 1].wert, "Jeder Schritt muss den Balken weiterbewegen.");
+  });
+
   // Der Haken vor dem Setting Call liegt unter dem Gespräch selbst: erst
   // bestätigen, dann sprechen.
-  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: "erstgespraech" })), 25);
+  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: "erstgespraech", status: "wahrgenommen" })), 25);
   // Ohne Stufe zählt nur der Haken selbst.
   assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: null })), 10);
 
   // Nach dem Abschluss die Umsetzung, danach der Check-in.
-  assert.equal(fortschritt(mitHaken(["projektumsetzung"], { outcome: "kunde", termin_art: "closing" })), 95);
+  assert.equal(fortschritt(mitHaken(["projektumsetzung"], { outcome: "kunde", termin_art: "closing", status: "wahrgenommen" })), 95);
   // Der Check-in zählt als Haken des Vertriebs. Hat der Termin dazu
   // stattgefunden, gilt er als abgehakt — sonst müsste man zweimal
   // dasselbe bestätigen.
   assert.equal(fortschritt(mitHaken(["projektumsetzung"],
     { outcome: "kunde", termin_art: "checkin", status: "wahrgenommen" })), 100);
-  assert.equal(fortschritt(mitHaken(["checkin_erledigt"], { outcome: "kunde", termin_art: "closing" })), 100);
+  assert.equal(fortschritt(mitHaken(["checkin_erledigt"], { outcome: "kunde", termin_art: "closing", status: "wahrgenommen" })), 100);
   assert.equal(fortschritt({ outcome: "kunde", termin_art: "checkin", status: "geplant" }), 85);
 
   // Ein übersprungener Haken bleibt offen sichtbar — genau das ist die
   // Information: der Termin wurde nie bestätigt.
-  const erreicht = erreichteMarken({ termin_art: "closing", stufen_verlauf: [{ art: "erstgespraech" }] });
+  const erreicht = erreichteMarken({ termin_art: "closing", status: "wahrgenommen", stufen_verlauf: [{ art: "erstgespraech" }] });
   assert.equal(erreicht.has("erstgespraech"), true);
   assert.equal(erreicht.has("closing"), true);
   assert.equal(erreicht.has("setting_bestaetigt"), false);
@@ -2879,8 +2906,8 @@ test("Ein Termin ohne Stufe wird nicht zum Setting Call erklärt", async () => {
 
   // Und kein Fortschritt: ein Termin, von dem niemand weiss, was er ist,
   // ist kein Viertel des Weges.
-  assert.equal(fortschritt({}), 0);
-  assert.equal(fortschritt({ termin_art: "erstgespraech" }), 25);
+  assert.equal(fortschritt({ status: "wahrgenommen" }), 0);
+  assert.equal(fortschritt({ termin_art: "erstgespraech", status: "wahrgenommen" }), 25);
 
   // In der Auswertung ein eigener Eimer statt der Erstgespräche — sonst
   // besteht die wichtigste Zahl des Trichters aus Vermutungen.
