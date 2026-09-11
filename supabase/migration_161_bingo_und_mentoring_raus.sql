@@ -12,10 +12,22 @@
 -- drinsteht.
 --
 --   select count(*) from bingo_karten;
+--   select count(*) from bingo_felder;
 --   select count(*) from mentor_pairs;
 --
+-- Die REIHENFOLGE ist dabei nicht beliebig: bingo_felder zeigt per
+-- Fremdschlüssel auf bingo_karten, und Postgres lehnt ein "drop table
+-- bingo_karten" ab, solange die abhängige Tabelle steht. Erst das Kind,
+-- dann die Mutter:
+--
+--   drop table if exists bingo_felder;
 --   drop table if exists bingo_karten;
 --   drop table if exists mentor_pairs;
+--
+-- "drop ... cascade" täte dasselbe in einem Zug. Es ist hier bewusst nicht
+-- vorgeschlagen: cascade löscht ungefragt ALLES, was daran hängt — auch
+-- das, woran gerade niemand denkt. Die Reihenfolge von Hand zu schreiben
+-- zwingt dazu, jede Tabelle einmal anzusehen.
 
 -- Den Menüpunkt ausblenden, falls er in der Datenbank steht: sonst bliebe
 -- er in der Navigation und führte auf eine Seite, die es nicht mehr gibt.
