@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
     const { data: profil } = await admin.from("profiles")
-      .select("id, full_name, organization_id, active_org").eq("id", user.id).maybeSingle();
+      .select("id, full_name, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
     const orgId = await aktiveOrgId(admin, profil, user.id);
     if (!orgId) return res.status(200).json({ ok: true, still: true, hinweis: "Keine aktive Organisation gefunden." });
 

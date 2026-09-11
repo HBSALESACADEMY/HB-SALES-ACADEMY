@@ -390,3 +390,56 @@ test("Die Projektumsetzung ist in der Datenbank der Leitung vorbehalten", () => 
   assert.match(seite, /darfSchritt\(schritt, canSeeTeam\)/);
   assert.match(seite, /disabled=\{!darf\}/);
 });
+
+// "active_org" ist eine eigene TABELLE und keine Spalte in profiles. Wer
+// sie mitselektiert, bekommt von Supabase einen Fehler zurück — das Profil
+// ist dann leer, aktiveOrgId() liefert null, und die Route bricht mit
+// "Keine aktive Organisation gefunden" ab. Genau so ist die
+// Telegram-Meldung beim Abhaken einer Bestätigung ausgefallen.
+test("Keine Route fragt active_org als Spalte des Profils ab", () => {
+  const ordner = new URL("../pages/api/", import.meta.url);
+  const dateien = readdirSync(ordner, { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js"));
+
+  const treffer = [];
+  dateien.forEach((name) => {
+    const quelle = readFileSync(new URL(name, ordner), "utf8");
+    // Nur Abfragen AUF profiles: die Tabelle active_org selbst darf
+    // natürlich ihre eigene Spalte lesen.
+    [...quelle.matchAll(/from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)/g)].forEach((m) => {
+      if (/\bactive_org\b/.test(m[1])) treffer.push(`${name}: ${m[1]}`);
+    });
+  });
+
+  assert.deepEqual(treffer, [],
+    `Diese Abfragen holen "active_org" aus profiles und liefern deshalb gar kein Profil: ${treffer.join(", ")}`);
+});
+
+// aktiveOrgId() unterscheidet Plattform-Admins von allen anderen. Fehlt
+// is_platform_admin im Profil, gilt jeder als normaler Nutzer — ein
+// Plattform-Admin unter fremdem Firmencode landet dann still in seiner
+// Heimat-Organisation, und die Meldung geht an das falsche Team.
+test("Wer aktiveOrgId nutzt, lädt is_platform_admin mit", () => {
+  const ordner = new URL("../pages/api/", import.meta.url);
+  const dateien = readdirSync(ordner, { recursive: true })
+    .filter((n) => typeof n === "string" && n.endsWith(".js"));
+
+  const fehlend = [];
+  dateien.forEach((name) => {
+    const quelle = readFileSync(new URL(name, ordner), "utf8");
+    if (!/aktiveOrgId\(/.test(quelle)) return;
+
+    // Nur Abfragen auf das EIGENE Profil. Eine Route liest oft auch das
+    // Profil anderer Personen — das hat mit der aktiven Organisation
+    // nichts zu tun. Und manche holen ihr Profil über einen Helfer in
+    // einer anderen Datei; die haben hier gar keinen Treffer.
+    const eigene = [...quelle.matchAll(
+      /from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)[\s\S]{0,120}?\.eq\("id",\s*(?:auth\.)?user(?:Id)?\.?i?d?\)/g,
+    )].map((m) => m[1]);
+    if (!eigene.length) return;
+    if (!eigene.some((p) => p.includes("is_platform_admin"))) fehlend.push(name);
+  });
+
+  assert.deepEqual(fehlend, [],
+    `Diese Routen bestimmen die aktive Organisation ohne is_platform_admin: ${fehlend.join(", ")}`);
+});

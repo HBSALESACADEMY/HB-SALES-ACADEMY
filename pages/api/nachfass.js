@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   try {
     const admin = getAdminSupabase();
     const { data: profil } = await admin.from("profiles")
-      .select("id, full_name, organization_id, active_org").eq("id", user.id).maybeSingle();
+      .select("id, full_name, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
     // Die AKTIVE Organisation, nicht die Heimat des Kontos: wer per
     // Firmencode woanders arbeitet, legt das Nachfassen dort an.
     const orgId = await aktiveOrgId(admin, profil, user.id);
