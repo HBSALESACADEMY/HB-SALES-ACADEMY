@@ -614,7 +614,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       <div className="card !py-2.5 mb-4">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-textMain font-semibold flex-1">Chat-ID einer Gruppe finden</span>
-          <button onClick={sucheChats} disabled={chatBusy} className="btn-ghost text-xs disabled:opacity-40">
+          <button type="button" onClick={sucheChats} disabled={chatBusy} className="btn-ghost text-xs disabled:opacity-40">
             {chatBusy ? "Sucht…" : "Gruppen suchen"}
           </button>
         </div>
@@ -630,14 +630,30 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
             noch einmal mit @HBSalesAcademy_bot und suche erneut.
           </p>
         )}
+        {/* Ein Klick setzt die Kennung in eines der Felder darunter — und
+            sagt das auch. Vorher passierte es lautlos: das Feld lag ein
+            Stück weiter unten, nichts bestätigte den Klick, und weil vor
+            dem Speichern nichts gilt, sah es aus, als täte der Knopf
+            nichts. */}
         {chatSuche?.chats?.map((c) => (
           <div key={c.id} className="flex items-center gap-2 flex-wrap text-xs mt-2 pt-2 border-t border-line">
             <span className="text-textMain flex-1 min-w-0 truncate">{c.titel}</span>
             <span className="font-mono text-textMuted flex-shrink-0">{c.id}</span>
-            <button onClick={() => setTelegramChatId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Termine</button>
-            <button onClick={() => setTelegramMarketingId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">E-Mail</button>
-            <button onClick={() => setTelegramBestaetigungId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Bestätigungen</button>
-            <button onClick={() => setTelegramAbschlussId(c.id)} className="btn-ghost text-[11px] flex-shrink-0">Abschlüsse</button>
+            {[
+              ["Termine", telegramChatId, setTelegramChatId],
+              ["E-Mail", telegramMarketingId, setTelegramMarketingId],
+              ["Bestätigungen", telegramBestaetigungId, setTelegramBestaetigungId],
+              ["Abschlüsse", telegramAbschlussId, setTelegramAbschlussId],
+            ].map(([label, wert, setzen]) => {
+              const drin = wert.trim() === c.id;
+              return (
+                <button key={label} type="button"
+                  onClick={() => { setzen(c.id); setTelegramStand({ ok: true, text: `„${c.titel}“ steht jetzt bei ${label}. Unten auf „Speichern“ klicken, sonst gilt es nicht.` }); }}
+                  className={`btn-ghost text-[11px] flex-shrink-0 ${drin ? "text-teal border-teal/50" : ""}`}>
+                  {drin ? "✓ " : ""}{label}
+                </button>
+              );
+            })}
           </div>
         ))}
         {telegramStand && (
@@ -649,7 +665,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       <div className="flex items-center gap-2 mb-1">
         <input className="input flex-1" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)}
           placeholder="z. B. -1001234567890" />
-        <button onClick={() => testeKanal(telegramChatId, "allgemein")} disabled={chatBusy || !telegramChatId.trim()}
+        <button type="button" onClick={() => testeKanal(telegramChatId, "allgemein")} disabled={chatBusy || !telegramChatId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
       <p className="text-[11px] text-textMuted mb-5">
@@ -662,7 +678,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       <div className="flex items-center gap-2 mb-1">
         <input className="input flex-1" value={telegramMarketingId} onChange={(e) => setTelegramMarketingId(e.target.value)}
           placeholder="z. B. -1009876543210" />
-        <button onClick={() => testeKanal(telegramMarketingId, "marketing")} disabled={chatBusy || !telegramMarketingId.trim()}
+        <button type="button" onClick={() => testeKanal(telegramMarketingId, "marketing")} disabled={chatBusy || !telegramMarketingId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
       <p className="text-[11px] text-textMuted mb-5">
@@ -676,7 +692,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       <div className="flex items-center gap-2 mb-1">
         <input className="input flex-1" value={telegramBestaetigungId} onChange={(e) => setTelegramBestaetigungId(e.target.value)}
           placeholder="z. B. -1005555555555" />
-        <button onClick={() => testeKanal(telegramBestaetigungId, "bestaetigung")} disabled={chatBusy || !telegramBestaetigungId.trim()}
+        <button type="button" onClick={() => testeKanal(telegramBestaetigungId, "bestaetigung")} disabled={chatBusy || !telegramBestaetigungId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
       <p className="text-[11px] text-textMuted mb-5">
@@ -691,7 +707,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       <div className="flex items-center gap-2 mb-1">
         <input className="input flex-1" value={telegramAbschlussId} onChange={(e) => setTelegramAbschlussId(e.target.value)}
           placeholder="z. B. -1007777777777" />
-        <button onClick={() => testeKanal(telegramAbschlussId, "abschluss")} disabled={chatBusy || !telegramAbschlussId.trim()}
+        <button type="button" onClick={() => testeKanal(telegramAbschlussId, "abschluss")} disabled={chatBusy || !telegramAbschlussId.trim()}
           className="btn-ghost text-xs flex-shrink-0 disabled:opacity-40">Test</button>
       </div>
       <p className="text-[11px] text-textMuted mb-5">
