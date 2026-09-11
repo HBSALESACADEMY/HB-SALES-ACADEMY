@@ -443,3 +443,35 @@ test("Wer aktiveOrgId nutzt, lädt is_platform_admin mit", () => {
   assert.deepEqual(fehlend, [],
     `Diese Routen bestimmen die aktive Organisation ohne is_platform_admin: ${fehlend.join(", ")}`);
 });
+
+// Ein Bot bedient alle Organisationen dieser Academy, und Telegram gibt
+// über getUpdates alles heraus, was er zuletzt gesehen hat — auch die
+// Gruppen anderer Kunden. Ohne Nachweis sähe die Leitung von Firma A die
+// Gruppennamen und Kennungen von Firma B und könnte eine fremde Kennung in
+// ihr eigenes Feld eintragen. Dann gingen die Meldungen von A in die
+// Telegram-Gruppe von B.
+test("Die Gruppensuche findet nur Gruppen der eigenen Organisation", async () => {
+  const { gruppenCode, codePasst } = await import("../lib/gruppenCode.js");
+
+  // Je Organisation ein eigener Code, und er lässt sich nicht aus der
+  // Organisations-Kennung ausrechnen: ein Geheimnis des Servers geht mit
+  // ein. Die Kennung steht in mancher Adresszeile.
+  const a = gruppenCode("11111111-1111-1111-1111-111111111111", "geheim");
+  const b = gruppenCode("22222222-2222-2222-2222-222222222222", "geheim");
+  assert.notEqual(a, b);
+  assert.match(a, /^HB-[A-Z0-9]{6}$/);
+  assert.notEqual(a, gruppenCode("11111111-1111-1111-1111-111111111111", "anderes-geheimnis"));
+  assert.equal(gruppenCode(null), null);
+
+  // Gross- und Kleinschreibung egal: der Code wird abgetippt.
+  assert.equal(codePasst(`hallo ${a.toLowerCase()} @bot`, a), true);
+  assert.equal(codePasst("nur text", a), false);
+  assert.equal(codePasst(`text ${b}`, a), false);
+
+  // Und die Route prüft den Code, statt alles zu listen, was der Bot
+  // gesehen hat.
+  const quelle = readFileSync(new URL("../pages/api/admin/telegram-chats.js", import.meta.url), "utf8");
+  assert.match(quelle, /codePasst\(/, "Ohne Code-Prüfung listet die Suche fremde Gruppen.");
+  assert.match(quelle, /is_platform_admin \? gewuenscht : null/,
+    "Eine fremde orgId darf nur ein Plattform-Admin angeben.");
+});

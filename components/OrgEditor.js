@@ -171,6 +171,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   // eine nackte Nummer, und eine Kennung im falschen Feld merkt man erst,
   // wenn die Nachricht in der falschen Gruppe steht.
   const [chatNamen, setChatNamen] = useState({});
+  const [gruppenCode, setGruppenCode] = useState(null);
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
@@ -281,7 +282,11 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
     setChatBusy(true);
     setTelegramStand(null);
     try {
-      const { chats, namen } = await apiGet(`/api/admin/telegram-chats?ids=${encodeURIComponent(eingetrageneChats.join(","))}`);
+      // Die Organisation mitgeben: ein Plattform-Admin verwaltet hier auch
+      // fremde Organisationen, und der Nachweis gilt je Organisation.
+      const { chats, namen, code } = await apiGet(
+        `/api/admin/telegram-chats?orgId=${encodeURIComponent(org.id)}&ids=${encodeURIComponent(eingetrageneChats.join(","))}`);
+      setGruppenCode(code || null);
       // Einzelchats sind hier nicht gemeint: die Meldungen gehen an ein
       // Team, nicht an eine Person.
       setChatSuche({ chats: (chats || []).filter((c) => c.art !== "private") });
@@ -633,17 +638,25 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           </button>
         </div>
         <p className="text-[11px] text-textMuted mt-1">
-          Die Suche holt auch die NAMEN der schon eingetragenen Gruppen und schreibt sie unter die Felder —
-          in einer nackten Nummer sieht man nicht, welche Gruppe gemeint ist.
-          Lade <strong>@HBSalesAcademy_bot</strong> in deine Telegram-Gruppe ein und schreibe dort eine
-          Nachricht, in der du <strong>@HBSalesAcademy_bot</strong> erwähnst. Dann hier suchen. Der Bot sieht
-          aus Datenschutzgründen nur Nachrichten, die ihn nennen.
+          Lade <strong>@HBSalesAcademy_bot</strong> in die Gruppe ein und schreibe dort den Code dieser
+          Organisation zusammen mit <strong>@HBSalesAcademy_bot</strong>. Dann hier suchen. Gelistet wird nur,
+          wo dieser Code in den letzten 30 Minuten stand — so findet niemand die Gruppen einer anderen
+          Organisation. Der Bot sieht aus Datenschutzgründen ohnehin nur Nachrichten, die ihn nennen.
+        </p>
+        {gruppenCode && (
+          <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mt-2">
+            In der Gruppe schreiben: <strong className="font-mono">{gruppenCode} @HBSalesAcademy_bot</strong>
+          </p>
+        )}
+        <p className="text-[11px] text-textMuted mt-1">
+          Die Suche holt ausserdem die Namen der schon eingetragenen Gruppen und schreibt sie unter die Felder
+          — in einer nackten Nummer sieht man nicht, welche Gruppe gemeint ist.
         </p>
         {chatSuche?.fehler && <p className="text-[11px] text-coral mt-2">{chatSuche.fehler}</p>}
         {chatSuche?.chats?.length === 0 && (
           <p className="text-[11px] text-textMuted mt-2">
-            Keine Gruppe gefunden. Telegram gibt nur die letzten Nachrichten heraus — schreibe in der Gruppe
-            noch einmal mit @HBSalesAcademy_bot und suche erneut.
+            Keine Gruppe gefunden. Gelistet wird nur, wo der Code oben in den letzten 30 Minuten stand —
+            schreibe ihn in der Gruppe zusammen mit @HBSalesAcademy_bot und suche gleich danach erneut.
           </p>
         )}
         {/* Ein Klick setzt die Kennung in eines der Felder darunter — und

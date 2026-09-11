@@ -1,6 +1,8 @@
 import { requireUser } from "../../../lib/supabaseServer";
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { istFuehrungsrolle } from "../../../lib/rollen";
+import { aktiveOrgId } from "../../../lib/aktiveOrgServer";
+import { gruppenCode, codePasst } from "../../../lib/gruppenCode";
 
 // Welche Telegram-Gruppen der Bot kennt — samt ihrer Kennung.
 //
@@ -20,10 +22,23 @@ export default async function handler(req, res) {
 
   const admin = getAdminSupabase();
   const { data: profil } = await admin.from("profiles")
-    .select("role, is_admin, is_platform_admin").eq("id", auth.user.id).maybeSingle();
+    .select("role, is_admin, is_platform_admin, organization_id").eq("id", auth.user.id).maybeSingle();
   if (!istFuehrungsrolle(profil)) {
     return res.status(403).json({ error: "Diese Suche ist der Leitung vorbehalten." });
   }
+
+  // Für WELCHE Organisation gesucht wird. Normalerweise die eigene aktive;
+  // ein Plattform-Admin darf auch eine andere angeben, weil er fremde
+  // Organisationen verwaltet. Jede andere Angabe wird abgelehnt — sonst
+  // liesse sich der Nachweis über die Adresszeile umgehen.
+  const eigene = await aktiveOrgId(admin, profil, auth.user.id);
+  const gewuenscht = typeof req.query.orgId === "string" ? req.query.orgId : null;
+  const orgId = gewuenscht && gewuenscht !== eigene
+    ? (profil?.is_platform_admin ? gewuenscht : null)
+    : eigene;
+  if (!orgId) return res.status(403).json({ error: "Für diese Organisation darfst du nicht suchen." });
+
+  const code = gruppenCode(orgId);
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return res.status(503).json({ error: "Für diese Academy ist kein Telegram-Bot eingerichtet (TELEGRAM_BOT_TOKEN fehlt)." });
@@ -61,10 +76,31 @@ export default async function handler(req, res) {
       }
     }));
 
+    // Gelistet wird NUR, wo der Code dieser Organisation geschrieben
+    // wurde.
+    //
+    // Ein Bot bedient alle Organisationen dieser Academy, und getUpdates
+    // gibt alles heraus, was er zuletzt gesehen hat — auch die Gruppen
+    // anderer Kunden. Ohne Nachweis sähe die Leitung von Firma A die
+    // Gruppennamen und Kennungen von Firma B und könnte eine fremde
+    // Kennung in ihr eigenes Feld eintragen. Dann gingen die Meldungen von
+    // A in die Gruppe von B.
+    //
+    // Wer den Code in der Gruppe schreiben kann, ist in der Gruppe. Mehr
+    // muss der Nachweis nicht leisten. Das Zeitfenster kommt dazu, damit
+    // ein einmal geschriebener Code nicht für immer gilt.
+    const FENSTER_SEKUNDEN = 30 * 60;
+    const jetzt = Math.floor(Date.now() / 1000);
+
     const chats = new Map();
     (daten.result || []).forEach((u) => {
-      const chat = u.message?.chat || u.my_chat_member?.chat || u.channel_post?.chat;
+      const kern = u.message || u.channel_post;
+      const chat = kern?.chat;
       if (!chat?.id) return;
+      if (!kern.date || jetzt - kern.date > FENSTER_SEKUNDEN) return;
+      // Der Code muss im Text stehen — auch in der Bildunterschrift, falls
+      // jemand ihn zu einem Bild schreibt.
+      if (!codePasst(`${kern.text || ""} ${kern.caption || ""}`, code)) return;
       chats.set(String(chat.id), {
         id: String(chat.id),
         titel: chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(" ") || chat.username || "Ohne Namen",
@@ -72,7 +108,7 @@ export default async function handler(req, res) {
       });
     });
 
-    return res.status(200).json({ chats: [...chats.values()], namen });
+    return res.status(200).json({ chats: [...chats.values()], namen, code });
   } catch (e) {
     console.error("Telegram-Chats konnten nicht geladen werden:", e.message);
     return res.status(500).json({ error: e.message || "Die Suche ist fehlgeschlagen." });
