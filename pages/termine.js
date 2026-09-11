@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
-import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, kuerzelVon, rueckeVor, verlaufVon } from "../lib/terminArt";
+import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
@@ -614,6 +614,25 @@ export default function Termine() {
     }));
   }
 
+  // Einen Schritt abhaken oder den Haken wieder entfernen.
+  //
+  // Über aendereGeprueft, weil beides schiefgehen kann: die Zugriffsregeln
+  // lehnen fremde Termine ab (null Zeilen, kein Fehler), und der
+  // Datenbank-Auslöser aus migration_157 wirft bei der Projektumsetzung,
+  // wenn keine Führungsrolle dahintersteht. Beides muss auf den Bildschirm.
+  async function setzeSchritt(lead, key, erledigt) {
+    const patch = schrittPatch(lead, key, erledigt, selfId);
+    const fehler = await aendereGeprueft(
+      supabase.from("leads").update(patch).eq("id", lead.id),
+      "Diesen Schritt darf nur abhaken, wer den Termin angelegt hat, oder ein Manager.",
+    );
+    if (fehler) { setError(fehler); return; }
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, ...patch } : l)));
+    // Bewusst ohne Meldung ans Team: ein Haken ändert weder den Kalender
+    // noch ist er ein Abschluss (lib/terminMeldung.js). Er steht in der
+    // Academy, und dort wird er gelesen.
+  }
+
   async function updateStatus(id, status) {
     const err = await aendereGeprueft(supabase.from("leads").update({ status }).eq("id", id), "Den Status darf nur ändern, wer den Termin angelegt hat, oder ein Manager.");
     if (err) { setError(err); return; }
@@ -1107,6 +1126,27 @@ export default function Termine() {
 
               <div className="mb-3">
                 <Fortschrittsbalken lead={lead} />
+
+                {/* Die Schritte zwischen den Gesprächen. Sie stehen direkt
+                    unter dem Balken, weil sie ihn bewegen — ein Haken, den
+                    man erst nach dem Scrollen findet, wird nicht gesetzt. */}
+                <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap mt-2">
+                  {SCHRITTE.map((schritt) => {
+                    const getan = schrittErledigt(lead, schritt.key);
+                    const darf = darfSchritt(schritt, canSeeTeam);
+                    return (
+                      <label key={schritt.key}
+                        title={darf ? schritt.hinweis : "Das hakt die Vertriebsleitung ab."}
+                        className={`flex items-center gap-1.5 text-xs ${darf ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}>
+                        <input type="checkbox" checked={getan} disabled={!darf}
+                          onChange={(e) => setzeSchritt(lead, schritt.key, e.target.checked)}
+                          className="w-3.5 h-3.5" />
+                        <span className={getan ? "text-textMain" : "text-textMuted"}>{schritt.label}</span>
+                        {!darf && <span className="text-[10px] text-textMuted">(Leitung)</span>}
+                      </label>
+                    );
+                  })}
+                </div>
                 {/* Wo der Kontakt herkommt: die abgeschlossenen Stufen mit
                     ihrem Datum. Ohne das wüsste nach dem Weiterrücken
                     niemand mehr, wann das Erstgespräch war. */}

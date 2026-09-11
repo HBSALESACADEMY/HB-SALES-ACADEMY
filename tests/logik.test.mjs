@@ -48,7 +48,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, SCHRITTE, WEGMARKEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, erreichteMarken, darfSchritt, schrittPatch, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -2558,26 +2558,87 @@ test("Die Auswertung zählt jede Stufe, auch die abgeschlossenen", () => {
   assert.deepEqual(verlaufVon(vorgerueckt).map((v) => v.kurz), ["ST", "FU"]);
 });
 
-test("Der Abschluss steht bei 90 Prozent, nicht bei 100", () => {
-  // Mit dem Geld ist es nicht fertig. Die letzten zehn Punkte gibt es erst,
-  // wenn einen Monat später jemand nachgefragt hat, ob alles läuft — die
-  // einzige Stufe nach dem Verkauf, und deshalb die, die ohne festen Platz
-  // im System immer vergessen wird.
-  assert.equal(fortschritt({}), 25);                                    // Termin steht
+test("Der Abschluss steht bei 85 Prozent, nicht bei 100", () => {
+  // Mit dem Geld ist es nicht fertig. Was danach fehlt, ist die
+  // Projektumsetzung und der Anruf einen Monat später — die beiden
+  // Schritte nach dem Verkauf, und deshalb die, die ohne festen Platz im
+  // System immer vergessen werden.
+  assert.equal(fortschritt({}), 25);                                    // Setting Call
   // Bewusst nur knapp über dem blossen Termin: ein Folgetermin heisst, dass
   // der Kunde zögert. Auf halber Strecke stehend wäre er eine Zahl, die aus
   // einem Zögern einen Fortschritt macht.
   assert.equal(fortschritt({ termin_art: "folgetermin" }), 35);
   assert.ok(fortschritt({ termin_art: "folgetermin" }) < fortschritt({ termin_art: "closing" }) - 30,
     "Der Folgetermin muss deutlich unter dem Abschlussgespräch liegen.");
-  assert.equal(fortschritt({ termin_art: "closing" }), 75);             // Abschlussgespräch
-  assert.equal(fortschritt({ outcome: "kunde" }), 90);                  // Kunde — noch nicht fertig
+  assert.equal(fortschritt({ termin_art: "closing" }), 70);             // Abschlussgespräch
+  assert.equal(fortschritt({ outcome: "kunde" }), 85);                  // Kunde — noch nicht fertig
   assert.equal(fortschritt({ termin_art: "checkin", status: "wahrgenommen" }), 100);
 
   // Ein GEPLANTER Check-in ist kein geführter: erst das Gespräch zählt.
-  assert.equal(fortschritt({ termin_art: "checkin", status: "geplant" }), 90);
+  // Er fällt dann auf das zurück, was wirklich erreicht ist.
+  assert.equal(fortschritt({ termin_art: "checkin", status: "geplant", outcome: "kunde" }), 85);
   // Eine Absage ist kein Fortschritt, egal wie weit es vorher war.
   assert.equal(fortschritt({ termin_art: "closing", outcome: "absage" }), 0);
+});
+
+test("Die Schritte zwischen den Gesprächen bewegen den Balken", () => {
+  // Der Ablauf, wie er im Verkauf wirklich läuft: bestätigen, sprechen,
+  // bestätigen, abschliessen, liefern, nachfragen. Die Bestätigungen sind
+  // keine Termine, sondern Haken — und der billigste Schritt im ganzen
+  // Ablauf. Ein unbestätigter Termin platzt.
+  assert.deepEqual(WEGMARKEN.map((m) => m.kurz),
+    ["SB", "ST", "FU", "CB", "CC", "KD", "PU", "CI"]);
+
+  // Die höchste erreichte Marke zählt, nicht die letzte. Wer den Closing
+  // Call schon bestätigt hat, aber noch im Setting Call steht, ist weiter
+  // als 25 % — ein Balken, der beim Abhaken zurückspringt, wird nicht mehr
+  // abgehakt.
+  const mitHaken = (keys, rest = {}) => ({
+    ...rest,
+    schritte: Object.fromEntries(keys.map((k) => [k, { am: "2026-09-11T08:00:00Z" }])),
+  });
+  assert.equal(fortschritt(mitHaken(["closing_bestaetigt"], { termin_art: "erstgespraech" })), 50);
+
+  // Der Haken vor dem Setting Call liegt unter dem Gespräch selbst: erst
+  // bestätigen, dann sprechen.
+  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { termin_art: null })), 25);
+  assert.equal(fortschritt(mitHaken(["setting_bestaetigt"], { stufen_verlauf: [] , termin_art: undefined })), 25);
+
+  // Nach dem Abschluss die Umsetzung, danach der Check-in.
+  assert.equal(fortschritt(mitHaken(["projektumsetzung"], { outcome: "kunde", termin_art: "closing" })), 95);
+  assert.equal(fortschritt(mitHaken(["projektumsetzung"],
+    { outcome: "kunde", termin_art: "checkin", status: "wahrgenommen" })), 100);
+
+  // Ein übersprungener Haken bleibt offen sichtbar — genau das ist die
+  // Information: der Termin wurde nie bestätigt.
+  const erreicht = erreichteMarken({ termin_art: "closing", stufen_verlauf: [{ art: "erstgespraech" }] });
+  assert.equal(erreicht.has("erstgespraech"), true);
+  assert.equal(erreicht.has("closing"), true);
+  assert.equal(erreicht.has("setting_bestaetigt"), false);
+  assert.equal(erreicht.has("closing_bestaetigt"), false);
+});
+
+test("Die Projektumsetzung hakt nur die Leitung ab", () => {
+  const umsetzung = SCHRITTE.find((s) => s.key === "projektumsetzung");
+  const bestaetigung = SCHRITTE.find((s) => s.key === "setting_bestaetigt");
+
+  // Wer verkauft hat, ist nicht die Person, die beurteilt, ob geliefert
+  // wurde.
+  assert.equal(darfSchritt(umsetzung, false), false);
+  assert.equal(darfSchritt(umsetzung, true), true);
+  assert.equal(darfSchritt(bestaetigung, false), true);
+
+  // Der Haken hält fest, WER und WANN — sonst lässt sich später nicht
+  // klären, ob überhaupt jemand hingesehen hat.
+  const patch = schrittPatch({}, "setting_bestaetigt", true, "uuid-1");
+  assert.equal(patch.schritte.setting_bestaetigt.von, "uuid-1");
+  assert.ok(patch.schritte.setting_bestaetigt.am);
+
+  // Und er lässt sich zurücknehmen, ohne die anderen mitzureissen.
+  const zwei = schrittPatch(patch, "closing_bestaetigt", true, "uuid-1");
+  const zurueck = schrittPatch(zwei, "setting_bestaetigt", false);
+  assert.equal(zurueck.schritte.setting_bestaetigt, undefined);
+  assert.ok(zurueck.schritte.closing_bestaetigt);
 });
 
 test("Der Check-in wird nach einem Monat fällig — und nur bei Kunden", () => {

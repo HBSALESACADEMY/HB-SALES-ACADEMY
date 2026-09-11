@@ -362,3 +362,31 @@ test("Im Kalender steht nur das eigene Follow-up", () => {
       + "Die Führung bekäme die Rückrufe des ganzen Teams in den eigenen Kalender.");
   });
 });
+
+// Wer verkauft hat, ist nicht die Person, die beurteilt, ob geliefert wurde.
+// Diese Grenze darf nicht nur in der Maske stehen: ein deaktiviertes
+// Kästchen hält genau so lange, bis jemand den Weg daran vorbei findet.
+test("Die Projektumsetzung ist in der Datenbank der Leitung vorbehalten", () => {
+  const sql = readFileSync(new URL("../supabase/migration_157_schritte.sql", import.meta.url), "utf8");
+
+  assert.match(sql, /alter table leads add column if not exists schritte/);
+
+  // Ein Auslöser, der genau diesen einen Schlüssel schützt — und nicht die
+  // ganze Zeile sperrt, sonst könnte der Vertrieb seinen eigenen Termin
+  // nicht mehr bearbeiten.
+  assert.match(sql, /create trigger leads_schritte_pruefen[\s\S]*?before update on leads/);
+  assert.match(sql, /schritte -> 'projektumsetzung'/);
+  assert.match(sql, /not ist_fuehrungsrolle\(auth\.uid\(\)\)/);
+  assert.match(sql, /raise exception/);
+
+  // Ohne angemeldete Person läuft der Server mit erweiterten Rechten
+  // (Cron). Dort greift die Grenze nicht — sonst stünden Wartungsläufe.
+  assert.match(sql, /if auth\.uid\(\) is null then/);
+
+  // Und die Maske deaktiviert das Kästchen zusätzlich: eine Fehlermeldung
+  // nach dem Klick ist schlechter als ein Kästchen, das gar nicht erst
+  // klickbar aussieht.
+  const seite = readFileSync(new URL("../pages/termine.js", import.meta.url), "utf8");
+  assert.match(seite, /darfSchritt\(schritt, canSeeTeam\)/);
+  assert.match(seite, /disabled=\{!darf\}/);
+});
