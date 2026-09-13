@@ -48,7 +48,10 @@ export default async function handler(req, res) {
 
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { anrede, name, email, firma, telefon, notiz } = req.body || {};
+  const { anrede, name, email, firma, telefon, notiz, quelle } = req.body || {};
+  // Von Hand im E-Mail-Marketing angelegt oder aus dem Gespräch? Nur das
+  // zweite ist eine Übergabe, bei der jemand anderes handeln muss.
+  const vonHand = quelle === "manuell";
   if (!String(name || "").trim()) return res.status(400).json({ error: "Name fehlt." });
   // Beim Erfassen säubern, nicht erst beim Senden: eine kopierte Adresse
   // bringt unsichtbare Zeichen mit, und wer den Fehler erst zwei Tage
@@ -77,6 +80,12 @@ export default async function handler(req, res) {
       notiz: String(notiz || "").trim() || null,
     }).select().single();
     if (error) throw error;
+
+    // Von Hand angelegt: keine Meldung. Wer den Kontakt im E-Mail-Marketing
+    // selbst einträgt, sitzt bereits dort, wo die Meldung hinführt — sie
+    // wäre eine Nachricht an sich selbst, und davon lernt eine Gruppe
+    // schnell, Meldungen wegzuwischen.
+    if (vonHand) return res.status(200).json({ kontakt });
 
     // Hier muss jemand handeln — deshalb eine Meldung, anders als bei
     // Änderungen, die nur in der App stehen (siehe lib/terminMeldung.js).

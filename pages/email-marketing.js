@@ -8,7 +8,7 @@ import { istHtmlVorlage, fertigeHtmlMail } from "../lib/htmlMail";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Aufklapper from "../components/Aufklapper";
 import { supabase } from "../lib/supabaseClient";
-import { apiPost } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
@@ -81,6 +81,16 @@ export default function EmailMarketing() {
   // Für welchen Kontakt gerade nachgefragt wird, ob wirklich ein zweites
   // Mal gesendet werden soll.
   const [nochmalFuer, setNochmalFuer] = useState(null);
+
+  // Einen Kontakt direkt hier anlegen. Bisher kamen Kontakte nur aus dem
+  // Call Tracker — wer eine Adresse von einer Messe, aus einer Empfehlung
+  // oder aus einer Antwort auf eine alte Mail hatte, konnte sie nirgends
+  // eintragen, ohne einen Anruf zu erfinden.
+  const LEERER_KONTAKT = { anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" };
+  const [neuOffen, setNeuOffen] = useState(false);
+  const [neuEntwurf, setNeuEntwurf] = useState(LEERER_KONTAKT);
+  const [neuBusy, setNeuBusy] = useState(false);
+  const [neuDublette, setNeuDublette] = useState(null);
 
   // Das Nachfassen nach der Mail (migration_156). Es steht bewusst hier und
   // nicht nur als Notiz: nur ein Eintrag im Kalender der zuständigen Person
@@ -331,6 +341,53 @@ export default function EmailMarketing() {
     return k.user_id === ich && vorlagen.length > 0;
   }
 
+  // Gibt es die Adresse schon? Nur ein Hinweis, keine Sperre — dieselbe
+  // Prüfung wie im Call Tracker, über den Server, weil dort auch die
+  // Kontakte der Kollegen gesehen werden, ohne sie offenzulegen.
+  async function pruefeNeueDublette(adresse) {
+    setNeuDublette(null);
+    const sauber = bereinigeAdresse(adresse).toLowerCase();
+    if (!sauber.includes("@")) return;
+    try {
+      const { kontakt } = await apiGet(`/api/email-kontakt?email=${encodeURIComponent(sauber)}`);
+      if (kontakt) setNeuDublette(kontakt);
+    } catch (e) { /* Die Prüfung ist ein Komfort, kein Muss. */ }
+  }
+
+  async function legeKontaktAn(direktSchreiben = false) {
+    setFehler("");
+    if (!neuEntwurf.name.trim()) { setFehler("Bitte einen Namen eintragen."); return; }
+    const sauberEmail = bereinigeAdresse(neuEntwurf.email);
+    if (!gueltigeAdresse(sauberEmail)) {
+      const fremd = fremdeZeichen(sauberEmail);
+      setFehler(fremd.length
+        ? `Die Adresse enthält Zeichen, die kein Versanddienst annimmt (${fremd.join(", ")}). Bitte neu eintippen statt zu kopieren.`
+        : "Bitte eine gültige E-Mail-Adresse eintragen.");
+      return;
+    }
+    setNeuBusy(true);
+    try {
+      // Dieselbe Route wie aus dem Call Tracker: Säubern, Anrede und die
+      // Organisation laufen dort, an einer Stelle. "manuell" unterdrückt
+      // nur die Telegram-Meldung — wer hier anlegt, sitzt schon dort, wo
+      // sie hinführen würde.
+      const { kontakt } = await apiPost("/api/email-kontakt", { ...neuEntwurf, email: sauberEmail, quelle: "manuell" });
+      setNeuEntwurf(LEERER_KONTAKT);
+      setNeuDublette(null);
+      setNeuOffen(false);
+      await laden();
+      if (kontakt) {
+        setOffenerKontakt(kontakt.id);
+        // Wer "Anlegen und schreiben" wählt, will die Mail jetzt. Mit der
+        // ersten Vorlage, wie überall sonst beim Öffnen.
+        if (direktSchreiben && darfSelbstSenden(kontakt)) starteMail(kontakt, vorlagen[0] || null);
+      }
+    } catch (e) {
+      setFehler(e?.message || "Der Kontakt konnte nicht angelegt werden.");
+    }
+    setNeuBusy(false);
+  }
+
   // Ging heute schon eine Mail an diesen Kontakt raus?
   //
   // Der Senden-Knopf steht bewusst an jedem Eintrag — manchmal braucht es
@@ -569,7 +626,7 @@ export default function EmailMarketing() {
         <p className="text-xs text-textMuted">
           Kontakte, die im Gespräch um eine E-Mail gebeten haben. Verschickte Mails ohne Ergebnis melden sich
           nach {NACHFASSEN_AB_TAGEN} Tagen von selbst — einmal, nicht täglich. Erfasst werden sie von den Vertrieblern im
-          Call Tracker — hier werden sie verschickt und nachgehalten. Wird ein Termin daraus, entsteht ein
+          Call Tracker oder hier über „+ Kontakt anlegen“ — hier werden sie verschickt und nachgehalten. Wird ein Termin daraus, entsteht ein
           echter Termin, der beim ursprünglichen Vertriebler zählt.
         </p>
       </div>
@@ -609,10 +666,78 @@ export default function EmailMarketing() {
             <MehrfachAuswahl eintraege={personen} ausgewaehlt={wer} onChange={setWer} alleText="Alle Vertriebler" />
           </>
         )}
-        <button onClick={exportiere} className="btn-ghost text-xs ml-auto">
+        <button onClick={() => setNeuOffen((v) => !v)} className="btn text-xs ml-auto">
+          {neuOffen ? "Abbrechen" : "+ Kontakt anlegen"}
+        </button>
+        <button onClick={exportiere} className="btn-ghost text-xs">
           <Icon name="download" size={12} /> Für Excel
         </button>
       </div>
+
+      {neuOffen && (
+        <div className="card mb-4">
+          <div className="font-semibold text-textMain text-sm mb-1">Kontakt anlegen</div>
+          <p className="text-[11px] text-textMuted mb-3">
+            Für Adressen, die nicht aus einem Anruf stammen — Messe, Empfehlung, Antwort auf eine alte Mail.
+            Der Kontakt gehört dir und zählt nicht als Anruf im Call Tracker.
+          </p>
+          <div className="flex items-center gap-1.5 mb-2">
+            {[["", "—"], ["frau", "Frau"], ["herr", "Herr"]].map(([wert, label]) => (
+              <button key={wert || "leer"} type="button"
+                onClick={() => setNeuEntwurf((d) => ({ ...d, anrede: wert }))}
+                className={`px-2 py-1.5 rounded-lg text-xs border ${neuEntwurf.anrede === wert ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="block text-[11px] text-textMuted mb-1">Name *</label>
+              <input className="input !py-1.5 text-xs" value={neuEntwurf.name}
+                onChange={(e) => setNeuEntwurf((d) => ({ ...d, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-textMuted mb-1">E-Mail *</label>
+              <input className="input !py-1.5 text-xs" type="email" value={neuEntwurf.email}
+                onChange={(e) => setNeuEntwurf((d) => ({ ...d, email: e.target.value }))}
+                onBlur={(e) => pruefeNeueDublette(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-textMuted mb-1">Firma</label>
+              <input className="input !py-1.5 text-xs" value={neuEntwurf.firma}
+                onChange={(e) => setNeuEntwurf((d) => ({ ...d, firma: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-textMuted mb-1">Telefon</label>
+              <input className="input !py-1.5 text-xs" type="tel" value={neuEntwurf.telefon}
+                onChange={(e) => setNeuEntwurf((d) => ({ ...d, telefon: e.target.value }))} />
+            </div>
+          </div>
+          <label className="block text-[11px] text-textMuted mb-1">Notiz</label>
+          <textarea className="input !py-1.5 text-xs mb-2" rows={2}
+            placeholder="Woher die Adresse stammt und worum es geht — sie kann in die Mail eingesetzt werden."
+            value={neuEntwurf.notiz}
+            onChange={(e) => setNeuEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
+          {/* Zwei Mails an denselben Kontakt sind der eine Fehler, den man
+              im Marketing nie machen will. */}
+          {neuDublette && (
+            <p className="text-[11px] text-amber mb-2">
+              Diese Adresse gibt es schon — erfasst von {neuDublette.wer} am{" "}
+              {new Date(neuDublette.created_at).toLocaleDateString("de-DE")}. Anlegen geht trotzdem.
+            </p>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => legeKontaktAn(false)} disabled={neuBusy} className="btn-ghost text-xs disabled:opacity-40">
+              {neuBusy ? "Wird angelegt…" : "Anlegen"}
+            </button>
+            {vorlagen.length > 0 && (
+              <button onClick={() => legeKontaktAn(true)} disabled={neuBusy} className="btn text-xs disabled:opacity-40">
+                Anlegen und Mail schreiben
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Vorlagen: hier zu bearbeiten und nicht nur in der Verwaltung, weil
           man beim Schreiben merkt, dass eine fehlt. Dieselbe Komponente und

@@ -475,3 +475,17 @@ test("Die Gruppensuche findet nur Gruppen der eigenen Organisation", async () =>
   assert.match(quelle, /is_platform_admin \? gewuenscht : null/,
     "Eine fremde orgId darf nur ein Plattform-Admin angeben.");
 });
+
+// Ein von Hand im E-Mail-Marketing angelegter Kontakt ist keine Übergabe:
+// wer ihn einträgt, sitzt schon dort, wo die Telegram-Meldung hinführt.
+// Aus dem Gespräch dagegen muss jemand anderes handeln — dort bleibt sie.
+test("Nur ein Kontakt aus dem Gespräch meldet sich in Telegram", () => {
+  const quelle = readFileSync(new URL("../pages/api/email-kontakt.js", import.meta.url), "utf8");
+  const vonHand = quelle.indexOf("if (vonHand) return");
+  const meldung = quelle.indexOf("sendeAlarm(");
+  assert.ok(vonHand > 0, "Die Route unterscheidet nicht mehr zwischen Hand und Gespräch.");
+  assert.ok(vonHand < meldung, "Der Ausstieg für von Hand angelegte Kontakte muss VOR der Meldung stehen.");
+  // Und die Adresse wird für beide Wege gleich gesäubert — der Ausstieg
+  // steht erst NACH dem Speichern.
+  assert.ok(quelle.indexOf("bereinigeAdresse(email)") < vonHand);
+});
