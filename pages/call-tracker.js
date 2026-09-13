@@ -8,7 +8,7 @@ import { EMAIL_STATUS, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "
 import { NACHFASS_VORSCHLAEGE, faelligIn, nachfassTitel } from "../lib/nachfass";
 import { namensHinweis } from "../lib/kundenname";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
-import { fertigeMail, werteFuerKontakt, markeAus } from "../lib/marketingVorlage";
+import { fertigeMail, werteFuerKontakt, markeAus, teileName } from "../lib/marketingVorlage";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -103,7 +103,7 @@ export default function CallTracker() {
   // Zuletzt gutgeschriebenes XP — nur zum Anzeigen.
   const [xpHinweis, setXpHinweis] = useState(null);
   // Der E-Mail-Kontakt aus dem Gespräch (migration_138).
-  const [emailEntwurf, setEmailEntwurf] = useState({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
+  const [emailEntwurf, setEmailEntwurf] = useState({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFehler, setEmailFehler] = useState("");
   const [dublette, setDublette] = useState(null);
@@ -124,7 +124,10 @@ export default function CallTracker() {
   // Entscheider, oder erst wenn man schon nach dem Ablehnungsgrund gefragt
   // wird.
   function starteEmailKontakt(vonSchritt) {
-    setEmailEntwurf({ anrede: "", name: leadDraft.name || "", email: "", firma: "", telefon: "", notiz: "" });
+    // Stand im Termin-Entwurf schon ein Name, wird er als Vorschlag
+    // aufgeteilt — sichtbar in beiden Feldern, damit "von der Heide" nicht
+    // still zu Vorname "Anna von der" und Nachname "Heide" wird.
+    setEmailEntwurf({ anrede: "", ...teileName(leadDraft.name), email: "", firma: "", telefon: "", notiz: "" });
     setEmailFehler("");
     setDublette(null);
     setEmailHerkunft(vonSchritt);
@@ -533,7 +536,9 @@ export default function CallTracker() {
 
   async function speichereEmailKontakt() {
     setEmailFehler("");
-    if (!emailEntwurf.name.trim()) { setEmailFehler("Bitte einen Namen eintragen."); return; }
+    // Der Nachname ist Pflicht: er steht in der Anrede der Mail. Der Vorname
+    // hilft beim Wiederfinden, fehlt er, geht trotzdem nichts schief.
+    if (!emailEntwurf.nachname.trim()) { setEmailFehler("Bitte den Nachnamen eintragen — er steht in der Anrede der Mail."); return; }
     // Dieselbe Prüfung wie beim Speichern und beim Senden — an einer
     // Stelle beschrieben (lib/emailKontakt.js). Eine kopierte Adresse
     // bringt unsichtbare Zeichen mit, die der Versanddienst ablehnt.
@@ -573,7 +578,7 @@ export default function CallTracker() {
         setStep("mailWeg");
       } else {
         showToast("An die Organisation übergeben");
-        setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
+        setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
         zurueckZumStart();
       }
     } catch (e) {
@@ -613,7 +618,7 @@ export default function CallTracker() {
         vorlage: mailEntwurf.vorlage,
       });
       showToast("Mail ist raus");
-      setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
+      setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
       // Nicht gleich zurück: "ich schicke Ihnen was" ist erst die halbe
       // Arbeit, und der Rückruf danach ist genau das, was ohne Eintrag
       // untergeht. Der Kontakt bleibt dafür noch einen Schritt stehen.
@@ -1342,10 +1347,18 @@ export default function CallTracker() {
                         ))}
                       </div>
                     </div>
+                    {/* Getrennt, weil in der Mail nur der Nachname steht.
+                        Aus einem Feld das letzte Wort zu nehmen, ging bei
+                        "Anna von der Heide" schief. */}
                     <div>
-                      <label className="block text-xs text-textMuted mb-1">Name *</label>
-                      <input className="input !py-2 text-sm" value={emailEntwurf.name}
-                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, name: e.target.value }))} />
+                      <label className="block text-xs text-textMuted mb-1">Vorname</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.vorname}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, vorname: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Nachname *</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.nachname}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, nachname: e.target.value }))} />
                     </div>
                     <div>
                       <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
@@ -1426,7 +1439,7 @@ export default function CallTracker() {
                     <button
                       onClick={() => {
                         setMailKontakt(null);
-                        setEmailEntwurf({ anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" });
+                        setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
                         showToast("An die Organisation übergeben");
                         zurueckZumStart();
                       }}

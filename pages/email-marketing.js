@@ -16,7 +16,7 @@ import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../lib/emailKontakt";
 import {
   fuelleVorlage, fertigeMail, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN,
-  BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt, markeAus,
+  BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt, markeAus, ganzerName, teileName,
 } from "../lib/marketingVorlage";
 import { deutscheZeit } from "../lib/terminzeit";
 import { ZUSTELLUNG_LABELS, istGescheitert, darfNochSenden } from "../lib/zustellung";
@@ -87,7 +87,7 @@ export default function EmailMarketing() {
   // Call Tracker — wer eine Adresse von einer Messe, aus einer Empfehlung
   // oder aus einer Antwort auf eine alte Mail hatte, konnte sie nirgends
   // eintragen, ohne einen Anruf zu erfinden.
-  const LEERER_KONTAKT = { anrede: "", name: "", email: "", firma: "", telefon: "", notiz: "" };
+  const LEERER_KONTAKT = { anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" };
   const [neuOffen, setNeuOffen] = useState(false);
   const [neuEntwurf, setNeuEntwurf] = useState(LEERER_KONTAKT);
   const [neuBusy, setNeuBusy] = useState(false);
@@ -234,15 +234,18 @@ export default function EmailMarketing() {
   // ihn hinterher nicht mehr korrigieren.
   function starteBearbeiten(k) {
     setBearbeite(k.id);
+    // Alte Kontakte haben nur "name" — dann wird er als Vorschlag
+    // aufgeteilt, sichtbar und korrigierbar.
+    const teile = k.nachname ? { vorname: k.vorname || "", nachname: k.nachname } : teileName(k.name);
     setEntwurf({
-      anrede: k.anrede || "", name: k.name || "", email: k.email || "", firma: k.firma || "",
+      anrede: k.anrede || "", ...teile, email: k.email || "", firma: k.firma || "",
       telefon: k.telefon || "", notiz: k.notiz || "",
     });
     setFehler("");
   }
 
   async function speichereBearbeitung(k) {
-    if (!entwurf.name.trim()) { setFehler("Der Name darf nicht leer sein."); return; }
+    if (!entwurf.nachname.trim()) { setFehler("Der Nachname darf nicht leer sein — er steht in der Anrede der Mail."); return; }
     // Die Adresse säubern statt nur trimmen: kopierte Adressen bringen
     // unsichtbare Zeichen mit, und der Versanddienst lehnt sie später ab.
     const sauberEmail = bereinigeAdresse(entwurf.email);
@@ -255,17 +258,28 @@ export default function EmailMarketing() {
     }
     const patch = {
       anrede: entwurf.anrede === "herr" || entwurf.anrede === "frau" ? entwurf.anrede : null,
-      name: entwurf.name.trim(),
+      name: ganzerName(entwurf.vorname, entwurf.nachname),
+      vorname: entwurf.vorname.trim() || null,
+      nachname: entwurf.nachname.trim(),
       email: sauberEmail,
       firma: entwurf.firma.trim() || null,
       telefon: entwurf.telefon.trim() || null,
       notiz: entwurf.notiz.trim() || null,
     };
     setKontakte((prev) => prev.map((x) => (x.id === k.id ? { ...x, ...patch } : x)));
-    const err = await aendereGeprueft(
+    let err = await aendereGeprueft(
       supabase.from("email_kontakte").update(patch).eq("id", k.id),
       "Diesen Kontakt darf nur die Leitung der Organisation ändern."
     );
+    // Fehlen die Spalten noch (migration_162), ohne sie speichern statt gar
+    // nicht — der Name steht vollständig in "name".
+    if (err && /vorname|nachname/.test(err)) {
+      const { vorname: _v, nachname: _n, ...ohne } = patch;
+      err = await aendereGeprueft(
+        supabase.from("email_kontakte").update(ohne).eq("id", k.id),
+        "Diesen Kontakt darf nur die Leitung der Organisation ändern."
+      );
+    }
     if (err) { setFehler(err); laden(); return; }
     setBearbeite(null);
     setEntwurf(null);
@@ -365,7 +379,7 @@ export default function EmailMarketing() {
 
   async function legeKontaktAn(direktSchreiben = false) {
     setFehler("");
-    if (!neuEntwurf.name.trim()) { setFehler("Bitte einen Namen eintragen."); return; }
+    if (!neuEntwurf.nachname.trim()) { setFehler("Bitte den Nachnamen eintragen — er steht in der Anrede der Mail."); return; }
     const sauberEmail = bereinigeAdresse(neuEntwurf.email);
     if (!gueltigeAdresse(sauberEmail)) {
       const fremd = fremdeZeichen(sauberEmail);
@@ -700,10 +714,16 @@ export default function EmailMarketing() {
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+            {/* Getrennt, weil in der Mail nur der Nachname steht. */}
             <div>
-              <label className="block text-[11px] text-textMuted mb-1">Name *</label>
-              <input className="input !py-1.5 text-xs" value={neuEntwurf.name}
-                onChange={(e) => setNeuEntwurf((d) => ({ ...d, name: e.target.value }))} />
+              <label className="block text-[11px] text-textMuted mb-1">Vorname</label>
+              <input className="input !py-1.5 text-xs" value={neuEntwurf.vorname}
+                onChange={(e) => setNeuEntwurf((d) => ({ ...d, vorname: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-textMuted mb-1">Nachname *</label>
+              <input className="input !py-1.5 text-xs" value={neuEntwurf.nachname}
+                onChange={(e) => setNeuEntwurf((d) => ({ ...d, nachname: e.target.value }))} />
             </div>
             <div>
               <label className="block text-[11px] text-textMuted mb-1">E-Mail *</label>
@@ -1196,8 +1216,10 @@ export default function EmailMarketing() {
                     </button>
                   ))}
                 </div>
-                <input className="input !py-1.5 text-xs" placeholder="Name" value={entwurf.name}
-                  onChange={(e) => setEntwurf((d) => ({ ...d, name: e.target.value }))} />
+                <input className="input !py-1.5 text-xs" placeholder="Vorname" value={entwurf.vorname}
+                  onChange={(e) => setEntwurf((d) => ({ ...d, vorname: e.target.value }))} />
+                <input className="input !py-1.5 text-xs" placeholder="Nachname *" value={entwurf.nachname}
+                  onChange={(e) => setEntwurf((d) => ({ ...d, nachname: e.target.value }))} />
                 <input className="input !py-1.5 text-xs" placeholder="E-Mail" type="email" value={entwurf.email}
                   onChange={(e) => setEntwurf((d) => ({ ...d, email: e.target.value }))} />
                 <input className="input !py-1.5 text-xs" placeholder="Firma" value={entwurf.firma}

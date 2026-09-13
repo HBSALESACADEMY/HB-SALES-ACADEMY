@@ -3307,3 +3307,29 @@ test("Die Prüfung bemängelt keinen Platzhalter und warnt vor WebP", async () =
   assert.ok(webp.some((h) => /WebP/.test(h) && /karl-meyer\.webp/.test(h)));
   assert.ok(!htmlPruefung('<img src="https://x.de/a.png"><p>Abmelden</p>').some((h) => /WebP/.test(h)));
 });
+
+test("In der Mail steht der erfasste Nachname, nicht das letzte Wort", async () => {
+  const { werteFuerKontakt, ganzerName, teileName } = await import("../lib/marketingVorlage.js");
+
+  // Aus einem Feld "Name" das letzte Wort zu nehmen, geht bei
+  // "Karl-Heinz Müller" gut und bei "Anna von der Heide" schief: "Guten Tag
+  // Frau Heide" verrät dem Kunden sofort, dass eine Maschine schrieb.
+  const mitFeldern = werteFuerKontakt({ anrede: "frau", vorname: "Anna", nachname: "von der Heide", name: "Anna von der Heide" });
+  assert.equal(mitFeldern.nachname, "von der Heide");
+  assert.equal(mitFeldern.anrede, "Frau");
+
+  // Alte Kontakte ohne getrennte Felder behalten das bisherige Verhalten.
+  assert.equal(werteFuerKontakt({ name: "Max Muster" }).nachname, "Muster");
+
+  // "name" wird aus beiden Teilen gebildet — alles, was ihn liest, läuft
+  // unverändert weiter.
+  assert.equal(ganzerName("Anna", "von der Heide"), "Anna von der Heide");
+  assert.equal(ganzerName("", "Muster"), "Muster");
+  assert.equal(ganzerName("  Max ", " Muster "), "Max Muster");
+
+  // Das Aufteilen alter Namen ist ein Vorschlag: letztes Wort Nachname.
+  assert.deepEqual(teileName("Max Muster"), { vorname: "Max", nachname: "Muster" });
+  assert.deepEqual(teileName("Muster"), { vorname: "", nachname: "Muster" });
+  assert.deepEqual(teileName(""), { vorname: "", nachname: "" });
+  assert.deepEqual(teileName("Anna von der Heide"), { vorname: "Anna von der", nachname: "Heide" });
+});

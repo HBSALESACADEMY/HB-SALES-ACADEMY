@@ -3,6 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { sendeAlarm } from "../../lib/alarm";
 import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
+import { ganzerName } from "../../lib/marketingVorlage";
 
 // Kontakte aus dem Gespräch: anlegen und auf Dubletten prüfen.
 //
@@ -48,11 +49,18 @@ export default async function handler(req, res) {
 
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { anrede, name, email, firma, telefon, notiz, quelle } = req.body || {};
+  const { anrede, vorname, nachname, email, firma, telefon, notiz, quelle } = req.body || {};
+  // Aus beiden Teilen gebildet (migration_162). Ein älterer Aufrufer, der
+  // nur "name" schickt, funktioniert weiter.
+  const name = ganzerName(vorname, nachname) || String(req.body?.name || "").trim();
   // Von Hand im E-Mail-Marketing angelegt oder aus dem Gespräch? Nur das
   // zweite ist eine Übergabe, bei der jemand anderes handeln muss.
   const vonHand = quelle === "manuell";
   if (!String(name || "").trim()) return res.status(400).json({ error: "Name fehlt." });
+  // Ohne Nachnamen gibt es keine Anrede in der Mail — "Guten Tag Herr ,".
+  if (req.body?.vorname !== undefined && !String(nachname || "").trim()) {
+    return res.status(400).json({ error: "Bitte den Nachnamen eintragen — er steht in der Anrede der Mail." });
+  }
   // Beim Erfassen säubern, nicht erst beim Senden: eine kopierte Adresse
   // bringt unsichtbare Zeichen mit, und wer den Fehler erst zwei Tage
   // später beim Versand sieht, sucht ihn beim Absender.
@@ -67,18 +75,31 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { data: kontakt, error } = await admin.from("email_kontakte").insert({
+    const zeile = {
       organization_id: orgId,
       user_id: user.id,
       // Nur die zwei erlaubten Werte oder gar keiner — die Datenbank
       // lehnt alles andere ohnehin ab (migration_149).
       anrede: anrede === "herr" || anrede === "frau" ? anrede : null,
       name: String(name).trim(),
+      vorname: String(vorname || "").trim() || null,
+      nachname: String(nachname || "").trim() || null,
       email: sauber,
       firma: String(firma || "").trim() || null,
       telefon: String(telefon || "").trim() || null,
       notiz: String(notiz || "").trim() || null,
-    }).select().single();
+    };
+    let { data: kontakt, error } = await admin.from("email_kontakte").insert(zeile).select().single();
+
+    // Fehlen die Spalten noch (migration_162 nicht eingespielt), wird ohne
+    // sie gespeichert statt gar nicht. Der Call Tracker ist das
+    // Arbeitsgerät des Tages — dass dort ein Kontakt verlorengeht, weil
+    // eine Migration aussteht, darf nicht passieren. Der Name steht
+    // trotzdem vollständig in "name".
+    if (error && /vorname|nachname/.test(error.message || "")) {
+      const { vorname: _v, nachname: _n, ...ohne } = zeile;
+      ({ data: kontakt, error } = await admin.from("email_kontakte").insert(ohne).select().single());
+    }
     if (error) throw error;
 
     // Von Hand angelegt: keine Meldung. Wer den Kontakt im E-Mail-Marketing
