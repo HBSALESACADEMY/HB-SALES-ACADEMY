@@ -1,8 +1,8 @@
 import { useState } from "react";
 import MailVorschau from "./MailVorschau";
-import { istHtmlVorlage, bereinigeHtml, htmlPruefung, fertigeHtmlMail } from "../lib/htmlMail";
+import { istHtmlVorlage, bereinigeHtml, htmlPruefung, fertigeHtmlMail, fremdePlatzhalter, ersetzeFremdePlatzhalter } from "../lib/htmlMail";
 import { BEISPIEL_KONTAKT, werteFuerKontakt } from "../lib/marketingVorlage";
-import { PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage";
+import { PLATZHALTER, MARKEN_PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage";
 
 // Die Mail-Vorlagen bearbeiten.
 //
@@ -10,7 +10,10 @@ import { PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNam
 // Einstellungen liegen) und den E-Mail-Marketing-Reiter (wo man merkt, dass
 // eine Vorlage fehlt). Zwei getrennte Masken für dieselbe Sache wären der
 // sichere Weg zu zwei verschiedenen Verhaltensweisen.
-export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], signatur = "", erfolge = [] }) {
+// "marke": Name, Logo und Farben der Organisation — für die Vorschau. Ohne
+// sie zeigte die Vorschau einer HTML-Vorlage ein Beispiel-Unternehmen, und
+// ob sich die Vorlage anpasst, liess sich erst am echten Versand sehen.
+export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], signatur = "", erfolge = [], marke = {} }) {
   // Eine Rückfrage vor dem Entfernen. Eine Vorlage ist Arbeit von einer
   // halben Stunde, und der Knopf sass neben dem Namensfeld — ein Fehlklick
   // dort war unbemerkt weg, sobald jemand danach speicherte.
@@ -131,10 +134,38 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
                   onChange={(e) => onChange(vorlagen.map((x, j) => (j === i
                     ? { ...x, html: e.target.value, entfernt: bereinigeHtml(e.target.value).entfernt }
                     : x)))} />
+                <p className="text-[11px] text-textMuted">
+                  Damit sich die Vorlage an die Organisation anpasst, zusätzlich zu den Platzhaltern oben:{" "}
+                  {MARKEN_PLATZHALTER.map((p, k) => (
+                    <span key={p.schluessel}>
+                      {k > 0 ? ", " : ""}<strong className="text-textMain">{`{{${p.schluessel}}}`}</strong> ({p.label})
+                    </span>
+                  ))}
+                  . Beispiel: <code>{'<img src="{{logo}}" width="160">'}</code>
+                </p>
                 {v.entfernt?.length > 0 && (
                   <p className="text-[11px] text-amber">
                     Entfernt beim Versand: {v.entfernt.join(", ")}. Mailprogramme werfen das ohnehin hinaus.
                   </p>
+                )}
+                {/* Platzhalter aus Mailchimp, Brevo oder einem Baukasten
+                    ersetzt die Academy nicht. Genau daran lag es, wenn eine
+                    Vorlage sich "nicht anpasste". */}
+                {fremdePlatzhalter(v.html || "").length > 0 && (
+                  <div className="rounded-lg border border-amber/40 px-2.5 py-2">
+                    <p className="text-[11px] text-amber mb-1">
+                      Diese Platzhalter stammen aus einem anderen Programm und werden nicht ersetzt:
+                    </p>
+                    <ul className="text-[11px] text-textMuted mb-2">
+                      {fremdePlatzhalter(v.html || "").map((f) => (
+                        <li key={f.fund}><code>{f.fund}</code> → <code>{f.vorschlag}</code></li>
+                      ))}
+                    </ul>
+                    <button type="button" className="btn-ghost text-[11px]"
+                      onClick={() => aendere(i, "html", ersetzeFremdePlatzhalter(v.html || ""))}>
+                      Alle ersetzen
+                    </button>
+                  </div>
                 )}
                 {htmlPruefung(v.html || "").map((h) => (
                   <p key={h} className="text-[11px] text-amber">{h}</p>
@@ -143,7 +174,11 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
                   <>
                     <div className="text-[11px] text-textMuted">Vorschau mit Beispielkontakt und Standardschluss:</div>
                     <MailVorschau html={fertigeHtmlMail(v,
-                      werteFuerKontakt(BEISPIEL_KONTAKT, { vertriebler: "Beispiel Vertrieblerin", organisation: "Eure Organisation" }),
+                      werteFuerKontakt(BEISPIEL_KONTAKT, {
+                        vertriebler: "Beispiel Vertrieblerin",
+                        organisation: marke.organisation || "Eure Organisation",
+                        logo: marke.logo, farbe: marke.farbe, farbe2: marke.farbe2,
+                      }),
                       signatur).html} />
                   </>
                 )}

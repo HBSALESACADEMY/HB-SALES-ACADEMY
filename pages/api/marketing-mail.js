@@ -4,7 +4,7 @@ import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { sendEmail } from "../../lib/email";
 import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
-import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss } from "../../lib/marketingVorlage";
+import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss, markeAus } from "../../lib/marketingVorlage";
 import { istHtmlVorlage, fertigeHtmlMail } from "../../lib/htmlMail";
 
 // Die Marketing-Mail wirklich verschicken.
@@ -89,7 +89,8 @@ export default async function handler(req, res) {
     }
 
     const { data: org } = await admin.from("organizations")
-      .select("name, email_absender, email_antwort_an, email_signatur, email_vorlagen").eq("id", orgId).maybeSingle();
+      .select("name, email_absender, email_antwort_an, email_signatur, email_vorlagen, logo_url, primary_color, secondary_color")
+      .eq("id", orgId).maybeSingle();
 
     // Ist es eine HTML-Vorlage, kommt der Inhalt aus der GESPEICHERTEN
     // Vorlage — nie aus der Anfrage. Sonst liesse sich über die
@@ -134,6 +135,9 @@ export default async function handler(req, res) {
     const werte = werteFuerKontakt(kontakt, {
       vertriebler: profil?.full_name || "",
       organisation: org?.name || "",
+      // Logo und Farben der Organisation, damit eine HTML-Vorlage sich
+      // anpasst statt festzuhalten, was in der Datei stand.
+      ...markeAus(org),
     });
     const gefuellterBetreff = fuelleVorlage(String(betreff), werte);
 

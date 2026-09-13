@@ -15,7 +15,7 @@ import { aendereGeprueft, loescheGeprueft } from "../lib/loeschen";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, marketingQuote, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../lib/emailKontakt";
 import {
   fuelleVorlage, fertigeMail, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN,
-  BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt,
+  BEISPIEL_KONTAKT, vorlagenErfolg, werteFuerKontakt, markeAus,
 } from "../lib/marketingVorlage";
 import { deutscheZeit } from "../lib/terminzeit";
 import { ZUSTELLUNG_LABELS, istGescheitert, darfNochSenden } from "../lib/zustellung";
@@ -290,6 +290,8 @@ export default function EmailMarketing() {
     return werteFuerKontakt(k, {
       vertriebler: nameVon(k.user_id, k.erfasser?.full_name),
       organisation: orgName,
+      // Logo und Farben — dieselben, die der Server beim Versand einsetzt.
+      ...markeAus(org),
     });
   }
 
@@ -820,7 +822,8 @@ export default function EmailMarketing() {
 
         <Aufklapper offen={vorlagenOffen}>
           <div className="mt-3">
-            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} signatur={signatur} erfolge={vorlagenErfolg(kontakte)} />
+            <MailVorlagen vorlagen={vorlagenEntwurf || []} onChange={setVorlagenEntwurf} anhaenge={anhaenge} signatur={signatur} erfolge={vorlagenErfolg(kontakte)}
+              marke={{ organisation: orgName, ...markeAus(org) }} />
 
             {/* Die Vorschau: der fertige Text mit einem erfundenen Kontakt.
                 So sieht man Anrede, Absätze und Signatur, bevor eine echte
@@ -834,7 +837,7 @@ export default function EmailMarketing() {
                     <div key={i} className="mb-3">
                       <div className="text-[11px] text-textMuted mb-1">{v.name || "(ohne Namen)"} · Betreff: {fertig.betreff}</div>
                       {istHtmlVorlage(v)
-                        ? <MailVorschau html={fertigeHtmlMail(v, { ...BEISPIEL_KONTAKT, vertriebler: "Beispiel Vertrieblerin", organisation: orgName }, signatur).html} hoehe={320} />
+                        ? <MailVorschau html={fertigeHtmlMail(v, werteFuerKontakt(BEISPIEL_KONTAKT, { vertriebler: "Beispiel Vertrieblerin", organisation: orgName, ...markeAus(org) }), signatur).html} hoehe={320} />
                         : <pre className="text-[11px] text-textMain whitespace-pre-wrap bg-surfaceRaised rounded-lg px-3 py-2">{fertig.text}</pre>}
                     </div>
                   );

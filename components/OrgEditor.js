@@ -624,7 +624,8 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
 
       <p className="text-[11px] text-textMuted mb-3">Diese Vorlagen stehen im E-Mail-Marketing zur Auswahl.</p>
       <div className="mb-5">
-        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} anhaenge={orgAnhaenge} signatur={signatur} />
+        <MailVorlagen vorlagen={vorlagen} onChange={setVorlagen} anhaenge={orgAnhaenge} signatur={signatur}
+          marke={{ organisation: name, logo: logoUrl, farbe: primaryColor, farbe2: secondaryColor }} />
       </div>
 
       </Abschnitt>

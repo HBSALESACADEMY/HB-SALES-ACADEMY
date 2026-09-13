@@ -3206,3 +3206,47 @@ test("Eine HTML-Vorlage wird gefüllt, ohne dass ein Kontaktname Markup schreibt
   assert.ok(htmlPruefung("<p>Nur Text</p>").some((h) => /Abmeldehinweis/.test(h)));
   assert.deepEqual(htmlPruefung('<p>Hallo</p><img src="https://x.de/a.png"><p>Abmelden</p>'), []);
 });
+
+test("Eine HTML-Vorlage passt sich der Organisation an", async () => {
+  const { werteFuerKontakt, markeAus, sichereFarbe, sichereBildAdresse, unbekanntePlatzhalter } =
+    await import("../lib/marketingVorlage.js");
+  const { fertigeHtmlMail, fremdePlatzhalter, ersetzeFremdePlatzhalter } = await import("../lib/htmlMail.js");
+
+  // Logo und Farben wurden nie an eine Vorlage übergeben — also blieb
+  // stehen, was fest in der Datei stand. Jetzt kommen sie aus der
+  // Organisation.
+  const org = { name: "VolkWork", logo_url: "https://cdn.volkwork.de/logo.png", primary_color: "#CE3A5C", secondary_color: "#4C5DC9" };
+  const werte = werteFuerKontakt({ name: "Max Muster" }, { organisation: org.name, ...markeAus(org) });
+  const mail = fertigeHtmlMail(
+    { format: "html", html: '<table style="background:{{farbe}}"><tr><td><img src="{{logo}}"><p>{{organisation}}</p></td></tr></table>' },
+    werte, "");
+  assert.match(mail.html, /background:#CE3A5C/);
+  assert.match(mail.html, /src="https:\/\/cdn\.volkwork\.de\/logo\.png"/);
+  assert.match(mail.html, /<p>VolkWork<\/p>/);
+
+  // Die Werte landen in style- und src-Attributen. Eine Farbe, die keine
+  // ist, würde beliebiges CSS in jede Mail schreiben; ein Logo ohne https
+  // käme als leeres Kästchen an.
+  assert.equal(sichereFarbe("#abc"), "#abc");
+  assert.equal(sichereFarbe("red; background:url(x)"), "");
+  assert.equal(sichereBildAdresse("https://x.de/a.png"), "https://x.de/a.png");
+  assert.equal(sichereBildAdresse("javascript:alert(1)"), "");
+  assert.equal(sichereBildAdresse('https://x.de/a.png" onerror="y'), "");
+
+  // Die Markenplatzhalter gelten nicht als Tippfehler.
+  assert.deepEqual(unbekanntePlatzhalter("{{logo}} {{farbe}} {{farbe2}} {{vorname}}"), ["vorname"]);
+
+  // Platzhalter aus anderen Programmen werden erkannt — sonst kam die Mail
+  // mit "*|FNAME|*" beim Kunden an.
+  const fremd = fremdePlatzhalter('<p>Hallo *|FNAME|*, von [Firma] und {{ contact.LASTNAME }} und %%company%%</p>');
+  assert.deepEqual(fremd.map((f) => [f.fund, f.vorschlag]), [
+    ["*|FNAME|*", "{{name}}"],
+    ["{{ contact.LASTNAME }}", "{{nachname}}"],
+    ["%%company%%", "{{firma}}"],
+    ["[Firma]", "{{firma}}"],
+  ]);
+  assert.equal(ersetzeFremdePlatzhalter("Hallo *|FNAME|* von [Firma]"), "Hallo {{name}} von {{firma}}");
+
+  // Kein Fehlalarm bei gewöhnlichem Text in Klammern oder bei CSS.
+  assert.deepEqual(fremdePlatzhalter("<style>p{color:red}</style><p>[Hinweis] {Beispiel}</p>"), []);
+});

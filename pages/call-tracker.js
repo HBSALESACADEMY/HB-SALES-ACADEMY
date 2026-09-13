@@ -8,7 +8,7 @@ import { EMAIL_STATUS, gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "
 import { NACHFASS_VORSCHLAEGE, faelligIn, nachfassTitel } from "../lib/nachfass";
 import { namensHinweis } from "../lib/kundenname";
 import { resolveLeitfaden, hatLeitfaden } from "../lib/leitfaden";
-import { fertigeMail, werteFuerKontakt } from "../lib/marketingVorlage";
+import { fertigeMail, werteFuerKontakt, markeAus } from "../lib/marketingVorlage";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
@@ -588,6 +588,7 @@ export default function CallTracker() {
     const werte = werteFuerKontakt(kontakt, {
       vertriebler: meinProfil?.full_name || "",
       organisation: org?.name || "",
+      ...markeAus(org),
     });
     // Bei einer HTML-Vorlage nur Betreff und Vorschau. Den Inhalt nimmt der
     // Server aus der gespeicherten Vorlage (pages/api/marketing-mail.js).
