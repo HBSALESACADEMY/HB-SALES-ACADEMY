@@ -186,6 +186,10 @@ export default async function handler(req, res) {
       subject: gefuellterBetreff.trim(),
       html,
       text: textfassung,
+      // Die Abmelde-Kopfzeile: Postfächer werten Werbung ohne sie als
+      // Massenversand und zeigen mit ihr einen eigenen Abmeldeknopf — den
+      // klickt ein Empfänger dann statt "Spam" (lib/email.js).
+      abmeldung: org?.email_antwort_an || org?.email_absender || null,
       fromName: org?.name || "HB Sales Academy",
       fromEmail: org?.email_absender || null,
       // Damit die Antwort des Kontakts bei der Organisation ankommt und

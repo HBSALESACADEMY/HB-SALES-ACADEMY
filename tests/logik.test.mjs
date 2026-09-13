@@ -3333,3 +3333,25 @@ test("In der Mail steht der erfasste Nachname, nicht das letzte Wort", async () 
   assert.deepEqual(teileName(""), { vorname: "", nachname: "" });
   assert.deepEqual(teileName("Anna von der Heide"), { vorname: "Anna von der", nachname: "Heide" });
 });
+
+test("Werbemails tragen eine Abmelde-Kopfzeile", async () => {
+  const { abmeldeKopfzeilen } = await import("../lib/email.js");
+
+  // Ohne "List-Unsubscribe" gilt Werbung bei Gmail, web.de und GMX als
+  // Massenversand ohne Regeln und landet eher im Spam. Mit ihr zeigt das
+  // Postfach einen Abmeldeknopf — und wer sich abmelden will, drückt den
+  // statt "Spam", was sonst den Ruf der Absenderdomain ruiniert.
+  assert.deepEqual(abmeldeKopfzeilen("kontakt@volkwork.de"),
+    { "List-Unsubscribe": "<mailto:kontakt@volkwork.de?subject=Abmelden>" });
+
+  // Ohne gültige Adresse keine Kopfzeile — eine kaputte wäre schlimmer
+  // als keine.
+  assert.equal(abmeldeKopfzeilen(""), null);
+  assert.equal(abmeldeKopfzeilen("keine-adresse"), null);
+  assert.equal(abmeldeKopfzeilen("a@b.de>\r\nBcc: x@y.de"), null);
+
+  // Nur die Marketing-Route setzt sie; Benachrichtigungen ans eigene Team
+  // haben keinen Abmeldeknopf.
+  const route = readFileSync(new URL("../pages/api/marketing-mail.js", import.meta.url), "utf8");
+  assert.match(route, /abmeldung:/);
+});
