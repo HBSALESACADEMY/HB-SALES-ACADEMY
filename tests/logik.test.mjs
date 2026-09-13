@@ -3334,7 +3334,7 @@ test("In der Mail steht der erfasste Nachname, nicht das letzte Wort", async () 
   assert.deepEqual(teileName("Anna von der Heide"), { vorname: "Anna von der", nachname: "Heide" });
 });
 
-test("Werbemails tragen eine Abmelde-Kopfzeile", async () => {
+test("Die Abmelde-Kopfzeile gibt es nur für echten Massenversand", async () => {
   const { abmeldeKopfzeilen } = await import("../lib/email.js");
 
   // Ohne "List-Unsubscribe" gilt Werbung bei Gmail, web.de und GMX als
@@ -3350,8 +3350,11 @@ test("Werbemails tragen eine Abmelde-Kopfzeile", async () => {
   assert.equal(abmeldeKopfzeilen("keine-adresse"), null);
   assert.equal(abmeldeKopfzeilen("a@b.de>\r\nBcc: x@y.de"), null);
 
-  // Nur die Marketing-Route setzt sie; Benachrichtigungen ans eigene Team
-  // haben keinen Abmeldeknopf.
+  // Die Marketing-Mails setzen sie NICHT. Mit ihr zeigen Mailprogramme
+  // "Diese Nachricht stammt von einer Mailingliste" über der Mail — und
+  // eine persönliche Mail nach einem Telefonat liest sich dann wie eine
+  // Rundmail. Diese Entscheidung soll niemand still rückgängig machen.
   const route = readFileSync(new URL("../pages/api/marketing-mail.js", import.meta.url), "utf8");
-  assert.match(route, /abmeldung:/);
+  assert.ok(!/^\s*abmeldung:/m.test(route),
+    "Die Marketing-Route setzt die Abmelde-Kopfzeile — dann erscheint beim Kunden das Mailinglisten-Banner.");
 });

@@ -186,10 +186,11 @@ export default async function handler(req, res) {
       subject: gefuellterBetreff.trim(),
       html,
       text: textfassung,
-      // Die Abmelde-Kopfzeile: Postfächer werten Werbung ohne sie als
-      // Massenversand und zeigen mit ihr einen eigenen Abmeldeknopf — den
-      // klickt ein Empfänger dann statt "Spam" (lib/email.js).
-      abmeldung: org?.email_antwort_an || org?.email_absender || null,
+      // Bewusst OHNE Abmelde-Kopfzeile (List-Unsubscribe). Mit ihr zeigen
+      // Apple Mail, Gmail und web.de über der Mail "Diese Nachricht stammt
+      // von einer Mailingliste" — und genau das ist diese Mail nicht: sie
+      // geht an einen einzelnen Kontakt nach einem Telefonat. Das Banner
+      // machte aus der persönlichen Nachricht eine Rundmail.
       fromName: org?.name || "HB Sales Academy",
       fromEmail: org?.email_absender || null,
       // Damit die Antwort des Kontakts bei der Organisation ankommt und
