@@ -325,9 +325,11 @@ test("Wo eine Mail entsteht, wird der Name des Absenders mitgeladen", () => {
       abfrage: /const \{ data: meineRolle \} = await supabase\s*\.?\s*\n?\s*\.from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)/,
     },
     {
+      // Beim Versand zählt die Person, der der Kontakt GEHÖRT: mit ihr hat
+      // der Kunde telefoniert, ihr Name steht unter der Mail.
       datei: "../pages/api/marketing-mail.js",
-      verwendung: "vertriebler: profil?.full_name",
-      abfrage: /const \{ data: profil \} = await admin\s*\.?\s*\n?\s*\.from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)/,
+      verwendung: "besitzer?.full_name",
+      abfrage: /const \{ data: besitzer \} = await admin\.from\("profiles"\)\s*\n?\s*\.select\("([^"]*)"\)/,
     },
   ];
 

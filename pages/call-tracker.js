@@ -14,7 +14,7 @@ import { meldeFehler } from "../lib/errorBus";
 import { resolveObjectionCategories } from "../lib/objectionCategories";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
-import { buchungslink, kurzform } from "../lib/buchungslink";
+import { buchungslink, kurzform, nachverfolgbarerLink } from "../lib/buchungslink";
 import { meldeStoerung } from "../lib/fehlerMelden";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidung, differenz, vergleichsText } from "../lib/vergleich";
@@ -589,6 +589,9 @@ export default function CallTracker() {
       vertriebler: meinProfil?.full_name || "",
       organisation: org?.name || "",
       ...markeAus(org),
+      buchungslink: nachverfolgbarerLink(buchungslink(meinProfil, org), {
+        vertriebler: meinProfil?.full_name || "", kontaktId: kontakt?.id, name: kontakt?.name, email: kontakt?.email,
+      }),
     });
     // Bei einer HTML-Vorlage nur Betreff und Vorschau. Den Inhalt nimmt der
     // Server aus der gespeicherten Vorlage (pages/api/marketing-mail.js).

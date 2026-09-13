@@ -5,6 +5,7 @@ import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
 import MailVorschau from "../components/MailVorschau";
 import { istHtmlVorlage, fertigeHtmlMail } from "../lib/htmlMail";
+import { buchungslink, nachverfolgbarerLink } from "../lib/buchungslink";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Aufklapper from "../components/Aufklapper";
 import { supabase } from "../lib/supabaseClient";
@@ -292,6 +293,12 @@ export default function EmailMarketing() {
       organisation: orgName,
       // Logo und Farben — dieselben, die der Server beim Versand einsetzt.
       ...markeAus(org),
+      // Der Link mit Herkunft. In der Vorschau über den Buchungslink der
+      // Organisation; der Server nimmt beim Versand zuerst den der Person,
+      // der der Kontakt gehört.
+      buchungslink: nachverfolgbarerLink(buchungslink(null, org), {
+        vertriebler: nameVon(k.user_id, k.erfasser?.full_name), kontaktId: k.id, name: k.name, email: k.email,
+      }),
     });
   }
 

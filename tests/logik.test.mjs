@@ -3250,3 +3250,60 @@ test("Eine HTML-Vorlage passt sich der Organisation an", async () => {
   // Kein Fehlalarm bei gewöhnlichem Text in Klammern oder bei CSS.
   assert.deepEqual(fremdePlatzhalter("<style>p{color:red}</style><p>[Hinweis] {Beispiel}</p>"), []);
 });
+
+test("Der Buchungslink trägt mit, von wem der Kunde kam", async () => {
+  const { nachverfolgbarerLink } = await import("../lib/buchungslink.js");
+  const { werteFuerKontakt } = await import("../lib/marketingVorlage.js");
+  const { htmlMitSchluss, fertigeHtmlMail } = await import("../lib/htmlMail.js");
+
+  // Bucht ein Kunde über den Link in der Mail, stand im Kalender bisher
+  // nur ein Termin. Von wem er kam, liess sich nicht mehr sagen.
+  const link = nachverfolgbarerLink("https://www.cal.eu/volkwork.de/erstgesprach", {
+    vertriebler: "Ernestine Müller", kontaktId: "abc-123", name: "Max Muster", email: "max@firma.de",
+  });
+  const url = new URL(link);
+  assert.equal(url.searchParams.get("vertriebler"), "Ernestine Müller");
+  assert.equal(url.searchParams.get("ref"), "abc-123");
+  assert.equal(url.searchParams.get("utm_source"), "hb-academy");
+  assert.equal(url.searchParams.get("utm_campaign"), "Ernestine Müller");
+  // Vorgefüllt, damit der Kunde nichts zweimal eintippt.
+  assert.equal(url.searchParams.get("name"), "Max Muster");
+  assert.equal(url.searchParams.get("email"), "max@firma.de");
+  // Leerzeichen und Umlaute sind kodiert — sonst endet der Link beim ersten
+  // Leerzeichen, und aus "Ernestine Müller" wird "Ernestine".
+  assert.ok(!/ /.test(link));
+
+  // Ohne hinterlegten Link: leer statt kaputt. Und kein http in eine Mail.
+  assert.equal(nachverfolgbarerLink("", {}), "");
+  assert.equal(nachverfolgbarerLink("http://cal.eu/x", {}), "");
+
+  // Im HTML landet der Link maskiert im href — & wird zu &amp;, wie es
+  // in einem Attribut sein muss.
+  const mail = fertigeHtmlMail({ format: "html", html: '<a href="{{buchungslink}}">Termin</a>' },
+    werteFuerKontakt({ name: "Max Muster" }, { buchungslink: link }), "");
+  assert.match(mail.html, /href="https:\/\/www\.cal\.eu\/volkwork\.de\/erstgesprach\?name=Max\+Muster&amp;email=/);
+
+  // Eine Vorlage mit eigener Grussformel bekommt keinen zweiten Gruss
+  // darunter — der Kunde läse ihn sonst zweimal.
+  const mitGruss = "<body><p>Beste Grüße</p><p>Ernestine</p></body>";
+  assert.equal(htmlMitSchluss(mitGruss, "Viele Grüße\nVolkWork"), mitGruss);
+  assert.match(htmlMitSchluss("<body><p>Text</p></body>", "Viele Grüße\nVolkWork"), /Viele Grüße/);
+});
+
+test("Die Prüfung bemängelt keinen Platzhalter und warnt vor WebP", async () => {
+  const { htmlPruefung } = await import("../lib/htmlMail.js");
+
+  // {{logo}} wird beim Versand mit einer geprüften https-Adresse gefüllt.
+  // Ihn als "keine öffentliche Adresse" zu melden, bemängelte genau die
+  // Vorlage, die es richtig macht.
+  const mitPlatzhalter = htmlPruefung('<img src="{{logo}}"><p>Abmelden</p>');
+  assert.ok(!mitPlatzhalter.some((h) => /öffentliche https-Adresse/.test(h)));
+
+  // Ein echter lokaler Pfad bleibt ein Fehler.
+  assert.ok(htmlPruefung('<img src="logo.png"><p>Abmelden</p>').some((h) => /öffentliche https-Adresse/.test(h)));
+
+  // WebP zeigt Outlook am Windows-Rechner nicht an.
+  const webp = htmlPruefung('<img src="https://volkwork.de/a/karl-meyer.webp"><p>Abmelden</p>');
+  assert.ok(webp.some((h) => /WebP/.test(h) && /karl-meyer\.webp/.test(h)));
+  assert.ok(!htmlPruefung('<img src="https://x.de/a.png"><p>Abmelden</p>').some((h) => /WebP/.test(h)));
+});

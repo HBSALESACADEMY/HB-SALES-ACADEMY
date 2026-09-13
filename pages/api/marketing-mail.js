@@ -6,6 +6,7 @@ import { sendEmail } from "../../lib/email";
 import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
 import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss, markeAus } from "../../lib/marketingVorlage";
 import { istHtmlVorlage, fertigeHtmlMail } from "../../lib/htmlMail";
+import { buchungslink, nachverfolgbarerLink } from "../../lib/buchungslink";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
     }
 
     const { data: org } = await admin.from("organizations")
-      .select("name, email_absender, email_antwort_an, email_signatur, email_vorlagen, logo_url, primary_color, secondary_color")
+      .select("name, email_absender, email_antwort_an, email_signatur, email_vorlagen, logo_url, primary_color, secondary_color, booking_url")
       .eq("id", orgId).maybeSingle();
 
     // Ist es eine HTML-Vorlage, kommt der Inhalt aus der GESPEICHERTEN
@@ -132,8 +133,23 @@ export default async function handler(req, res) {
     // Wer im Textfeld selbst "{{vertriebler}}" tippt — oder eine Signatur
     // hineinkopiert — hatte das sonst wörtlich in der Mail stehen: die
     // Seite füllt nur beim Öffnen der Vorlage, danach nie wieder.
+    // Die Person, der der Kontakt GEHÖRT — nicht die, die gerade sendet.
+    //
+    // Schickt die Leitung eine Mail für Ernestines Kontakt, hat der Kunde
+    // am Telefon mit Ernestine gesprochen. Unter der Mail muss ihr Name
+    // stehen, und der Buchungslink muss auf sie zeigen — sonst bucht der
+    // Kunde bei der Leitung, und der Termin fehlt in Ernestines Zahlen.
+    // Für Text-Vorlagen war das schon so: dort setzt der Browser den Namen
+    // beim Öffnen ein. Für HTML-Vorlagen, die hier gefüllt werden, fehlte es.
+    const { data: besitzer } = await admin.from("profiles")
+      .select("full_name, booking_url").eq("id", kontakt.user_id).maybeSingle();
+    const vertrieblerName = besitzer?.full_name || profil?.full_name || "";
+
     const werte = werteFuerKontakt(kontakt, {
-      vertriebler: profil?.full_name || "",
+      vertriebler: vertrieblerName,
+      buchungslink: nachverfolgbarerLink(buchungslink(besitzer, org), {
+        vertriebler: vertrieblerName, kontaktId: kontakt.id, name: kontakt.name, email: kontakt.email,
+      }),
       organisation: org?.name || "",
       // Logo und Farben der Organisation, damit eine HTML-Vorlage sich
       // anpasst statt festzuhalten, was in der Datei stand.
