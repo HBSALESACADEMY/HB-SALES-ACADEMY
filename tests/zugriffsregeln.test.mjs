@@ -491,3 +491,33 @@ test("Nur ein Kontakt aus dem Gespräch meldet sich in Telegram", () => {
   // steht erst NACH dem Speichern.
   assert.ok(quelle.indexOf("bereinigeAdresse(email)") < vonHand);
 });
+
+// Die Einträge in email_anhaenge waren je Organisation getrennt, die
+// DATEIEN im Speicher nicht: die Regeln prüften nur "angemeldet" oder
+// "Führungsrolle irgendeiner Organisation". Die Leitung von Firma B hätte
+// eine Datei von Firma A überschreiben oder löschen können — und beim
+// Versand ginge dann Bs Datei an As Kunden.
+test("Anhang-Dateien sind im Speicher je Organisation abgeschottet", () => {
+  const sql = readFileSync(new URL("../supabase/migration_163_anhaenge_je_organisation.sql", import.meta.url), "utf8");
+  const regel = (name) => sql.match(new RegExp(`create policy "${name}"[\\s\\S]*?;`))?.[0] || "";
+
+  ["email_anhaenge_lesen", "email_anhaenge_schreiben", "email_anhaenge_entfernen"].forEach((name) => {
+    const r = regel(name);
+    assert.ok(r, `${name} fehlt.`);
+    assert.match(r, /bucket_id = 'email-anhaenge'/);
+    // Der erste Ordner des Pfads ist die Organisation.
+    assert.match(r, /\(storage\.foldername\(name\)\)\[1\] = aktive_org\(auth\.uid\(\)\)::text/,
+      `${name} prüft nicht, ob die Datei zur aktiven Organisation gehört.`);
+    // Keine Pauschalausnahme, die die Grenze wieder aushebelt.
+    assert.ok(!/is_platform_admin/.test(r), `${name} hebt die Grenze für Plattform-Admins auf.`);
+  });
+
+  // Schreiben und Löschen bleiben der Leitung vorbehalten.
+  assert.match(regel("email_anhaenge_schreiben"), /ist_fuehrungsrolle\(auth\.uid\(\)\)/);
+  assert.match(regel("email_anhaenge_entfernen"), /ist_fuehrungsrolle\(auth\.uid\(\)\)/);
+
+  // Und der Upload legt die Dateien wirklich unter der Organisation ab —
+  // sonst sperrte die neue Regel jeden Upload aus.
+  const seite = readFileSync(new URL("../pages/email-marketing.js", import.meta.url), "utf8");
+  assert.match(seite, /const pfad = `\$\{org\.id\}\//);
+});
