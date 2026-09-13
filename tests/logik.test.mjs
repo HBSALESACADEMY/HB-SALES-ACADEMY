@@ -3358,3 +3358,36 @@ test("Die Abmelde-Kopfzeile gibt es nur für echten Massenversand", async () => 
   assert.ok(!/^\s*abmeldung:/m.test(route),
     "Die Marketing-Route setzt die Abmelde-Kopfzeile — dann erscheint beim Kunden das Mailinglisten-Banner.");
 });
+
+test("Die Hinweise zu einer Vorlage stehen gesammelt und mit Schweregrad", async () => {
+  const { vorlagenHinweise, ernsteHinweise } = await import("../lib/vorlagenHinweise.js");
+
+  // Vorher standen alle Hinweise verstreut untereinander in der Maske. Jetzt
+  // zeigt die Übersicht nur eine Zahl — und die muss die ernsten zählen,
+  // nicht jede Randbemerkung.
+  const sauber = vorlagenHinweise({
+    name: "Erstinfo", betreff: "Hallo {{firma}}",
+    text: "Guten Tag {{anrede}} {{nachname}},\n\nDanke für das Gespräch.",
+  });
+  assert.equal(ernsteHinweise(sauber), 0);
+
+  // Ein Tippfehler im Platzhalter ist ein Fehler: er steht wörtlich beim Kunden.
+  const tippfehler = vorlagenHinweise({ name: "X", text: "Hallo {{vorname}}" });
+  assert.ok(tippfehler.some((h) => h.art === "fehler" && /\{\{vorname\}\}/.test(h.text)));
+
+  // Fremde Platzhalter bringen den Ersatzvorschlag gleich mit.
+  const fremd = vorlagenHinweise({ name: "X", format: "html", html: "<p>Hallo *|FNAME|*</p><p>abmelden</p>" });
+  const eintrag = fremd.find((h) => h.fremde);
+  assert.equal(eintrag.art, "fehler");
+  assert.deepEqual(eintrag.fremde, [{ fund: "*|FNAME|*", vorschlag: "{{name}}" }]);
+
+  // Doppelter Gruss bei Text-Vorlagen ist eine Warnung.
+  const doppeltGruss = vorlagenHinweise({ name: "X", text: "Text\n\nViele Grüße\n{{vertriebler}}" }, "Viele Grüße\n{{vertriebler}}");
+  assert.ok(doppeltGruss.some((h) => h.art === "warnung" && /doppelt/.test(h.text)));
+
+  // Eine leere Vorlage ist nur ein Hinweis — kein Grund für ein Warnzeichen
+  // in der Übersicht, solange man sie gerade erst anlegt.
+  const leer = vorlagenHinweise({ name: "", text: "" });
+  assert.ok(leer.some((h) => h.art === "info"));
+  assert.equal(ernsteHinweise(leer), 0);
+});
