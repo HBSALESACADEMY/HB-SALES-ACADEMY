@@ -348,7 +348,10 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       telegram_abschluss_chat_id: telegramAbschlussId.trim() || null,
       // Nur vollständige Vorlagen: eine ohne Text steht sonst in der
       // Auswahl und liefert eine leere Mail.
-      email_vorlagen: vorlagen.filter((v) => v.name?.trim() && v.text?.trim()),
+      email_vorlagen: vorlagen
+        .filter((v) => v.name?.trim() && (v.format === "html" ? v.html?.trim() : v.text?.trim()))
+        // "entfernt" ist nur ein Hinweis für die Maske, kein Teil der Vorlage.
+        .map(({ entfernt, ...v }) => v),
       email_absender: absender.trim() || null,
       // 0 heisst ausdrücklich "keine Frist" — deshalb wird die Null hier
       // nicht wie ein leeres Feld behandelt.

@@ -28,6 +28,8 @@ import { saeubere, MAX_LAENGE } from "../lib/grundVorschlag";
 import Aufklapper from "../components/Aufklapper";
 import TageszeitAnalyse from "../components/TageszeitAnalyse";
 import WochentagAnalyse from "../components/WochentagAnalyse";
+import MailVorschau from "../components/MailVorschau";
+import { istHtmlVorlage, fertigeHtmlMail } from "../lib/htmlMail";
 import VergleichsDiagramm from "../components/VergleichsDiagramm";
 import TempoKarte from "../components/TempoKarte";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
@@ -583,10 +585,15 @@ export default function CallTracker() {
   // Die Vorlage mit den Werten dieses Gesprächs füllen. Name des Kontakts
   // und eigener Name kommen automatisch — mehr muss niemand eintippen.
   function waehleVorlage(kontakt, vorlage) {
-    const fertig = fertigeMail(vorlage, werteFuerKontakt(kontakt, {
+    const werte = werteFuerKontakt(kontakt, {
       vertriebler: meinProfil?.full_name || "",
       organisation: org?.name || "",
-    }), org?.email_signatur || "");
+    });
+    // Bei einer HTML-Vorlage nur Betreff und Vorschau. Den Inhalt nimmt der
+    // Server aus der gespeicherten Vorlage (pages/api/marketing-mail.js).
+    const fertig = istHtmlVorlage(vorlage)
+      ? { ...fertigeHtmlMail(vorlage, werte, org?.email_signatur || ""), format: "html" }
+      : { ...fertigeMail(vorlage, werte, org?.email_signatur || ""), format: "text" };
     setMailEntwurf({ vorlage: vorlage.name, ...fertig });
   }
 
@@ -1454,9 +1461,18 @@ export default function CallTracker() {
                     <label className="block text-xs text-textMuted mb-1">Betreff</label>
                     <input className="input !py-2 text-sm mb-2" value={mailEntwurf.betreff}
                       onChange={(e) => setMailEntwurf((d) => ({ ...d, betreff: e.target.value }))} />
-                    <label className="block text-xs text-textMuted mb-1">Text</label>
-                    <textarea className="input !py-2 text-sm" rows={9} value={mailEntwurf.text}
-                      onChange={(e) => setMailEntwurf((d) => ({ ...d, text: e.target.value }))} />
+                    {mailEntwurf.format === "html" ? (
+                      <>
+                        <label className="block text-xs text-textMuted mb-1">So kommt die Mail an</label>
+                        <MailVorschau html={mailEntwurf.html} hoehe={360} />
+                      </>
+                    ) : (
+                      <>
+                        <label className="block text-xs text-textMuted mb-1">Text</label>
+                        <textarea className="input !py-2 text-sm" rows={9} value={mailEntwurf.text}
+                          onChange={(e) => setMailEntwurf((d) => ({ ...d, text: e.target.value }))} />
+                      </>
+                    )}
                     <p className="text-[11px] text-textMuted mt-1">
                       Geht an {mailKontakt?.email} im Namen von {org?.name || "eurer Organisation"}. Ändern
                       darfst du; die Vorlage kommt von eurer Leitung.

@@ -3,6 +3,8 @@ import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
+import MailVorschau from "../components/MailVorschau";
+import { istHtmlVorlage, fertigeHtmlMail } from "../lib/htmlMail";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Aufklapper from "../components/Aufklapper";
 import { supabase } from "../lib/supabaseClient";
@@ -285,9 +287,13 @@ export default function EmailMarketing() {
     const werte = werteFuer(k);
     // Signatur gleich mit: man soll sehen, was rausgeht — und nicht erst
     // beim Kunden merken, dass die Anschrift fehlt oder doppelt dasteht.
-    const fertig = vorlage
-      ? fertigeMail(vorlage, werte, signatur)
-      : { betreff: `Ihre Anfrage${k.firma ? ` – ${k.firma}` : ""}`, text: signatur ? fuelleVorlage(signatur, werte) : "" };
+    const fertig = !vorlage
+      ? { betreff: `Ihre Anfrage${k.firma ? ` – ${k.firma}` : ""}`, text: signatur ? fuelleVorlage(signatur, werte) : "" }
+      : istHtmlVorlage(vorlage)
+        // Bei HTML nur Betreff und Vorschau. Den Inhalt nimmt der Server
+        // aus der gespeicherten Vorlage — hier wird nichts davon geschickt.
+        ? { ...fertigeHtmlMail(vorlage, werte, signatur), format: "html" }
+        : fertigeMail(vorlage, werte, signatur);
     setMailFuer(k.id);
     setMailVorlage(vorlage?.name || "");
     setMail(fertig);
@@ -336,7 +342,10 @@ export default function EmailMarketing() {
   }
 
   async function sendeMail(k, anMichSelbst = false) {
-    if (!mail.betreff.trim() || !mail.text.trim()) { setFehler("Betreff und Text dürfen nicht leer sein."); return; }
+    if (!mail.betreff.trim() || (mail.format !== "html" && !mail.text.trim())) {
+      setFehler("Betreff und Text dürfen nicht leer sein.");
+      return;
+    }
     if (!anMichSelbst && !darfNochSenden(k)) {
       setFehler("Dieser Kontakt hat die Mail als Spam gemeldet — dorthin geht nichts mehr raus.");
       return;
@@ -488,7 +497,9 @@ export default function EmailMarketing() {
     // Unvollständige verwerfen: eine Vorlage ohne Text steht sonst in der
     // Auswahl und liefert eine leere Mail.
     const sauber = (liste || [])
-      .filter((v) => v.name?.trim() && v.text?.trim())
+      .filter((v) => v.name?.trim() && (istHtmlVorlage(v) ? v.html?.trim() : v.text?.trim()))
+      // "entfernt" ist nur ein Hinweis für die Maske, kein Teil der Vorlage.
+      .map(({ entfernt, ...v }) => v)
       // Verweise auf gelöschte Dateien mitschleppen hiesse: die Mail
       // scheitert später an einem Anhang, den es nicht mehr gibt.
       .map((v) => ({ ...v, anhaenge: (v.anhaenge || []).filter((id) => anhaenge.some((a) => a.id === id)) }));
@@ -651,7 +662,7 @@ export default function EmailMarketing() {
                       // Der reine Text in die Zwischenablage — für alle,
                       // die ausserhalb der Academy schreiben.
                       try {
-                        await navigator.clipboard.writeText(`${v.betreff || ""}\n\n${v.text || ""}`.trim());
+                        await navigator.clipboard.writeText(`${v.betreff || ""}\n\n${istHtmlVorlage(v) ? (v.html || "") : (v.text || "")}`.trim());
                         setProbeStand("Vorlage kopiert.");
                         setTimeout(() => setProbeStand(null), 2500);
                       } catch (e) { setFehler("Kopieren war nicht möglich."); }
@@ -689,15 +700,17 @@ export default function EmailMarketing() {
             {/* Die Vorschau: der fertige Text mit einem erfundenen Kontakt.
                 So sieht man Anrede, Absätze und Signatur, bevor eine echte
                 Mail rausgeht. */}
-            {(vorlagenEntwurf || []).filter((v) => v.text?.trim()).length > 0 && (
+            {(vorlagenEntwurf || []).filter((v) => v.text?.trim() || v.html?.trim()).length > 0 && (
               <div className="card mt-3">
                 <div className="text-xs text-textMain font-semibold mb-2">Vorschau mit Beispielkontakt</div>
-                {(vorlagenEntwurf || []).filter((v) => v.text?.trim()).map((v, i) => {
+                {(vorlagenEntwurf || []).filter((v) => v.text?.trim() || v.html?.trim()).map((v, i) => {
                   const fertig = fertigeMail(v, { ...BEISPIEL_KONTAKT, vertriebler: "Beispiel Vertrieblerin", organisation: orgName }, signatur);
                   return (
                     <div key={i} className="mb-3">
                       <div className="text-[11px] text-textMuted mb-1">{v.name || "(ohne Namen)"} · Betreff: {fertig.betreff}</div>
-                      <pre className="text-[11px] text-textMain whitespace-pre-wrap bg-surfaceRaised rounded-lg px-3 py-2">{fertig.text}</pre>
+                      {istHtmlVorlage(v)
+                        ? <MailVorschau html={fertigeHtmlMail(v, { ...BEISPIEL_KONTAKT, vertriebler: "Beispiel Vertrieblerin", organisation: orgName }, signatur).html} hoehe={320} />
+                        : <pre className="text-[11px] text-textMain whitespace-pre-wrap bg-surfaceRaised rounded-lg px-3 py-2">{fertig.text}</pre>}
                     </div>
                   );
                 })}
@@ -907,8 +920,20 @@ export default function EmailMarketing() {
                 )}
                 <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
                   value={mail.betreff} onChange={(e) => setMail((d) => ({ ...d, betreff: e.target.value }))} />
-                <textarea className="input !py-1.5 text-xs" rows={8} placeholder="Text der Mail"
-                  value={mail.text} onChange={(e) => setMail((d) => ({ ...d, text: e.target.value }))} />
+                {mail.format === "html" ? (
+                  <>
+                    {/* Eine gestaltete Mail lässt sich nicht im Textfeld
+                        ändern, ohne sie zu zerlegen. Geändert wird die
+                        Vorlage — hier steht, was rausgeht. */}
+                    <MailVorschau html={mail.html} />
+                    <p className="text-[11px] text-textMuted mt-1">
+                      HTML-Vorlage: Der Inhalt kommt unverändert aus der Vorlage, nur der Betreff ist hier änderbar.
+                    </p>
+                  </>
+                ) : (
+                  <textarea className="input !py-1.5 text-xs" rows={8} placeholder="Text der Mail"
+                    value={mail.text} onChange={(e) => setMail((d) => ({ ...d, text: e.target.value }))} />
+                )}
                 {anhaenge.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap mt-2">
                     <span className="text-[11px] text-textMuted">Anhänge:</span>

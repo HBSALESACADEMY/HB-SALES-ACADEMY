@@ -5,6 +5,7 @@ import { istFuehrungsrolle } from "../../lib/rollen";
 import { sendEmail } from "../../lib/email";
 import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
 import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss } from "../../lib/marketingVorlage";
+import { istHtmlVorlage, fertigeHtmlMail } from "../../lib/htmlMail";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -24,8 +25,11 @@ export default async function handler(req, res) {
   const { user } = auth;
 
   const { kontaktId, betreff, text, vorlage, anhaenge, anMichSelbst } = req.body || {};
-  if (!kontaktId || !String(betreff || "").trim() || !String(text || "").trim()) {
-    return res.status(400).json({ error: "Betreff und Text sind nötig." });
+  // Der Text wird erst geprüft, wenn feststeht, ob es eine HTML-Vorlage
+  // ist: dort kommt der Inhalt aus der gespeicherten Vorlage, und das
+  // Textfeld der Anfrage ist zu Recht leer.
+  if (!kontaktId || !String(betreff || "").trim()) {
+    return res.status(400).json({ error: "Betreff ist nötig." });
   }
 
   const admin = getAdminSupabase();
@@ -85,7 +89,20 @@ export default async function handler(req, res) {
     }
 
     const { data: org } = await admin.from("organizations")
-      .select("name, email_absender, email_antwort_an, email_signatur").eq("id", orgId).maybeSingle();
+      .select("name, email_absender, email_antwort_an, email_signatur, email_vorlagen").eq("id", orgId).maybeSingle();
+
+    // Ist es eine HTML-Vorlage, kommt der Inhalt aus der GESPEICHERTEN
+    // Vorlage — nie aus der Anfrage. Sonst liesse sich über die
+    // Absenderadresse der Firma beliebiges HTML verschicken, von jeder
+    // angemeldeten Person.
+    const gewaehlte = (Array.isArray(org?.email_vorlagen) ? org.email_vorlagen : []).find((v) => v.name === vorlage);
+    const htmlVorlage = istHtmlVorlage(gewaehlte) ? gewaehlte : null;
+    if (!htmlVorlage && !String(text || "").trim()) {
+      return res.status(400).json({ error: "Betreff und Text sind nötig." });
+    }
+    if (htmlVorlage && !String(htmlVorlage.html || "").trim()) {
+      return res.status(400).json({ error: `Die HTML-Vorlage „${htmlVorlage.name}“ ist leer.` });
+    }
 
     // Anhänge holt der Server aus dem Speicher; der Browser schickt nur die
     // Kennungen. Sonst liesse sich jede beliebige Datei über eure
@@ -118,12 +135,26 @@ export default async function handler(req, res) {
       vertriebler: profil?.full_name || "",
       organisation: org?.name || "",
     });
-    const gefuellterText = fuelleVorlage(String(text), werte);
     const gefuellterBetreff = fuelleVorlage(String(betreff), werte);
 
-    // Hängt den Standardschluss an — aber nur, wenn er nicht ohnehin schon
-    // im Text steht (siehe lib/marketingVorlage.js).
-    const html = alsHtml(mitSchluss(gefuellterText.trim(), org?.email_signatur || "", werte));
+    // Zwei Wege, ein Ergebnis: HTML und Textfassung.
+    //
+    // Text-Vorlage: der Text aus dem Entwurf, maskiert und in Absätze
+    // gesetzt, mit Standardschluss. HTML-Vorlage: bereinigt, mit maskierten
+    // Werten gefüllt, Schluss angehängt, und dieselbe Mail zusätzlich als
+    // Text (lib/htmlMail.js).
+    let html;
+    let textfassung = null;
+    if (htmlVorlage) {
+      const fertig = fertigeHtmlMail(htmlVorlage, werte, org?.email_signatur || "");
+      html = fertig.html;
+      textfassung = fertig.text;
+    } else {
+      // Hängt den Standardschluss an — aber nur, wenn er nicht ohnehin schon
+      // im Text steht (siehe lib/marketingVorlage.js).
+      const gefuellterText = fuelleVorlage(String(text), werte);
+      html = alsHtml(mitSchluss(gefuellterText.trim(), org?.email_signatur || "", werte));
+    }
 
     // An sich selbst: dieselbe Mail, dieselbe Vorlage, derselbe Absender —
     // nur ein anderer Empfänger. Die Sicherheitsstufe vor dem Ernstfall.
@@ -134,6 +165,7 @@ export default async function handler(req, res) {
       to: empfaenger,
       subject: gefuellterBetreff.trim(),
       html,
+      text: textfassung,
       fromName: org?.name || "HB Sales Academy",
       fromEmail: org?.email_absender || null,
       // Damit die Antwort des Kontakts bei der Organisation ankommt und

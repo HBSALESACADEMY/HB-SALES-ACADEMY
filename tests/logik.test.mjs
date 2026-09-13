@@ -3148,3 +3148,61 @@ test("Ergebnis und Status heissen nicht beide fast gleich", async () => {
   ERGEBNISSE.forEach((e) => assert.ok(e.hinweis?.length > 10, `Zu "${e.label}" fehlt der Hinweis.`));
   assert.match(ERGEBNIS_LABELS.absage && ERGEBNISSE[2].hinweis, /kein Interesse/);
 });
+
+test("Eine HTML-Vorlage wird gefüllt, ohne dass ein Kontaktname Markup schreibt", async () => {
+  const { fuelleHtml, bereinigeHtml, fertigeHtmlMail, htmlZuText, htmlPruefung, htmlMitSchluss,
+    istHtmlVorlage, GMAIL_GRENZE_BYTES } = await import("../lib/htmlMail.js");
+
+  // Die VORLAGE ist vertraut, die WERTE nicht. Ein Kontakt steht so in der
+  // Datenbank, wie ihn jemand am Telefon notiert hat — samt spitzer
+  // Klammern. Ohne Maskierung schriebe sein Name Markup in eine Mail, die
+  // im Namen der Firma rausgeht.
+  const gefuellt = fuelleHtml("<p>Hallo {{name}}</p>", { name: "<b>Müller</b> & Co" });
+  assert.equal(gefuellt, "<p>Hallo &lt;b&gt;Müller&lt;/b&gt; &amp; Co</p>");
+  assert.ok(!/<b>/.test(gefuellt));
+
+  // Anders als beim Text fällt keine Zeile weg — das zerschnitte Tabellen.
+  assert.equal(fuelleHtml("<td>{{firma}}</td>", {}), "<td></td>");
+
+  // Was in einer Mail nichts zu suchen hat, fliegt raus — und die Maske
+  // sagt, was.
+  const { html: sauber, entfernt } = bereinigeHtml(
+    '<p onclick="x()">Hi</p><script>alert(1)</script><a href="javascript:y()">Link</a><iframe src="z"></iframe>');
+  assert.ok(!/script|onclick|javascript:|iframe/i.test(sauber));
+  assert.ok(entfernt.includes("Skripte"));
+  assert.ok(entfernt.some((e) => /onclick/.test(e)));
+  assert.ok(entfernt.includes("javascript:-Links"));
+  assert.ok(entfernt.includes("eingebettete Rahmen"));
+
+  // Der Standardschluss kommt vor </body>, und nicht zweimal, wenn er
+  // schon im HTML steht.
+  const mitSchluss = htmlMitSchluss("<html><body><p>Text</p></body></html>", "Viele Grüße\nVolkWork");
+  assert.match(mitSchluss, /Viele Grüße<br\/>VolkWork<\/p><\/div><\/body>/);
+  const schonDa = "<html><body><p>Viele Grüße<br>VolkWork</p></body></html>";
+  assert.equal(htmlMitSchluss(schonDa, "Viele Grüße\nVolkWork"), schonDa);
+
+  // Die Textfassung ist lesbar: Absätze, Links mit Adresse, Entitäten
+  // aufgelöst — und entschärfte Links ohne ein sinnloses "(#)".
+  const text = htmlZuText('<style>p{}</style><p>Hallo&nbsp;Welt &amp; Co</p><p><a href="https://volkwork.de">Seite</a> <a href="#">weg</a></p>');
+  assert.equal(text, "Hallo Welt & Co\n\nSeite (https://volkwork.de) weg");
+
+  // Vorschau und Versand gehen durch dieselbe Funktion.
+  const fertig = fertigeHtmlMail(
+    { format: "html", betreff: "Für {{firma}}", html: "<body><p>Hallo {{anrede}} {{nachname}}</p><script>x</script></body>" },
+    { firma: "ACME", anrede: "Herr", nachname: "Muster" }, "");
+  assert.equal(fertig.betreff, "Für ACME");
+  assert.match(fertig.html, /Hallo Herr Muster/);
+  assert.ok(!/script/.test(fertig.html));
+  assert.equal(fertig.text, "Hallo Herr Muster");
+
+  assert.equal(istHtmlVorlage({ format: "html" }), true);
+  assert.equal(istHtmlVorlage({ text: "x" }), false);
+
+  // Die Hinweise stehen VOR dem ersten Versand: zu gross für Gmail, Bilder
+  // ohne öffentliche Adresse, kein Abmeldehinweis.
+  const riesig = `<p>${"x".repeat(GMAIL_GRENZE_BYTES + 10)}</p><p>abmelden</p>`;
+  assert.ok(htmlPruefung(riesig).some((h) => /Gmail/.test(h)));
+  assert.ok(htmlPruefung('<img src="bild.png"><p>abmelden</p>').some((h) => /öffentliche https-Adresse/.test(h)));
+  assert.ok(htmlPruefung("<p>Nur Text</p>").some((h) => /Abmeldehinweis/.test(h)));
+  assert.deepEqual(htmlPruefung('<p>Hallo</p><img src="https://x.de/a.png"><p>Abmelden</p>'), []);
+});

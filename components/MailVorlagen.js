@@ -1,4 +1,7 @@
 import { useState } from "react";
+import MailVorschau from "./MailVorschau";
+import { istHtmlVorlage, bereinigeHtml, htmlPruefung, fertigeHtmlMail } from "../lib/htmlMail";
+import { BEISPIEL_KONTAKT, werteFuerKontakt } from "../lib/marketingVorlage";
 import { PLATZHALTER, unbekanntePlatzhalter, doppelt, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage";
 
 // Die Mail-Vorlagen bearbeiten.
@@ -56,9 +59,10 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
       {vorlagen.map((v, i) => {
         // Ein Tippfehler im Platzhalter landet sonst wörtlich in der Mail
         // beim Kunden: "Hallo {{vorname}}".
+        const html = istHtmlVorlage(v);
         const unbekannt = [...new Set([
           ...unbekanntePlatzhalter(v.betreff || ""),
-          ...unbekanntePlatzhalter(v.text || ""),
+          ...unbekanntePlatzhalter(html ? (v.html || "") : (v.text || "")),
         ])];
         return (
           <div key={i} className="card mb-2">
@@ -88,14 +92,71 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
                   className="btn-ghost text-xs text-coral flex-shrink-0">Entfernen</button>
               )}
             </div>
+            {/* Text oder gestaltete HTML-Mail. Vorher gab es nur Text: eine
+                HTML-Datei kam beim Kunden als sichtbarer Quelltext an. */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-[11px] text-textMuted">Format:</span>
+              {[["text", "Text"], ["html", "HTML"]].map(([wert, label]) => (
+                <button key={wert} type="button"
+                  onClick={() => aendere(i, "format", wert)}
+                  className={`px-2 py-1 rounded-full text-[11px] border ${(v.format || "text") === wert ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
               value={v.betreff || ""} onChange={(e) => aendere(i, "betreff", e.target.value)} />
-            <textarea className="input !py-1.5 text-xs" rows={7}
+            {html ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Die Datei einlesen statt den Quelltext abzutippen. Beim
+                      Einlesen wird bereinigt — was entfernt wurde, steht
+                      darunter, damit niemand eine fehlende Stelle sucht. */}
+                  <label className="btn-ghost text-xs cursor-pointer">
+                    HTML-Datei laden
+                    <input type="file" accept=".html,.htm,text/html" className="hidden"
+                      onChange={async (e) => {
+                        const datei = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!datei) return;
+                        const { html: sauber, entfernt } = bereinigeHtml(await datei.text());
+                        onChange(vorlagen.map((x, j) => (j === i ? { ...x, html: sauber, entfernt } : x)));
+                      }} />
+                  </label>
+                  <span className="text-[11px] text-textMuted">oder den Quelltext unten einfügen</span>
+                </div>
+                <textarea className="input !py-1.5 text-[11px] font-mono" rows={8}
+                  placeholder={"<table>…<p>Hallo {{anrede}} {{nachname}},</p>…</table>"}
+                  value={v.html || ""}
+                  onChange={(e) => onChange(vorlagen.map((x, j) => (j === i
+                    ? { ...x, html: e.target.value, entfernt: bereinigeHtml(e.target.value).entfernt }
+                    : x)))} />
+                {v.entfernt?.length > 0 && (
+                  <p className="text-[11px] text-amber">
+                    Entfernt beim Versand: {v.entfernt.join(", ")}. Mailprogramme werfen das ohnehin hinaus.
+                  </p>
+                )}
+                {htmlPruefung(v.html || "").map((h) => (
+                  <p key={h} className="text-[11px] text-amber">{h}</p>
+                ))}
+                {v.html?.trim() && (
+                  <>
+                    <div className="text-[11px] text-textMuted">Vorschau mit Beispielkontakt und Standardschluss:</div>
+                    <MailVorschau html={fertigeHtmlMail(v,
+                      werteFuerKontakt(BEISPIEL_KONTAKT, { vertriebler: "Beispiel Vertrieblerin", organisation: "Eure Organisation" }),
+                      signatur).html} />
+                  </>
+                )}
+              </div>
+            ) : (
+              <textarea className="input !py-1.5 text-xs" rows={7}
               placeholder={"Hallo {{name}},\n\naus unserem Gespräch: {{notiz}}\n\nViele Grüße\n{{vertriebler}}"}
               value={v.text || ""} onChange={(e) => aendere(i, "text", e.target.value)} />
+            )}
             {(() => {
               // Was in Vorlage UND Signatur steht, kommt beim Kunden zweimal
               // an. Hier gesagt statt dort gesehen.
+              if (html) return null;
               const zweimal = doppelt(v.text || "", signatur);
               if (!zweimal.hatDoppeltes) return null;
               return (
@@ -134,7 +195,7 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
               </div>
             )}
 
-            {!v.name?.trim() || !v.text?.trim() ? (
+            {!v.name?.trim() || !(html ? v.html?.trim() : v.text?.trim()) ? (
               <p className="text-[11px] text-textMuted mt-1">
                 Ohne Name und Text wird diese Vorlage beim Speichern verworfen — eine leere Vorlage in der
                 Auswahl liefert eine leere Mail.
