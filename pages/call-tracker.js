@@ -1464,13 +1464,20 @@ export default function CallTracker() {
                   </p>
 
                   {vorlagen.length > 1 && (
-                    <div className="flex items-center justify-center gap-1.5 mb-3 flex-wrap">
-                      {vorlagen.map((v, i) => (
-                        <button key={i} onClick={() => waehleVorlage(mailKontakt, v)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mailEntwurf.vorlage === v.name ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-                          {v.name}
-                        </button>
-                      ))}
+                    <div className="text-left mb-3">
+                      {/* Eine Klappliste statt einer Knopfreihe: bei vielen
+                          Vorlagen brach die Reihe mitten im Gespräch über
+                          mehrere Zeilen um. */}
+                      <label className="block text-xs text-textMuted mb-1" htmlFor="call-vorlage">Vorlage</label>
+                      <select id="call-vorlage" className="input !py-2 text-sm"
+                        value={String(Math.max(0, vorlagen.findIndex((v) => v.name === mailEntwurf.vorlage)))}
+                        onChange={(e) => waehleVorlage(mailKontakt, vorlagen[Number(e.target.value)])}>
+                        {vorlagen.map((v, i) => (
+                          <option key={i} value={String(i)}>
+                            {i + 1}. {v.name}{v.format === "html" ? " · HTML" : ""}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
 

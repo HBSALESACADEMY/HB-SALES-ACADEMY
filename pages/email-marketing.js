@@ -5,6 +5,7 @@ import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
 import MailVorschau from "../components/MailVorschau";
 import { istHtmlVorlage, fertigeHtmlMail } from "../lib/htmlMail";
+import { vorlagenHinweise, ernsteHinweise } from "../lib/vorlagenHinweise";
 import { buchungslink, nachverfolgbarerLink } from "../lib/buchungslink";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Aufklapper from "../components/Aufklapper";
@@ -797,18 +798,32 @@ export default function EmailMarketing() {
             {vorlagen.map((v, i) => {
               const erfolg = vorlagenErfolg(kontakte).find((e) => e.name === v.name);
               return (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  {/* Die Nummer zeigt, dass die Reihenfolge gewollt ist und
-                      nicht zufällig — geändert wird sie beim Aufklappen. */}
+                <div key={i} className="flex items-center gap-2 text-xs rounded-lg border border-line px-2.5 py-2">
+                  {/* Dieselbe Zeile wie in der Bearbeitung: Nummer, Name,
+                      Format, Betreff — und ein Warnzeichen, wenn etwas
+                      auffällt. So findet man eine Vorlage, ohne aufzuklappen. */}
                   <span className="text-[11px] text-textMuted font-mono flex-shrink-0 w-5">{i + 1}.</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-textMain">{v.name}</div>
-                    <div className="text-[11px] text-textMuted truncate">{v.betreff || "(kein Betreff)"}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-textMain truncate">{v.name}</span>
+                      <span className="text-[9px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
+                        {istHtmlVorlage(v) ? "HTML" : "Text"}
+                      </span>
+                      {(() => {
+                        const ernst = ernsteHinweise(vorlagenHinweise(v, signatur));
+                        return ernst > 0 ? (
+                          <span title="Zum Ansehen: Vorlagen aufklappen, Vorlage bearbeiten, Reiter „Hinweise“"
+                            className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber/15 text-amber flex-shrink-0">⚠ {ernst}</span>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div className="text-[11px] text-textMuted truncate">{v.betreff || "Kein Betreff"}</div>
                   </div>
+                  {/* Wie die Vorlage läuft, als kleine Angabe statt als Satz. */}
                   {erfolg && (
-                    <span className="text-[11px] text-textMuted flex-shrink-0">
+                    <span className="text-[11px] text-textMuted flex-shrink-0 text-right leading-tight hidden sm:block">
                       {erfolg.verschickt}× verschickt
-                      {erfolg.quote !== null ? ` · ${erfolg.quote} % Termine` : ""}
+                      {erfolg.quote !== null ? <><br />{erfolg.quote} % Termine</> : null}
                     </span>
                   )}
                   <button
@@ -821,13 +836,15 @@ export default function EmailMarketing() {
                         setTimeout(() => setProbeStand(null), 2500);
                       } catch (e) { setFehler("Kopieren war nicht möglich."); }
                     }}
-                    className="btn-ghost text-[11px] flex-shrink-0">Kopieren</button>
+                    title="Betreff und Inhalt in die Zwischenablage" aria-label="Kopieren"
+                    className="btn-ghost text-[11px] flex-shrink-0 !px-2"><Icon name="copy" size={12} /></button>
                   <button
                     onClick={() => {
                       const kopie = { ...v, name: `${v.name} (Kopie)` };
                       setVorlagenEntwurf([...(vorlagenEntwurf || vorlagen), kopie]);
                       setVorlagenOffen(true);
                     }}
+                    title="Als neue Vorlage duplizieren"
                     className="btn-ghost text-[11px] flex-shrink-0">Duplizieren</button>
                   {vorlageLoeschen === i ? (
                     <span className="flex items-center gap-1.5 flex-shrink-0">
@@ -837,8 +854,8 @@ export default function EmailMarketing() {
                       <button onClick={() => setVorlageLoeschen(null)} className="btn-ghost text-[11px]">Abbrechen</button>
                     </span>
                   ) : (
-                    <button onClick={() => setVorlageLoeschen(i)}
-                      className="btn-ghost text-[11px] text-coral flex-shrink-0">Löschen</button>
+                    <button onClick={() => setVorlageLoeschen(i)} title="Vorlage löschen" aria-label="Löschen"
+                      className="btn-ghost text-[11px] text-coral flex-shrink-0 !px-2">×</button>
                   )}
                 </div>
               );
@@ -1054,23 +1071,24 @@ export default function EmailMarketing() {
             {mailFuer === k.id && (
               <div className="mb-3">
                 {vorlagen.length > 0 && (
-                  <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                    <span className="text-[11px] text-textMuted">Vorlage:</span>
-                    {vorlagen.map((v, i) => (
-                      <button key={i} onClick={() => starteMail(k, v)}
-                        className={`btn-ghost text-[11px] ${mailVorlage === v.name ? "text-amber border-amber" : ""}`}>
-                        {v.name}
-                      </button>
-                    ))}
-                    {/* "Leer" nur für die Leitung: der Server lehnt eine
-                        Mail ohne Vorlage von allen anderen ab, und ein
-                        Knopf, der in eine Fehlermeldung führt, ist keine
-                        Wahl. */}
-                    {leitung && (
-                      <button onClick={() => starteMail(k, null)} className="btn-ghost text-[11px] text-textMuted">
-                        Leer
-                      </button>
-                    )}
+                  <div className="flex items-center gap-2 mb-2">
+                    {/* Eine Klappliste statt einer Knopfreihe: bei acht
+                        Vorlagen brach die Reihe über drei Zeilen um, und
+                        welche gerade gilt, sah man nur an einer Farbe. */}
+                    <label className="text-[11px] text-textMuted flex-shrink-0" htmlFor={`vorlage-${k.id}`}>Vorlage:</label>
+                    <select id={`vorlage-${k.id}`} className="input !w-auto !py-1.5 text-xs flex-1 min-w-0"
+                      value={mailVorlage ? String(vorlagen.findIndex((v) => v.name === mailVorlage)) : "leer"}
+                      onChange={(e) => (e.target.value === "leer" ? starteMail(k, null) : starteMail(k, vorlagen[Number(e.target.value)]))}>
+                      {vorlagen.map((v, i) => (
+                        <option key={i} value={String(i)}>
+                          {i + 1}. {v.name}{istHtmlVorlage(v) ? " · HTML" : ""}
+                        </option>
+                      ))}
+                      {/* "Leer" nur für die Leitung: der Server lehnt eine
+                          Mail ohne Vorlage von allen anderen ab, und eine
+                          Wahl, die in eine Fehlermeldung führt, ist keine. */}
+                      {leitung && <option value="leer">Ohne Vorlage</option>}
+                    </select>
                   </div>
                 )}
                 <input className="input !py-1.5 text-xs mb-2" placeholder="Betreff"
