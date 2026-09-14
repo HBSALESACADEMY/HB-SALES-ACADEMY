@@ -646,11 +646,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
                 ["Team erinnern", "Termine"],
                 ["Tagesbericht", "Termine"],
                 ["E-Mail-Kontakt aus dem Gespräch", "E-Mail"],
-                ["Follow-up zugewiesen oder fällig", "E-Mail"],
                 ["Setting Call bestätigt", "Bestätigungen"],
                 ["Closing Call bestätigt", "Bestätigungen"],
                 ["Check-in erledigt", "Bestätigungen"],
-                ["Follow-up erledigt", "Bestätigungen"],
                 ["Morgens: Termine von morgen ohne Bestätigung", "Bestätigungen"],
                 ["Kunde geworden", "Abschlüsse"],
               ].map(([was, wohin]) => (
@@ -665,6 +663,10 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         <p className="text-[11px] text-textMuted mt-2">
           Bleibt ein Feld leer, läuft die Meldung über den Kanal „Termine“ mit. Ist auch der leer, geht sie
           nur per E-Mail raus, soweit es für diese Meldung eine gibt.
+        </p>
+        <p className="text-[11px] text-textMuted mt-1">
+          Follow-ups aus dem E-Mail-Marketing gehen nicht an Telegram. Die zuständige Person bekommt sie per
+          E-Mail: beim Zuweisen und morgens, wenn sie fällig sind.
         </p>
       </div>
 

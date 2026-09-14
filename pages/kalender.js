@@ -283,19 +283,11 @@ export default function Kalender() {
       supabase.from("nachfass_termine").update({ erledigt_am: new Date().toISOString() }).eq("id", n.id),
       "Abhaken darf nur, wer zuständig ist oder es eingetragen hat."
     );
+    // Keine Telegram-Meldung: Ein Follow-up aus dem E-Mail-Marketing geht
+    // die zuständige Person an, nicht die ganze Gruppe.
     if (meldung) setFehler(meldung);
-    else meldeFollowUp(n.id);
     await laden(true);
     setBusy(false);
-  }
-
-  // Dass sich jemand gekümmert hat, gehört in den Bestätigungs-Kanal —
-  // dieselbe Frage wie bei den Terminbestätigungen (migration_158).
-  // Nebenher und ohne Warten: eine Meldung darf den Haken nicht aufhalten.
-  function meldeFollowUp(id) {
-    apiPost("/api/bestaetigung-melden", { nachfassId: id })
-      .then((antwort) => { if (antwort?.hinweis) setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${antwort.hinweis}`); })
-      .catch((e) => setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${e.message}`));
   }
 
   // Verschieben: um einen Tag weiter, gleiche Uhrzeit. Bewusst ein Klick

@@ -2,7 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { sendEmail } from "../../lib/email";
-import { sendeAlarm } from "../../lib/alarm";
+import { maskiere } from "../../lib/htmlMail";
 import { willMeldung } from "../../lib/benachrichtigungen";
 import { deutscheZeit } from "../../lib/terminzeit";
 
@@ -11,8 +11,10 @@ import { deutscheZeit } from "../../lib/terminzeit";
 // Der Eintrag selbst läuft über den RLS-gebundenen Client: wer wem etwas
 // zuweisen darf, entscheidet die Datenbank (migration_156) und nicht diese
 // Route. Erweiterte Rechte braucht es nur für das, was der Browser nicht
-// kann — die Mailadresse der anderen Person und den Telegram-Kanal der
-// Organisation.
+// kann — die Mailadresse der anderen Person.
+//
+// Bewusst KEINE Telegram-Meldung: Ein Follow-up aus dem E-Mail-Marketing
+// geht die zuständige Person an, nicht die ganze Gruppe.
 export const config = { maxDuration: 20 };
 
 export default async function handler(req, res) {
@@ -84,25 +86,13 @@ export default async function handler(req, res) {
             // Postfachs sieht das nach einem Fehler aus.
             subject: `${titel.trim()} — ${wann}`,
             html:
-              `<p><strong>${profil?.full_name || "Jemand"}</strong> hat dir ein Follow-up eingetragen:</p>` +
-              `<p><strong>${titel.trim()}</strong><br/>Fällig: ${wann}</p>` +
-              (notiz?.trim() ? `<p>${notiz.trim()}</p>` : "") +
+              `<p><strong>${maskiere(profil?.full_name || "Jemand")}</strong> hat dir ein Follow-up eingetragen:</p>` +
+              `<p><strong>${maskiere(titel.trim())}</strong><br/>Fällig: ${wann}</p>` +
+              (notiz?.trim() ? `<p>${maskiere(notiz.trim())}</p>` : "") +
               (appUrl ? `<p><a href="${appUrl}/kalender" target="_blank" rel="noopener noreferrer">Im Kalender ansehen →</a></p>` : ""),
           });
         }
 
-        const { data: org } = orgId
-          ? await admin.from("organizations")
-            .select("telegram_chat_id, telegram_marketing_chat_id").eq("id", orgId).maybeSingle()
-          : { data: null };
-        const kanal = org?.telegram_marketing_chat_id || org?.telegram_chat_id;
-        if (kanal) {
-          await sendeAlarm(
-            `📌 Follow-up für ${ziel.full_name || "jemanden"}: ${titel.trim()}\nFällig: ${wann}`
-            + (appUrl ? `\n${appUrl}/kalender` : ""),
-            kanal,
-          );
-        }
       }
     } catch (meldeFehler) {
       console.error("Nachfass-Benachrichtigung fehlgeschlagen:", meldeFehler.message);

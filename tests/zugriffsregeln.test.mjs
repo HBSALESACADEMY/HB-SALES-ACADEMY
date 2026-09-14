@@ -532,3 +532,18 @@ test("Beim Check-in lässt sich das Ergebnis Kunde nicht versehentlich zurückne
   const davor = quelle.slice(Math.max(0, zeile - 700), zeile);
   assert.match(davor, /kundentermin && art\.key !== "checkin" && \(/);
 });
+
+test("Follow-ups aus dem E-Mail-Marketing gehen nicht an Telegram", () => {
+  // Anlegen, fällig werden, liegengebliebene Kontakte, abhaken: Keine
+  // dieser Stellen darf in eine Telegram-Gruppe schreiben.
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  for (const pfad of ["pages/api/nachfass.js", "lib/nachfassTermineErinnerung.js", "lib/nachfassErinnerung.js", "lib/nachfassMail.js"]) {
+    const code = lies(pfad).replace(/^\s*\/\/.*$/gm, "");
+    assert.ok(!/sendeAlarm|telegram_/i.test(code), `${pfad} schickt noch an Telegram`);
+  }
+  // Das Abhaken meldet nichts mehr an den Bestätigungs-Kanal.
+  for (const pfad of ["pages/kalender.js", "pages/email-marketing.js"]) {
+    assert.ok(!/nachfassId/.test(lies(pfad)), `${pfad} meldet erledigte Follow-ups noch an Telegram`);
+  }
+  assert.ok(!/nachfass_termine|nachfassId/.test(lies("pages/api/bestaetigung-melden.js").replace(/^\s*\/\/.*$/gm, "")));
+});

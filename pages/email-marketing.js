@@ -524,12 +524,8 @@ export default function EmailMarketing() {
       "Abhaken darf nur, wer zuständig ist oder es eingetragen hat."
     );
     if (meldung) { setFehler(meldung); return; }
-    // Dass sich jemand gekümmert hat, gehört in den Bestätigungs-Kanal —
-    // dieselbe Frage wie bei den Terminbestätigungen (migration_158).
-    // Nebenher und ohne Warten: eine Meldung darf den Haken nicht aufhalten.
-    apiPost("/api/bestaetigung-melden", { nachfassId: n.id })
-      .then((antwort) => { if (antwort?.hinweis) setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${antwort.hinweis}`); })
-      .catch((e) => setFehler(`Abgehakt — die Telegram-Meldung ging aber nicht raus: ${e.message}`));
+    // Keine Telegram-Meldung: Ein Follow-up aus dem E-Mail-Marketing geht
+    // die zuständige Person an, nicht die ganze Gruppe.
     await laden();
   }
 

@@ -44,10 +44,10 @@ export default async function handler(req, res) {
     const { text } = await baueTagesbericht(admin);
     await sendeAlarm(text);
 
-    // Im selben Lauf: welche Marketing-Mails ohne Antwort liegen. Getrennt
-    // gemeldet, weil es in den Marketing-Kanal geht und einen anderen
-    // Adressaten hat — hier muss jemand nachfassen. Ein Fehler dabei darf
-    // den Bericht nicht nachträglich als gescheitert dastehen lassen.
+    // Im selben Lauf: welche Marketing-Mails ohne Antwort liegen. Per Mail
+    // an die Person, der der Kontakt gehört — nicht an Telegram. Ein Fehler
+    // dabei darf den Bericht nicht nachträglich als gescheitert dastehen
+    // lassen.
     let nachfassen = { erinnert: 0 };
     try {
       nachfassen = await erinnereAnNachfassen(admin);
@@ -55,9 +55,9 @@ export default async function handler(req, res) {
       console.error("Nachfass-Erinnerung fehlgeschlagen:", e.message);
     }
 
-    // Und die eingetragenen Nachfass-Termine, die heute dran sind. Sie
-    // stehen zwar im Kalender — aber wer morgens nicht hineinschaut, sieht
-    // sie erst abends, und dann ist der Rückruf für heute erledigt.
+    // Und die eingetragenen Nachfass-Termine, die heute dran sind — per Mail
+    // an die zuständige Person. Sie stehen zwar im Kalender, aber wer
+    // morgens nicht hineinschaut, sieht sie erst abends.
     let nachfassTermine = { erinnert: 0 };
     try {
       nachfassTermine = await erinnereAnNachfassTermine(admin);

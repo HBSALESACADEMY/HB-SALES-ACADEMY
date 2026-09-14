@@ -2,15 +2,16 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { sendeAlarm } from "../../lib/alarm";
-import { bestaetigungsText, followUpErledigtText } from "../../lib/bestaetigung";
+import { bestaetigungsText } from "../../lib/bestaetigung";
 import { SCHRITTE, schrittErledigt } from "../../lib/terminArt";
 
 // Meldet an den Bestätigungs-Kanal, dass sich jemand gekümmert hat.
 //
-// Drei Anlässe, dieselbe Frage: die Bestätigung vor dem Setting Call, die
-// vor dem Closing Call und ein erledigtes Follow-up. Deshalb ein Kanal und
-// eine Route — zwei Gruppen im Blick zu behalten, um eine Antwort zu
-// bekommen, ist keine.
+// Die Bestätigung vor dem Setting Call, die vor dem Closing Call und der
+// erledigte Check-in.
+//
+// Erledigte Follow-ups aus dem E-Mail-Marketing gehen ausdrücklich NICHT
+// hierhin: Sie gehen die zuständige Person an, nicht die ganze Gruppe.
 //
 // Der Text wird HIER gebaut, nicht im Browser mitgeschickt: sonst könnte
 // jede angemeldete Person eine beliebige Nachricht in den Kanal der
@@ -26,9 +27,8 @@ export default async function handler(req, res) {
   if (!auth) return;
   const { client, user } = auth;
 
-  const { leadId, schritt, nachfassId } = req.body || {};
-  if (!leadId && !nachfassId) return res.status(400).json({ error: "leadId mit schritt oder nachfassId ist nötig." });
-  if (leadId && !schritt) return res.status(400).json({ error: "Zu einem Termin gehört der Schritt." });
+  const { leadId, schritt } = req.body || {};
+  if (!leadId || !schritt) return res.status(400).json({ error: "leadId und schritt sind nötig." });
 
   try {
     const admin = getAdminSupabase();
@@ -39,9 +39,7 @@ export default async function handler(req, res) {
 
     // Erst den Text bauen, dann den Kanal holen: gibt es nichts zu melden,
     // muss auch nichts nachgeschlagen werden.
-    const { text, grund } = leadId
-      ? await terminText({ client, admin, leadId, schritt })
-      : await followUpText({ client, admin, nachfassId });
+    const { text, grund } = await terminText({ client, admin, leadId, schritt });
     if (!text) return res.status(200).json({ ok: true, still: true, hinweis: grund || null });
 
     // Warum nichts rausging, muss auf den Bildschirm.
@@ -96,19 +94,23 @@ export default async function handler(req, res) {
  * unter den Tisch.
  */
 async function terminText({ client, admin, leadId, schritt }) {
+  // Immer ein Objekt zurückgeben, nie null: Der Aufrufer liest "text" und
+  // "grund" daraus, und ein null liess die Route mit einem TypeError
+  // abbrechen, statt still nichts zu melden.
+  const nichts = { text: null };
   const gemeint = SCHRITTE.find((x) => x.key === schritt && x.meldet);
-  if (!gemeint) return null;
+  if (!gemeint) return nichts;
 
   const { data: lead } = await client.from("leads")
     .select("id, name, company, appointment_at, termin_art, status, schritte, created_by, kein_kundentermin")
     .is("geloescht_am", null).eq("id", leadId).maybeSingle();
-  if (!lead) return null;
+  if (!lead) return nichts;
   // Ein persönlicher Termin geht das Vertriebsteam nichts an.
-  if (lead.kein_kundentermin) return null;
+  if (lead.kein_kundentermin) return nichts;
 
   // Nur melden, was wirklich in der Datenbank steht. Sonst meldet ein
   // zweiter Aufruf eine Bestätigung, die es nicht gibt.
-  if (!schrittErledigt(lead, schritt)) return null;
+  if (!schrittErledigt(lead, schritt)) return nichts;
 
   // Der Name der Person, die den Termin ANGELEGT hat — nicht der, die
   // gerade abhakt. In der Gruppe geht es darum, wessen Termin stattfindet.
@@ -116,17 +118,4 @@ async function terminText({ client, admin, leadId, schritt }) {
     .select("full_name").eq("id", lead.created_by).maybeSingle();
 
   return { text: bestaetigungsText(lead, besitzer?.full_name || "", gemeint) };
-}
-
-/** Ein erledigtes Follow-up — dieselbe Frage, derselbe Kanal. */
-async function followUpText({ client, admin, nachfassId }) {
-  const { data: nachfass, error } = await client.from("nachfass_termine")
-    .select("id, titel, faellig_am, erledigt_am, zustaendig").eq("id", nachfassId).maybeSingle();
-  if (error) return { text: null, grund: `Das Follow-up liess sich nicht lesen: ${error.message}` };
-  if (!nachfass?.erledigt_am) return { text: null, grund: "Das Follow-up steht nicht als erledigt in der Datenbank." };
-
-  const { data: person } = await admin.from("profiles")
-    .select("full_name").eq("id", nachfass.zustaendig).maybeSingle();
-
-  return { text: followUpErledigtText(nachfass, person?.full_name || "") };
 }

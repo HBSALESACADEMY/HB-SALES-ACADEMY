@@ -2849,7 +2849,7 @@ test("Die Morgenliste nennt nur, was morgen noch unbestätigt ist", async () => 
 });
 
 test("Die Meldung nennt den bestätigten Schritt, nicht die aktuelle Stufe", async () => {
-  const { bestaetigungsText, followUpErledigtText } = await import("../lib/bestaetigung.js");
+  const { bestaetigungsText } = await import("../lib/bestaetigung.js");
   const { SCHRITTE } = await import("../lib/terminArt.js");
 
   // Wer die Closing-Bestätigung setzt, während der Termin noch auf der
@@ -2875,13 +2875,6 @@ test("Die Meldung nennt den bestätigten Schritt, nicht die aktuelle Stufe", asy
   assert.match(ciText, /^✅ Check-in erledigt: Max Muster von Ernestine\.$/);
   assert.ok(!/findet am/.test(ciText));
 
-  // Ein erledigtes Follow-up geht in denselben Kanal: es ist dieselbe
-  // Frage — hat sich jemand gekümmert.
-  const text = followUpErledigtText(
-    { titel: "Follow-up: Dirk Reuters", faellig_am: "2026-09-14T06:00:00Z" }, "Ernestine");
-  assert.match(text, /^✅ Follow-up erledigt von Ernestine: Follow-up: Dirk Reuters/);
-  assert.match(text, /fällig war .* Uhr\.$/);
-  assert.match(followUpErledigtText({ titel: "Ohne Datum" }), /^✅ Follow-up erledigt: Ohne Datum\.$/);
 });
 
 test("Ein Termin ohne Stufe wird nicht zum Setting Call erklärt", async () => {
@@ -3447,4 +3440,36 @@ test("Der Kunde, der zum Check-in mitwandert, zählt in der Auswertung nur einma
   assert.equal(summe, 1);
   assert.equal(zeilen.find((z) => z.key === "closing").kunden, 1);
   assert.equal(zeilen.find((z) => z.key === "checkin").kunden, 0);
+});
+
+test("Die Follow-up-Erinnerungen gehen als Mail an die zuständige Person", async () => {
+  const { gruppiereNach, faelligeFollowUpsMail, wartendeKontakteMail, MAX_ZEILEN } = await import("../lib/nachfassMail.js");
+
+  // Je Person eine Mail; Einträge ohne Person fallen weg, statt bei
+  // "undefined" zu landen.
+  const gruppen = gruppiereNach([
+    { id: 1, zustaendig: "a" }, { id: 2, zustaendig: "b" }, { id: 3, zustaendig: "a" }, { id: 4 },
+  ], "zustaendig");
+  assert.deepEqual([...gruppen.keys()], ["a", "b"]);
+  assert.equal(gruppen.get("a").length, 2);
+
+  const eine = faelligeFollowUpsMail([{ titel: "Follow-up: Dirk Reuters", faellig_am: "2026-09-14T06:00:00Z" }], "https://app.example.de");
+  assert.equal(eine.subject, "Heute fällig: Follow-up: Dirk Reuters");
+  assert.match(eine.html, /Dieses Follow-up ist heute dran/);
+  assert.match(eine.html, /https:\/\/app\.example\.de\/kalender/);
+
+  // Was Leute eintippen, landet maskiert im HTML.
+  const boese = faelligeFollowUpsMail([{ titel: "<img src=x onerror=alert(1)>", faellig_am: "2026-09-14T06:00:00Z" }]);
+  assert.ok(!boese.html.includes("<img"));
+
+  const viele = faelligeFollowUpsMail(Array.from({ length: MAX_ZEILEN + 3 }, (_, i) => ({ titel: `F${i}`, faellig_am: "2026-09-14T06:00:00Z" })));
+  assert.equal(viele.subject, `Heute fällig: ${MAX_ZEILEN + 3} Follow-ups`);
+  assert.match(viele.html, /… und 3 weitere/);
+
+  const warten = wartendeKontakteMail(
+    [{ name: "Dirk Reuters", firma: "Bau & Co", verschickt_am: "2026-09-01T08:00:00Z" }],
+    new Date("2026-09-14T08:00:00Z"));
+  assert.equal(warten.subject, "1 Kontakt wartet auf ein Follow-up");
+  assert.match(warten.html, /Bau &amp; Co/);
+  assert.match(warten.html, /seit 13 Tagen ohne Antwort/);
 });
