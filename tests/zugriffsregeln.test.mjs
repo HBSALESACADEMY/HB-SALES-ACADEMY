@@ -521,3 +521,14 @@ test("Anhang-Dateien sind im Speicher je Organisation abgeschottet", () => {
   const seite = readFileSync(new URL("../pages/email-marketing.js", import.meta.url), "utf8");
   assert.match(seite, /const pfad = `\$\{org\.id\}\//);
 });
+
+test("Beim Check-in lässt sich das Ergebnis Kunde nicht versehentlich zurücknehmen", () => {
+  // Ein zweites Tippen auf "Kunde geworden" nimmt das Ergebnis zurück. Beim
+  // Check-in stünde der Kunde danach ohne Abschluss da, und der Balken fiele
+  // zurück. Deshalb gibt es die Ergebnis-Zeile dort nicht.
+  const quelle = readFileSync(new URL("../pages/termine.js", import.meta.url), "utf8");
+  const zeile = quelle.indexOf(">Ergebnis</span>");
+  assert.ok(zeile > 0);
+  const davor = quelle.slice(Math.max(0, zeile - 700), zeile);
+  assert.match(davor, /kundentermin && art\.key !== "checkin" && \(/);
+});

@@ -1386,7 +1386,10 @@ export default function Termine() {
                   fünf gleich aussehenden Reihen ohne Beschriftung, und man
                   musste den richtigen suchen. */}
               <div className="rounded-xl border border-line bg-surfaceRaised/40 px-3 py-2.5 mt-2 flex flex-col gap-2">
-                {kundentermin && (
+                {/* Beim Check-in steht das Ergebnis fest: Der Kontakt IST
+                    Kunde. Ein versehentliches Tippen auf "Kunde geworden"
+                    nahm das zurück und warf den Balken von 85 % zurück. */}
+                {kundentermin && art.key !== "checkin" && (
                 <div className="flex items-start gap-2 flex-wrap">
                   <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Ergebnis</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">

@@ -47,7 +47,7 @@ import { fristTage, verbleibendeTage, istAbgelaufen, fristText, STANDARD_FRIST_T
 import { resolveLeitfaden, hatLeitfaden, STANDARD_LEITFADEN } from "../lib/leitfaden.js";
 import { EMAIL_STATUS, STATUS_REIHENFOLGE, istErledigt, gueltigeAdresse, marketingQuote } from "../lib/emailKontakt.js";
 import { zustandFuer, istGescheitert, darfNochSenden, ZUSTELLUNG_LABELS } from "../lib/zustellung.js";
-import { artVon, stufenAuswertung, TERMIN_ARTEN, SCHRITTE, WEGMARKEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, erreichteMarken, darfSchritt, schrittPatch, istVerloren, checkinFaellig, CHECKIN_NACH_TAGEN } from "../lib/terminArt.js";
+import { artVon, stufenAuswertung, TERMIN_ARTEN, SCHRITTE, WEGMARKEN, kalenderTitel, kuerzelVon, terminFarbe, rueckeVor, verlaufVon, fortschritt, erreichteMarken, darfSchritt, schrittPatch, istVerloren, checkinFaellig, CHECKIN_NACH_TAGEN, istKundeGeworden } from "../lib/terminArt.js";
 import { fuelleVorlage, unbekanntePlatzhalter, brauchtNachfassen, liegtSeitTagen, NACHFASSEN_AB_TAGEN, PLATZHALTER, fertigeMail, vorlagenErfolg, BEISPIEL_KONTAKT, alsHtml, doppelt, werteFuerKontakt, anredeText, nachnameAus, mitSchluss, verschiebeVorlage, nachNamen, nachErfolg } from "../lib/marketingVorlage.js";
 import { tempoAuswertung, dauerText, PAUSE_AB_MINUTEN, MINDESTENS_ANRUFE } from "../lib/tempo.js";
 import { deutscheStunde, stundenText, stundenRaster, besteStunde, schlechtesteStunde, spitzeJeGrund, MINDESTENS_JE_STUNDE } from "../lib/tageszeit.js";
@@ -3390,4 +3390,61 @@ test("Die Hinweise zu einer Vorlage stehen gesammelt und mit Schweregrad", async
   const leer = vorlagenHinweise({ name: "", text: "" });
   assert.ok(leer.some((h) => h.art === "info"));
   assert.equal(ernsteHinweise(leer), 0);
+});
+
+test("Kunde bleibt Kunde: Der Balken springt beim Planen des Check-ins nicht zurück", () => {
+  // Nach dem Closing Call "Kunde geworden" angetippt, dann den Check-in
+  // geplant. Früher leerte das Weiterrücken das Ergebnis, und der Balken
+  // fiel von 85 % auf 70 %.
+  const kunde = {
+    termin_art: "closing", status: "wahrgenommen", outcome: "kunde",
+    appointment_at: "2026-09-10T10:00:00.000Z",
+    stufen_verlauf: [{ art: "erstgespraech", am: "2026-09-01", ergebnis: "follow_up" }],
+  };
+  assert.equal(fortschritt(kunde), 85);
+
+  const patch = rueckeVor(kunde, "checkin", "2026-10-10T10:00:00.000Z", "ernestine");
+  assert.equal(patch.outcome, "kunde");
+  assert.equal(patch.status, "geplant");
+  const danach = { ...kunde, ...patch };
+  assert.equal(fortschritt(danach), 85);
+  assert.ok(erreichteMarken(danach).has("kunde"));
+
+  // Hat der Check-in stattgefunden, geht es weiter auf 100 %.
+  assert.equal(fortschritt({ ...danach, status: "wahrgenommen" }), 100);
+
+  // Wer noch KEIN Kunde ist, bekommt beim Weiterrücken weiter ein leeres
+  // Ergebnis — das Zögern aus dem Setting Call gehört nicht zum Closing.
+  const zoegert = { termin_art: "erstgespraech", status: "wahrgenommen", outcome: "follow_up", stufen_verlauf: [] };
+  assert.equal(rueckeVor(zoegert, "closing", "2026-09-12T14:00:00.000Z").outcome, null);
+});
+
+test("Alte Einträge, bei denen der Kunde nur noch im Verlauf steht, zählen als Kunde", () => {
+  // So stehen die Kontakte da, die vor der Korrektur zum Check-in
+  // weitergerückt sind (migration_164 repariert sie auch in der Datenbank).
+  const alt = {
+    termin_art: "checkin", status: "geplant", outcome: null,
+    stufen_verlauf: [
+      { art: "erstgespraech", ergebnis: "follow_up" },
+      { art: "closing", ergebnis: "kunde" },
+    ],
+  };
+  assert.equal(istKundeGeworden(alt), true);
+  assert.equal(fortschritt(alt), 85);
+  assert.equal(istKundeGeworden({ termin_art: "closing", outcome: "absage", stufen_verlauf: [] }), false);
+});
+
+test("Der Kunde, der zum Check-in mitwandert, zählt in der Auswertung nur einmal", () => {
+  const imCheckin = {
+    termin_art: "checkin", status: "geplant", outcome: "kunde",
+    stufen_verlauf: [
+      { art: "erstgespraech", ergebnis: "follow_up" },
+      { art: "closing", ergebnis: "kunde" },
+    ],
+  };
+  const zeilen = stufenAuswertung([imCheckin]);
+  const summe = zeilen.reduce((n, z) => n + z.kunden, 0);
+  assert.equal(summe, 1);
+  assert.equal(zeilen.find((z) => z.key === "closing").kunden, 1);
+  assert.equal(zeilen.find((z) => z.key === "checkin").kunden, 0);
 });
