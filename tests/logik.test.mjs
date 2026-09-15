@@ -3603,3 +3603,59 @@ test("Der Telegram-Code gilt nur im privaten Chat und nur frisch", async () => {
   assert.equal(codeGueltig(seit, new Date("2026-09-15T08:11:00Z")), false);
   assert.equal(codeGueltig(null), false);
 });
+
+test("Zum Lob kommt ein Zitat, das zum Anlass passt", async () => {
+  const { auswertungsText, zitatAnlass, leereZahlen } = await import("../lib/tagesauswertung.js");
+  const { ZITATE, zitatFuer, zitatZeile } = await import("../lib/zitate.js");
+  const zahlen = (werte) => ({ ...leereZahlen(), ...werte });
+
+  // Jedes Zitat hat einen Urheber und bleibt kurz genug fürs Handy.
+  ZITATE.forEach((z) => {
+    assert.ok(z.text && z.von && z.anlass, JSON.stringify(z));
+    assert.ok(z.text.length <= 120, z.text);
+  });
+  // Jeder Anlass hat mindestens zwei — sonst käme täglich dasselbe.
+  ["abschluss", "spitze", "nachfassen", "steigerung", "dranbleiben"].forEach((a) =>
+    assert.ok(ZITATE.filter((z) => z.anlass === a).length >= 2, a));
+
+  // Das Wichtigste zuerst: ein Kunde schlägt Platz 1 und Steigerung.
+  assert.equal(zitatAnlass({ heute: zahlen({ kunden: 1, anwahlen: 9 }), vorher: zahlen({}), bestwerte: ["anwahlen"] }), "abschluss");
+  assert.equal(zitatAnlass({ heute: zahlen({ anwahlen: 9 }), vorher: zahlen({}), bestwerte: ["anwahlen"] }), "spitze");
+  assert.equal(zitatAnlass({ heute: zahlen({ followups: 3, anwahlen: 9 }), vorher: zahlen({ followups: 1 }) }), "nachfassen");
+  assert.equal(zitatAnlass({ heute: zahlen({ anwahlen: 9 }), vorher: zahlen({ anwahlen: 5 }) }), "steigerung");
+  assert.equal(zitatAnlass({ heute: zahlen({ anwahlen: 4 }), vorher: zahlen({ anwahlen: 5 }) }), "dranbleiben");
+
+  // Derselbe Tag: dasselbe Zitat. Zwei Tage hintereinander: nie dasselbe.
+  ["abschluss", "spitze", "nachfassen", "steigerung", "dranbleiben"].forEach((a) => {
+    assert.equal(zitatFuer(a, "2026-09-14"), zitatFuer(a, "2026-09-14"));
+    for (const [heute, morgen] of [["2026-09-14", "2026-09-15"], ["2026-09-30", "2026-10-01"], ["2026-12-31", "2027-01-01"]]) {
+      assert.notEqual(zitatFuer(a, heute).text, zitatFuer(a, morgen).text, `${a} ${heute}`);
+    }
+    assert.equal(zitatFuer(a, "2026-09-14").anlass, a);
+  });
+
+  const text = auswertungsText({
+    name: "Anna", berichtTag: "2026-09-11", vergleichTag: "2026-09-10",
+    heute: zahlen({ anwahlen: 60, kunden: 1 }), vorher: zahlen({ anwahlen: 48 }),
+  });
+  const zeile = zitatZeile(zitatFuer("abschluss", "2026-09-11"));
+  assert.match(zeile, /^💬 „.+“ — .+$/);
+  assert.ok(text.endsWith(zeile), text);
+
+  // Auch am ruhigen Tag kommt eins — unter dem stärksten Wert.
+  const ruhig = auswertungsText({
+    name: "Ben", berichtTag: "2026-09-14", vergleichTag: "2026-09-11",
+    heute: zahlen({ anwahlen: 20 }), vorher: zahlen({ anwahlen: 35 }),
+  });
+  assert.match(ruhig, /💪 Dein stärkster Wert[^\n]*\n\n💬 „/);
+
+  // Zeilen, die an beiden Tagen 0 sind, fehlen — auch in einer Gruppe,
+  // in der sonst etwas steht.
+  const gemischt = auswertungsText({
+    name: "Cem", berichtTag: "2026-09-15", vergleichTag: "2026-09-14",
+    heute: zahlen({ anwahlen: 22, followups: 2 }), vorher: zahlen({ anwahlen: 35 }),
+  });
+  assert.match(gemischt, /Follow-ups erledigt: 2 \(Mo: 0\) ↑/);
+  assert.ok(!/: 0 \(Mo: 0\)/.test(gemischt), gemischt);
+  assert.ok(!/Mails verschickt/.test(gemischt));
+});
