@@ -670,3 +670,14 @@ test("Niemand befördert sich selbst über das eigene Profil", () => {
   const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
   assert.ok(!/rpc\("increment_xp"/.test(layout), "Der Browser ruft increment_xp auf — das darf nur der Server");
 });
+
+test("Was der Server beim Mailversand meldet, kommt auf den Bildschirm", () => {
+  // Die Route antwortet "ok" mit einem Hinweis, wenn die Mail raus ist, der
+  // Status aber nicht gespeichert wurde. Wer die Antwort verwirft, macht
+  // daraus wieder einen stillen Fehler.
+  for (const pfad of ["pages/email-marketing.js", "pages/call-tracker.js"]) {
+    const code = readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+    assert.match(code, /const antwort = await apiPost\("\/api\/marketing-mail"/, pfad);
+    assert.match(code, /if \(antwort\?\.hinweis\) set(Fehler|EmailFehler)\(antwort\.hinweis\)/, pfad);
+  }
+});

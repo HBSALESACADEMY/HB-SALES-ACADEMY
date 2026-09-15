@@ -460,6 +460,10 @@ export default function EmailMarketing() {
         // genau das, was ohne Eintrag untergeht.
         oeffneNachfass(k);
         await laden();
+        // Die Mail ist raus, aber der Server meldet etwas (etwa: Status
+        // nicht gespeichert). Das muss auf den Bildschirm — sonst steht der
+        // Kontakt still auf "offen", und niemand fasst nach.
+        if (antwort?.hinweis) setFehler(antwort.hinweis);
       }
     } catch (e) {
       setFehler(e?.message || "Die Mail konnte nicht verschickt werden.");

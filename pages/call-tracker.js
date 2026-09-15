@@ -611,13 +611,15 @@ export default function CallTracker() {
     setMailBusy(true);
     setEmailFehler("");
     try {
-      await apiPost("/api/marketing-mail", {
+      const antwort = await apiPost("/api/marketing-mail", {
         kontaktId: mailKontakt.id,
         betreff: mailEntwurf.betreff,
         text: mailEntwurf.text,
         vorlage: mailEntwurf.vorlage,
       });
       showToast("Mail ist raus");
+      // Raus ist sie — aber was der Server dazu meldet, muss sichtbar sein.
+      if (antwort?.hinweis) setEmailFehler(antwort.hinweis);
       setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
       // Nicht gleich zurück: "ich schicke Ihnen was" ist erst die halbe
       // Arbeit, und der Rückruf danach ist genau das, was ohne Eintrag
