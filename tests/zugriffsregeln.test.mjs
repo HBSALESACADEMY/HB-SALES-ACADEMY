@@ -572,3 +572,11 @@ test("Die persönliche Telegram-Verknüpfung schreibt nur der Server", () => {
     assert.match(code, /sendePersoenlich\(admin, chat,/, pfad);
   }
 });
+
+test("Die Einstellungen sind am Rechner und am Handy erreichbar", () => {
+  // Dort verbindet man sein Telegram. Stand der Link nur im Handy-Menü,
+  // fand ihn am Schreibtisch niemand.
+  const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
+  const links = layout.match(/router\.push\("\/settings"\)/g) || [];
+  assert.ok(links.length >= 2, `nur ${links.length} Link(s) zu den Einstellungen`);
+});

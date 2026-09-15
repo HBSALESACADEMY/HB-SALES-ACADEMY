@@ -24,7 +24,7 @@ const STEPS = [
   {
     emoji: "⚙️",
     title: "Einstellungen",
-    body: "Passe an, wer deine Kontaktdaten sehen darf, sortiere deine Sidebar und dein Dashboard per Drag & Drop — ganz wie du magst.",
+    body: "Unten links in der Seitenleiste (am Handy hinter deinem Profilbild). Verbinde dort dein Telegram: Dann bekommst du jeden Werktag morgens deine persönliche Auswertung und deine Follow-ups direkt aufs Handy. Außerdem stellst du ein, wer deine Kontaktdaten sehen darf und welche Mails du bekommst.",
   },
 ];
 

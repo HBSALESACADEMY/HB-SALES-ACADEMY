@@ -1080,6 +1080,12 @@ export default function Layout({ children, fullBleed }) {
           </div>
           <span className="font-mono text-textMuted">{into}/150 bis Level {level + 1}</span>
         </div>
+        {/* Am Rechner gab es keinen Weg zu den Einstellungen — nur im
+            Handy-Menü. Wer am Schreibtisch arbeitet, fand damit weder die
+            Benachrichtigungen noch die Telegram-Verbindung. */}
+        <button onClick={() => router.push("/settings")} className="flex items-center gap-2.5 px-3 py-2.5 mt-1.5 rounded-lg text-[13px] text-textMuted hover:text-textMain hover:bg-surfaceRaised text-left">
+          <Icon name="lock" size={15} /> Einstellungen
+        </button>
         <button onClick={handleLogout} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] text-textMuted hover:text-textMain hover:bg-surfaceRaised text-left">
           <Icon name="logout" size={15} /> Abmelden
         </button>
