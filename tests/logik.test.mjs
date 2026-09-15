@@ -3473,3 +3473,133 @@ test("Die Follow-up-Erinnerungen gehen als Mail an die zuständige Person", asyn
   assert.match(warten.html, /Bau &amp; Co/);
   assert.match(warten.html, /seit 13 Tagen ohne Antwort/);
 });
+
+test("Die Tagesauswertung vergleicht Arbeitstage, nie das Wochenende", async () => {
+  const { auswertungsTage, arbeitstagDavor } = await import("../lib/tagesauswertung.js");
+  // Montag, 14.9.2026: Freitag gegen Donnerstag.
+  assert.deepEqual(auswertungsTage(new Date("2026-09-14T07:00:00Z")),
+    { heute: "2026-09-14", berichtTag: "2026-09-11", vergleichTag: "2026-09-10" });
+  // Dienstag: Montag gegen Freitag.
+  assert.deepEqual(auswertungsTage(new Date("2026-09-15T07:00:00Z")),
+    { heute: "2026-09-15", berichtTag: "2026-09-14", vergleichTag: "2026-09-11" });
+  // Samstag und Sonntag kommt nichts.
+  assert.equal(auswertungsTage(new Date("2026-09-12T07:00:00Z")), null);
+  assert.equal(auswertungsTage(new Date("2026-09-13T07:00:00Z")), null);
+  // Kurz nach Mitternacht deutscher Zeit ist schon Montag, in UTC noch Sonntag.
+  assert.equal(auswertungsTage(new Date("2026-09-13T22:30:00Z"))?.heute, "2026-09-14");
+  assert.equal(arbeitstagDavor("2026-09-14"), "2026-09-11");
+});
+
+test("Die Tagesauswertung zählt je Person und nach deutschem Kalendertag", async () => {
+  const { zaehleTage } = await import("../lib/tagesauswertung.js");
+  const tage = ["2026-09-11", "2026-09-10"];
+  const z = zaehleTage({
+    anrufe: [
+      { user_id: "anna", log_date: "2026-09-11", counts: { anwahlen: 40, entscheider: 3, weitergeleitet: 2, termin: 1 } },
+      { user_id: "anna", log_date: "2026-09-10", counts: { anwahlen: 30 } },
+    ],
+    termine: [
+      // 22:30 UTC ist 00:30 in Berlin — der 11., nicht der 10.
+      { created_by: "anna", termin_art: "erstgespraech", status: "wahrgenommen", appointment_at: "2026-09-10T22:30:00Z" },
+      // Nur geplant: zählt nicht als geführt.
+      { created_by: "anna", termin_art: "closing", status: "geplant", appointment_at: "2026-09-11T10:00:00Z" },
+      // Weitergerückt: der Closing Call im Verlauf hat am 11. stattgefunden.
+      { created_by: "anna", termin_art: "checkin", status: "geplant", appointment_at: "2026-10-11T10:00:00Z",
+        stufen_verlauf: [{ art: "closing", am: "2026-09-11T09:00:00Z", ergebnis: "kunde" }],
+        kunde_am: "2026-09-11T09:30:00Z",
+        schritte: { closing_bestaetigt: { am: "2026-09-10T08:00:00Z", von: "ben" } } },
+      // Persönlicher Termin: zählt gar nicht.
+      { created_by: "anna", termin_art: "erstgespraech", status: "wahrgenommen", appointment_at: "2026-09-11T12:00:00Z", kein_kundentermin: true },
+    ],
+    mails: [{ user_id: "anna", verschickt_von: "ben", verschickt_am: "2026-09-11T08:00:00Z" }],
+    followUps: [{ zustaendig: "anna", erledigt_am: "2026-09-11T15:00:00Z" }],
+  }, tage);
+
+  const anna = z.get("2026-09-11").get("anna");
+  assert.equal(anna.anwahlen, 40);
+  assert.equal(anna.entscheider, 5);
+  assert.equal(anna.terminiert, 1);
+  assert.equal(anna.setting, 1);
+  assert.equal(anna.closing, 1);
+  assert.equal(anna.kunden, 1);
+  assert.equal(anna.followups, 1);
+  assert.equal(anna.mails, 0);
+  // Bestätigt und verschickt hat Ben — es zählt bei ihm.
+  assert.equal(z.get("2026-09-10").get("ben").bestaetigt, 1);
+  assert.equal(z.get("2026-09-11").get("ben").mails, 1);
+  assert.equal(z.get("2026-09-10").get("anna").anwahlen, 30);
+});
+
+test("Platz 1 im Team verrät keine fremden Zahlen und zählt nur mit Konkurrenz", async () => {
+  const { platzEins, leereZahlen } = await import("../lib/tagesauswertung.js");
+  const zahlen = (werte) => ({ ...leereZahlen(), ...werte });
+  const jePerson = new Map([
+    ["anna", zahlen({ anwahlen: 50, kunden: 1 })],
+    ["ben", zahlen({ anwahlen: 50, setting: 2 })],
+    ["cem", zahlen({ anwahlen: 20 })],
+    ["dora", zahlen({ anwahlen: 90 })],
+  ]);
+  const orgVon = new Map([["anna", "o1"], ["ben", "o1"], ["cem", "o1"], ["dora", "o2"]]);
+  // Gleichstand ist geteilter Platz 1. Dora aus der anderen Firma zählt nicht.
+  assert.deepEqual(platzEins("anna", jePerson, orgVon), ["anwahlen"]);
+  assert.deepEqual(platzEins("ben", jePerson, orgVon), ["anwahlen"]);
+  // Kunden und Setting Calls hat im Team jeweils nur einer: kein Platz 1.
+  assert.deepEqual(platzEins("cem", jePerson, orgVon), []);
+  assert.deepEqual(platzEins("dora", jePerson, orgVon), []);
+});
+
+test("Die Auswertung lobt Steigerung, Bestwerte und Abschlüsse", async () => {
+  const { auswertungsText, leereZahlen } = await import("../lib/tagesauswertung.js");
+  const zahlen = (werte) => ({ ...leereZahlen(), ...werte });
+  const text = auswertungsText({
+    name: "Anna Muster", berichtTag: "2026-09-11", vergleichTag: "2026-09-10",
+    heute: zahlen({ anwahlen: 60, entscheider: 4, kunden: 1 }),
+    vorher: zahlen({ anwahlen: 48, entscheider: 5 }),
+    bestwerte: ["anwahlen"],
+  });
+  assert.match(text, /^☀️ Guten Morgen, Anna!/);
+  assert.match(text, /Deine Auswertung für Freitag, 11\.9\. — im Vergleich zum Donnerstag\./);
+  assert.match(text, /Anwahlen: 60 \(Do: 48\) ↑/);
+  assert.match(text, /Entscheider erreicht: 4 \(Do: 5\) ↓/);
+  // Gruppen ohne jede Zahl an beiden Tagen fehlen.
+  assert.ok(!/E-Mail und Follow-ups/.test(text));
+  assert.ok(!/📅 Termine/.test(text));
+  assert.match(text, /🏆 Platz 1 im Team am Freitag: bei den Anwahlen\./);
+  assert.match(text, /🎉 Ein neuer Kunde/);
+  assert.match(text, /📈 Mehr als am Donnerstag: Anwahlen \(\+25 %\)\./);
+
+  // Nichts besser, nirgends vorne: der stärkste echte Wert, kein Tadel.
+  const ruhig = auswertungsText({
+    name: "Ben", berichtTag: "2026-09-14", vergleichTag: "2026-09-11",
+    heute: zahlen({ anwahlen: 20, mails: 3 }), vorher: zahlen({ anwahlen: 35, mails: 3 }),
+  });
+  assert.match(ruhig, /💪 Dein stärkster Wert am Montag: Anwahlen 20\./);
+  assert.match(ruhig, /\(Fr: 35\)/);
+});
+
+test("Der Telegram-Code gilt nur im privaten Chat und nur frisch", async () => {
+  const { neuerVerbindungsCode, findeStart, codeGueltig, startLink } = await import("../lib/telegramPersoenlich.js");
+  const code = neuerVerbindungsCode(Buffer.from([0, 1, 2, 3, 4, 5, 6, 255]));
+  assert.match(code, /^HB[A-HJ-NP-Z2-9]{8}$/);
+  assert.match(neuerVerbindungsCode(), /^HB[A-HJ-NP-Z2-9]{8}$/);
+  assert.equal(startLink("hb_bot", code), `https://t.me/hb_bot?start=${code}`);
+
+  const seit = "2026-09-15T08:00:00Z";
+  const sek = (iso) => Math.floor(new Date(iso).getTime() / 1000);
+  const updates = [
+    // In einer Gruppe: zählt nicht, sonst landete die Auswertung vor allen.
+    { message: { date: sek("2026-09-15T08:01:00Z"), text: `/start ${code}`, chat: { id: -100, type: "group", title: "Team" } } },
+    // Zu alt.
+    { message: { date: sek("2026-09-15T07:00:00Z"), text: `/start ${code}`, chat: { id: 1, type: "private", first_name: "Alt" } } },
+    // Fremder Code.
+    { message: { date: sek("2026-09-15T08:02:00Z"), text: "/start HBXXXXXXXX", chat: { id: 2, type: "private", first_name: "Fremd" } } },
+    // Richtig — auch klein abgetippt.
+    { message: { date: sek("2026-09-15T08:03:00Z"), text: code.toLowerCase(), chat: { id: 42, type: "private", first_name: "Anna", last_name: "Muster" } } },
+  ];
+  assert.deepEqual(findeStart(updates, code, seit), { chatId: "42", name: "Anna Muster" });
+  assert.equal(findeStart(updates.slice(0, 3), code, seit), null);
+
+  assert.equal(codeGueltig(seit, new Date("2026-09-15T08:09:00Z")), true);
+  assert.equal(codeGueltig(seit, new Date("2026-09-15T08:11:00Z")), false);
+  assert.equal(codeGueltig(null), false);
+});

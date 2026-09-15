@@ -3,6 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { sendEmail } from "../../lib/email";
 import { maskiere } from "../../lib/htmlMail";
+import { ladeVerknuepfungen, sendePersoenlich } from "../../lib/telegramPersoenlich";
 import { willMeldung } from "../../lib/benachrichtigungen";
 import { deutscheZeit } from "../../lib/terminzeit";
 
@@ -13,8 +14,9 @@ import { deutscheZeit } from "../../lib/terminzeit";
 // Route. Erweiterte Rechte braucht es nur für das, was der Browser nicht
 // kann — die Mailadresse der anderen Person.
 //
-// Bewusst KEINE Telegram-Meldung: Ein Follow-up aus dem E-Mail-Marketing
-// geht die zuständige Person an, nicht die ganze Gruppe.
+// Bewusst KEINE Meldung an eine Telegram-Gruppe: Ein Follow-up aus dem
+// E-Mail-Marketing geht die zuständige Person an, nicht das ganze Team.
+// Hat sie ihr Telegram verbunden, bekommt sie es dort persönlich.
 export const config = { maxDuration: 20 };
 
 export default async function handler(req, res) {
@@ -93,6 +95,14 @@ export default async function handler(req, res) {
           });
         }
 
+        // Persönlich per Telegram, wenn die Person es verbunden hat
+        // (migration_165) — an sie allein.
+        const chat = (await ladeVerknuepfungen(admin, [zustaendig])).get(zustaendig);
+        if (chat && chat.followups !== false) {
+          await sendePersoenlich(admin, chat,
+            `📌 ${profil?.full_name || "Jemand"} hat dir ein Follow-up eingetragen:\n${titel.trim()}\nFällig: ${wann}`
+            + (appUrl ? `\n${appUrl}/kalender` : ""));
+        }
       }
     } catch (meldeFehler) {
       console.error("Nachfass-Benachrichtigung fehlgeschlagen:", meldeFehler.message);

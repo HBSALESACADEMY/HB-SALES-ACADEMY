@@ -533,9 +533,10 @@ test("Beim Check-in lässt sich das Ergebnis Kunde nicht versehentlich zurückne
   assert.match(davor, /kundentermin && art\.key !== "checkin" && \(/);
 });
 
-test("Follow-ups aus dem E-Mail-Marketing gehen nicht an Telegram", () => {
+test("Follow-ups aus dem E-Mail-Marketing gehen nicht an Telegram-Gruppen", () => {
   // Anlegen, fällig werden, liegengebliebene Kontakte, abhaken: Keine
-  // dieser Stellen darf in eine Telegram-Gruppe schreiben.
+  // dieser Stellen darf in eine Telegram-GRUPPE schreiben. Persönlich an
+  // die zuständige Person ist erlaubt — nur über die Verknüpfung.
   const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
   for (const pfad of ["pages/api/nachfass.js", "lib/nachfassTermineErinnerung.js", "lib/nachfassErinnerung.js", "lib/nachfassMail.js"]) {
     const code = lies(pfad).replace(/^\s*\/\/.*$/gm, "");
@@ -546,4 +547,28 @@ test("Follow-ups aus dem E-Mail-Marketing gehen nicht an Telegram", () => {
     assert.ok(!/nachfassId/.test(lies(pfad)), `${pfad} meldet erledigte Follow-ups noch an Telegram`);
   }
   assert.ok(!/nachfass_termine|nachfassId/.test(lies("pages/api/bestaetigung-melden.js").replace(/^\s*\/\/.*$/gm, "")));
+});
+
+test("Die persönliche Telegram-Verknüpfung schreibt nur der Server", () => {
+  const sql = readFileSync(new URL("../supabase/migration_165_telegram_persoenlich_und_tagesauswertung.sql", import.meta.url), "utf8")
+    .replace(/--.*$/gm, "");
+  // Stünde die Chat-Kennung in einer Tabelle, die man selbst beschreiben
+  // darf, liesse sich eine fremde Kennung eintragen — und die eigenen
+  // Meldungen landeten in einem fremden Chat.
+  assert.match(sql, /enable row level security/);
+  assert.match(sql, /for select using \(user_id = auth\.uid\(\)\)/);
+  assert.ok(!/on telegram_verknuepfungen\s+for (insert|update|delete|all)/.test(sql));
+  // Der Zeitpunkt des Abschlusses lässt sich nicht nachträglich verschieben.
+  assert.match(sql, /new\.kunde_am := old\.kunde_am/);
+
+  // Die Kennung kommt nur aus Telegram, nie aus der Anfrage.
+  const route = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
+  assert.ok(!/req\.body[^\n]*chat_?id/i.test(route));
+  assert.match(route, /chat_id: treffer\.chatId/);
+
+  // Die Follow-up-Stellen schreiben persönlich nur über die Verknüpfung.
+  for (const pfad of ["pages/api/nachfass.js", "lib/nachfassTermineErinnerung.js", "lib/nachfassErinnerung.js"]) {
+    const code = readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+    assert.match(code, /sendePersoenlich\(admin, chat,/, pfad);
+  }
 });

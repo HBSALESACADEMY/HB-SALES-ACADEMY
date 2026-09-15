@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout, { patchCachedProfile, getCachedOrg } from "../components/Layout";
 import { supabase } from "../lib/supabaseClient";
-import { apiGetBlob, apiPost } from "../lib/apiClient";
+import { apiGet, apiGetBlob, apiPost } from "../lib/apiClient";
 import { getStoredThemePref, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { applyOrgBranding } from "../lib/orgBranding";
 import { ZEITZONEN, merkeZeitzone, formatiere } from "../lib/zeit";
@@ -42,6 +42,11 @@ export default function Settings() {
   const [kontoLoeschen, setKontoLoeschen] = useState(false);
   const [loeschText, setLoeschText] = useState("");
   const [loeschBusy, setLoeschBusy] = useState(false);
+  // Persönliche Telegram-Verbindung (migration_165).
+  const [tg, setTg] = useState(null);
+  const [tgCode, setTgCode] = useState(null);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgHinweis, setTgHinweis] = useState("");
 
   useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
 
@@ -106,6 +111,36 @@ export default function Settings() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    apiGet("/api/telegram-verbindung").then(setTg).catch((e) => setTgHinweis(e.message));
+  }, []);
+
+  // Jede Aktion an der Telegram-Verbindung — mit sichtbarer Antwort. Ein
+  // Knopf, der still nichts tut, sieht aus wie ein kaputter Knopf.
+  async function telegram(aktion, extra = {}) {
+    setTgBusy(true);
+    setTgHinweis("");
+    try {
+      const antwort = await apiPost("/api/telegram-verbindung", { aktion, ...extra });
+      if (aktion === "code") setTgCode(antwort);
+      if (aktion === "pruefen") {
+        if (antwort.verbunden) {
+          setTgCode(null);
+          setTg((t) => ({ ...t, verbunden: true, chatName: antwort.chatName }));
+          setTgHinweis("Verbunden. In Telegram liegt eine Bestätigung für dich.");
+        } else {
+          setTgHinweis(antwort.hinweis || "Noch nicht verbunden.");
+        }
+      }
+      if (aktion === "trennen") setTg((t) => ({ ...t, verbunden: false, chatName: null }));
+      if (aktion === "einstellung") setTg((t) => ({ ...t, ...extra }));
+      if (aktion === "test") setTgHinweis("Testnachricht verschickt — schau in Telegram nach.");
+    } catch (e) {
+      setTgHinweis(e.message);
+    }
+    setTgBusy(false);
+  }
 
   function toggleVisibility(key) {
     setVisibility((v) => ({ ...v, [key]: v[key] === "friends" ? "public" : "friends" }));
@@ -280,6 +315,72 @@ export default function Settings() {
             );
           })}
         </div>
+      </div>
+
+      {/* Nur für die eigene Person: die tägliche Auswertung und die
+          Follow-ups. Die Gruppen der Organisation stellt die Leitung unter
+          Organisation → Benachrichtigungen ein. */}
+      <div className="card max-w-lg mb-5">
+        <div className="font-semibold text-textMain text-sm mb-1">Telegram</div>
+        <p className="text-xs text-textMuted mb-3">
+          Deine Follow-up-Erinnerungen und jeden Werktag morgens deine persönliche Auswertung vom Vortag,
+          direkt als Telegram-Nachricht. Nur du siehst diese Nachrichten.
+        </p>
+
+        {!tg ? (
+          <p className="text-xs text-textMuted">{tgHinweis || "Lädt…"}</p>
+        ) : !tg.eingerichtet ? (
+          <p className="text-xs text-textMuted">Für diese Academy ist noch kein Telegram-Bot eingerichtet.</p>
+        ) : tg.verbunden ? (
+          <>
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <span className="text-xs text-teal flex-1">✓ Verbunden{tg.chatName ? ` mit „${tg.chatName}“` : ""}</span>
+              <button type="button" onClick={() => telegram("test")} disabled={tgBusy} className="btn-ghost text-xs disabled:opacity-40">Test</button>
+              <button type="button" onClick={() => telegram("trennen")} disabled={tgBusy} className="btn-ghost text-xs disabled:opacity-40">Trennen</button>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {[
+                ["tagesauswertung", "Tägliche Auswertung", "Montag bis Freitag morgens: deine Zahlen vom letzten Arbeitstag, verglichen mit dem Tag davor, und Lob"],
+                ["followups", "Follow-up-Erinnerungen", "Wenn dir jemand ein Follow-up zuweist, und morgens deine fälligen Follow-ups"],
+              ].map(([key, label, hinweis]) => (
+                <label key={key} className="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" className="mt-1" checked={tg[key] !== false} disabled={tgBusy}
+                    onChange={(e) => telegram("einstellung", { [key]: e.target.checked })} />
+                  <span className="min-w-0">
+                    <span className="text-sm text-textMain block">{label}</span>
+                    <span className="text-[11px] text-textMuted">{hinweis}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        ) : tgCode ? (
+          <ol className="text-xs text-textMuted flex flex-col gap-3 list-decimal pl-4">
+            <li>
+              <a href={tgCode.link} target="_blank" rel="noopener noreferrer"
+                className="btn-ghost text-xs inline-block border-teal/40 text-teal">Telegram öffnen</a>
+              <span className="block mt-1">
+                Öffnet den Bot @{tgCode.botName}. Klappt das nicht, schreib dem Bot diesen Code:{" "}
+                <strong className="text-textMain">{tgCode.code}</strong>
+              </span>
+            </li>
+            <li>In Telegram auf <strong className="text-textMain">Start</strong> tippen.</li>
+            <li>
+              Zurück hier:{" "}
+              <button type="button" onClick={() => telegram("pruefen")} disabled={tgBusy}
+                className="btn-ghost text-xs border-teal/40 text-teal disabled:opacity-40">
+                {tgBusy ? "Prüft…" : "Verbindung prüfen"}
+              </button>
+              <span className="block mt-1">Der Code gilt {tgCode.gueltigMinuten} Minuten.</span>
+            </li>
+          </ol>
+        ) : (
+          <button type="button" onClick={() => telegram("code")} disabled={tgBusy}
+            className="btn-ghost text-xs border-teal/40 text-teal disabled:opacity-40">
+            {tgBusy ? "Einen Moment…" : "Telegram verbinden"}
+          </button>
+        )}
+        {tg && tgHinweis && <p className="text-xs text-textMuted mt-3">{tgHinweis}</p>}
       </div>
 
       <div className="card max-w-lg mb-5">

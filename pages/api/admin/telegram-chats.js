@@ -48,9 +48,13 @@ export default async function handler(req, res) {
     // Gruppe HINZUGEFÜGT wird. Ohne ihn müsste erst jemand in der Gruppe
     // schreiben — und bei eingeschaltetem Datenschutz sieht der Bot davon
     // nur Nachrichten, die ihn erwähnen.
+    //
+    // offset=-100 holt die NEUESTEN hundert. Mit limit=100 kamen die
+    // ältesten — bei viel Betrieb stand die Nachricht mit dem Code von eben
+    // gar nicht darin, und die Suche fand die Gruppe nicht.
     const antwort = await fetch(
       `https://api.telegram.org/bot${token}/getUpdates`
-      + `?limit=100&allowed_updates=${encodeURIComponent(JSON.stringify(["message", "my_chat_member", "channel_post"]))}`,
+      + `?offset=-100&allowed_updates=${encodeURIComponent(JSON.stringify(["message", "my_chat_member", "channel_post"]))}`,
     );
     const daten = await antwort.json();
     if (!daten?.ok) {
