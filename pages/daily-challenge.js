@@ -15,7 +15,10 @@ const todayStr = () => tagesSchluessel();
 function pickTodaysQuestion() {
   const all = [];
   COURSES.forEach((c) => allMcQuestionsOfCourse(c).forEach((q) => all.push(q)));
-  const dayNum = Math.floor(Date.now() / 86400000); // stabil pro Kalendertag, weltweit gleiche Frage
+  // Aus dem Kalendertag, nicht aus der UTC-Uhr: Die Frage wechselt um
+  // Mitternacht, zusammen mit dem Tag — und der Server rechnet genauso
+  // (pages/api/daily-challenge-submit.js).
+  const dayNum = Math.floor(Date.parse(`${todayStr()}T00:00:00Z`) / 86400000);
   return all[dayNum % all.length];
 }
 

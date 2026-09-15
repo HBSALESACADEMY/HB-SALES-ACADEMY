@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
@@ -100,16 +101,19 @@ export default async function handler(req, res) {
           .filter(Boolean);
 
         const htmlFuer = (empfaenger) =>
-          `<p><strong>${me.full_name || "Ein/e Vertriebler:in"}</strong> hat einen neuen Termin erfasst${orgName ? ` bei ${orgName}` : ""}:</p>` +
-          `<p><strong>${name}</strong>${companyValue ? ` (${companyValue})` : ""}<br/>` +
+          `<p><strong>${maskiere(me.full_name || "Ein/e Vertriebler:in")}</strong> hat einen neuen Termin erfasst${orgName ? ` bei ${maskiere(orgName)}` : ""}:</p>` +
+          // Alles, was jemand eingetippt hat, geht maskiert ins HTML — sonst
+          // wird aus einer Notiz mit "<a href=...>" ein Link in der Mail an
+          // die Leitung.
+          `<p><strong>${maskiere(name)}</strong>${companyValue ? ` (${maskiere(companyValue)})` : ""}<br/>` +
           `Termin: ${terminText(appointmentAt, empfaenger?.zeitzone)}` +
           // Telefon/E-Mail sind seit migration_81 pro Organisation optional —
           // leere Zeilen ("Telefon: ") wären sonst in jeder Mail zu sehen.
-          (phone ? `<br/>Telefon: ${phone}` : "") +
-          (email ? `<br/>E-Mail: ${email}` : "") +
-          (extraLines.length ? `<br/>${extraLines.join("<br/>")}` : "") +
+          (phone ? `<br/>Telefon: ${maskiere(phone)}` : "") +
+          (email ? `<br/>E-Mail: ${maskiere(email)}` : "") +
+          (extraLines.length ? `<br/>${extraLines.map((z) => maskiere(z)).join("<br/>")}` : "") +
           `</p>` +
-          (notesValue ? `<p>${notesValue}</p>` : "") +
+          (notesValue ? `<p>${maskiere(notesValue).replace(/\n/g, "<br/>")}</p>` : "") +
           (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
         const subject = `Neuer Termin: ${name}`;

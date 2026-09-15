@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
@@ -139,13 +140,13 @@ export default async function handler(req, res) {
       const betreff = `Neuer Termin für dich: ${kontakt.name}`;
 
       const html = (empfaenger) =>
-        `<p><strong>${wer}</strong> hat aus dem E-Mail-Marketing einen Termin für <strong>${fuerWen}</strong> eingetragen:</p>` +
-        `<p><strong>${kontakt.name}</strong>${kontakt.firma ? ` (${kontakt.firma})` : ""}<br/>` +
+        `<p><strong>${maskiere(wer)}</strong> hat aus dem E-Mail-Marketing einen Termin für <strong>${maskiere(fuerWen)}</strong> eingetragen:</p>` +
+        `<p><strong>${maskiere(kontakt.name)}</strong>${kontakt.firma ? ` (${maskiere(kontakt.firma)})` : ""}<br/>` +
         `Termin: ${terminText(lead.appointment_at, empfaenger?.zeitzone)}<br/>` +
-        `E-Mail: ${kontakt.email}` +
-        (kontakt.telefon ? `<br/>Telefon: ${kontakt.telefon}` : "") +
+        `E-Mail: ${maskiere(kontakt.email)}` +
+        (kontakt.telefon ? `<br/>Telefon: ${maskiere(kontakt.telefon)}` : "") +
         `</p>` +
-        (kontakt.notiz ? `<p>Aus dem Gespräch: ${kontakt.notiz}</p>` : "") +
+        (kontakt.notiz ? `<p>Aus dem Gespräch: ${maskiere(kontakt.notiz).replace(/\n/g, "<br/>")}</p>` : "") +
         (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
       // An die Leitung wie bei jedem neuen Termin — und ausdrücklich an die

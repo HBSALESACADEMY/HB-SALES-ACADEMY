@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers, notifyPlatformAdmins } from "../../lib/notifyManagers";
@@ -20,7 +21,11 @@ export default async function handler(req, res) {
     const orgName = org?.name || "eurer Organisation";
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
-    const html = `<p><strong>${me.full_name || "Ein neuer Nutzer"}</strong> hat sich bei ${orgName} registriert und wartet auf Freigabe.</p>` +
+    // Maskiert, und hier ist es besonders wichtig: Den Namen tippt eine
+    // Person ein, die noch niemand kennt — und die Mail geht an die Leitung
+    // und an die Plattform-Admins. Ungeschützt liesse sich darin ein
+    // täuschend echter "Jetzt freigeben"-Link unterbringen.
+    const html = `<p><strong>${maskiere(me.full_name || "Ein neuer Nutzer")}</strong> hat sich bei ${maskiere(orgName)} registriert und wartet auf Freigabe.</p>` +
       (appUrl ? `<p><a href="${appUrl}/admin" target="_blank" rel="noopener noreferrer">Jetzt freigeben →</a></p>` : "");
 
     // Org-Manager (nur diese Organisation) + zusätzlich alle Plattform-

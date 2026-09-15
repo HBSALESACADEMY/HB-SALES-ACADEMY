@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { notifyOrgManagers } from "../../lib/notifyManagers";
@@ -59,13 +60,13 @@ export default async function handler(req, res) {
     const link = appUrl ? `${appUrl}/termine?leadId=${lead.id}` : null;
 
     const htmlFuer = (e) =>
-      `<p><strong>Erinnerung</strong> an den Termin mit <strong>${lead.name}</strong>${lead.company ? ` (${lead.company})` : ""}${orgName ? ` bei ${orgName}` : ""}:</p>` +
+      `<p><strong>Erinnerung</strong> an den Termin mit <strong>${maskiere(lead.name)}</strong>${lead.company ? ` (${maskiere(lead.company)})` : ""}${orgName ? ` bei ${maskiere(orgName)}` : ""}:</p>` +
       `<p>Termin: ${appointmentFuer(e)}` +
-      (lead.phone ? `<br/>Telefon: ${lead.phone}` : "") +
-      (lead.email ? `<br/>E-Mail: ${lead.email}` : "") +
-      (lead.website ? `<br/>Webseite: ${lead.website}` : "") +
+      (lead.phone ? `<br/>Telefon: ${maskiere(lead.phone)}` : "") +
+      (lead.email ? `<br/>E-Mail: ${maskiere(lead.email)}` : "") +
+      (lead.website ? `<br/>Webseite: ${maskiere(lead.website)}` : "") +
       `</p>` +
-      (lead.notes ? `<p>${lead.notes}</p>` : "") +
+      (lead.notes ? `<p>${maskiere(lead.notes).replace(/\n/g, "<br/>")}</p>` : "") +
       (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
 
     const subject = `Erinnerung: Termin mit ${lead.name}`;

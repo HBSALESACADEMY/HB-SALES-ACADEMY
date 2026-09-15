@@ -1,15 +1,22 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { COURSES, allMcQuestionsOfCourse } from "../../lib/curriculum";
+import { berlinHeute, tagPlus } from "../../lib/woche";
 
+// Der Tag IN BERLIN. Vorher war es der UTC-Tag: Zwischen Mitternacht und
+// ein oder zwei Uhr nachts rechnete der Browser schon mit dem neuen Tag,
+// der Server noch mit dem alten. Wer dann antwortete, bekam "schon
+// beantwortet", und die Serie wurde gegen den falschen Vortag gerechnet.
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return berlinHeute();
 }
 
 function pickTodaysQuestion() {
   const all = [];
   COURSES.forEach((c) => allMcQuestionsOfCourse(c).forEach((q) => all.push(q)));
-  const dayNum = Math.floor(Date.now() / 86400000);
+  // Aus dem Tag abgeleitet, genau wie im Browser (pages/daily-challenge.js)
+  // — sonst bewertete der Server eine andere Frage als die angezeigte.
+  const dayNum = Math.floor(Date.parse(`${todayStr()}T00:00:00Z`) / 86400000);
   return all[dayNum % all.length];
 }
 
@@ -34,7 +41,7 @@ export default async function handler(req, res) {
     const correct = selected === question.correct;
 
     const { data: profile } = await client.from("profiles").select("streak_count, last_challenge_date").eq("id", user.id).maybeSingle();
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const yesterday = tagPlus(todayStr(), -1);
     let newStreak = 1;
     if (profile?.last_challenge_date === yesterday) newStreak = (profile.streak_count || 0) + 1;
     else if (profile?.last_challenge_date === todayStr()) newStreak = profile.streak_count || 1;

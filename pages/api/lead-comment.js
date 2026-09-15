@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendEmail } from "../../lib/email";
@@ -50,8 +51,10 @@ export default async function handler(req, res) {
           const link = appUrl ? `${appUrl}/termine?leadId=${leadId}` : null;
           const subject = `${me?.full_name || "Jemand"} hat dich erwähnt: Termin mit ${lead.name}`;
           const html =
-            `<p><strong>${me?.full_name || "Jemand"}</strong> hat dich in einem Kommentar zum Termin mit <strong>${lead.name}</strong> erwähnt:</p>` +
-            `<p>${content.trim()}</p>` +
+            `<p><strong>${maskiere(me?.full_name || "Jemand")}</strong> hat dich in einem Kommentar zum Termin mit <strong>${maskiere(lead.name)}</strong> erwähnt:</p>` +
+            // Maskiert: Der Kommentar ist Freitext. Ungeschützt würde aus
+            // "<a href=...>" in der Mail ein echter Link.
+            `<p>${maskiere(content.trim()).replace(/\n/g, "<br/>")}</p>` +
             (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
           // Erwähnungs-Mails nur an die, die sie wollen (migration_108). Der
           // Eintrag in lead_mentions bleibt für alle — im Dashboard sieht man

@@ -96,8 +96,12 @@ export default function ObjectionsAdmin() {
       .update({ objection_categories: neueListe }).eq("id", activeOrgId);
     if (err) { setError(err.message); setVorschlagBusy(null); return; }
 
-    await supabase.from("grund_vorschlaege")
-      .update({ status: "uebernommen" }).in("id", gruppe.ids);
+    // Geprüft: Scheitert das, ist die Kategorie zwar übernommen, der
+    // Vorschlag stünde beim nächsten Laden aber wieder da — ohne Hinweis.
+    const vorschlagFehler = await aendereGeprueft(
+      supabase.from("grund_vorschlaege").update({ status: "uebernommen" }).in("id", gruppe.ids),
+      "Die Kategorie ist übernommen, der Vorschlag liess sich aber nicht als erledigt markieren — er erscheint beim nächsten Laden wieder.");
+    if (vorschlagFehler) setError(vorschlagFehler);
     setCategories(neueListe);
     setVorschlaege((prev) => prev.filter((g) => g.form !== gruppe.form));
     setVorschlagBusy(null);

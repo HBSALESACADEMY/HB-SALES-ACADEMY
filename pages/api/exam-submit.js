@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { callAI } from "../../lib/aiClient";
@@ -82,7 +83,7 @@ export default async function handler(req, res) {
       const { data: me } = await auth.client.from("profiles").select("full_name, organization_id").eq("id", auth.user.id).maybeSingle();
       await notifyOrgManagers(admin, me?.organization_id, {
         subject: `Prüfung bestanden: ${course.title}`,
-        html: `<p><strong>${me?.full_name || "Ein Vertriebler"}</strong> hat die Prüfung „${course.title}" mit ${combinedScore}% bestanden.</p>`,
+        html: `<p><strong>${maskiere(me?.full_name || "Ein Vertriebler")}</strong> hat die Prüfung „${maskiere(course.title)}" mit ${combinedScore}% bestanden.</p>`,
       });
     }
 

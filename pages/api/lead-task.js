@@ -1,3 +1,4 @@
+import { maskiere } from "../../lib/htmlMail";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendEmail } from "../../lib/email";
@@ -56,8 +57,8 @@ export default async function handler(req, res) {
           const link = appUrl ? `${appUrl}/termine?leadId=${leadId}` : null;
           const subject = `Neue Aufgabe: ${title.trim()}`;
           const html =
-            `<p><strong>${me?.full_name || "Jemand"}</strong> hat dir eine Aufgabe zum Termin mit <strong>${lead.name}</strong> zugewiesen:</p>` +
-            `<p><strong>${title.trim()}</strong>${dueDate ? `<br/>Fällig: ${new Date(dueDate).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}` : ""}</p>` +
+            `<p><strong>${maskiere(me?.full_name || "Jemand")}</strong> hat dir eine Aufgabe zum Termin mit <strong>${maskiere(lead.name)}</strong> zugewiesen:</p>` +
+            `<p><strong>${maskiere(title.trim())}</strong>${dueDate ? `<br/>Fällig: ${new Date(dueDate).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}` : ""}</p>` +
             (link ? `<p><a href="${link}" target="_blank" rel="noopener noreferrer">Termin ansehen →</a></p>` : "");
           await sendEmail({ to, subject, html });
         }

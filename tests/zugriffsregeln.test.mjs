@@ -580,3 +580,42 @@ test("Die Einstellungen sind am Rechner und am Handy erreichbar", () => {
   const links = layout.match(/router\.push\("\/settings"\)/g) || [];
   assert.ok(links.length >= 2, `nur ${links.length} Link(s) zu den Einstellungen`);
 });
+
+test("Benachrichtigungs-Mails setzen Eingaben nur maskiert ins HTML", () => {
+  // Namen, Notizen, Kommentare, Firmen: alles, was jemand eintippt. Ohne
+  // Maskierung wird aus "<a href=...>" in der Mail an die Leitung ein echter
+  // Link — bei der Registrierung sogar von jemandem, den noch niemand kennt.
+  const dateien = [
+    "pages/api/lead-comment.js", "pages/api/lead-created.js", "pages/api/lead-reminder.js",
+    "pages/api/lead-task.js", "pages/api/marketing-termin.js", "pages/api/exam-submit.js",
+    "pages/api/notify-pending-approval.js", "pages/api/nachfass.js",
+  ];
+  // Erlaubt ohne Maskierung: selbst gebaute Werte und Bedingungen, deren
+  // Inhalt an seiner eigenen Stelle geprüft wird.
+  const erlaubt = [/^maskiere\(/, /^link\b/, /^appUrl\b/, /^terminText\(/, /^appointmentFuer\(/, /^combinedScore\b/,
+    /^wann\b/, /^new Date\(/, /^[\w.?]+\s+\?\s/, /^extraLines\.length\s+\?/,
+    /^extraLines\.map\(\(z\) => maskiere\(z\)\)/];
+  const verstoesse = [];
+  for (const pfad of dateien) {
+    const zeilen = readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8").split("\n");
+    zeilen.forEach((zeile, i) => {
+      if (!/<(p|br|strong)\b/.test(zeile)) return;
+      let ab = zeile.indexOf("${");
+      while (ab !== -1) {
+        const ausdruck = zeile.slice(ab + 2).trimStart();
+        if (!erlaubt.some((r) => r.test(ausdruck))) verstoesse.push(`${pfad}:${i + 1}: \${${ausdruck.slice(0, 40)}`);
+        ab = zeile.indexOf("${", ab + 2);
+      }
+    });
+  }
+  assert.deepEqual(verstoesse, []);
+});
+
+test("Die tägliche Challenge rechnet Browser und Server mit demselben Tag und derselben Frage", () => {
+  const server = readFileSync(new URL("../pages/api/daily-challenge-submit.js", import.meta.url), "utf8");
+  const browser = readFileSync(new URL("../pages/daily-challenge.js", import.meta.url), "utf8");
+  const frage = "Math.floor(Date.parse(`${todayStr()}T00:00:00Z`) / 86400000)";
+  assert.ok(server.includes(frage) && browser.includes(frage));
+  assert.match(server, /return berlinHeute\(\);/);
+  assert.ok(!/toISOString\(\)\.slice\(0, 10\)/.test(server));
+});

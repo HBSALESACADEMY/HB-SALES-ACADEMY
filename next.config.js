@@ -28,6 +28,10 @@ const SECURITY_HEADERS = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Die Academy nutzt next/image nicht. Der Bildoptimierer (/_next/image)
+  // stünde trotzdem bereit — und genau in ihm sitzen mehrere der bekannten
+  // Next.js-Lücken der 14er-Reihe. Was nicht gebraucht wird, bleibt aus.
+  images: { unoptimized: true },
   async headers() {
     // Call Tracker und Einwand-Trainer waren früher eigenständige HTML-Dateien
     // unter /tools/ mit gelockerter CSP (Inline-Script + Bibliotheken von
