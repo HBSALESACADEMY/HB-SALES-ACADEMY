@@ -1,3 +1,4 @@
+import { alleZeilen } from "../../lib/alleZeilen";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { goalMetric } from "../../lib/goalMetrics";
@@ -110,8 +111,10 @@ export default async function handler(req, res) {
     // ist der Gesamtstand ("wer hat was abgeschlossen"), nicht die Woche.
     // Zwei gebündelte Abfragen für alle statt zwei je Person.
     const [{ data: quizzes }, { data: pruefungen }] = await Promise.all([
-      alleIds.length ? admin.from("quiz_results").select("user_id, module_id").in("user_id", alleIds) : { data: [] },
-      alleIds.length ? admin.from("exam_results").select("user_id, course_id").eq("passed", true).in("user_id", alleIds) : { data: [] },
+      // Seitenweise: Quiz-Ergebnisse sammeln sich über die Zeit — ab tausend
+      // fehlten still abgeschlossene Module im Lernfortschritt.
+      alleIds.length ? alleZeilen(() => admin.from("quiz_results").select("id, user_id, module_id").in("user_id", alleIds).order("id")) : { data: [] },
+      alleIds.length ? alleZeilen(() => admin.from("exam_results").select("id, user_id, course_id").eq("passed", true).in("user_id", alleIds).order("id")) : { data: [] },
     ]);
     const modulGesamt = COURSES.reduce((s2, k) => s2 + k.modules.length, 0);
     const modulePro = new Map();

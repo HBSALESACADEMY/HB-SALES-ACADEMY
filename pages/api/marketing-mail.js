@@ -233,7 +233,7 @@ export default async function handler(req, res) {
     if (anMichSelbst) return res.status(200).json({ ok: true, an: empfaenger, probe: true });
 
     const jetzt = new Date().toISOString();
-    await admin.from("email_kontakte").update({
+    const { error: statusFehler } = await admin.from("email_kontakte").update({
       status: "verschickt",
       verschickt_am: jetzt,
       verschickt_von: user.id,
@@ -256,6 +256,17 @@ export default async function handler(req, res) {
       letzter_betreff: String(betreff).trim(),
       erinnert_am: null,
     }).eq("id", kontakt.id);
+
+    // Die Mail ist dann schon beim Kunden — also kein Fehler, aber ein
+    // sichtbarer Hinweis. Still übergangen stünde der Kontakt weiter auf
+    // "offen", und niemand würde nachfassen.
+    if (statusFehler) {
+      console.error("Marketing-Mail: Status nicht gespeichert:", statusFehler.message);
+      return res.status(200).json({
+        ok: true, an: kontakt.email,
+        hinweis: `Die Mail ist raus, aber am Kontakt liess sich „verschickt“ nicht speichern (${statusFehler.message}). Bitte den Status von Hand setzen, sonst fehlt die Follow-up-Erinnerung.`,
+      });
+    }
 
     return res.status(200).json({ ok: true, an: kontakt.email });
   } catch (e) {

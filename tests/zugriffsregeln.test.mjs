@@ -619,3 +619,54 @@ test("Die tägliche Challenge rechnet Browser und Server mit demselben Tag und d
   assert.match(server, /return berlinHeute\(\);/);
   assert.ok(!/toISOString\(\)\.slice\(0, 10\)/.test(server));
 });
+
+test("Auswertung, Teamziele und Org-Kalender laden über tausend Zeilen hinaus", () => {
+  // Supabase schneidet bei 1000 Zeilen still ab. Genau diese Stellen lesen
+  // wachsende Tabellen über ganze Zeiträume.
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const auswertung = lies("pages/api/auswertung.js");
+  for (const tabelle of ["call_log_days", "leads", "call_events"]) {
+    assert.match(auswertung, new RegExp(`alleZeilen\\(\\(\\) => admin\\.from\\("${tabelle}"\\)`), tabelle);
+  }
+  const ziele = lies("pages/api/team-goals.js");
+  assert.match(ziele, /alleZeilen\(\(\) => admin\.from\("quiz_results"\)/);
+  assert.match(ziele, /alleZeilen\(\(\) => admin\.from\("exam_results"\)/);
+  assert.match(lies("pages/api/org-kalender.js"), /alleZeilen\(\(\) => auth\.client\.from\("leads"\)/);
+});
+
+test("Niemand befördert sich selbst über das eigene Profil", () => {
+  const sql = readFileSync(new URL("../supabase/migration_166_profilrechte_und_freischaltung.sql", import.meta.url), "utf8")
+    .replace(/--.*$/gm, "");
+  const geschuetzt = ["role", "status", "is_admin", "is_platform_admin", "can_view_call_stats", "vorgesetzter_id",
+    "manager_id", "kalender_token", "kalender_umfang", "kalender_personen", "xp"];
+  for (const spalte of geschuetzt) {
+    assert.match(sql, new RegExp(`new\\.${spalte} is distinct from old\\.${spalte}`), spalte);
+  }
+  // Nur der Server (ohne auth.uid()) darf diese Spalten schreiben.
+  assert.match(sql, /if auth\.uid\(\) is null then\s+return new;/);
+  assert.match(sql, /before update on profiles/);
+
+  // Ohne Freischaltung keine Organisation — Plattform-Admins ausgenommen.
+  assert.match(sql, /status = 'approved' or coalesce\(is_platform_admin, false\)/);
+  assert.match(sql, /when not public\.ist_freigeschaltet\(uid\) then null/);
+
+  // Und der Browser schreibt keine dieser Spalten — sonst bricht dort
+  // etwas, sobald die Migration läuft.
+  const quellen = [];
+  const sammle = (ordner) => readdirSync(new URL(`../${ordner}/`, import.meta.url), { withFileTypes: true }).forEach((e) => {
+    const pfad = `${ordner}/${e.name}`;
+    if (e.isDirectory()) { if (pfad !== "pages/api") sammle(pfad); } else if (e.name.endsWith(".js")) quellen.push(pfad);
+  });
+  sammle("pages"); sammle("components");
+  const verstoesse = [];
+  for (const pfad of quellen) {
+    const code = readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+    for (const m of code.matchAll(/\.from\("profiles"\)\s*\.(update|upsert)\(\s*\{([\s\S]{0,400}?)\}\s*\)/g)) {
+      const keys = [...m[2].matchAll(/(?:^|[{,\s])([a-z_]+)\s*:/g)].map((k) => k[1]);
+      keys.filter((k) => geschuetzt.includes(k)).forEach((k) => verstoesse.push(`${pfad}: ${k}`));
+    }
+  }
+  assert.deepEqual(verstoesse, []);
+  const layout = readFileSync(new URL("../components/Layout.js", import.meta.url), "utf8");
+  assert.ok(!/rpc\("increment_xp"/.test(layout), "Der Browser ruft increment_xp auf — das darf nur der Server");
+});

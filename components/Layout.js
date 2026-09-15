@@ -373,17 +373,15 @@ export default function Layout({ children, fullBleed }) {
       // Serien zurücksetzt — ohne Aktivität blieb streak_count sonst beliebig
       // lange stehen ("Streak in Gefahr" für immer). Beim Login nachholen:
       // Serie auf 0, plus XP-Abzug als Konsequenz (lib/streak.js).
+      //
+      // Über den Server (pages/api/streak-verfall.js): increment_xp darf nur
+      // er aufrufen, der Abzug aus dem Browser scheiterte bei jedem still.
       if (data && data.streak_count > 0 && isStreakExpired(data.last_challenge_date)) {
-        const penalty = streakLossPenalty(data.streak_count);
-        const { error: resetErr } = await supabase.from("profiles").update({ streak_count: 0 }).eq("id", data.id);
-        // Nur bei erfolgreichem Reset auch den XP-Abzug anwenden — sonst
-        // bliebe streak_count in der DB weiter "abgelaufen" und der Abzug
-        // würde bei jedem künftigen Login erneut ausgeführt.
-        if (!resetErr) {
-          try { await supabase.rpc("increment_xp", { uid: data.id, amount: -penalty }); } catch (e) { console.error("streak XP penalty failed:", e.message); }
-          data = { ...data, streak_count: 0, xp: Math.max(0, (data.xp || 0) - penalty) };
-        } else {
-          console.error("streak reset failed:", resetErr.message);
+        try {
+          const verfall = await apiPost("/api/streak-verfall", {});
+          if (verfall?.verfallen) data = { ...data, streak_count: 0, xp: verfall.xp ?? data.xp };
+        } catch (e) {
+          console.error("Streak-Verfall fehlgeschlagen:", e.message);
         }
       }
 

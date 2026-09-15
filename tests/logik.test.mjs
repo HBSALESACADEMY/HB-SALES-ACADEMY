@@ -3659,3 +3659,26 @@ test("Zum Lob kommt ein Zitat, das zum Anlass passt", async () => {
   assert.ok(!/: 0 \(Mo: 0\)/.test(gemischt), gemischt);
   assert.ok(!/Mails verschickt/.test(gemischt));
 });
+
+test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
+  const { alleZeilen } = await import("../lib/alleZeilen.js");
+  const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));
+  let abfragen = 0;
+  const baue = () => ({
+    range: async (von, bis) => { abfragen += 1; return { data: bestand.slice(von, bis + 1), error: null }; },
+  });
+  const { data } = await alleZeilen(baue);
+  assert.equal(data.length, 2345);
+  assert.equal(abfragen, 3);
+  assert.equal(new Set(data.map((z) => z.id)).size, 2345);
+
+  // Genau tausend: eine leere Seite zur Bestätigung, nicht endlos.
+  const tausend = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
+  const { data: d2 } = await alleZeilen(() => ({ range: async (v, b) => ({ data: tausend.slice(v, b + 1), error: null }) }));
+  assert.equal(d2.length, 1000);
+
+  // Ein Fehler wird weitergegeben, nicht als leere Liste verschluckt.
+  const { data: d3, error } = await alleZeilen(() => ({ range: async () => ({ data: null, error: { message: "kaputt" } }) }));
+  assert.equal(d3, null);
+  assert.equal(error.message, "kaputt");
+});

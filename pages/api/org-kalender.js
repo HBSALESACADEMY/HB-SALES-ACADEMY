@@ -1,3 +1,4 @@
+import { alleZeilen } from "../../lib/alleZeilen";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { istFaellig, aktualisiereKalender } from "../../lib/externerKalenderAbruf";
@@ -50,12 +51,14 @@ export default async function handler(req, res) {
         .order("von"),
       admin.from("profiles").select("id, full_name, avatar_url, geburtstag, abwesend_von, abwesend_bis")
         .eq("organization_id", orgId),
-      auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by, termin_art, stufen_verlauf")
+      // Seitenweise: Die Leitung sieht die Termine der ganzen Organisation,
+      // und ab tausend im Zeitraum fehlten die späteren still im Kalender.
+      alleZeilen(() => auth.client.from("leads").select("id, name, company, appointment_at, status, outcome, created_by, termin_art, stufen_verlauf")
         .is("geloescht_am", null)
         .not("appointment_at", "is", null)
         .gte("appointment_at", vonZeitpunkt)
         .lt("appointment_at", bisZeitpunkt)
-        .order("appointment_at"),
+        .order("appointment_at").order("id")),
     ]);
 
     // Ein Eintrag, der vorher begann und kein Ende hat, dauert einen Tag

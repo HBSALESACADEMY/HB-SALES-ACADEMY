@@ -1,3 +1,4 @@
+import { alleZeilen } from "../../lib/alleZeilen";
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
@@ -57,20 +58,24 @@ export default async function handler(req, res) {
       teamIds.length
         ? admin.from("team_members").select("team_id, user_id").in("team_id", teamIds)
         : Promise.resolve({ data: [] }),
-      admin.from("call_log_days").select("user_id, log_date, counts, reasons")
-        .in("user_id", ids).gte("log_date", von).lte("log_date", bis),
+      // Seitenweise (lib/alleZeilen.js): Supabase schneidet bei 1000 Zeilen
+      // still ab, und ein Monat mit zwanzig Leuten hat mehr Tage.
+      alleZeilen(() => admin.from("call_log_days").select("user_id, log_date, counts, reasons")
+        .in("user_id", ids).gte("log_date", von).lte("log_date", bis).order("user_id").order("log_date")),
       // Termine über organization_id, nicht über die anlegende Person: wer
       // per Firmencode in mehreren Organisationen arbeitet, nähme seine
       // Termine sonst überallhin mit (migration_114).
-      admin.from("leads").select("created_by, status, outcome, appointment_at, created_at, termin_art").is("geloescht_am", null)
-        .eq("organization_id", orgId).gte("created_at", `${von}T00:00:00`).lte("created_at", `${bis}T23:59:59`),
+      alleZeilen(() => admin.from("leads").select("id, created_by, status, outcome, appointment_at, created_at, termin_art").is("geloescht_am", null)
+        .eq("organization_id", orgId).gte("created_at", `${von}T00:00:00`).lte("created_at", `${bis}T23:59:59`).order("id")),
       // Einzelne Ereignisse mit Uhrzeit (migration_128) — die Grundlage für
       // "welcher Einwand zu welcher Stunde". Über die Personen der
       // Organisation eingegrenzt, nicht über organization_id allein: Zeilen
       // aus der Zeit vor migration_128 tragen dort noch nichts.
-      admin.from("call_events").select("user_id, art, grund, erfasst_at")
+      // Hier war der Verlust am grössten: fünfzig Anrufe am Tag je Person
+      // sind nach einer Woche weit über tausend Ereignisse.
+      alleZeilen(() => admin.from("call_events").select("id, user_id, art, grund, erfasst_at")
         .in("user_id", ids)
-        .gte("erfasst_at", `${von}T00:00:00`).lte("erfasst_at", `${bis}T23:59:59.999`),
+        .gte("erfasst_at", `${von}T00:00:00`).lte("erfasst_at", `${bis}T23:59:59.999`).order("id")),
     ]);
 
     // Trainingsaktivität im selben Zeitraum — die Grundlage der

@@ -40,9 +40,12 @@ export default async function handler(req, res) {
         if (eligibleIds.length) {
           // Persistiert (nicht nur E-Mail), damit die Erwähnung auch im
           // Dashboard auftaucht (siehe migration_68).
-          await client.from("lead_mentions").insert(
+          const { error: erwaehnFehler } = await client.from("lead_mentions").insert(
             eligibleIds.map((uid) => ({ user_id: uid, actor_id: user.id, lead_id: leadId, comment_id: comment.id }))
           );
+          // Nicht mehr still: Fehlt die Erwähnung, taucht sie im Dashboard
+          // nicht auf, obwohl die Mail rausging.
+          if (erwaehnFehler) console.error("Erwähnung konnte nicht gespeichert werden:", erwaehnFehler.message);
 
           const { data: me } = await client.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
           const { data: authList } = await admin.auth.admin.listUsers({ perPage: 1000 });
