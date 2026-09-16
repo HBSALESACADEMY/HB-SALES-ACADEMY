@@ -3682,3 +3682,67 @@ test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   assert.equal(d3, null);
   assert.equal(error.message, "kaputt");
 });
+
+test("Onboarding: Schritte haken sich selbst ab, Fristen zählen ab dem Start", async () => {
+  const { planStand, schrittStand, darfAbhaken, pruefeSchritt, erinnerungsText, fertigText, datumKurz } = await import("../lib/onboarding.js");
+  const schritte = [
+    { id: "a", titel: "Profil ausfüllen", reihenfolge: 0, automatisch: "profil", faellig_tag: 1 },
+    { id: "b", titel: "50 Anwahlen", reihenfolge: 1, automatisch: "anwahlen", ziel_anzahl: 50, faellig_tag: 5 },
+    { id: "c", titel: "Probetelefonat", reihenfolge: 2, wer: "leitung", faellig_tag: 3 },
+    { id: "d", titel: "Leitfaden lesen", reihenfolge: 3, wer: "vertrieb" },
+  ];
+  const stand = planStand(schritte, {
+    werte: { profil: true, anwahlen: 37 },
+    haken: { d: { erledigt_am: "2026-09-15T08:00:00Z", von_name: "Anna" } },
+    gestartetAm: "2026-09-10",
+    heute: "2026-09-14",
+  });
+  assert.equal(stand.gesamt, 4);
+  assert.equal(stand.erledigt, 2);
+  assert.equal(stand.prozent, 50);
+  const nach = Object.fromEntries(stand.liste.map((x) => [x.schritt.id, x]));
+  assert.equal(nach.a.erledigt, true);
+  // 37 von 50: nicht erledigt, Frist Tag 5 = 15.9., am 14.9. noch nicht überfällig.
+  assert.equal(nach.b.erledigt, false);
+  assert.equal(nach.b.ist, 37);
+  assert.equal(nach.b.ziel, 50);
+  assert.equal(nach.b.faelligAm, "2026-09-15");
+  assert.equal(nach.b.ueberfaellig, false);
+  // Tag 3 = 13.9.: am 14.9. überfällig.
+  assert.equal(nach.c.ueberfaellig, true);
+  assert.equal(stand.ueberfaellig, 1);
+  assert.equal(stand.naechster.id, "b");
+  assert.equal(stand.fertig, false);
+
+  // Am Fristtag selbst ist noch nichts überfällig.
+  assert.equal(schrittStand(schritte[2], { gestartetAm: "2026-09-10", heute: "2026-09-13" }).ueberfaellig, false);
+  // Ohne Frist nie überfällig.
+  assert.equal(schrittStand(schritte[3], { gestartetAm: "2026-01-01", heute: "2026-09-13" }).ueberfaellig, false);
+  // Ein leerer Plan ist nicht "fertig".
+  assert.equal(planStand([], {}).fertig, false);
+  assert.equal(planStand([schritte[3]], { haken: { d: {} } }).fertig, true);
+
+  // Wer darf abhaken?
+  assert.equal(darfAbhaken(schritte[0], { istLeitung: true }), false);       // automatisch: niemand
+  assert.equal(darfAbhaken(schritte[2], { istLeitung: true }), true);
+  assert.equal(darfAbhaken(schritte[2], { istEigene: true }), false);        // Leitungsschritt
+  assert.equal(darfAbhaken(schritte[3], { istEigene: true }), true);
+  assert.equal(darfAbhaken(schritte[3], { istEigene: false }), false);       // fremder Plan
+
+  // Eingaben
+  assert.match(pruefeSchritt({ titel: "  " }).fehler, /Titel/);
+  assert.match(pruefeSchritt({ titel: "X", automatisch: "anwahlen" }).fehler, /Anwahlen/);
+  assert.match(pruefeSchritt({ titel: "X", automatisch: "hacken" }).fehler, /Unbekannte/);
+  assert.match(pruefeSchritt({ titel: "X", faellig_tag: "-1" }).fehler, /0 bis 365/);
+  assert.deepEqual(pruefeSchritt({ titel: " Telegram ", automatisch: "telegram", wer: "leitung", ziel_anzahl: 9, faellig_tag: "2" }).schritt,
+    { titel: "Telegram", beschreibung: null, wer: "vertrieb", automatisch: "telegram", ziel_anzahl: null, faellig_tag: 2 });
+  assert.equal(pruefeSchritt({ titel: "X", faellig_tag: "" }).schritt.faellig_tag, null);
+
+  // Texte
+  assert.equal(datumKurz("2026-09-05"), "5.9.");
+  const eintraege = [{ titel: "Probetelefonat", faelligAm: "2026-09-13" }];
+  assert.match(erinnerungsText({ name: "Anna Muster", eintraege }), /^⏰ Dein Onboarding: Dieser Schritt ist überfällig\./);
+  assert.match(erinnerungsText({ name: "Anna Muster", eintraege, fuerLeitung: true }), /^⏰ Onboarding von Anna Muster: Ein Schritt ist überfällig\./);
+  assert.match(erinnerungsText({ name: "A", eintraege }), /• Probetelefonat \(fällig bis 13\.9\.\)/);
+  assert.match(fertigText({ name: "Anna Muster" }), /Glückwunsch, Anna!/);
+});

@@ -681,3 +681,29 @@ test("Was der Server beim Mailversand meldet, kommt auf den Bildschirm", () => {
     assert.match(code, /if \(antwort\?\.hinweis\) set(Fehler|EmailFehler)\(antwort\.hinweis\)/, pfad);
   }
 });
+
+test("Onboarding: Schreiben nur über den Server, und dort nur in der eigenen Organisation", () => {
+  const sql = readFileSync(new URL("../supabase/migration_167_onboarding.sql", import.meta.url), "utf8").replace(/--.*$/gm, "");
+  for (const tabelle of ["onboarding_schritte", "onboarding_zuweisungen", "onboarding_haken"]) {
+    assert.match(sql, new RegExp(`alter table ${tabelle} enable row level security`), tabelle);
+    assert.ok(!new RegExp(`on ${tabelle}\\s+for (insert|update|delete|all)`).test(sql), `${tabelle} hat Schreibregeln`);
+  }
+  // Die eigene Zuweisung ohne Bedingung an die Organisation.
+  assert.match(sql, /"onboarding_zuweisung_eigene" on onboarding_zuweisungen\s+for select using \(user_id = auth\.uid\(\)\);/);
+  assert.match(sql, /'onboarding', 'Onboarding', 'check', '\/onboarding', true, true, true/);
+
+  const route = readFileSync(new URL("../pages/api/onboarding.js", import.meta.url), "utf8");
+  // Jede Abfrage auf Plan und Zuweisungen ist an die aktive Organisation gebunden.
+  for (const m of route.matchAll(/\.from\("onboarding_(schritte|zuweisungen)"\)([\s\S]*?)(;|\)\),|\]\);)/g)) {
+    assert.match(m[2], /organization_id/, `ohne Organisation: ${m[0].slice(0, 90)}`);
+  }
+  // Abhaken nach der gemeinsamen Regel; alles andere nur für die Leitung.
+  assert.match(route, /darfAbhaken\(schritt, \{ istLeitung: leitung, istEigene: zuweisung\.user_id === profil\.id \}\)/);
+  const leitungsSperre = route.indexOf('if (!leitung) return res.status(403)');
+  assert.ok(leitungsSperre > route.indexOf('b.aktion === "haken"'));
+  for (const aktion of ["schritt_speichern", "schritt_loeschen", "reihenfolge", "zuweisen", "startdatum", "zuweisung_entfernen"]) {
+    assert.ok(route.indexOf(`b.aktion === "${aktion}"`) > leitungsSperre, aktion);
+  }
+  // Nur freigeschaltete Personen der eigenen Organisation lassen sich verbinden.
+  assert.match(route, /person\.organization_id !== orgId \|\| person\.status !== "approved"/);
+});

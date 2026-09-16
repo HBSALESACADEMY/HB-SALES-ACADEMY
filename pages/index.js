@@ -1,3 +1,5 @@
+import { OnboardingBalken, schrittInfo } from "../components/OnboardingSchritt";
+import { darfAbhaken } from "../lib/onboarding";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout, { patchCachedProfile } from "../components/Layout";
@@ -8,7 +10,7 @@ import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { ABSTAND } from "../lib/autoRefresh";
-import { apiGet } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import { aendereGeprueft } from "../lib/loeschen";
 import { meldeFehler } from "../lib/errorBus";
 import { deutscheZeit } from "../lib/terminzeit";
@@ -32,6 +34,34 @@ export default function Dashboard() {
   const [kachelnBearbeiten, setKachelnBearbeiten] = useState(false);
   const [dashboardPrefs, setDashboardPrefs] = useState({});
   const [onboarding, setOnboarding] = useState(null); // null = noch nicht geladen/nicht nötig
+  // Der von der Leitung zugewiesene Onboarding-Plan (migration_167). Gibt es
+  // ihn, ersetzt er die feste Liste "Erste Schritte".
+  const [meinOnboarding, setMeinOnboarding] = useState(null);
+  const [onboardingBusy, setOnboardingBusy] = useState(false);
+  const [onboardingFehler, setOnboardingFehler] = useState("");
+
+  function ladeMeinOnboarding() {
+    return apiGet("/api/onboarding?ansicht=mein")
+      .then(setMeinOnboarding)
+      // Ohne migration_167 gibt es den Plan nicht — dann bleibt die alte
+      // Liste stehen. Der Grund gehört trotzdem ins Log.
+      .catch((e) => console.error("Onboarding nicht geladen:", e.message));
+  }
+  useEffect(() => { ladeMeinOnboarding(); }, []);
+
+  async function hakeOnboardingAb(x) {
+    setOnboardingBusy(true);
+    setOnboardingFehler("");
+    try {
+      await apiPost("/api/onboarding", {
+        aktion: "haken", zuweisungId: meinOnboarding.zuweisung.id, schrittId: x.schritt.id, erledigt: !x.erledigt,
+      });
+      await ladeMeinOnboarding();
+    } catch (e) {
+      setOnboardingFehler(e.message);
+    }
+    setOnboardingBusy(false);
+  }
   const [adminSnapshot, setAdminSnapshot] = useState(null);
   const [pendingFriendReqs, setPendingFriendReqs] = useState([]);
   const [friendReqBusyId, setFriendReqBusyId] = useState(null);
@@ -493,7 +523,45 @@ export default function Dashboard() {
             </div>
           )}
 
-          {onboarding && (
+          {meinOnboarding?.zuweisung && !meinOnboarding.zuweisung.stand.fertig && (() => {
+            const plan = meinOnboarding.zuweisung.stand;
+            return (
+              <div className="card mb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-semibold text-textMain text-sm flex-1">🚀 Dein Onboarding</span>
+                  <span className="text-[11px] font-mono text-textMuted">{plan.erledigt} von {plan.gesamt}</span>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <OnboardingBalken prozent={plan.prozent} warnung={plan.ueberfaellig > 0} />
+                  <span className="text-[11px] font-mono text-textMuted">{plan.prozent} %</span>
+                </div>
+                {onboardingFehler && <p className="text-xs text-coral mb-2">{onboardingFehler}</p>}
+                <div className="flex flex-col">
+                  {plan.liste.map((x) => {
+                    const selbst = darfAbhaken(x.schritt, { istEigene: true });
+                    return (
+                      <div key={x.schritt.id} className="flex items-start gap-2.5 py-1.5">
+                        <button type="button" disabled={onboardingBusy || !selbst} onClick={() => hakeOnboardingAb(x)}
+                          title={x.automatisch ? "Hakt sich automatisch ab" : selbst ? (x.erledigt ? "Haken entfernen" : "Als erledigt abhaken") : "Hakt die Leitung ab"}
+                          className={`w-5 h-5 mt-0.5 rounded-full border flex-shrink-0 flex items-center justify-center text-[10px] ${
+                            x.erledigt ? "bg-teal border-teal text-[#14151C]" : x.ueberfaellig ? "border-coral text-coral" : "border-line"
+                          } ${selbst ? "" : "cursor-default"}`}>
+                          {x.erledigt ? "✓" : x.ueberfaellig ? "!" : ""}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm ${x.erledigt ? "text-textMuted line-through" : "text-textMain"}`}>{x.schritt.titel}</div>
+                          {x.schritt.beschreibung && !x.erledigt && <div className="text-[11px] text-textMuted">{x.schritt.beschreibung}</div>}
+                          <div className={`text-[11px] ${x.ueberfaellig ? "text-coral" : "text-textMuted"}`}>{schrittInfo(x)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {onboarding && !meinOnboarding?.zuweisung && (
             <div className="card mb-5">
               <div className="flex items-center justify-between mb-2.5">
                 <span className="font-semibold text-textMain text-sm">👋 Erste Schritte</span>

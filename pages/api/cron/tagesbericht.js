@@ -6,6 +6,7 @@ import { raeumeAufnahmenAuf } from "../../../lib/aufnahmenAufraeumen";
 import { erinnereAnNachfassTermine } from "../../../lib/nachfassTermineErinnerung";
 import { erinnereAnBestaetigungen } from "../../../lib/bestaetigungErinnerung";
 import { sendeTagesauswertungen } from "../../../lib/tagesauswertungVersand";
+import { erinnereAnOnboarding } from "../../../lib/onboardingErinnerung";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -85,6 +86,15 @@ export default async function handler(req, res) {
       console.error("Tagesauswertungen fehlgeschlagen:", e.message);
     }
 
+    // Überfällige Onboarding-Schritte melden, fertige abschliessen
+    // (lib/onboardingErinnerung.js).
+    let onboarding = { erinnert: 0, fertig: 0 };
+    try {
+      onboarding = await erinnereAnOnboarding(admin);
+    } catch (e) {
+      console.error("Onboarding-Erinnerung fehlgeschlagen:", e.message);
+    }
+
     // Fällige Aufnahmen entfernen. Auch das darf den Bericht nicht
     // nachträglich als gescheitert dastehen lassen.
     let aufgeraeumt = { geloescht: 0 };
@@ -94,7 +104,7 @@ export default async function handler(req, res) {
       console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
     }
 
-    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, aufgeraeumt });
+    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, onboarding, aufgeraeumt });
   } catch (e) {
     console.error("Tagesbericht fehlgeschlagen:", e.message);
     await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);
