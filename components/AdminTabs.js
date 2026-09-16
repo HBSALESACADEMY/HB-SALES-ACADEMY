@@ -44,6 +44,8 @@ const BEREICHE = [
       // Reiter in der Sidebar.
       { key: "insights", label: "Lernfortschritt", route: "/admin/insights", icon: "award",
         zweck: "Wer wie weit ist: Kurse, Quiz, Rollenspiele, XP — über alle Teams." },
+      { key: "onboarding", label: "Onboarding", route: "/onboarding", icon: "check",
+        zweck: "Neue Leute verbinden, Onboarding-Schritte festlegen und den Fortschritt je Person sehen." },
     ],
   },
   {

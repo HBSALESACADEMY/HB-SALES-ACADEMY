@@ -707,3 +707,12 @@ test("Onboarding: Schreiben nur über den Server, und dort nur in der eigenen Or
   // Nur freigeschaltete Personen der eigenen Organisation lassen sich verbinden.
   assert.match(route, /person\.organization_id !== orgId \|\| person\.status !== "approved"/);
 });
+
+test("Der Onboarding-Reiter ist zu finden: Seitenleiste unter Führung und in der Verwaltung", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const layout = lies("components/Layout.js");
+  // Ohne Gruppe landet ein Menüpunkt unter "Weiteres" — dort sucht ihn niemand.
+  assert.match(layout, /onboarding: "Führung"/);
+  assert.match(layout, /id: "onboarding", label: "Onboarding"[^}]*requires_manager: true/);
+  assert.match(lies("components/AdminTabs.js"), /key: "onboarding", label: "Onboarding", route: "\/onboarding"/);
+});

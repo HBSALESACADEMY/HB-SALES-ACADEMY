@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
+import AdminTabs from "../components/AdminTabs";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { AUTO_SIGNALE, WER, signalVon, datumKurz } from "../lib/onboarding";
 import { OnboardingBalken, schrittInfo } from "../components/OnboardingSchritt";
@@ -141,6 +142,9 @@ export default function OnboardingSeite() {
 
   return (
     <Layout>
+      {/* Dieselben Reiter wie die übrigen Leitungsseiten: Wer über die
+          Verwaltung kommt, findet von hier aus zurück. */}
+      <AdminTabs />
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Onboarding</h1>
       <p className="text-sm text-textMuted mb-4">Neue Leute verbinden, Schritte festlegen und sehen, wo jede Person steht.</p>
       <div className="brand-stripe w-16 mb-5" />

@@ -36,6 +36,7 @@ const FALLBACK_NAV = [
   { id: "auswertung", label: "Auswertung", icon: "chart", route: "/auswertung", is_builtin: true, requires_manager: true },
   { id: "email-marketing", label: "E-Mail Marketing", icon: "send", route: "/email-marketing", is_builtin: true, requires_manager: false },
   { id: "manager", label: "Team (Manager)", icon: "users", route: "/manager", is_builtin: true, requires_manager: true },
+  { id: "onboarding", label: "Onboarding", icon: "check", route: "/onboarding", is_builtin: true, requires_manager: true },
   { id: "admin", label: "Verwaltung", icon: "lock", route: "/admin", is_builtin: true, requires_manager: true },
 ];
 
@@ -79,7 +80,7 @@ const NAV_GROUPS = {
 
   // Getrennt, weil es einen anderen Zweck hat: hier wird beurteilt, nicht
   // gearbeitet. Wer es nicht sehen darf, sieht die Gruppe gar nicht.
-  auswertung: "Führung", manager: "Führung",
+  auswertung: "Führung", manager: "Führung", onboarding: "Führung",
 
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
