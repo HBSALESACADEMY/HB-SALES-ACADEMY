@@ -1,7 +1,6 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { sendeAlarm } from "../../lib/alarm";
-import { deutscheZeit } from "../../lib/terminzeit";
+import { sendeTerminMeldung, TITEL } from "../../lib/terminMeldungSenden";
 import { meldungsGrund, MELDENSWERT } from "../../lib/terminMeldung";
 
 // Meldet Änderungen an einem bestehenden Termin an das Team — Statuswechsel,
@@ -20,24 +19,6 @@ import { meldungsGrund, MELDENSWERT } from "../../lib/terminMeldung";
 // Beim Löschen MUSS diese Route vor dem Löschen aufgerufen werden: danach
 // gibt es den Termin nicht mehr und die Daten wären nicht mehr lesbar.
 export const config = { maxDuration: 20 };
-
-const TITEL = {
-  status: "🔄 Termin-Status geändert",
-  ergebnis: "🎯 Termin-Ergebnis eingetragen",
-  folgetermin: "📅 Folgetermin angelegt",
-  bearbeitet: "✏️ Termin bearbeitet",
-  geloescht: "🗑️ Termin gelöscht",
-};
-
-// Überschrift nach dem GRUND der Meldung, nicht nach der Art der Änderung:
-// "Termin abgesagt" sagt mehr als "Status geändert".
-const GRUND_TITEL = {
-  verschoben: "🕐 Termin verschoben",
-  abgesagt: "❌ Termin abgesagt",
-  geloescht: "🗑️ Termin gelöscht",
-  folgetermin: "📅 Folgetermin angelegt",
-  kunde: "🎉 Kunde geworden",
-};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -70,30 +51,12 @@ export default async function handler(req, res) {
     if (activeOrgId && (me?.is_platform_admin || activeOrgId === me?.organization_id)) orgId = activeOrgId;
     if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
-    const { data: org } = await admin.from("organizations")
-      .select("name, telegram_chat_id, telegram_abschluss_chat_id").eq("id", orgId).maybeSingle();
-    const wer = me?.full_name || "Ein Teammitglied";
-    const terminDeutsch = lead.appointment_at ? `${deutscheZeit(lead.appointment_at)} Uhr` : "kein Zeitpunkt";
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-    // Nach dem Löschen führt der Link ins Leere — dann weglassen.
-    const link = appUrl && ereignis !== "geloescht" ? `${appUrl}/termine?leadId=${lead.id}` : null;
-
-    // Ein Abschluss geht in den Abschluss-Kanal, wenn es einen gibt
-    // (migration_160). Er lag vorher zwischen Verschiebungen und Absagen —
-    // die einzige Meldung, auf die ein Vertriebsteam hinarbeitet, stand
-    // zwischen lauter Organisatorischem.
-    const kanal = (grund === "kunde" && org?.telegram_abschluss_chat_id) || org?.telegram_chat_id;
-    if (kanal) {
-      const text = [
-        `${GRUND_TITEL[grund] || TITEL[ereignis]}: ${lead.name}` + (lead.company ? ` (${lead.company})` : ""),
-        beschreibung ? beschreibung : null,
-        `Von ${wer}`,
-        ``,
-        `Termin: ${terminDeutsch}`,
-        link ? `\n${link}` : null,
-      ].filter((z) => z !== null).join("\n");
-      await sendeAlarm(text, kanal);
-    }
+    // Text und Kanal (Abschlüsse in den Abschluss-Kanal) stehen in
+    // lib/terminMeldungSenden.js — derselbe Weg wie für die Knöpfe des
+    // Vertriebsbuddys in Telegram.
+    await sendeTerminMeldung(admin, {
+      orgId, lead, grund, ereignis, beschreibung, wer: me?.full_name || "Ein Teammitglied",
+    });
 
     return res.status(200).json({ ok: true, gemeldet: true, grund: MELDENSWERT[grund] });
   } catch (e) {

@@ -155,6 +155,8 @@ export default function Settings() {
         setTgHinweis(antwort.hinweis || "Der Wochenimpuls ist raus — schau in Telegram.");
       } else if (aktion === "test-teamlage") {
         setTgHinweis(antwort.hinweis || "Die Teamlage ist raus — schau in Telegram.");
+      } else if (aktion === "test-briefing") {
+        setTgHinweis(antwort.hinweis || "Das Briefing ist raus — schau in Telegram.");
       } else {
         setTgHinweis(antwort.neu
           ? `${antwort.neu} ${antwort.neu === 1 ? "Antwort" : "Antworten"} abgeholt und beantwortet — schau in Telegram.`
@@ -387,6 +389,7 @@ export default function Settings() {
               {[
                 ["tagesauswertung", "Tägliche Auswertung", "Montag bis Freitag morgens: deine Zahlen vom letzten Arbeitstag, verglichen mit dem Tag davor, und Lob"],
                 ["followups", "Follow-up-Erinnerungen", "Wenn dir jemand ein Follow-up zuweist, und morgens deine fälligen Follow-ups"],
+                ["briefing", "Morgen-Briefing", "Montag bis Freitag morgens deine Termine des Tages mit dem, was du vorher wissen solltest — und Knöpfe für Termine ohne Ergebnis"],
                 ["buddy", "Vertriebsbuddy", "Freitags dein Wochenimpuls mit deinen Zahlen und einer Frage — du kannst direkt im Chat antworten"],
                 ...(tg.istLeitung ? [["teamlage", "Teamlage (nur Leitung)", "Freitags die Zahlen deines Teams, die häufigsten Themen und worauf du achten solltest"]] : []),
               ].map(([key, label, hinweis]) => (
@@ -405,6 +408,8 @@ export default function Settings() {
                 <span className="text-[11px] text-textMuted flex-1 min-w-[8rem]">Vertriebsbuddy ausprobieren:</span>
                 <button type="button" onClick={() => buddyAktion("test-impuls")} disabled={tgBusy}
                   className="btn-ghost text-xs disabled:opacity-40">Wochenimpuls testen</button>
+                <button type="button" onClick={() => buddyAktion("test-briefing")} disabled={tgBusy}
+                  className="btn-ghost text-xs disabled:opacity-40">Briefing testen</button>
                 <button type="button" onClick={() => buddyAktion("abholen")} disabled={tgBusy}
                   className="btn-ghost text-xs disabled:opacity-40">Antworten abholen</button>
                 {tg.istLeitung && tg.teamlage !== false && (
@@ -413,6 +418,16 @@ export default function Settings() {
                 )}
               </div>
             )}
+            {/* Die Kurzbefehle muss man kennen, um sie zu benutzen — Telegram
+                zeigt sie zwar beim Tippen auf "/", aber darauf kommt niemand. */}
+            <p className="text-[11px] text-textMuted mt-3 pt-3 border-t border-line">
+              Im Chat mit dem Bot: <span className="font-mono text-textMain">/heute</span>,{" "}
+              <span className="font-mono text-textMain">/woche</span>, <span className="font-mono text-textMain">/ziel</span>,{" "}
+              <span className="font-mono text-textMain">/termine</span>, <span className="font-mono text-textMain">/einwand</span> und{" "}
+              <span className="font-mono text-textMain">/rollenspiel</span>
+              {tg.istLeitung ? <>, als Leitung auch <span className="font-mono text-textMain">/gespraech Name</span> und <span className="font-mono text-textMain">/team</span></> : null}.
+              {" "}<span className="font-mono text-textMain">/hilfe</span> zeigt alles.
+            </p>
           </>
         ) : tgCode ? (
           <ol className="text-xs text-textMuted flex flex-col gap-3 list-decimal pl-4">

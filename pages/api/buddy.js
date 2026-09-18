@@ -2,6 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeWochenimpulse, holeAntworten } from "../../lib/buddy";
 import { sendeTeamlage } from "../../lib/teamlageVersand";
+import { sendeBriefings } from "../../lib/buddyBriefing";
 import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Der Vertriebsbuddy aus Sicht der angemeldeten Person.
@@ -14,6 +15,10 @@ export const config = { maxDuration: 60 };
 
 const MIGRATION_FEHLT = "In der Datenbank fehlen die Tabellen für den Vertriebsbuddy (migration_168).";
 const lesbar = (e) => (/buddy_|impuls_fuer/.test(e?.message || "") ? MIGRATION_FEHLT : (e?.message || "Unbekannter Fehler."));
+
+// Fehlt migration_175, heisst die Meldung "column briefing does not exist".
+const lesbarBriefing = (grund) => (/briefing/.test(grund || "")
+  ? "In der Datenbank fehlt noch eine Änderung (migration_175)." : grund);
 
 export default async function handler(req, res) {
   const auth = await requireUser(req, res);
@@ -64,6 +69,18 @@ export default async function handler(req, res) {
         });
       }
       return res.status(200).json({ ok: true, gesendet: ergebnis.gesendet, woche: ergebnis.woche });
+    }
+
+    if (aktion === "test-briefing") {
+      if (!verbunden) return res.status(400).json({ error: "Dein Konto ist noch nicht mit Telegram verbunden." });
+      // erzwingen: auch am Wochenende und auch, wenn es heute schon raus ist.
+      const ergebnis = await sendeBriefings(admin, { nurFuer: userId, erzwingen: true });
+      return res.status(200).json({
+        ok: true, gesendet: ergebnis.gesendet || 0,
+        hinweis: ergebnis.gesendet ? null
+          : ergebnis.grund ? `Das Briefing ging nicht raus: ${lesbarBriefing(ergebnis.grund)}`
+            : "Heute stehen bei dir keine Termine an, und beim letzten Arbeitstag fehlt kein Ergebnis — deshalb kam nichts.",
+      });
     }
 
     if (aktion === "test-teamlage") {

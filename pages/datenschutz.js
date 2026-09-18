@@ -102,7 +102,11 @@ export default function Datenschutz() {
               <li>deine Arbeitszahlen aus der Academy (z.B. Anwahlen, Termine, Abschlüsse) für die tägliche
                 Auswertung und den wöchentlichen Impuls;</li>
               <li>die Nachrichten, die du dem „Vertriebsbuddy" schreibst, sowie die daraus wöchentlich
-                erzeugte Zusammenfassung (Themen, Stimmung, Vorhaben).</li>
+                erzeugte Zusammenfassung (Themen, Stimmung, Vorhaben);</li>
+              <li>im Morgen-Briefing deine Termine des Tages mit Notiz und bekannten Einwänden, und die Ergebnisse,
+                die du über die Knöpfe unter einer Nachricht einträgst;</li>
+              <li>im Rollenspiel dein Wortwechsel mit dem gespielten Kunden — nur solange es läuft; danach wird er
+                gelöscht und fließt weder in die Wochenzusammenfassung noch an Vorgesetzte.</li>
             </ul>
             <p className="mt-2">
               <strong className="text-textMain">Übermittlung an Telegram:</strong> Betreiberin des Dienstes ist die
@@ -115,7 +119,10 @@ export default function Datenschutz() {
             <p className="mt-2">
               <strong className="text-textMain">Vertriebsbuddy und KI:</strong> Deine Nachrichten an den
               Vertriebsbuddy, deine Wochenzahlen und die Wochenzusammenfassung werden zur Erzeugung der Antwort an
-              den in Abschnitt 4 genannten KI-Dienst übermittelt. [Platzhalter: Prüfen, ob der eingesetzte
+              den in Abschnitt 4 genannten KI-Dienst übermittelt, ebenso der Wortwechsel eines Rollenspiels und die
+              Frage bei der Einwand-Hilfe. Bereitet eine Führungsrolle ein Einzelgespräch mit dir vor, gehen deine
+              Arbeitszahlen und die Stichpunkte aus der Wochenzusammenfassung an den KI-Dienst — deine Nachrichten
+              an den Buddy nicht. [Platzhalter: Prüfen, ob der eingesetzte
               KI-Tarif eine Nutzung der Inhalte zu Trainingszwecken ausschließt.]
             </p>
             <p className="mt-2">

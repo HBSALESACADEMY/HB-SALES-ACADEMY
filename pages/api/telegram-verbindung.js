@@ -5,6 +5,8 @@ import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, CODE_GUELTIG_
 import { begruessung } from "../../lib/telegramBegruessung";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { webhookGeheimnis, webhookAdresse, stelleWebhookSicher } from "../../lib/telegramWebhook";
+import { setzeBefehle } from "../../lib/telegramApi";
+import { BEFEHLE } from "../../lib/buddyBefehle";
 
 // Das eigene Konto mit dem eigenen Telegram verbinden.
 //
@@ -46,6 +48,7 @@ export default async function handler(req, res) {
       followups: zeile ? zeile.followups !== false : true,
       buddy: zeile ? zeile.buddy !== false : true,
       teamlage: zeile ? zeile.teamlage !== false : true,
+      briefing: zeile ? zeile.briefing !== false : true,
       istLeitung: istFuehrungsrolle(ich),
       einwilligungAm: zeile?.einwilligung_am || null,
     });
@@ -77,6 +80,8 @@ export default async function handler(req, res) {
       // Steht es schon richtig, kostet das eine Anfrage und sonst nichts.
       const webhook = await stelleWebhookSicher();
       if (!webhook.aktiv) console.error("Webhook nicht eingerichtet:", webhook.grund);
+      // Und die Kurzbefehle, die Telegram beim Tippen auf "/" anbietet.
+      await setzeBefehle(BEFEHLE);
 
       const code = neuerVerbindungsCode();
       await speichere({ code, code_seit: jetzt, einwilligung_am: zeile?.einwilligung_am || jetzt });
@@ -133,6 +138,7 @@ export default async function handler(req, res) {
       if (typeof req.body.followups === "boolean") felder.followups = req.body.followups;
       if (typeof req.body.buddy === "boolean") felder.buddy = req.body.buddy;
       if (typeof req.body.teamlage === "boolean") felder.teamlage = req.body.teamlage;
+      if (typeof req.body.briefing === "boolean") felder.briefing = req.body.briefing;
       if (!Object.keys(felder).length) return res.status(400).json({ error: "Keine Einstellung angegeben." });
       await speichere(felder);
       return res.status(200).json({ ok: true, ...felder });

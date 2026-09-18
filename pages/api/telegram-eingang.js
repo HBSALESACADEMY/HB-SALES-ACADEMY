@@ -3,7 +3,9 @@ import { sendeAlarm } from "../../lib/alarm";
 import { geheimnisPasst, leseUpdate, verbindungsCodeAus } from "../../lib/telegramWebhook";
 import { codeGueltig } from "../../lib/telegramPersoenlich";
 import { begruessung } from "../../lib/telegramBegruessung";
-import { beantworteEingang } from "../../lib/buddy";
+import { beantworteEingang, beantworteBefehl } from "../../lib/buddy";
+import { leseBefehl } from "../../lib/buddyBefehle";
+import { bearbeiteErgebnisKnopf } from "../../lib/buddyErgebnis";
 
 // Der Eingang: Telegram meldet hier jede Nachricht, sobald sie geschrieben
 // wird. Damit antwortet der Vertriebsbuddy in Sekunden, statt bis zum
@@ -35,11 +37,19 @@ export default async function handler(req, res) {
     // Ablegen ist zugleich der Schutz gegen Doppelantworten: Kommt dieselbe
     // Meldung noch einmal (Telegram wiederholt bei Zeitüberschreitung),
     // scheitert das Einfügen am Primärschlüssel — und es passiert nichts.
-    const { error } = await admin.from("telegram_updates").insert(eingang);
+    // Die Knopf-Angaben gehören nicht in die Ablage — nur die Spalten der Tabelle.
+    const { knopf, ...zeile } = eingang;
+    const { error } = await admin.from("telegram_updates").insert(zeile);
     if (error) {
       const schonBekannt = error.code === "23505";
       if (!schonBekannt) console.error("Telegram-Eingang nicht gespeichert:", error.message);
       return res.status(200).json({ ok: true, doppelt: schonBekannt });
+    }
+
+    // Ein Ergebnis-Knopf aus dem Morgen-Briefing.
+    if (knopf) {
+      await bearbeiteErgebnisKnopf(admin, knopf);
+      return res.status(200).json({ ok: true, knopf: true });
     }
 
     if (eingang.chat_typ === "private" && eingang.text) {
@@ -48,11 +58,15 @@ export default async function handler(req, res) {
         await verbinde(admin, code, eingang);
         return res.status(200).json({ ok: true, verbunden: true });
       }
-      // Kein Befehl, sondern ein Satz an den Buddy.
-      if (!eingang.text.startsWith("/")) {
-        await beantworteEingang(admin, eingang);
-        return res.status(200).json({ ok: true, beantwortet: true });
+      // Ein Kurzbefehl wie /heute oder /rollenspiel.
+      const befehl = leseBefehl(eingang.text);
+      if (befehl) {
+        await beantworteBefehl(admin, eingang, befehl);
+        return res.status(200).json({ ok: true, befehl: befehl.befehl });
       }
+      // Sonst ein Satz an den Buddy.
+      await beantworteEingang(admin, eingang);
+      return res.status(200).json({ ok: true, beantwortet: true });
     }
 
     // Gruppen und Kanäle: nur ablegen. Die Gruppensuche in den

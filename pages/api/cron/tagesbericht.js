@@ -11,6 +11,9 @@ import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen, schickeUebungen
 import { istImpulsTag } from "../../../lib/wochenimpuls";
 import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
 import { sendeTeamlage } from "../../../lib/teamlageVersand";
+import { sendeBriefings } from "../../../lib/buddyBriefing";
+import { setzeBefehle } from "../../../lib/telegramApi";
+import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -90,6 +93,15 @@ export default async function handler(req, res) {
       console.error("Tagesauswertungen fehlgeschlagen:", e.message);
     }
 
+    // Direkt danach das Morgen-Briefing: die Termine von heute und die
+    // Knöpfe für Termine ohne Ergebnis (lib/buddyBriefing.js).
+    let briefings = { gesendet: 0 };
+    try {
+      briefings = await sendeBriefings(admin);
+    } catch (e) {
+      console.error("Morgen-Briefing fehlgeschlagen:", e.message);
+    }
+
     // Überfällige Onboarding-Schritte melden, fertige abschliessen
     // (lib/onboardingErinnerung.js).
     let onboarding = { erinnert: 0, fertig: 0 };
@@ -107,6 +119,9 @@ export default async function handler(req, res) {
       // gewechselt wurde oder die Adresse der Academy sich geändert hat.
       const webhook = await stelleWebhookSicher();
       buddy.webhook = webhook.aktiv ? (webhook.gesetzt ? "neu eingerichtet" : "läuft") : webhook.grund;
+      // Die Kurzbefehle (/heute, /rollenspiel …) — falls sich die Liste geändert hat.
+      await setzeBefehle(BEFEHLE);
+      await raeumeRollenspieleAuf(admin);
       if (istImpulsTag()) {
         // Erst das Gespräch der Woche auswerten, dann den neuen Impuls —
         // so kann er an die Vorwoche anknüpfen.
@@ -137,7 +152,7 @@ export default async function handler(req, res) {
       console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
     }
 
-    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, onboarding, buddy, aufgeraeumt });
+    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, briefings, onboarding, buddy, aufgeraeumt });
   } catch (e) {
     console.error("Tagesbericht fehlgeschlagen:", e.message);
     await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);

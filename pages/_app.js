@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import Head from "next/head";
 import { Work_Sans, Fraunces, JetBrains_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { meldeStoerung } from "../lib/fehlerMelden";
@@ -28,6 +29,9 @@ export default function App({ Component, pageProps }) {
 
   return (
     <div className={`${workSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} font-sans`}>
+      {/* Der Name im Browser-Reiter. Stand bisher nirgends — der Reiter
+          zeigte nur die Adresse. */}
+      <Head><title>HB Sales Academy</title></Head>
       <Component {...pageProps} />
     </div>
   );
