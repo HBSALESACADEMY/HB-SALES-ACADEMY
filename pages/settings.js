@@ -152,6 +152,8 @@ export default function Settings() {
       const antwort = await apiPost("/api/buddy", { aktion, erzwingen: true });
       if (aktion === "test-impuls") {
         setTgHinweis(antwort.hinweis || "Der Wochenimpuls ist raus — schau in Telegram.");
+      } else if (aktion === "test-teamlage") {
+        setTgHinweis(antwort.hinweis || "Die Teamlage ist raus — schau in Telegram.");
       } else {
         setTgHinweis(antwort.neu
           ? `${antwort.neu} ${antwort.neu === 1 ? "Antwort" : "Antworten"} abgeholt und beantwortet — schau in Telegram.`
@@ -380,6 +382,7 @@ export default function Settings() {
                 ["tagesauswertung", "Tägliche Auswertung", "Montag bis Freitag morgens: deine Zahlen vom letzten Arbeitstag, verglichen mit dem Tag davor, und Lob"],
                 ["followups", "Follow-up-Erinnerungen", "Wenn dir jemand ein Follow-up zuweist, und morgens deine fälligen Follow-ups"],
                 ["buddy", "Vertriebsbuddy", "Freitags dein Wochenimpuls mit deinen Zahlen und einer Frage — du kannst direkt im Chat antworten"],
+                ...(tg.istLeitung ? [["teamlage", "Teamlage (nur Leitung)", "Freitags die Zahlen deines Teams, die häufigsten Themen und worauf du achten solltest"]] : []),
               ].map(([key, label, hinweis]) => (
                 <label key={key} className="flex items-start gap-2.5 cursor-pointer">
                   <input type="checkbox" className="mt-1" checked={tg[key] !== false} disabled={tgBusy}
@@ -398,6 +401,10 @@ export default function Settings() {
                   className="btn-ghost text-xs disabled:opacity-40">Wochenimpuls testen</button>
                 <button type="button" onClick={() => buddyAktion("abholen")} disabled={tgBusy}
                   className="btn-ghost text-xs disabled:opacity-40">Antworten abholen</button>
+                {tg.istLeitung && tg.teamlage !== false && (
+                  <button type="button" onClick={() => buddyAktion("test-teamlage")} disabled={tgBusy}
+                    className="btn-ghost text-xs disabled:opacity-40">Teamlage testen</button>
+                )}
               </div>
             )}
           </>

@@ -3,6 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeAlarm } from "../../lib/alarm";
 import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
 import { begruessung } from "../../lib/telegramBegruessung";
+import { istFuehrungsrolle } from "../../lib/rollen";
 import { webhookGeheimnis, webhookAdresse, stelleWebhookSicher } from "../../lib/telegramWebhook";
 
 // Das eigene Konto mit dem eigenen Telegram verbinden.
@@ -31,7 +32,8 @@ export default async function handler(req, res) {
   if (leseFehler) return res.status(500).json({ error: lesbar(leseFehler) });
 
   if (req.method === "GET") {
-    const { data: ich } = await admin.from("profiles").select("is_platform_admin").eq("id", userId).maybeSingle();
+    const { data: ich } = await admin.from("profiles")
+      .select("role, is_admin, is_platform_admin").eq("id", userId).maybeSingle();
     // Die Kennung selbst geht nicht an den Browser — sie wird dort nicht
     // gebraucht.
     return res.status(200).json({
@@ -43,6 +45,8 @@ export default async function handler(req, res) {
       tagesauswertung: zeile ? zeile.tagesauswertung !== false : true,
       followups: zeile ? zeile.followups !== false : true,
       buddy: zeile ? zeile.buddy !== false : true,
+      teamlage: zeile ? zeile.teamlage !== false : true,
+      istLeitung: istFuehrungsrolle(ich),
     });
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -122,6 +126,7 @@ export default async function handler(req, res) {
       if (typeof req.body.tagesauswertung === "boolean") felder.tagesauswertung = req.body.tagesauswertung;
       if (typeof req.body.followups === "boolean") felder.followups = req.body.followups;
       if (typeof req.body.buddy === "boolean") felder.buddy = req.body.buddy;
+      if (typeof req.body.teamlage === "boolean") felder.teamlage = req.body.teamlage;
       if (!Object.keys(felder).length) return res.status(400).json({ error: "Keine Einstellung angegeben." });
       await speichere(felder);
       return res.status(200).json({ ok: true, ...felder });

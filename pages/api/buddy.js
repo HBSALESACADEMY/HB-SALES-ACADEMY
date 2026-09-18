@@ -1,6 +1,8 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeWochenimpulse, holeAntworten } from "../../lib/buddy";
+import { sendeTeamlage } from "../../lib/teamlageVersand";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Der Vertriebsbuddy aus Sicht der angemeldeten Person.
 //
@@ -62,6 +64,18 @@ export default async function handler(req, res) {
         });
       }
       return res.status(200).json({ ok: true, gesendet: ergebnis.gesendet, woche: ergebnis.woche });
+    }
+
+    if (aktion === "test-teamlage") {
+      if (!verbunden) return res.status(400).json({ error: "Dein Konto ist noch nicht mit Telegram verbunden." });
+      const { data: profil } = await admin.from("profiles")
+        .select("role, is_admin, is_platform_admin").eq("id", userId).maybeSingle();
+      if (!istFuehrungsrolle(profil)) return res.status(403).json({ error: "Die Teamlage bekommt die Leitung." });
+      const ergebnis = await sendeTeamlage(admin, { nurFuer: userId, erzwingen: true });
+      return res.status(200).json({
+        ok: true, gesendet: ergebnis.gesendet || 0,
+        hinweis: ergebnis.gesendet ? null : (ergebnis.grund || "Es gibt noch keine Zahlen für diese Woche."),
+      });
     }
 
     if (aktion === "abholen") {

@@ -826,3 +826,22 @@ test("Die Sofort-Antworten brauchen keinen Knopf und keinen Plattform-Admin", ()
   assert.match(lies("pages/api/telegram-verbindung.js"), /const webhook = await stelleWebhookSicher\(\);/);
   assert.match(lies("pages/api/cron/tagesbericht.js"), /await stelleWebhookSicher\(\)/);
 });
+
+test("Die Teamlage bekommt nur die Leitung, und auch sie ohne den Chat", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const versand = lies("lib/teamlageVersand.js");
+  // Empfänger sind ausschliesslich Führungsrollen der eigenen Organisation.
+  assert.match(versand, /istFuehrungsrolle\(p\)/);
+  assert.match(versand, /\.eq\("organization_id", orgId\)/);
+  // Die Gespräche werden nicht einmal geladen — nur Zeitpunkte für "keine
+  // Antwort seit …".
+  assert.match(versand, /from\("buddy_nachrichten"\)\s*\.select\("user_id, created_at"\)/);
+  assert.ok(!/buddy_wochen[^\n]*zusammenfassung/.test(versand));
+  assert.ok(!/select\("[^"]*text[^"]*"\)/.test(versand));
+
+  // Der Testknopf prüft die Rolle serverseitig.
+  const route = lies("pages/api/buddy.js");
+  const stelle = route.indexOf('aktion === "test-teamlage"');
+  assert.ok(stelle > 0);
+  assert.match(route.slice(stelle, stelle + 500), /istFuehrungsrolle\(profil\)/);
+});

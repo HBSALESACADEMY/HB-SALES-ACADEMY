@@ -4095,3 +4095,59 @@ test("Die Sofort-Antworten richten sich von selbst ein", async () => {
   });
   assert.deepEqual([kaputt.aktiv, kaputt.grund], [false, "Netz weg"]);
 });
+
+test("Die Teamlage zeigt Zahlen und Frühwarnungen — nie ein Wort aus dem Chat", async () => {
+  const { teamlageText, fruehwarnungen, teamZeilenFuerKI } = await import("../lib/teamlage.js");
+  const { leereZahlen } = await import("../lib/tagesauswertung.js");
+  const z = (w) => ({ ...leereZahlen(), ...w });
+
+  const personen = [
+    {
+      name: "Anna Muster", zahlen: z({ anwahlen: 214, terminiert: 6, setting: 4, kunden: 1 }),
+      vorwoche: z({ anwahlen: 180, terminiert: 4, setting: 5 }), stimmung: "gut", stimmungsFolge: 0,
+      herausforderungen: ["Kommt selten am Vorzimmer vorbei"], schulung: "vorzimmer",
+      verbunden: true, letzteAntwortTage: 1, onboardingUeberfaellig: 0,
+    },
+    {
+      name: "Ben Beispiel", zahlen: z({ anwahlen: 40 }), vorwoche: z({ anwahlen: 140, terminiert: 3 }),
+      stimmung: "schwer", stimmungsFolge: 2, herausforderungen: [], schulung: null,
+      verbunden: true, letzteAntwortTage: 20, onboardingUeberfaellig: 2,
+    },
+    {
+      name: "Cem Ruhig", zahlen: z({}), vorwoche: z({}), stimmung: null, stimmungsFolge: 0,
+      herausforderungen: [], schulung: null, verbunden: false, letzteAntwortTage: null, onboardingUeberfaellig: 0,
+    },
+  ];
+
+  const warnungen = fruehwarnungen(personen);
+  const gruende = warnungen.map((w) => `${w.name}: ${w.grund}`);
+  assert.ok(gruende.some((g) => /Ben Beispiel: Anwahlen von 140 auf 40 gefallen/.test(g)));
+  assert.ok(gruende.some((g) => /Ben Beispiel: 2\. Woche in Folge als schwer/.test(g)));
+  assert.ok(gruende.some((g) => /Ben Beispiel: seit 20 Tagen keine Antwort/.test(g)));
+  assert.ok(gruende.some((g) => /Ben Beispiel: 2 überfällige Onboarding-Schritte/.test(g)));
+  // Wer ruhig arbeitet, ist kein Alarm.
+  assert.ok(!gruende.some((g) => /Cem/.test(g)));
+  // Und eine gute Woche erst recht nicht.
+  assert.ok(!gruende.some((g) => /Anna/.test(g)));
+
+  const text = teamlageText({ organisation: "VolkWork", woche: "2026-09-14", personen, name: "Houman Honarmand" });
+  assert.match(text, /^📊 Teamlage — VolkWork/);
+  assert.match(text, /Anwahlen 254 \(320\) ↓/);        // Summe des Teams
+  assert.match(text, /2 von 3 haben diese Woche telefoniert/);
+  assert.match(text, /• Anna Muster: Anwahlen 214 \(180\) ↑/);
+  assert.match(text, /Themen: Kommt selten am Vorzimmer vorbei/);
+  assert.match(text, /Training: Am Vorzimmer vorbei/);
+  assert.match(text, /⚠️ Achte auf:/);
+  assert.match(text, /Frag mich einfach/);
+
+  // Ohne Auffälligkeit steht das auch da.
+  const ruhig = teamlageText({ woche: "2026-09-14", personen: [personen[0]] });
+  assert.match(ruhig, /✅ Nichts, das sofort ein Gespräch braucht\./);
+
+  // Was die KI für Rückfragen bekommt: Zahlen und Stichpunkte, plus die
+  // ausdrückliche Grenze.
+  const zeilen = teamZeilenFuerKI(personen);
+  assert.match(zeilen.join("\n"), /- Anna Muster: Anwahlen 214 \(180\)/);
+  assert.match(zeilen[zeilen.length - 1], /Gespräche der Leute kennst du nicht/);
+  assert.deepEqual(teamZeilenFuerKI([]), []);
+});

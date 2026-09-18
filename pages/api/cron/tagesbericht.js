@@ -10,6 +10,7 @@ import { erinnereAnOnboarding } from "../../../lib/onboardingErinnerung";
 import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen, schickeUebungen } from "../../../lib/buddy";
 import { istImpulsTag } from "../../../lib/wochenimpuls";
 import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
+import { sendeTeamlage } from "../../../lib/teamlageVersand";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -113,6 +114,9 @@ export default async function handler(req, res) {
         buddy.rueckblicke = rueckblicke.erstellt || 0;
         const impulse = await sendeWochenimpulse(admin);
         buddy.impulse = impulse.gesendet || 0;
+        // Und für die Leitung die Lage im Team.
+        const lage = await sendeTeamlage(admin);
+        buddy.teamlage = lage.gesendet || 0;
       }
       // Die Übung kommt am Tag nach der Lektion — beides zusammen liest man
       // wie einen Artikel und macht es nicht.
