@@ -723,3 +723,9 @@ test("Das Onboarding ist ein eigener Bereich, keine Unterseite der Verwaltung", 
   assert.match(seite, /const REITER = \[/);
   ["uebersicht", "personen", "plan"].forEach((r) => assert.match(seite, new RegExp(`key: "${r}"`), r));
 });
+
+test("Die Begrüssung nennt die aktive Organisation, nicht die Heimat-Organisation", () => {
+  const route = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
+  assert.match(route, /const orgId = await aktiveOrgId\(admin, profil, userId\)/);
+  assert.match(route, /await sendeAlarm\(await begruessung\(admin, userId\), treffer\.chatId\)/);
+});

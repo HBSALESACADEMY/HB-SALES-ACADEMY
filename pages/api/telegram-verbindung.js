@@ -1,7 +1,9 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeAlarm } from "../../lib/alarm";
-import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
+import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, willkommensText, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
+import { aktiveOrgId } from "../../lib/aktiveOrgServer";
+import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Das eigene Konto mit dem eigenen Telegram verbinden.
 //
@@ -15,6 +17,42 @@ const UPDATES = encodeURIComponent(JSON.stringify(["message", "my_chat_member", 
 
 function lesbar(fehler) {
   return /telegram_verknuepfungen/.test(fehler?.message || "") ? TABELLE_FEHLT : (fehler?.message || "Unbekannter Fehler.");
+}
+
+/**
+ * Die Begrüssung zusammenstellen — mit dem Namen DER Organisation, in der
+ * die Person gerade arbeitet (Firmencode, nicht Heimat-Organisation).
+ *
+ * Scheitert etwas davon, geht die Nachricht trotzdem raus: eine Begrüssung
+ * ohne Firmennamen ist besser als gar keine.
+ */
+async function begruessung(admin, userId) {
+  let organisation = "";
+  let istLeitung = false;
+  let imOnboarding = false;
+  let name = "";
+  try {
+    const { data: profil } = await admin.from("profiles")
+      .select("id, full_name, role, is_admin, is_platform_admin, organization_id").eq("id", userId).maybeSingle();
+    name = profil?.full_name || "";
+    istLeitung = istFuehrungsrolle(profil);
+    const orgId = await aktiveOrgId(admin, profil, userId);
+    if (orgId) {
+      const { data: org } = await admin.from("organizations").select("name").eq("id", orgId).maybeSingle();
+      organisation = org?.name || "";
+    }
+    // Ohne migration_167 gibt es die Tabelle nicht — dann eben ohne die Zeile.
+    // limit(1) statt maybeSingle: Wer per Firmencode in zwei Organisationen
+    // ein Onboarding hat, bekäme sonst einen Fehler statt einer Antwort.
+    const { data: zuweisungen } = await admin.from("onboarding_zuweisungen")
+      .select("id").eq("user_id", userId).is("abgeschlossen_am", null).limit(1);
+    imOnboarding = !!zuweisungen?.length;
+  } catch (e) {
+    console.error("Begrüssung unvollständig:", e.message);
+  }
+  return willkommensText({
+    organisation, name, istLeitung, imOnboarding, appUrl: process.env.NEXT_PUBLIC_APP_URL || "",
+  });
 }
 
 export default async function handler(req, res) {
@@ -82,12 +120,7 @@ export default async function handler(req, res) {
         });
       }
       await speichere({ chat_id: treffer.chatId, chat_name: treffer.name, verbunden_am: jetzt, code: null, code_seit: null });
-      await sendeAlarm(
-        "✅ Verbunden mit der HB Sales Academy.\n\n"
-        + "Ab jetzt bekommst du hier deine Follow-up-Erinnerungen und jeden Werktag morgens deine persönliche Auswertung. "
-        + "Nur du siehst diese Nachrichten.",
-        treffer.chatId,
-      );
+      await sendeAlarm(await begruessung(admin, userId), treffer.chatId);
       return res.status(200).json({ verbunden: true, chatName: treffer.name });
     }
 

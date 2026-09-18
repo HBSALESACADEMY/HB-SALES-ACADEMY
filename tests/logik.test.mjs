@@ -3779,3 +3779,37 @@ test("Die Onboarding-Übersicht zeigt Rückstand, Dauer und Engpässe", async ()
   assert.equal(tageZwischen("2026-09-10", "2026-09-14"), 4);
   assert.equal(tageZwischen(null, "2026-09-14"), null);
 });
+
+test("Die Willkommensnachricht grüsst mit der Organisation und zeigt den Weg", async () => {
+  const { willkommensText } = await import("../lib/telegramPersoenlich.js");
+
+  const text = willkommensText({
+    organisation: "VolkWork", name: "Anna Muster", appUrl: "https://app.example.de", imOnboarding: true,
+  });
+  assert.match(text, /^👋 Herzlich willkommen bei VolkWork, Anna!/);
+  assert.match(text, /Diese Nachrichten sieht nur du\./);
+  // Was ankommt …
+  assert.match(text, /• Follow-ups:/);
+  assert.match(text, /• Deine Auswertung: Montag bis Freitag/);
+  assert.match(text, /• Onboarding: wenn ein Schritt überfällig ist/);
+  // … und wo man hinkommt.
+  assert.match(text, /• Call Tracker: .*\n {2}https:\/\/app\.example\.de\/call-tracker/);
+  assert.match(text, /• Kurse und Training:/);
+  assert.match(text, /Einstellungen → Telegram/);
+  // Ohne Führungsrolle nichts über fremde Leute.
+  assert.ok(!/Auswertung: Zahlen des Teams/.test(text));
+  assert.ok(!/\/onboarding/.test(text));
+
+  // Die Leitung bekommt ihre Bereiche dazu.
+  const leitung = willkommensText({ organisation: "VolkWork", name: "Houman", appUrl: "https://app.example.de", istLeitung: true });
+  assert.match(leitung, /• Onboarding: neue Leute einarbeiten/);
+  assert.match(leitung, /• Auswertung: Zahlen des Teams/);
+  assert.match(leitung, /beim Onboarding deiner Leute etwas liegen bleibt/);
+
+  // Ohne Organisation, Namen und Adresse bleibt die Nachricht heil.
+  const knapp = willkommensText({});
+  assert.match(knapp, /^👋 Herzlich willkommen!/);
+  assert.ok(!/undefined|https/.test(knapp));
+  // Wer nicht im Onboarding ist, liest nichts davon.
+  assert.ok(!/Onboarding/.test(knapp));
+});
