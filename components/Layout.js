@@ -22,6 +22,7 @@ import { quoteOfTheDay } from "../lib/quotes";
 import ProfileModal from "./ProfileModal";
 import WelcomeModal from "./WelcomeModal";
 import TutorialModal from "./TutorialModal";
+import SeitenHinweis from "./SeitenHinweis";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -1090,6 +1091,9 @@ export default function Layout({ children, fullBleed }) {
         </button>
       </aside>
       <main key={router.asPath} className={`flex-1 overflow-y-auto animate-fadein ${fullBleed ? "p-3" : "p-4 md:p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(232,54,143,.09), transparent), radial-gradient(500px 260px at 0% 100%, rgba(123,47,247,.07), transparent)" }}>
+        {/* Ein Satz zur Seite, beim ersten Besuch. Hier statt in jeder
+            Seite einzeln: sonst fehlt er in der Hälfte. */}
+        <SeitenHinweis pfad={router.pathname} />
         {typeof children === "function" ? children(profile) : children}
       </main>
       {openProfileId && <ProfileModal userId={openProfileId} onClose={() => setOpenProfileId(null)} />}

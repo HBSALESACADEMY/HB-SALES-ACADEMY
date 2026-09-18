@@ -3831,3 +3831,23 @@ test("Die Willkommensnachricht grüsst mit der Organisation, erklärt die Haltun
   assert.match(knapp, /^👋 Herzlich willkommen!/);
   assert.ok(!/undefined|https/.test(knapp));
 });
+
+test("Die Seitenhinweise erklären kurz und genau dort, wo man ist", async () => {
+  const { SEITEN_HINWEISE, hinweisFuer } = await import("../lib/seitenHinweise.js");
+
+  assert.equal(hinweisFuer("/call-tracker").text.length > 0, true);
+  assert.equal(hinweisFuer("/gibtsnicht"), null);
+  assert.equal(hinweisFuer(undefined), null);
+
+  const pfade = SEITEN_HINWEISE.map((h) => h.pfad);
+  assert.equal(new Set(pfade).size, pfade.length, "ein Pfad steht doppelt");
+  SEITEN_HINWEISE.forEach((h) => {
+    assert.match(h.pfad, /^\/[a-z-]+$/, h.pfad);
+    // Ein Satz, kein Handbuch: zwei Sätze liest niemand.
+    assert.ok(h.text.length <= 170, `zu lang (${h.text.length}): ${h.pfad}`);
+    assert.ok(h.text.trim().endsWith("."), h.pfad);
+  });
+  // Die Seiten, auf denen ein Neuer am ersten Tag landet, haben einen.
+  ["/call-tracker", "/termine", "/follow-up", "/courses", "/settings"].forEach((p) =>
+    assert.ok(hinweisFuer(p), p));
+});

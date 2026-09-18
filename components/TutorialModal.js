@@ -1,64 +1,35 @@
-import { useState } from "react";
-
-const STEPS = [
-  {
-    emoji: "🏠",
-    title: "Dein Dashboard",
-    body: "Hier siehst du auf einen Blick alles Wichtige: Fortschritt, Kacheln zu allen Tools, und (falls verfügbar) Erinnerungen wie deine Tages-Serie.",
-  },
-  {
-    emoji: "📚",
-    title: "Kurse & Rollenspiel",
-    body: "Unter \"Lernen\" findest du die Kurse, die Wissensdatenbank, den Rollenspiel-Trainer und mehr — arbeite dich Schritt für Schritt durch, jeder Kurs endet mit einer Prüfung und einem Zertifikat.",
-  },
-  {
-    emoji: "👥",
-    title: "Team & Community",
-    body: "In \"Team\" findest du deine Kolleg:innen und die Team-Ziele. In der Community teilt ihr Erfolge und Tipps — schau öfter vorbei!",
-  },
-  {
-    emoji: "💬",
-    title: "Nachrichten & Vertriebs-Buddy",
-    body: "Schreib direkt mit Kolleg:innen oder in Gruppen. Und falls du mal eine schnelle Verkaufsfrage hast: der Vertriebs-Buddy-Knopf unten rechts hilft dir sofort weiter.",
-  },
-  {
-    emoji: "⚙️",
-    title: "Einstellungen",
-    body: "Unten links in der Seitenleiste (am Handy hinter deinem Profilbild). Verbinde dort dein Telegram: Dann bekommst du jeden Werktag morgens deine persönliche Auswertung und deine Follow-ups direkt aufs Handy. Außerdem stellst du ein, wer deine Kontaktdaten sehen darf und welche Mails du bekommst.",
-  },
-];
-
+// Die eine Folie zum Anfang.
+//
+// Vorher standen hier fünf: Dashboard, Kurse, Team, Nachrichten,
+// Einstellungen — am ersten Tag, alle auf einmal, und vier davon über
+// Bereiche, die erst Wochen später dran sind. Gelesen wurde davon nichts,
+// weggeklickt alles.
+//
+// Jetzt sagt der Anfang nur, worum es geht und wo man beginnt. Den Rest
+// erklärt die Academy dort, wo er gebraucht wird: ein Satz beim ersten
+// Öffnen jeder Seite (components/SeitenHinweis.js).
 export default function TutorialModal({ onClose }) {
-  const [step, setStep] = useState(0);
-  const current = STEPS[step];
-  const isLast = step === STEPS.length - 1;
-
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[220] p-4">
       <div className="card max-w-sm w-full overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
-          <div className="text-3xl mb-3">{current.emoji}</div>
-          <h2 className="font-display font-bold text-textMain text-lg mb-2">{current.title}</h2>
-          <p className="text-sm text-textMuted leading-relaxed mb-5">{current.body}</p>
+          <div className="text-3xl mb-3">🚀</div>
+          <h2 className="font-display font-bold text-textMain text-lg mb-2">Schön, dass du da bist</h2>
+          <p className="text-sm text-textMuted leading-relaxed mb-3">
+            Die Academy ist dein Werkzeug für den Vertriebsalltag: telefonieren, Termine führen, nachfassen,
+            besser werden. Alles an einem Ort.
+          </p>
+          <p className="text-sm text-textMuted leading-relaxed mb-3">
+            Fang einfach an. Auf deinem Startbildschirm stehen deine ersten Schritte — und in jedem Bereich
+            erklärt dir ein Satz, worum es dort geht.
+          </p>
+          <p className="text-xs text-textMuted leading-relaxed mb-5">
+            Am wichtigsten am ersten Tag: <strong className="text-textMain">den Call Tracker offen haben</strong>,
+            wenn du telefonierst. Alles andere findest du nach und nach.
+          </p>
 
-          <div className="flex items-center justify-center gap-1.5 mb-5">
-            {STEPS.map((_, i) => (
-              <span key={i} className={`h-1.5 rounded-full transition-all ${i === step ? "w-5 bg-amber" : "w-1.5 bg-line"}`} />
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {step > 0 && (
-              <button onClick={() => setStep((s) => s - 1)} className="btn-ghost text-xs flex-1">Zurück</button>
-            )}
-            <button onClick={() => isLast ? onClose() : setStep((s) => s + 1)} className="btn text-xs flex-1 justify-center">
-              {isLast ? "Los geht's!" : "Weiter"}
-            </button>
-          </div>
-          {!isLast && (
-            <button onClick={onClose} className="text-textMuted hover:text-textMain text-xs mt-3 w-full text-center">Überspringen</button>
-          )}
+          <button onClick={onClose} className="btn text-xs w-full justify-center">Los geht&apos;s!</button>
         </div>
       </div>
     </div>

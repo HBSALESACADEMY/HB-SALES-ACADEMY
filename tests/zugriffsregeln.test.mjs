@@ -729,3 +729,17 @@ test("Die Begrüssung nennt die aktive Organisation, nicht die Heimat-Organisati
   assert.match(route, /const orgId = await aktiveOrgId\(admin, profil, userId\)/);
   assert.match(route, /await sendeAlarm\(await begruessung\(admin, userId\), treffer\.chatId\)/);
 });
+
+test("Der Einstieg ist kurz: eine Folie vorab, Erklärungen an Ort und Stelle", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  // Fünf Folien über Bereiche, die erst Wochen später dran sind, liest niemand.
+  const tutorial = lies("components/TutorialModal.js");
+  assert.ok(!/const STEPS/.test(tutorial), "das Tutorial hat wieder mehrere Folien");
+  assert.ok(!/Weiter<\/button>|"Weiter"/.test(tutorial));
+  assert.match(tutorial, /Call Tracker/);
+
+  // Der Hinweis hängt im Layout, nicht in einzelnen Seiten — sonst fehlt er
+  // in der Hälfte.
+  const layout = lies("components/Layout.js");
+  assert.match(layout, /<SeitenHinweis pfad=\{router\.pathname\} \/>/);
+});
