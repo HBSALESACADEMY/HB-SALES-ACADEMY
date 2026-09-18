@@ -867,3 +867,11 @@ test("Telegram läuft nur mit bestätigter, festgehaltener Einwilligung", () => 
   // Für Vorgesetzte ist der Chat ausdrücklich nicht einsehbar.
   assert.match(seite, /für Vorgesetzte[\s\S]{0,80}nicht[\s\S]{0,40}einsehbar/);
 });
+
+test("Im Gespräch mit der Leitung gelten die Leitungsregeln", () => {
+  const buddy = readFileSync(new URL("../lib/buddy.js", import.meta.url), "utf8");
+  assert.match(buddy, /const istLeitung = istFuehrungsrolle\(profil\)/);
+  assert.match(buddy, /\[\.\.\.leitungsAnweisung\(\), "", \.\.\.teamZeilenFuerKI\(stand\.personen\)\]/);
+  // Der Standard-Prompt mit den eigenen Zahlen gilt nur für Vertriebler.
+  assert.match(buddy, /istLeitung\s*\n\s*\? `Du bist der Vertriebsbuddy/);
+});

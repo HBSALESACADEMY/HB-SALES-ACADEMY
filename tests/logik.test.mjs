@@ -4151,3 +4151,38 @@ test("Die Teamlage zeigt Zahlen und Frühwarnungen — nie ein Wort aus dem Chat
   assert.match(zeilen[zeilen.length - 1], /Gespräche der Leute kennst du nicht/);
   assert.deepEqual(teamZeilenFuerKI([]), []);
 });
+
+test("Ein Closing Call ist kein Abschluss — und die Leitung bekommt keine eigene Bewertung", async () => {
+  const { closingSatz, personenZeile, teamZeilenFuerKI, leitungsAnweisung, teamlageText } = await import("../lib/teamlage.js");
+  const { leereZahlen } = await import("../lib/tagesauswertung.js");
+  const z = (w) => ({ ...leereZahlen(), ...w });
+
+  // Der Satz, an dem es hing.
+  assert.equal(closingSatz(z({ closing: 1, kunden: 0 })), "1 Closing Call geführt, daraus kein Abschluss");
+  assert.equal(closingSatz(z({ closing: 3, kunden: 1 })), "3 Closing Calls geführt, davon 1 mit Abschluss");
+  assert.equal(closingSatz(z({ closing: 0, kunden: 2 })), "2 neue Kunden");
+  assert.equal(closingSatz(z({})), "");
+
+  const monoke = {
+    name: "Monoke", zahlen: z({ anwahlen: 80, terminiert: 2, setting: 2, closing: 1, kunden: 0 }),
+    vorwoche: z({ anwahlen: 75 }), stimmung: "gut", stimmungsFolge: 0, herausforderungen: [],
+    schulung: null, verbunden: true, letzteAntwortTage: 2, onboardingUeberfaellig: 0,
+  };
+
+  // In der Teamlage steht das Ergebnis direkt unter der Zeile.
+  const zeile = personenZeile(monoke);
+  assert.match(zeile, /Closing Calls geführt 1 \(0\)/);
+  assert.match(zeile, /1 Closing Call geführt, daraus kein Abschluss/);
+  assert.match(teamlageText({ woche: "2026-09-14", personen: [monoke] }), /daraus kein Abschluss/);
+
+  // Und genauso in dem, was die KI zu sehen bekommt.
+  assert.match(teamZeilenFuerKI([monoke]).join("\n"), /- Monoke: .*· 1 Closing Call geführt, daraus kein Abschluss/);
+
+  // Die Regeln für das Gespräch mit der Leitung.
+  const regeln = leitungsAnweisung().join("\n");
+  assert.match(regeln, /NUR über diese Person/);
+  assert.match(regeln, /eigenen Zahlen der Leitung bewertest du nicht/);
+  assert.match(regeln, /Ein Closing Call ist KEIN Abschluss/);
+  assert.match(regeln, /ausschliesslich unter "Neue Kunden"/);
+  assert.match(regeln, /Schreibe die Zahlen aus/);
+});
