@@ -708,11 +708,18 @@ test("Onboarding: Schreiben nur über den Server, und dort nur in der eigenen Or
   assert.match(route, /person\.organization_id !== orgId \|\| person\.status !== "approved"/);
 });
 
-test("Der Onboarding-Reiter ist zu finden: Seitenleiste unter Führung und in der Verwaltung", () => {
+test("Das Onboarding ist ein eigener Bereich, keine Unterseite der Verwaltung", () => {
   const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
   const layout = lies("components/Layout.js");
   // Ohne Gruppe landet ein Menüpunkt unter "Weiteres" — dort sucht ihn niemand.
   assert.match(layout, /onboarding: "Führung"/);
   assert.match(layout, /id: "onboarding", label: "Onboarding"[^}]*requires_manager: true/);
-  assert.match(lies("components/AdminTabs.js"), /key: "onboarding", label: "Onboarding", route: "\/onboarding"/);
+
+  // Nicht in den Verwaltungsreitern, und die Seite zeigt sie auch nicht.
+  assert.ok(!/onboarding/i.test(lies("components/AdminTabs.js")));
+  const seite = lies("pages/onboarding.js");
+  assert.ok(!/AdminTabs/.test(seite));
+  // Stattdessen eigene Reiter.
+  assert.match(seite, /const REITER = \[/);
+  ["uebersicht", "personen", "plan"].forEach((r) => assert.match(seite, new RegExp(`key: "${r}"`), r));
 });

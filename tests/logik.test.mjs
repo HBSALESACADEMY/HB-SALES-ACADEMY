@@ -3746,3 +3746,36 @@ test("Onboarding: Schritte haken sich selbst ab, Fristen zählen ab dem Start", 
   assert.match(erinnerungsText({ name: "A", eintraege }), /• Probetelefonat \(fällig bis 13\.9\.\)/);
   assert.match(fertigText({ name: "Anna Muster" }), /Glückwunsch, Anna!/);
 });
+
+test("Die Onboarding-Übersicht zeigt Rückstand, Dauer und Engpässe", async () => {
+  const { onboardingUebersicht, tageZwischen } = await import("../lib/onboarding.js");
+  const person = (name, prozent, ueberfaellig, liste, extra = {}) => ({
+    person: { full_name: name },
+    gestartet_am: "2026-09-01",
+    stand: { prozent, ueberfaellig, fertig: prozent === 100, liste },
+    ...extra,
+  });
+  const offen = (id, titel, ueberfaellig = false) => ({ schritt: { id, titel }, erledigt: false, ueberfaellig });
+  const fertig = (id, titel) => ({ schritt: { id, titel }, erledigt: true, ueberfaellig: false });
+
+  const u = onboardingUebersicht([
+    person("Anna", 50, 1, [fertig("a", "Profil"), offen("b", "Probetelefonat", true)]),
+    person("Ben", 0, 0, [offen("a", "Profil"), offen("b", "Probetelefonat")]),
+    person("Cem", 100, 0, [fertig("a", "Profil"), fertig("b", "Probetelefonat")], { abgeschlossen_am: "2026-09-15T09:00:00Z" }),
+  ]);
+  assert.equal(u.laufend, 2);
+  assert.equal(u.fertig, 1);
+  assert.equal(u.prozent, 25);              // (50 + 0) / 2
+  assert.equal(u.ueberfaellig, 1);
+  assert.equal(u.mitRueckstand, 1);
+  assert.equal(u.dauerSchnitt, 14);         // 1.9. bis 15.9.
+  // Der Schritt mit Überfälligem steht oben, obwohl beide gleich oft offen sind.
+  assert.deepEqual(u.engpaesse.map((e) => [e.titel, e.offen, e.ueberfaellig]),
+    [["Probetelefonat", 2, 1], ["Profil", 1, 0]]);
+
+  // Ohne Leute im Onboarding steht überall 0, nichts bricht.
+  const leer = onboardingUebersicht([]);
+  assert.deepEqual([leer.laufend, leer.prozent, leer.ueberfaellig, leer.dauerSchnitt, leer.engpaesse.length], [0, 0, 0, null, 0]);
+  assert.equal(tageZwischen("2026-09-10", "2026-09-14"), 4);
+  assert.equal(tageZwischen(null, "2026-09-14"), null);
+});

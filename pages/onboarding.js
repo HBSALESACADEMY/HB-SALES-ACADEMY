@@ -1,20 +1,39 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
-import AdminTabs from "../components/AdminTabs";
 import { apiGet, apiPost } from "../lib/apiClient";
-import { AUTO_SIGNALE, WER, signalVon, datumKurz } from "../lib/onboarding";
+import { AUTO_SIGNALE, WER, signalVon, datumKurz, onboardingUebersicht } from "../lib/onboarding";
 import { OnboardingBalken, schrittInfo } from "../components/OnboardingSchritt";
 import { berlinHeute } from "../lib/woche";
 
-// Onboarding für die Leitung: den Plan festlegen, neue Leute verbinden und
-// sehen, wo jede Person steht.
+// Der Onboarding-Bereich für die Leitung — mit eigenen Reitern.
+//
+// Bewusst NICHT in der Verwaltung: Das Onboarding ist keine Einstellung, die
+// man einmal setzt, sondern tägliche Arbeit mit Menschen. Es steht deshalb
+// für sich, mit eigener Übersicht, eigener Personenliste und eigenem Plan.
 
 const LEER = { titel: "", beschreibung: "", wer: "vertrieb", automatisch: "", ziel_anzahl: "", faellig_tag: "" };
+
+const REITER = [
+  { key: "uebersicht", label: "Übersicht" },
+  { key: "personen", label: "Personen" },
+  { key: "plan", label: "Plan" },
+];
+
+function Kennzahl({ label, wert, hinweis, warnung = false }) {
+  return (
+    <div className="rounded-xl border border-line px-3 py-2.5">
+      <div className={`text-xl font-semibold ${warnung ? "text-coral" : "text-textMain"}`}>{wert}</div>
+      <div className="text-[11px] text-textMuted">{label}</div>
+      {hinweis && <div className="text-[10px] text-textMuted mt-0.5">{hinweis}</div>}
+    </div>
+  );
+}
 
 export default function OnboardingSeite() {
   const [daten, setDaten] = useState(null);
   const [fehler, setFehler] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reiter, setReiter] = useState("uebersicht");
   const [offen, setOffen] = useState(null);
   const [entwurf, setEntwurf] = useState(null);
   const [neuePerson, setNeuePerson] = useState("");
@@ -65,6 +84,7 @@ export default function OnboardingSeite() {
   const schonDabei = new Set(zuweisungen.map((z) => z.user_id));
   const verfuegbar = (daten.mitglieder || []).filter((m) => !schonDabei.has(m.id));
   const signalEntwurf = signalVon(entwurf?.automatisch);
+  const uebersicht = onboardingUebersicht(zuweisungen);
 
   function verschiebe(index, richtung) {
     const ids = schritte.map((s) => s.id);
@@ -142,17 +162,85 @@ export default function OnboardingSeite() {
 
   return (
     <Layout>
-      {/* Dieselben Reiter wie die übrigen Leitungsseiten: Wer über die
-          Verwaltung kommt, findet von hier aus zurück. */}
-      <AdminTabs />
       <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Onboarding</h1>
-      <p className="text-sm text-textMuted mb-4">Neue Leute verbinden, Schritte festlegen und sehen, wo jede Person steht.</p>
-      <div className="brand-stripe w-16 mb-5" />
+      <p className="text-sm text-textMuted mb-3">Neue Leute verbinden, Schritte festlegen und sehen, wo jede Person steht.</p>
+
+      {/* Eigene Reiter — das Onboarding ist ein Bereich für sich, keine
+          Unterseite der Verwaltung. */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-5">
+        {REITER.map((r) => {
+          const an = r.key === reiter;
+          return (
+            <button key={r.key} type="button" onClick={() => setReiter(r.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${an ? "border-amber text-textMain" : "border-transparent text-textMuted hover:text-textMain"}`}
+              style={an ? { background: "color-mix(in srgb, var(--org-accent, #E9B44C) 14%, transparent)" } : undefined}>
+              {r.label}
+              {r.key === "personen" && laufend.length > 0 && <span className="ml-1.5 text-[10px] font-mono text-textMuted">{laufend.length}</span>}
+              {r.key === "plan" && <span className="ml-1.5 text-[10px] font-mono text-textMuted">{schritte.length}</span>}
+            </button>
+          );
+        })}
+      </div>
 
       {fehler && <div className="card border-coral/40 text-coral text-sm mb-4">{fehler}</div>}
 
-      <div className="grid gap-5 lg:grid-cols-2 items-start">
-        <div className="flex flex-col gap-5">
+      {reiter === "uebersicht" && (
+        <div className="flex flex-col gap-5 max-w-3xl">
+          <div className="card">
+            <div className="font-semibold text-textMain text-sm mb-3">Wie es läuft</div>
+            <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4">
+              <Kennzahl label="im Onboarding" wert={uebersicht.laufend} />
+              <Kennzahl label="Fortschritt im Schnitt" wert={`${uebersicht.prozent} %`} />
+              <Kennzahl label="überfällige Schritte" wert={uebersicht.ueberfaellig} warnung={uebersicht.ueberfaellig > 0}
+                hinweis={uebersicht.mitRueckstand ? `bei ${uebersicht.mitRueckstand} Person${uebersicht.mitRueckstand === 1 ? "" : "en"}` : null} />
+              <Kennzahl label="abgeschlossen" wert={uebersicht.fertig}
+                hinweis={uebersicht.dauerSchnitt !== null ? `im Schnitt in ${uebersicht.dauerSchnitt} Tagen` : null} />
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="font-semibold text-textMain text-sm mb-1">Woran es hängt</div>
+            <p className="text-xs text-textMuted mb-3">
+              Die Schritte, die gerade bei den meisten offen sind. Steht hier immer derselbe, liegt es selten an den
+              Leuten — dann ist der Schritt unklar, zu früh angesetzt oder zu gross.
+            </p>
+            {uebersicht.engpaesse.length ? (
+              <div className="flex flex-col">
+                {uebersicht.engpaesse.map((e) => (
+                  <div key={e.id} className="flex items-center gap-2 py-1.5 border-b border-line last:border-b-0">
+                    <span className="text-sm text-textMain flex-1 min-w-0 truncate">{e.titel}</span>
+                    <span className="text-[11px] font-mono text-textMuted">{e.offen} offen</span>
+                    {e.ueberfaellig > 0 && <span className="text-[11px] font-mono text-coral">{e.ueberfaellig} überfällig</span>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-textMuted">Gerade hängt nichts — entweder ist niemand im Onboarding, oder alle sind durch.</p>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="font-semibold text-textMain text-sm mb-3">Wer gerade wo steht</div>
+            {laufend.length ? (
+              <div className="flex flex-col gap-2.5">
+                {[...laufend].sort((a, b) => b.stand.ueberfaellig - a.stand.ueberfaellig || a.stand.prozent - b.stand.prozent).map((z) => (
+                  <button key={z.id} type="button" className="flex items-center gap-2 text-left"
+                    onClick={() => { setReiter("personen"); setOffen(z.id); }}>
+                    <span className="text-sm text-textMain w-36 flex-shrink-0 truncate">{z.person.full_name}</span>
+                    <OnboardingBalken prozent={z.stand.prozent} warnung={z.stand.ueberfaellig > 0} />
+                    <span className="text-[11px] font-mono text-textMuted w-12 text-right flex-shrink-0">{z.stand.prozent} %</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-textMuted">Gerade ist niemand im Onboarding.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {reiter === "personen" && (
+        <div className="flex flex-col gap-5 max-w-3xl">
           <div className="card">
             <div className="font-semibold text-textMain text-sm mb-1">Person verbinden</div>
             <p className="text-xs text-textMuted mb-3">
@@ -160,7 +248,7 @@ export default function OnboardingSeite() {
               Fortschritt auf ihrem Startbildschirm.
             </p>
             {!schritte.length ? (
-              <p className="text-xs text-amber">Lege zuerst mindestens einen Schritt im Plan an.</p>
+              <p className="text-xs text-amber">Lege zuerst mindestens einen Schritt im Reiter „Plan“ an.</p>
             ) : !verfuegbar.length ? (
               <p className="text-xs text-textMuted">Alle freigeschalteten Personen sind schon im Onboarding.</p>
             ) : (
@@ -199,8 +287,10 @@ export default function OnboardingSeite() {
             )}
           </div>
         </div>
+      )}
 
-        <div className="card">
+      {reiter === "plan" && (
+        <div className="card max-w-3xl">
           <div className="flex items-center gap-2 mb-1">
             <span className="font-semibold text-textMain text-sm flex-1">Onboarding-Plan</span>
             {!entwurf && (
@@ -293,7 +383,7 @@ export default function OnboardingSeite() {
             )}
           </div>
         </div>
-      </div>
+      )}
     </Layout>
   );
 }
