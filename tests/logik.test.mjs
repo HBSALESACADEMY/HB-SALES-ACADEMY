@@ -3780,36 +3780,54 @@ test("Die Onboarding-Übersicht zeigt Rückstand, Dauer und Engpässe", async ()
   assert.equal(tageZwischen(null, "2026-09-14"), null);
 });
 
-test("Die Willkommensnachricht grüsst mit der Organisation und zeigt den Weg", async () => {
+test("Die Willkommensnachricht grüsst mit der Organisation, erklärt die Haltung und zeigt den Weg", async () => {
   const { willkommensText } = await import("../lib/telegramPersoenlich.js");
 
   const text = willkommensText({
-    organisation: "VolkWork", name: "Anna Muster", appUrl: "https://app.example.de", imOnboarding: true,
+    organisation: "VolkWork", name: "Anna Muster", appUrl: "https://app.example.de", imOnboarding: true, tag: "2026-09-18",
   });
   assert.match(text, /^👋 Herzlich willkommen bei VolkWork, Anna!/);
-  assert.match(text, /Diese Nachrichten sieht nur du\./);
+  // Rechtschreibung: "Diese Nachrichten sieht nur du" war falsch.
+  assert.match(text, /Diese Nachrichten siehst nur du\./);
+  assert.ok(!/Nachrichten sieht nur du/.test(text));
+
+  // Wofür die Academy da ist und wie hier gearbeitet wird.
+  assert.match(text, /Werkzeug für den Vertriebsalltag/);
+  assert.match(text, /^So arbeiten wir hier:$/m);
+  assert.match(text, /Nachfassen ist die halbe Miete/);
+  assert.match(text, /Kein Abschluss ist kein Scheitern/);
+
   // Was ankommt …
   assert.match(text, /• Follow-ups:/);
   assert.match(text, /• Deine Auswertung: Montag bis Freitag/);
   assert.match(text, /• Onboarding: wenn ein Schritt überfällig ist/);
-  // … und wo man hinkommt.
+  // … wo man hinkommt …
   assert.match(text, /• Call Tracker: .*\n {2}https:\/\/app\.example\.de\/call-tracker/);
   assert.match(text, /• Kurse und Training:/);
+  // … und womit man anfängt.
+  assert.match(text, /Onboarding-Plan/);
   assert.match(text, /Einstellungen → Telegram/);
+  assert.match(text, /\n💬 „.+“ — .+$/);
+  // Telegram nimmt höchstens 4096 Zeichen.
+  assert.ok(text.length < 4000, `zu lang: ${text.length}`);
   // Ohne Führungsrolle nichts über fremde Leute.
-  assert.ok(!/Auswertung: Zahlen des Teams/.test(text));
-  assert.ok(!/\/onboarding/.test(text));
+  assert.ok(!/Zahlen des Teams/.test(text));
 
   // Die Leitung bekommt ihre Bereiche dazu.
-  const leitung = willkommensText({ organisation: "VolkWork", name: "Houman", appUrl: "https://app.example.de", istLeitung: true });
+  const leitung = willkommensText({ organisation: "VolkWork", name: "Houman", appUrl: "https://app.example.de", istLeitung: true, tag: "2026-09-18" });
   assert.match(leitung, /• Onboarding: neue Leute einarbeiten/);
-  assert.match(leitung, /• Auswertung: Zahlen des Teams/);
+  assert.match(leitung, /• Auswertung: die Zahlen des Teams/);
   assert.match(leitung, /beim Onboarding deiner Leute etwas liegen bleibt/);
+  assert.ok(leitung.length < 4000, `zu lang: ${leitung.length}`);
+
+  // Wer noch kein Onboarding hat, bekommt drei konkrete erste Schritte.
+  const ohnePlan = willkommensText({ organisation: "VolkWork", name: "Ben", tag: "2026-09-18" });
+  assert.match(ohnePlan, /1\. Profil ausfüllen/);
+  assert.match(ohnePlan, /2\. .*Call Tracker/);
+  assert.ok(!/Onboarding/.test(ohnePlan));
 
   // Ohne Organisation, Namen und Adresse bleibt die Nachricht heil.
-  const knapp = willkommensText({});
+  const knapp = willkommensText({ tag: "2026-09-18" });
   assert.match(knapp, /^👋 Herzlich willkommen!/);
   assert.ok(!/undefined|https/.test(knapp));
-  // Wer nicht im Onboarding ist, liest nichts davon.
-  assert.ok(!/Onboarding/.test(knapp));
 });
