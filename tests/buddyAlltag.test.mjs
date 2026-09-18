@@ -402,3 +402,13 @@ test("Der Briefing-Testknopf richtet die Knöpfe sofort ein", () => {
   assert.ok(teil.indexOf("stelleWebhookSicher()") > 0);
   assert.ok(teil.indexOf("stelleWebhookSicher()") < teil.indexOf("sendeBriefings("));
 });
+
+test("Der Buddy behauptet im Gespräch nie, etwas eingetragen zu haben", () => {
+  const buddy = lies("lib/buddy.js");
+  const stelle = buddy.indexOf("async function antworte(");
+  const antworte = buddy.slice(stelle, buddy.indexOf("export async function beantworteEingang"));
+  assert.match(antworte, /\.\.\.NICHTS_EINGETRAGEN/);
+  assert.match(buddy, /Behaupte nie, etwas eingetragen/);
+  // Auch die Ersatzantwort ohne KI sagt nicht "notiert".
+  assert.doesNotMatch(antworte, /notiert\./);
+});
