@@ -55,6 +55,54 @@ export default function HerausforderungenSeite() {
         </p>
       </div>
 
+      {daten.verbindungen?.gesamt > 0 && (() => {
+        const { verbunden, offen: nichtVerbunden, gesamt } = daten.verbindungen;
+        const datum = (wert) => (wert ? new Date(wert).toLocaleDateString("de-DE") : null);
+        return (
+          <div className="card max-w-3xl mb-5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold text-textMain text-sm flex-1">Mit dem Vertriebsbuddy verbunden</span>
+              <span className="text-xs font-mono text-textMuted">{verbunden.length} von {gesamt}</span>
+            </div>
+            <p className="text-xs text-textMuted mb-3">
+              Verbinden kann sich jede Person selbst: Einstellungen → Telegram. Wer nicht verbunden ist, bekommt
+              weder Auswertung noch Wochenimpuls.
+            </p>
+            <div className="flex flex-col">
+              {verbunden.map((p) => (
+                <div key={p.id} className="flex items-start gap-2 py-1.5 border-b border-line last:border-b-0">
+                  <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-teal" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-textMain">{p.name}</div>
+                    <div className="text-[11px] text-textMuted">
+                      {[
+                        `verbunden${datum(p.seit) ? ` seit ${datum(p.seit)}` : ""}`,
+                        p.buddy === false ? "Buddy aus" : null,
+                        p.tagesauswertung === false ? "Auswertung aus" : null,
+                        p.letzteAntwortTage === null
+                          ? "hat dem Buddy noch nicht geschrieben"
+                          : p.letzteAntwortTage === 0 ? "heute geschrieben" : `zuletzt vor ${p.letzteAntwortTage} Tagen geschrieben`,
+                      ].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {nichtVerbunden.map((p) => (
+                <div key={p.id} className="flex items-start gap-2 py-1.5 border-b border-line last:border-b-0">
+                  <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-line" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-textMain">{p.name}</div>
+                    <div className="text-[11px] text-textMuted">nicht verbunden</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {daten.hinweis && <div className="card border-amber/40 text-amber text-xs mb-5 max-w-3xl">{daten.hinweis}</div>}
+
       {!wochen.length ? (
         <div className="card max-w-3xl text-sm text-textMuted">
           Noch keine Rückblicke. Sie entstehen freitags aus den Gesprächen der Woche — sobald jemand dem Buddy

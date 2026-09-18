@@ -875,3 +875,13 @@ test("Im Gespräch mit der Leitung gelten die Leitungsregeln", () => {
   // Der Standard-Prompt mit den eigenen Zahlen gilt nur für Vertriebler.
   assert.match(buddy, /istLeitung\s*\n\s*\? `Du bist der Vertriebsbuddy/);
 });
+
+test("Die Verbindungsliste zeigt nur das Ob, nicht den Chat", () => {
+  const route = readFileSync(new URL("../pages/api/herausforderungen.js", import.meta.url), "utf8");
+  // Weder Telegram-Name noch Nachrichtentext werden geladen.
+  assert.match(route, /\.select\("user_id, chat_id, verbunden_am, buddy, tagesauswertung"\)/);
+  assert.ok(!/chat_name/.test(route.replace(/\/\/.*$/gm, "")));
+  assert.match(route, /from\("buddy_nachrichten"\)\.select\("user_id, created_at"\)/);
+  // Fehlen die Rückblicke noch, erscheint die Liste trotzdem.
+  assert.match(route, /wochen: \[\], verbindungen, diese: wochenStartTag\(\)/);
+});

@@ -4,6 +4,7 @@ import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { haeufigeHerausforderungen, stimmungsBild } from "../../lib/buddyRueckblick";
 import { wochenStartTag, tagPlus } from "../../lib/woche";
+import { verbindungsUebersicht } from "../../lib/botVerbindungen";
 
 // Was die Leitung aus den Buddy-Gesprächen ihres Teams sieht.
 //
@@ -20,6 +21,23 @@ export const config = { maxDuration: 20 };
 const WOCHEN = 8;
 const MIGRATION_FEHLT = "In der Datenbank fehlt die Tabelle für die Wochenrückblicke (migration_169).";
 
+// Wer im Team mit dem Bot verbunden ist. Nur das Ob, seit wann und wann
+// zuletzt geschrieben wurde — keine Chat-Kennung für den Browser, kein
+// Telegram-Name, kein Wort aus einem Gespräch (lib/botVerbindungen.js).
+async function verbindungsListe(admin, orgId) {
+  const { data: mitglieder } = await admin.from("profiles")
+    .select("id, full_name").eq("organization_id", orgId).eq("status", "approved");
+  const ids = (mitglieder || []).map((m) => m.id);
+  if (!ids.length) return verbindungsUebersicht([], [], []);
+
+  const [{ data: verknuepfungen }, { data: antworten }] = await Promise.all([
+    admin.from("telegram_verknuepfungen").select("user_id, chat_id, verbunden_am, buddy, tagesauswertung").in("user_id", ids),
+    admin.from("buddy_nachrichten").select("user_id, created_at")
+      .in("user_id", ids).eq("richtung", "person").order("created_at", { ascending: false }).limit(1000),
+  ]);
+  return verbindungsUebersicht(mitglieder || [], verknuepfungen || [], antworten || []);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
   const auth = await requireUser(req, res);
@@ -33,6 +51,10 @@ export default async function handler(req, res) {
   if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
   try {
+    // Zuerst, wer verbunden ist: Das soll auch dann erscheinen, wenn die
+    // Wochenrückblicke noch fehlen (migration_169 nicht eingespielt).
+    const verbindungen = await verbindungsListe(admin, orgId);
+
     const ab = tagPlus(wochenStartTag(), -7 * (WOCHEN - 1));
     const { data: rueckblicke, error } = await admin.from("buddy_wochen")
       // Ausdrücklich ohne "zusammenfassung".
@@ -40,7 +62,10 @@ export default async function handler(req, res) {
       .eq("organization_id", orgId).gte("woche", ab)
       .order("woche", { ascending: false });
     if (error) {
-      return res.status(500).json({ error: /buddy_wochen/.test(error.message) ? MIGRATION_FEHLT : error.message });
+      if (/buddy_wochen/.test(error.message)) {
+        return res.status(200).json({ wochen: [], verbindungen, diese: wochenStartTag(), hinweis: MIGRATION_FEHLT });
+      }
+      return res.status(500).json({ error: error.message });
     }
 
     // Dazu die Schulungen — Thema und ob die Übung gemacht wurde. Auch hier
@@ -97,7 +122,7 @@ export default async function handler(req, res) {
       };
     });
 
-    return res.status(200).json({ wochen, diese: wochenStartTag() });
+    return res.status(200).json({ wochen, diese: wochenStartTag(), verbindungen });
   } catch (e) {
     console.error("Herausforderungen fehlgeschlagen:", e.message);
     return res.status(500).json({ error: e.message || "Unbekannter Fehler." });

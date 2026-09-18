@@ -4186,3 +4186,35 @@ test("Ein Closing Call ist kein Abschluss — und die Leitung bekommt keine eige
   assert.match(regeln, /ausschliesslich unter "Neue Kunden"/);
   assert.match(regeln, /Schreibe die Zahlen aus/);
 });
+
+test("Die Leitung sieht, wer mit dem Bot verbunden ist — und wer noch nicht", async () => {
+  const { verbindungsUebersicht } = await import("../lib/botVerbindungen.js");
+  const jetzt = new Date("2026-09-18T10:00:00Z");
+  const u = verbindungsUebersicht(
+    [{ id: "a", full_name: "Zora" }, { id: "b", full_name: "Anna" }, { id: "c", full_name: "Ben" }, { id: "d", full_name: null }],
+    [
+      { user_id: "a", chat_id: "1", verbunden_am: "2026-09-10T08:00:00Z", buddy: true, tagesauswertung: false },
+      { user_id: "b", chat_id: "2", verbunden_am: "2026-09-12T08:00:00Z", buddy: false },
+      // Getrennt: Die Zeile gibt es noch, die Chat-Kennung nicht mehr.
+      { user_id: "c", chat_id: null, verbunden_am: null },
+    ],
+    [
+      { user_id: "a", created_at: "2026-09-16T09:00:00Z" },
+      { user_id: "a", created_at: "2026-09-01T09:00:00Z" },
+    ],
+    jetzt,
+  );
+  assert.equal(u.gesamt, 4);
+  // Alphabetisch.
+  assert.deepEqual(u.verbunden.map((p) => p.name), ["Anna", "Zora"]);
+  assert.deepEqual(u.offen.map((p) => p.name), ["Ben", "Unbenannt"]);
+
+  const zora = u.verbunden.find((p) => p.name === "Zora");
+  assert.equal(zora.letzteAntwortTage, 2);            // die neueste Antwort zählt
+  assert.equal(zora.tagesauswertung, false);
+  const anna = u.verbunden.find((p) => p.name === "Anna");
+  assert.equal(anna.buddy, false);
+  assert.equal(anna.letzteAntwortTage, null);          // noch nie geantwortet
+  // Keine Chat-Kennung in der Ausgabe.
+  assert.ok(!JSON.stringify(u).includes("chat_id"));
+});
