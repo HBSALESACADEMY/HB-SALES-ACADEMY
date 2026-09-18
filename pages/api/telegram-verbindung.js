@@ -1,9 +1,9 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeAlarm } from "../../lib/alarm";
-import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, willkommensText, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
-import { aktiveOrgId } from "../../lib/aktiveOrgServer";
-import { istFuehrungsrolle } from "../../lib/rollen";
+import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
+import { begruessung } from "../../lib/telegramBegruessung";
+import { webhookGeheimnis, webhookAdresse } from "../../lib/telegramWebhook";
 
 // Das eigene Konto mit dem eigenen Telegram verbinden.
 //
@@ -19,42 +19,6 @@ function lesbar(fehler) {
   return /telegram_verknuepfungen/.test(fehler?.message || "") ? TABELLE_FEHLT : (fehler?.message || "Unbekannter Fehler.");
 }
 
-/**
- * Die Begrüssung zusammenstellen — mit dem Namen DER Organisation, in der
- * die Person gerade arbeitet (Firmencode, nicht Heimat-Organisation).
- *
- * Scheitert etwas davon, geht die Nachricht trotzdem raus: eine Begrüssung
- * ohne Firmennamen ist besser als gar keine.
- */
-async function begruessung(admin, userId) {
-  let organisation = "";
-  let istLeitung = false;
-  let imOnboarding = false;
-  let name = "";
-  try {
-    const { data: profil } = await admin.from("profiles")
-      .select("id, full_name, role, is_admin, is_platform_admin, organization_id").eq("id", userId).maybeSingle();
-    name = profil?.full_name || "";
-    istLeitung = istFuehrungsrolle(profil);
-    const orgId = await aktiveOrgId(admin, profil, userId);
-    if (orgId) {
-      const { data: org } = await admin.from("organizations").select("name").eq("id", orgId).maybeSingle();
-      organisation = org?.name || "";
-    }
-    // Ohne migration_167 gibt es die Tabelle nicht — dann eben ohne die Zeile.
-    // limit(1) statt maybeSingle: Wer per Firmencode in zwei Organisationen
-    // ein Onboarding hat, bekäme sonst einen Fehler statt einer Antwort.
-    const { data: zuweisungen } = await admin.from("onboarding_zuweisungen")
-      .select("id").eq("user_id", userId).is("abgeschlossen_am", null).limit(1);
-    imOnboarding = !!zuweisungen?.length;
-  } catch (e) {
-    console.error("Begrüssung unvollständig:", e.message);
-  }
-  return willkommensText({
-    organisation, name, istLeitung, imOnboarding, appUrl: process.env.NEXT_PUBLIC_APP_URL || "",
-  });
-}
-
 export default async function handler(req, res) {
   const auth = await requireUser(req, res);
   if (!auth) return;
@@ -67,9 +31,11 @@ export default async function handler(req, res) {
   if (leseFehler) return res.status(500).json({ error: lesbar(leseFehler) });
 
   if (req.method === "GET") {
+    const { data: ich } = await admin.from("profiles").select("is_platform_admin").eq("id", userId).maybeSingle();
     // Die Kennung selbst geht nicht an den Browser — sie wird dort nicht
     // gebraucht.
     return res.status(200).json({
+      plattformAdmin: !!ich?.is_platform_admin,
       eingerichtet: !!token,
       verbunden: !!zeile?.chat_id,
       chatName: zeile?.chat_name || null,
@@ -103,6 +69,12 @@ export default async function handler(req, res) {
     }
 
     if (aktion === "pruefen") {
+      // Mit Webhook ist die Verbindung meist schon fertig, bevor hier
+      // jemand klickt — der Bot hat den Start selbst verarbeitet.
+      const { data: frisch } = await admin.from("telegram_verknuepfungen")
+        .select("chat_id, chat_name").eq("user_id", userId).maybeSingle();
+      if (frisch?.chat_id) return res.status(200).json({ verbunden: true, chatName: frisch.chat_name });
+
       if (!zeile?.code || !codeGueltig(zeile.code_seit)) {
         return res.status(400).json({ error: "Der Code ist abgelaufen. Tippe noch einmal auf „Telegram verbinden“." });
       }
@@ -111,7 +83,17 @@ export default async function handler(req, res) {
       // eben noch gar nicht darin.
       const antwort = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=-100&allowed_updates=${UPDATES}`);
       const daten = await antwort.json();
-      if (!daten?.ok) return res.status(502).json({ error: daten?.description || "Telegram hat die Anfrage abgelehnt." });
+      if (!daten?.ok) {
+        // Läuft ein Webhook, gibt Telegram über diesen Weg nichts mehr
+        // heraus (409). Dann erledigt der Eingang die Verbindung selbst.
+        if (/webhook/i.test(daten?.description || "")) {
+          return res.status(200).json({
+            verbunden: false,
+            hinweis: "Tippe im Bot auf „Start“ — die Verbindung stellt sich dann von selbst her. Danach hier noch einmal prüfen.",
+          });
+        }
+        return res.status(502).json({ error: daten?.description || "Telegram hat die Anfrage abgelehnt." });
+      }
 
       const treffer = findeStart(daten.result, zeile.code, zeile.code_seit);
       if (!treffer) {
@@ -138,6 +120,46 @@ export default async function handler(req, res) {
       if (!Object.keys(felder).length) return res.status(400).json({ error: "Keine Einstellung angegeben." });
       await speichere(felder);
       return res.status(200).json({ ok: true, ...felder });
+    }
+
+    // Der Webhook gilt für den ganzen Bot und damit für alle
+    // Organisationen — deshalb nur für den Betreiber der Academy.
+    if (aktion === "webhook-einrichten" || aktion === "webhook-status" || aktion === "webhook-aus") {
+      const { data: ich } = await admin.from("profiles").select("is_platform_admin").eq("id", userId).maybeSingle();
+      if (!ich?.is_platform_admin) return res.status(403).json({ error: "Das richtet der Betreiber der Academy ein." });
+
+      const geheimnis = webhookGeheimnis();
+      const adresse = webhookAdresse();
+      if (aktion === "webhook-aus") {
+        const r = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`);
+        const d = await r.json();
+        if (!d?.ok) return res.status(502).json({ error: d?.description || "Telegram hat die Anfrage abgelehnt." });
+        return res.status(200).json({ ok: true, aktiv: false });
+      }
+      if (aktion === "webhook-einrichten") {
+        if (!adresse) return res.status(400).json({ error: "In Vercel fehlt NEXT_PUBLIC_APP_URL mit der https-Adresse der Academy." });
+        if (!geheimnis) return res.status(400).json({ error: "Auf dem Server fehlt der Service-Role-Schlüssel." });
+        const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: adresse,
+            secret_token: geheimnis,
+            allowed_updates: ["message", "my_chat_member", "channel_post"],
+            drop_pending_updates: true,
+          }),
+        });
+        const d = await r.json();
+        if (!d?.ok) return res.status(502).json({ error: d?.description || "Telegram hat die Anfrage abgelehnt." });
+      }
+      const info = await (await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)).json();
+      return res.status(200).json({
+        ok: true,
+        aktiv: !!info?.result?.url,
+        adresse: info?.result?.url || null,
+        wartend: info?.result?.pending_update_count ?? null,
+        letzterFehler: info?.result?.last_error_message || null,
+      });
     }
 
     if (aktion === "test") {

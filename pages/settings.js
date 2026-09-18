@@ -47,6 +47,7 @@ export default function Settings() {
   const [tgCode, setTgCode] = useState(null);
   const [tgBusy, setTgBusy] = useState(false);
   const [tgHinweis, setTgHinweis] = useState("");
+  const [tgWebhook, setTgWebhook] = useState("");
 
   useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
 
@@ -158,6 +159,22 @@ export default function Settings() {
       }
     } catch (e) {
       setTgHinweis(e.message);
+    }
+    setTgBusy(false);
+  }
+
+  // Nur für den Betreiber: Telegram meldet Nachrichten dann sofort, statt
+  // dass die Academy nachfragt.
+  async function webhookAktion(aktion) {
+    setTgBusy(true);
+    setTgHinweis("");
+    try {
+      const a = await apiPost("/api/telegram-verbindung", { aktion });
+      setTgWebhook(a.aktiv
+        ? `Eingeschaltet${a.adresse ? ` — ${a.adresse}` : ""}${a.wartend ? ` · ${a.wartend} wartend` : ""}${a.letzterFehler ? ` · zuletzt: ${a.letzterFehler}` : ""}`
+        : "Ausgeschaltet — der Buddy antwortet dann erst, wenn jemand die Academy öffnet.");
+    } catch (e) {
+      setTgWebhook(e.message);
     }
     setTgBusy(false);
   }
@@ -411,6 +428,25 @@ export default function Settings() {
           </button>
         )}
         {tg && tgHinweis && <p className="text-xs text-textMuted mt-3">{tgHinweis}</p>}
+
+        {tg?.plattformAdmin && (
+          <div className="mt-4 pt-3 border-t border-line">
+            <div className="text-xs text-textMain font-semibold mb-1">Sofort-Antworten (nur Betreiber)</div>
+            <p className="text-[11px] text-textMuted mb-2">
+              Eingeschaltet meldet Telegram jede Nachricht sofort an die Academy — der Vertriebsbuddy antwortet
+              dann in Sekunden, auch wenn niemand die Academy offen hat. Gilt für alle Organisationen.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" disabled={tgBusy} onClick={() => webhookAktion("webhook-einrichten")}
+                className="btn-ghost text-xs border-teal/40 text-teal disabled:opacity-40">Einschalten</button>
+              <button type="button" disabled={tgBusy} onClick={() => webhookAktion("webhook-status")}
+                className="btn-ghost text-xs disabled:opacity-40">Status prüfen</button>
+              <button type="button" disabled={tgBusy} onClick={() => webhookAktion("webhook-aus")}
+                className="btn-ghost text-xs disabled:opacity-40">Ausschalten</button>
+            </div>
+            {tgWebhook && <p className="text-[11px] text-textMuted mt-2">{tgWebhook}</p>}
+          </div>
+        )}
       </div>
 
       <div className="card max-w-lg mb-5">

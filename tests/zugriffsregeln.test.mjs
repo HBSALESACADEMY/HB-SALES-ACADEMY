@@ -725,9 +725,14 @@ test("Das Onboarding ist ein eigener Bereich, keine Unterseite der Verwaltung", 
 });
 
 test("Die Begrüssung nennt die aktive Organisation, nicht die Heimat-Organisation", () => {
-  const route = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
-  assert.match(route, /const orgId = await aktiveOrgId\(admin, profil, userId\)/);
-  assert.match(route, /await sendeAlarm\(await begruessung\(admin, userId\), treffer\.chatId\)/);
+  // Sie liegt in einer eigenen Datei, weil zwei Wege zum Verbinden führen:
+  // der Knopf in den Einstellungen und der Bot selbst (Webhook).
+  const lib = readFileSync(new URL("../lib/telegramBegruessung.js", import.meta.url), "utf8");
+  assert.match(lib, /const orgId = await aktiveOrgId\(admin, profil, userId\)/);
+  const knopf = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
+  assert.match(knopf, /await sendeAlarm\(await begruessung\(admin, userId\), treffer\.chatId\)/);
+  const eingang = readFileSync(new URL("../pages/api/telegram-eingang.js", import.meta.url), "utf8");
+  assert.match(eingang, /await sendeAlarm\(await begruessung\(admin, zeile\.user_id\), eingang\.chat_id\)/);
 });
 
 test("Der Einstieg ist kurz: eine Folie vorab, Erklärungen an Ort und Stelle", () => {
@@ -784,4 +789,33 @@ test("Die Schulungsbausteine kommen aus der Academy, nicht aus der KI", () => {
   // Die Leitung sieht Thema und Übung, nie den Chat.
   const route = lies("pages/api/herausforderungen.js");
   assert.match(route, /\.select\("user_id, woche, thema, phase, erledigt"\)/);
+});
+
+test("Der Telegram-Eingang ist ohne Geheimnis dicht und meldet nie einen Fehler zurück", () => {
+  const route = readFileSync(new URL("../pages/api/telegram-eingang.js", import.meta.url), "utf8");
+
+  // Erst der Ausweis, dann alles andere: Die Prüfung steht vor dem ersten
+  // Datenbankzugriff.
+  const pruefung = route.indexOf("geheimnisPasst(req.headers");
+  assert.ok(pruefung > 0);
+  assert.ok(pruefung < route.indexOf("getAdminSupabase()"));
+  assert.match(route, /return res\.status\(401\)/);
+  // Das Geheimnis kommt aus dem Kopf der Anfrage, nie aus dem Rumpf.
+  assert.ok(!/req\.body[^\n]*(secret|geheim)/i.test(route));
+  // Fehler werden mit 200 quittiert — sonst wiederholt Telegram minutenlang
+  // dieselbe Meldung, und die Antwort stünde mehrfach im Chat.
+  assert.ok(!/res\.status\(500\)/.test(route));
+  assert.match(route, /doppelt: schonBekannt/);
+
+  // Der Eingang gehört dem Server: Zeilenschutz an, keine Leseregel.
+  const sql = readFileSync(new URL("../supabase/migration_171_telegram_eingang.sql", import.meta.url), "utf8")
+    .replace(/--.*$/gm, "");
+  assert.match(sql, /alter table telegram_updates enable row level security/);
+  assert.ok(!/create policy[^;]*on telegram_updates/.test(sql));
+
+  // Den Webhook schaltet nur der Betreiber.
+  const verbindung = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
+  const webhookStelle = verbindung.indexOf('aktion === "webhook-einrichten"');
+  assert.ok(webhookStelle > 0);
+  assert.match(verbindung.slice(webhookStelle, webhookStelle + 600), /is_platform_admin/);
 });

@@ -57,7 +57,9 @@ export default async function handler(req, res) {
       + `?offset=-100&allowed_updates=${encodeURIComponent(JSON.stringify(["message", "my_chat_member", "channel_post"]))}`,
     );
     const daten = await antwort.json();
-    if (!daten?.ok) {
+    // Ohne Webhook ist das die Hauptquelle, mit Webhook antwortet Telegram
+    // hier mit einem Fehler — dann zählt allein der Eingang von oben.
+    if (!daten?.ok && !chats.size) {
       return res.status(502).json({ error: daten?.description || "Telegram hat die Anfrage abgelehnt." });
     }
 
@@ -97,6 +99,16 @@ export default async function handler(req, res) {
     const jetzt = Math.floor(Date.now() / 1000);
 
     const chats = new Map();
+
+    // Mit Webhook liefert getUpdates nichts mehr — was hereinkam, steht im
+    // Eingang (migration_171).
+    const { data: eingang } = await admin.from("telegram_updates")
+      .select("chat_id, chat_typ, chat_name, text, gesendet_am")
+      .gte("gesendet_am", new Date(Date.now() - FENSTER_SEKUNDEN * 1000).toISOString());
+    (eingang || []).forEach((u) => {
+      if (!u.chat_id || !codePasst(u.text || "", code)) return;
+      chats.set(String(u.chat_id), { id: String(u.chat_id), titel: u.chat_name || "Ohne Namen", art: u.chat_typ });
+    });
     (daten.result || []).forEach((u) => {
       const kern = u.message || u.channel_post;
       const chat = kern?.chat;

@@ -15,6 +15,9 @@ import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 const RETENTION_DAYS = {
   login_events: 30,
   login_attempts: 30,
+  // Der Telegram-Eingang dient nur der Entdopplung und der Gruppensuche —
+  // nach einem Tag hat er seinen Zweck erfüllt.
+  telegram_updates: 1,
   page_views: 30,
   // Dient nur der Drosselung von KI-Anfragen im 60-Sekunden-Fenster und
   // räumt sich bei jedem Aufruf selbst auf (siehe lib/aiClient.js) — die
@@ -36,7 +39,9 @@ export default async function handler(req, res) {
     for (const [table, days] of Object.entries(RETENTION_DAYS)) {
       const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
       const { error, count } = await admin.from(table).delete({ count: "exact" }).lt("created_at", cutoff);
-      if (error) throw error;
+      // Fehlt eine Tabelle (Migration noch nicht eingespielt), darf das
+      // nicht das Aufräumen aller anderen verhindern.
+      if (error) { console.error(`cleanup-logs: ${table}:`, error.message); results[table] = error.message; continue; }
       results[table] = count || 0;
     }
     return res.status(200).json({ ok: true, deleted: results });

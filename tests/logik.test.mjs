@@ -4008,3 +4008,48 @@ test("Der Rückblick sagt nur bei klarer Lage, ob die Übung gemacht wurde", asy
   assert.equal(leseRueckblick(JSON.stringify({ ...basis, uebung_gemacht: "unklar" })).uebungGemacht, null);
   assert.equal(leseRueckblick(JSON.stringify(basis)).uebungGemacht, null);
 });
+
+test("Der Telegram-Eingang weist sich mit einem abgeleiteten Geheimnis aus", async () => {
+  const { webhookGeheimnis, webhookAdresse, geheimnisPasst, leseUpdate, verbindungsCodeAus } =
+    await import("../lib/telegramWebhook.js");
+
+  // Aus dem Serverschlüssel abgeleitet: kein zusätzliches Passwort, das
+  // jemand abtippen und verlieren könnte.
+  const g = webhookGeheimnis("service-role-abc");
+  assert.match(g, /^[0-9a-f]{48}$/);
+  assert.equal(webhookGeheimnis("service-role-abc"), g);
+  assert.notEqual(webhookGeheimnis("anderer-schluessel"), g);
+  assert.equal(webhookGeheimnis(""), null);
+
+  assert.equal(geheimnisPasst(g, g), true);
+  assert.equal(geheimnisPasst("falsch", g), false);
+  assert.equal(geheimnisPasst("", g), false);
+  assert.equal(geheimnisPasst(g, ""), false);
+
+  // Nur https, ohne Schrägstrich am Ende.
+  assert.equal(webhookAdresse("https://app.example.de/"), "https://app.example.de/api/telegram-eingang");
+  assert.equal(webhookAdresse("http://app.example.de"), null);
+  assert.equal(webhookAdresse(""), null);
+
+  // Aus einer Meldung wird das Wesentliche.
+  const nachricht = leseUpdate({
+    update_id: 42,
+    message: { date: 1789000000, text: "Hallo", chat: { id: -100123, type: "group", title: "Vertrieb" } },
+  });
+  assert.equal(nachricht.update_id, 42);
+  assert.equal(nachricht.art, "message");
+  assert.equal(nachricht.chat_id, "-100123");
+  assert.equal(nachricht.chat_name, "Vertrieb");
+  assert.equal(nachricht.chat_typ, "group");
+  assert.match(nachricht.gesendet_am, /^\d{4}-\d{2}-\d{2}T/);
+
+  const beigetreten = leseUpdate({ update_id: 43, my_chat_member: { chat: { id: 7, type: "supergroup", title: "Neu" } } });
+  assert.equal(beigetreten.art, "my_chat_member");
+  assert.equal(leseUpdate({ update_id: 44 }), null);
+  assert.equal(leseUpdate({}), null);
+
+  // Der Verbindungs-Code, egal ob per Knopf oder abgetippt.
+  assert.equal(verbindungsCodeAus("/start HB7K3Q9MX2"), "HB7K3Q9MX2");
+  assert.equal(verbindungsCodeAus("hb7k3q9mx2"), "HB7K3Q9MX2");
+  assert.equal(verbindungsCodeAus("Hallo, wie geht's?"), null);
+});
