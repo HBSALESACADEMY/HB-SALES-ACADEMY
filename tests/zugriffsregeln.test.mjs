@@ -910,3 +910,15 @@ test("Hochgeladene Dateien bleiben in der Organisation", () => {
     assert.ok(!/(href|src)=\{[^}]*\b(file_url|video_url|attachment_url)\b[^}]*\}/.test(code), `${pfad} verlinkt eine Datei direkt`);
   }
 });
+
+test("Die Herausforderungen sind eine Übersicht mit Reitern, keine lange Liste", () => {
+  const seite = readFileSync(new URL("../pages/herausforderungen.js", import.meta.url), "utf8");
+  // Das Wichtigste oben, der Rest hinter Reitern.
+  ["Mit dem Buddy verbunden", "Stimmung", "Häufigstes Thema", "Übungen gemacht"].forEach((k) =>
+    assert.ok(seite.includes(`label="${k}"`), k));
+  ["ueberblick", "personen", "verbindungen"].forEach((r) => assert.match(seite, new RegExp(`key: "${r}"`), r));
+  // Wer "schwer" angibt, steht oben.
+  assert.match(seite, /STIMMUNGS_RANG = \{ schwer: 0, gemischt: 1, gut: 2 \}/);
+  // Kein Chat, keine Zusammenfassung des Gesprächs auf der Seite.
+  assert.ok(!/zusammenfassung/.test(seite));
+});
