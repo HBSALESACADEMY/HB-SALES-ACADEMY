@@ -3,6 +3,9 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeWochenimpulse, holeAntworten } from "../../lib/buddy";
 import { sendeTeamlage } from "../../lib/teamlageVersand";
 import { sendeBriefings } from "../../lib/buddyBriefing";
+import { stelleWebhookSicher } from "../../lib/telegramWebhook";
+import { setzeBefehle } from "../../lib/telegramApi";
+import { BEFEHLE } from "../../lib/buddyBefehle";
 import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Der Vertriebsbuddy aus Sicht der angemeldeten Person.
@@ -73,6 +76,11 @@ export default async function handler(req, res) {
 
     if (aktion === "test-briefing") {
       if (!verbunden) return res.status(400).json({ error: "Dein Konto ist noch nicht mit Telegram verbunden." });
+      // Die Knöpfe unter der Ergebnisfrage kommen nur an, wenn der Webhook
+      // sie kennt — ein älterer kannte sie nicht. Beim Testen soll das nicht
+      // bis zum nächsten Morgen warten.
+      await stelleWebhookSicher();
+      await setzeBefehle(BEFEHLE);
       // erzwingen: auch am Wochenende und auch, wenn es heute schon raus ist.
       const ergebnis = await sendeBriefings(admin, { nurFuer: userId, erzwingen: true });
       return res.status(200).json({

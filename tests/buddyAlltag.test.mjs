@@ -394,3 +394,11 @@ test("Ein liegen gebliebenes Rollenspiel wird im Morgenlauf gelöscht", () => {
   assert.match(befehle.slice(stelle, stelle + 600), /modus_daten: null/);
   assert.match(lies("pages/api/cron/tagesbericht.js"), /raeumeRollenspieleAuf\(admin\)/);
 });
+
+test("Der Briefing-Testknopf richtet die Knöpfe sofort ein", () => {
+  const route = lies("pages/api/buddy.js");
+  const stelle = route.indexOf('aktion === "test-briefing"');
+  const teil = route.slice(stelle, stelle + 900);
+  assert.ok(teil.indexOf("stelleWebhookSicher()") > 0);
+  assert.ok(teil.indexOf("stelleWebhookSicher()") < teil.indexOf("sendeBriefings("));
+});
