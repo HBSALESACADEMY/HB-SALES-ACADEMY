@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import { apiGet } from "../lib/apiClient";
 import { STIMMUNGEN } from "../lib/buddyRueckblick";
 import { wochenName } from "../lib/wochenimpuls";
+import { schulungVon } from "../lib/schulung";
 
 // Was das Team gerade beschäftigt — aus den Wochengesprächen mit dem
 // Vertriebsbuddy.
@@ -103,6 +104,25 @@ export default function HerausforderungenSeite() {
             </div>
           </div>
 
+          {woche.themen?.length > 0 && (
+            <div className="card">
+              <div className="font-semibold text-textMain text-sm mb-1">Im Training</div>
+              <p className="text-xs text-textMuted mb-3">
+                Woran der Vertriebsbuddy gerade mit wem arbeitet — und wie oft die Übung dazu auch gemacht wurde.
+              </p>
+              <div className="flex flex-col">
+                {woche.themen.map((t) => (
+                  <div key={t.thema} className="flex items-center gap-2 py-1.5 border-b border-line last:border-b-0">
+                    <span className="text-sm text-textMain flex-1 min-w-0">{schulungVon(t.thema)?.titel || t.thema}</span>
+                    <span className="text-[11px] font-mono text-textMuted flex-shrink-0">
+                      {t.anzahl} {t.anzahl === 1 ? "Person" : "Personen"} · Übung gemacht: {t.erledigt}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="card">
             <div className="font-semibold text-textMain text-sm mb-3">Je Person</div>
             <div className="flex flex-col gap-3">
@@ -122,6 +142,17 @@ export default function HerausforderungenSeite() {
                   {p.vorhaben && (
                     <p className="text-[11px] text-textMuted mt-1.5">
                       <span className="text-textMain">Vorgenommen:</span> {p.vorhaben}
+                    </p>
+                  )}
+                  {p.schulung && (
+                    <p className="text-[11px] text-textMuted mt-1">
+                      <span className="text-textMain">Im Training:</span>{" "}
+                      {schulungVon(p.schulung.thema)?.titel || p.schulung.thema}
+                      {p.schulung.erledigt === true
+                        ? " · Übung gemacht"
+                        : p.schulung.erledigt === false
+                          ? " · Übung offen"
+                          : p.schulung.phase === "uebung" ? " · Übung läuft" : ""}
                     </p>
                   )}
                 </div>

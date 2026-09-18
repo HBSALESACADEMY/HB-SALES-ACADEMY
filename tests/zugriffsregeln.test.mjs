@@ -770,3 +770,18 @@ test("Der Buddy-Chat bleibt privat — die Leitung sieht nur die Themen", () => 
   assert.match(buddyRoute, /nurFuer: userId/);
   assert.ok(!/req\.body[^\n]*userId/.test(buddyRoute));
 });
+
+test("Die Schulungsbausteine kommen aus der Academy, nicht aus der KI", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const buddy = lies("lib/buddy.js");
+  // Lektion, Übung und Fazit werden aus der Bibliothek verschickt.
+  ["lektionsText(", "uebungsText(", "fazitZeile("].forEach((f) => assert.match(buddy, new RegExp(f.replace("(", "\\("))));
+  // Die Schulungstabelle ist wie die anderen: nur die eigene Zeile, kein Schreibrecht.
+  const sql = lies("supabase/migration_170_buddy_schulung.sql").replace(/--.*$/gm, "");
+  assert.match(sql, /alter table buddy_schulungen enable row level security/);
+  assert.match(sql, /on buddy_schulungen\s+for select using \(user_id = auth\.uid\(\)\)/);
+  assert.ok(!/on buddy_schulungen\s+for (insert|update|delete|all)/.test(sql));
+  // Die Leitung sieht Thema und Übung, nie den Chat.
+  const route = lies("pages/api/herausforderungen.js");
+  assert.match(route, /\.select\("user_id, woche, thema, phase, erledigt"\)/);
+});

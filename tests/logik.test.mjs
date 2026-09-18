@@ -3945,3 +3945,66 @@ test("Der Wochenrückblick liest Herausforderungen heraus, auch aus unsauberem J
   assert.deepEqual(stimmungsBild([{ stimmung: "gut" }, { stimmung: "gut" }, { stimmung: "schwer" }, {}]),
     { gut: 2, gemischt: 0, schwer: 1, ohne: 1 });
 });
+
+test("Die Mini-Schulung trifft das Thema und liefert Lektion, Übung und Fazit", async () => {
+  const { SCHULUNGEN, schulungVon, themaAusText, themaAusZahlen, naechstesThema, lektionsText, uebungsText, fazitZeile } =
+    await import("../lib/schulung.js");
+
+  // Jeder Baustein ist vollständig — halbe Schulungen helfen niemandem.
+  SCHULUNGEN.forEach((s) => {
+    ["key", "titel", "kern", "formulierung", "uebung"].forEach((feld) => assert.ok(s[feld], `${s.key}: ${feld} fehlt`));
+    assert.ok(s.erkennung.length > 0, s.key);
+    assert.ok(s.link?.pfad?.startsWith("/"), s.key);
+  });
+  assert.equal(new Set(SCHULUNGEN.map((s) => s.key)).size, SCHULUNGEN.length);
+
+  // Aus dem, was jemand schreibt.
+  assert.equal(themaAusText("Ich komme am Vorzimmer einfach nicht vorbei"), "vorzimmer");
+  assert.equal(themaAusText("Die sagen alle sofort kein Interesse"), "einwand");
+  assert.equal(themaAusText("zwei Termine sind diese Woche geplatzt"), "noshow");
+  assert.equal(themaAusText("ok"), null);
+  assert.equal(themaAusText(""), null);
+
+  // Aus den Zahlen — der Reihe nach: erst die Menge, dann das Durchkommen,
+  // dann der Termin, dann der Abschluss.
+  const z = (w) => ({ anwahlen: 0, entscheider: 0, terminiert: 0, setting: 0, closing: 0, kunden: 0, mails: 0, followups: 0, ...w });
+  assert.equal(themaAusZahlen(z({ anwahlen: 20 })), "telefonzeit");
+  assert.equal(themaAusZahlen(z({ anwahlen: 200, entscheider: 8 })), "vorzimmer");
+  assert.equal(themaAusZahlen(z({ anwahlen: 200, entscheider: 40, terminiert: 3 })), "einstieg");
+  assert.equal(themaAusZahlen(z({ anwahlen: 200, entscheider: 40, terminiert: 10, setting: 4 })), "noshow");
+  assert.equal(themaAusZahlen(z({ anwahlen: 200, entscheider: 40, terminiert: 10, setting: 9, closing: 3, kunden: 0 })), "abschluss");
+  assert.equal(themaAusZahlen(z({ anwahlen: 200, entscheider: 40, terminiert: 10, setting: 9, mails: 5, followups: 0 })), "nachfassen");
+  assert.equal(themaAusZahlen(z({})), null);
+
+  // Das Gespräch schlägt die Zahlen, und nichts wird zweimal geschult.
+  assert.equal(naechstesThema({ text: "das Vorzimmer blockt immer", zahlen: z({ anwahlen: 10 }) }), "vorzimmer");
+  assert.equal(naechstesThema({ text: "das Vorzimmer blockt immer", zahlen: z({ anwahlen: 10 }), ausser: ["vorzimmer"] }), "telefonzeit");
+  assert.equal(naechstesThema({ text: "alles gut", zahlen: z({}) }), null);
+
+  // Die Texte
+  const s = schulungVon("vorzimmer");
+  const lektion = lektionsText(s, "https://app.example.de");
+  assert.match(lektion, /^📘 Kurz was für dich: Am Vorzimmer vorbei/);
+  assert.match(lektion, /So sagst du es:/);
+  assert.match(lektion, /https:\/\/app\.example\.de\/scripts/);
+  assert.match(lektion, /Morgen schicke ich dir die passende Übung/);
+  // Ohne Adresse kein kaputter Link.
+  assert.ok(!/https|undefined/.test(lektionsText(s)));
+
+  assert.match(uebungsText(s), /^🎯 Deine Übung: Am Vorzimmer vorbei/);
+  assert.match(uebungsText(s), /Schreib mir danach kurz/);
+
+  assert.match(fazitZeile(s, true), /Übung gemacht/);
+  assert.match(fazitZeile(s, false), /liegen geblieben/);
+  assert.match(fazitZeile(s, null), /Thema der Woche war/);
+  assert.equal(fazitZeile(null, true), "");
+});
+
+test("Der Rückblick sagt nur bei klarer Lage, ob die Übung gemacht wurde", async () => {
+  const { leseRueckblick } = await import("../lib/buddyRueckblick.js");
+  const basis = { herausforderungen: ["Kommt selten durch"], stimmung: "gemischt" };
+  assert.equal(leseRueckblick(JSON.stringify({ ...basis, uebung_gemacht: "ja" })).uebungGemacht, true);
+  assert.equal(leseRueckblick(JSON.stringify({ ...basis, uebung_gemacht: "nein" })).uebungGemacht, false);
+  assert.equal(leseRueckblick(JSON.stringify({ ...basis, uebung_gemacht: "unklar" })).uebungGemacht, null);
+  assert.equal(leseRueckblick(JSON.stringify(basis)).uebungGemacht, null);
+});

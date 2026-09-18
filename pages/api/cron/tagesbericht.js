@@ -7,7 +7,7 @@ import { erinnereAnNachfassTermine } from "../../../lib/nachfassTermineErinnerun
 import { erinnereAnBestaetigungen } from "../../../lib/bestaetigungErinnerung";
 import { sendeTagesauswertungen } from "../../../lib/tagesauswertungVersand";
 import { erinnereAnOnboarding } from "../../../lib/onboardingErinnerung";
-import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen } from "../../../lib/buddy";
+import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen, schickeUebungen } from "../../../lib/buddy";
 import { istImpulsTag } from "../../../lib/wochenimpuls";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
@@ -109,6 +109,10 @@ export default async function handler(req, res) {
         const impulse = await sendeWochenimpulse(admin);
         buddy.impulse = impulse.gesendet || 0;
       }
+      // Die Übung kommt am Tag nach der Lektion — beides zusammen liest man
+      // wie einen Artikel und macht es nicht.
+      const uebungen = await schickeUebungen(admin);
+      buddy.uebungen = uebungen.verschickt || 0;
       const antworten = await holeAntworten(admin, { erzwingen: true });
       buddy.antworten = antworten.neu || 0;
     } catch (e) {

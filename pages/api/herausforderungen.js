@@ -43,30 +43,59 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: /buddy_wochen/.test(error.message) ? MIGRATION_FEHLT : error.message });
     }
 
-    const ids = [...new Set((rueckblicke || []).map((r) => r.user_id))];
+    // Dazu die Schulungen — Thema und ob die Übung gemacht wurde. Auch hier
+    // nur Kennzahlen, kein Wort aus dem Chat.
+    const { data: schulungen } = await admin.from("buddy_schulungen")
+      .select("user_id, woche, thema, phase, erledigt")
+      .eq("organization_id", orgId).gte("woche", ab);
+
+    const ids = [...new Set([...(rueckblicke || []).map((r) => r.user_id), ...(schulungen || []).map((s) => s.user_id)])];
     const { data: profile } = ids.length
       ? await admin.from("profiles").select("id, full_name").in("id", ids)
       : { data: [] };
     const nameVon = new Map((profile || []).map((p) => [p.id, p.full_name || "Unbenannt"]));
 
     const jeWoche = new Map();
-    (rueckblicke || []).forEach((r) => {
-      if (!jeWoche.has(r.woche)) jeWoche.set(r.woche, []);
-      jeWoche.get(r.woche).push(r);
-    });
+    const dazu = (woche) => {
+      if (!jeWoche.has(woche)) jeWoche.set(woche, { rueckblicke: [], schulungen: [] });
+      return jeWoche.get(woche);
+    };
+    (rueckblicke || []).forEach((r) => dazu(r.woche).rueckblicke.push(r));
+    (schulungen || []).forEach((s) => dazu(s.woche).schulungen.push(s));
 
-    const wochen = [...jeWoche.entries()].map(([woche, liste]) => ({
-      woche,
-      personen: liste.map((r) => ({
-        id: r.user_id,
-        name: nameVon.get(r.user_id) || "Unbenannt",
-        herausforderungen: Array.isArray(r.herausforderungen) ? r.herausforderungen : [],
-        stimmung: r.stimmung || null,
-        vorhaben: r.vorhaben || null,
-      })),
-      haeufig: haeufigeHerausforderungen(liste),
-      stimmung: stimmungsBild(liste),
-    }));
+    const wochen = [...jeWoche.entries()].map(([woche, inhalt]) => {
+      const schulungVonPerson = new Map(inhalt.schulungen.map((s) => [s.user_id, s]));
+      const personenIds = [...new Set([
+        ...inhalt.rueckblicke.map((r) => r.user_id),
+        ...inhalt.schulungen.map((s) => s.user_id),
+      ])];
+      const themen = new Map();
+      inhalt.schulungen.forEach((s) => {
+        const e = themen.get(s.thema) || { thema: s.thema, anzahl: 0, erledigt: 0 };
+        e.anzahl += 1;
+        if (s.erledigt === true) e.erledigt += 1;
+        themen.set(s.thema, e);
+      });
+
+      return {
+        woche,
+        personen: personenIds.map((id) => {
+          const r = inhalt.rueckblicke.find((x) => x.user_id === id);
+          const s = schulungVonPerson.get(id);
+          return {
+            id,
+            name: nameVon.get(id) || "Unbenannt",
+            herausforderungen: Array.isArray(r?.herausforderungen) ? r.herausforderungen : [],
+            stimmung: r?.stimmung || null,
+            vorhaben: r?.vorhaben || null,
+            schulung: s ? { thema: s.thema, phase: s.phase, erledigt: s.erledigt } : null,
+          };
+        }),
+        haeufig: haeufigeHerausforderungen(inhalt.rueckblicke),
+        stimmung: stimmungsBild(inhalt.rueckblicke),
+        themen: [...themen.values()].sort((a, b) => b.anzahl - a.anzahl),
+      };
+    });
 
     return res.status(200).json({ wochen, diese: wochenStartTag() });
   } catch (e) {
