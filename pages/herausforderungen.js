@@ -4,6 +4,7 @@ import { apiGet } from "../lib/apiClient";
 import { STIMMUNGEN } from "../lib/buddyRueckblick";
 import { wochenName } from "../lib/wochenimpuls";
 import { schulungVon } from "../lib/schulung";
+import { vorTagen } from "../lib/teamlage";
 
 // Was das Team gerade beschäftigt — aus den Wochengesprächen mit dem
 // Vertriebsbuddy.
@@ -81,7 +82,7 @@ export default function HerausforderungenSeite() {
                         p.tagesauswertung === false ? "Auswertung aus" : null,
                         p.letzteAntwortTage === null
                           ? "hat dem Buddy noch nicht geschrieben"
-                          : p.letzteAntwortTage === 0 ? "heute geschrieben" : `zuletzt vor ${p.letzteAntwortTage} Tagen geschrieben`,
+                          : `zuletzt ${vorTagen(p.letzteAntwortTage)} geschrieben`,
                       ].filter(Boolean).join(" · ")}
                     </div>
                   </div>

@@ -4147,7 +4147,7 @@ test("Die Teamlage zeigt Zahlen und Frühwarnungen — nie ein Wort aus dem Chat
   // Was die KI für Rückfragen bekommt: Zahlen und Stichpunkte, plus die
   // ausdrückliche Grenze.
   const zeilen = teamZeilenFuerKI(personen);
-  assert.match(zeilen.join("\n"), /- Anna Muster: Anwahlen 214 \(180\)/);
+  assert.match(zeilen.join("\n"), /- Anna Muster:\n {2}· diese Woche: Anwahlen 214 \(Vorwoche 180\)/);
   assert.match(zeilen[zeilen.length - 1], /Gespräche der Leute kennst du nicht/);
   assert.deepEqual(teamZeilenFuerKI([]), []);
 });
@@ -4176,7 +4176,7 @@ test("Ein Closing Call ist kein Abschluss — und die Leitung bekommt keine eige
   assert.match(teamlageText({ woche: "2026-09-14", personen: [monoke] }), /daraus kein Abschluss/);
 
   // Und genauso in dem, was die KI zu sehen bekommt.
-  assert.match(teamZeilenFuerKI([monoke]).join("\n"), /- Monoke: .*· 1 Closing Call geführt, daraus kein Abschluss/);
+  assert.match(teamZeilenFuerKI([monoke]).join("\n"), /· diese Woche: .*— 1 Closing Call geführt, daraus kein Abschluss/);
 
   // Die Regeln für das Gespräch mit der Leitung.
   const regeln = leitungsAnweisung().join("\n");
@@ -4217,4 +4217,38 @@ test("Die Leitung sieht, wer mit dem Bot verbunden ist — und wer noch nicht", 
   assert.equal(anna.letzteAntwortTage, null);          // noch nie geantwortet
   // Keine Chat-Kennung in der Ausgabe.
   assert.ok(!JSON.stringify(u).includes("chat_id"));
+});
+
+test("Der Buddy trennt für die Leitung Tages- und Wochenzahlen", async () => {
+  const { teamZeilenFuerKI, leitungsAnweisung } = await import("../lib/teamlage.js");
+  const { leereZahlen } = await import("../lib/tagesauswertung.js");
+  const z = (w) => ({ ...leereZahlen(), ...w });
+
+  // Ernestine: heute wenig, gestern viel, in der Woche noch mehr. Genau
+  // diese drei Zahlen durften nicht ineinander verrutschen.
+  const ernestine = {
+    name: "Ernestine",
+    heute: z({ anwahlen: 12 }),
+    letzterTag: z({ anwahlen: 41, terminiert: 2, closing: 1 }),
+    zahlen: z({ anwahlen: 150, terminiert: 5, closing: 1 }),
+    vorwoche: z({ anwahlen: 160, terminiert: 4 }),
+  };
+  const text = teamZeilenFuerKI([ernestine], { heuteTag: "2026-09-18", letzterTag: "2026-09-17", woche: "2026-09-14" }).join("\n");
+  assert.match(text, /· heute bisher \(Freitag, 18\.9\.\): Anwahlen 12\n/);
+  assert.match(text, /· letzter Arbeitstag \(Donnerstag, 17\.9\.\): Anwahlen 41, Terminiert 2, Closing Calls geführt 1 — 1 Closing Call geführt, daraus kein Abschluss/);
+  assert.match(text, /· diese Woche ab Montag, 14\.9\.: Anwahlen 150 \(Vorwoche 160\)/);
+  assert.match(text, /heute bisher" ist der Stand der letzten Speicherung/);
+
+  // Ohne Eintrag an einem Tag steht das auch so da — nicht die Wochenzahl.
+  const leer = teamZeilenFuerKI([{ ...ernestine, heute: z({}) }], { heuteTag: "2026-09-18" }).join("\n");
+  assert.match(leer, /· heute bisher \(Freitag, 18\.9\.\): nichts eingetragen/);
+
+  // Und kein "vor 1 Tagen".
+  const { vorTagen } = await import("../lib/teamlage.js");
+  assert.deepEqual([vorTagen(0), vorTagen(1), vorTagen(5)], ["heute", "gestern", "vor 5 Tagen"]);
+
+  const regeln = leitungsAnweisung().join("\n");
+  assert.match(regeln, /Nenne zu JEDER Zahl ihren Zeitraum/);
+  assert.match(regeln, /niemals die Wochensumme als Tageszahl/);
+  assert.match(regeln, /Gibt es für den gefragten Zeitraum keine Zahlen, sag genau das/);
 });
