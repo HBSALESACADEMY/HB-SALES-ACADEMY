@@ -4053,3 +4053,45 @@ test("Der Telegram-Eingang weist sich mit einem abgeleiteten Geheimnis aus", asy
   assert.equal(verbindungsCodeAus("hb7k3q9mx2"), "HB7K3Q9MX2");
   assert.equal(verbindungsCodeAus("Hallo, wie geht's?"), null);
 });
+
+test("Die Sofort-Antworten richten sich von selbst ein", async () => {
+  const { stelleWebhookSicher } = await import("../lib/telegramWebhook.js");
+  const ziel = "https://app.example.de/api/telegram-eingang";
+
+  // Steht der Webhook schon richtig, wird nichts gesetzt.
+  let aufrufe = [];
+  const antwort = (daten) => Promise.resolve({ json: async () => daten });
+  let ergebnis = await stelleWebhookSicher({
+    token: "t", appUrl: "https://app.example.de", geheimnis: "g".repeat(48),
+    fetchFn: (url) => { aufrufe.push(url); return antwort({ ok: true, result: { url: ziel } }); },
+  });
+  assert.deepEqual([ergebnis.aktiv, ergebnis.schonGesetzt], [true, true]);
+  assert.equal(aufrufe.filter((u) => u.includes("setWebhook")).length, 0);
+
+  // Steht er falsch oder gar nicht, wird er gesetzt — mit Geheimnis.
+  aufrufe = [];
+  let gesendet = null;
+  ergebnis = await stelleWebhookSicher({
+    token: "t", appUrl: "https://app.example.de", geheimnis: "g".repeat(48),
+    fetchFn: (url, opt) => {
+      aufrufe.push(url);
+      if (url.includes("setWebhook")) { gesendet = JSON.parse(opt.body); return antwort({ ok: true }); }
+      return antwort({ ok: true, result: { url: "" } });
+    },
+  });
+  assert.equal(ergebnis.gesetzt, true);
+  assert.equal(gesendet.url, ziel);
+  assert.ok(gesendet.secret_token?.length >= 32);
+  assert.equal(gesendet.drop_pending_updates, true);
+
+  // Ohne Adresse oder Bot passiert nichts, und es fliegt nichts.
+  assert.equal((await stelleWebhookSicher({ token: "", appUrl: "https://app.example.de", geheimnis: "g" })).aktiv, false);
+  assert.match((await stelleWebhookSicher({ token: "t", appUrl: "", geheimnis: "g" })).grund, /NEXT_PUBLIC_APP_URL/);
+  assert.match((await stelleWebhookSicher({ token: "t", appUrl: "https://app.example.de", geheimnis: "" })).grund, /Service-Role/);
+  // Antwortet Telegram nicht, kommt der Grund zurück statt eines Absturzes.
+  const kaputt = await stelleWebhookSicher({
+    token: "t", appUrl: "https://app.example.de", geheimnis: "g".repeat(48),
+    fetchFn: () => { throw new Error("Netz weg"); },
+  });
+  assert.deepEqual([kaputt.aktiv, kaputt.grund], [false, "Netz weg"]);
+});

@@ -3,7 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeAlarm } from "../../lib/alarm";
 import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
 import { begruessung } from "../../lib/telegramBegruessung";
-import { webhookGeheimnis, webhookAdresse } from "../../lib/telegramWebhook";
+import { webhookGeheimnis, webhookAdresse, stelleWebhookSicher } from "../../lib/telegramWebhook";
 
 // Das eigene Konto mit dem eigenen Telegram verbinden.
 //
@@ -63,6 +63,11 @@ export default async function handler(req, res) {
       if (!bot?.ok || !bot.result?.username) {
         return res.status(502).json({ error: bot?.description || "Der Telegram-Bot antwortet nicht." });
       }
+      // Im selben Zug dafür sorgen, dass Telegram künftig von selbst meldet.
+      // Steht es schon richtig, kostet das eine Anfrage und sonst nichts.
+      const webhook = await stelleWebhookSicher();
+      if (!webhook.aktiv) console.error("Webhook nicht eingerichtet:", webhook.grund);
+
       const code = neuerVerbindungsCode();
       await speichere({ code, code_seit: jetzt });
       return res.status(200).json({ code, link: startLink(bot.result.username, code), botName: bot.result.username, gueltigMinuten: CODE_GUELTIG_MINUTEN });

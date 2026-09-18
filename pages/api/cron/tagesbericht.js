@@ -9,6 +9,7 @@ import { sendeTagesauswertungen } from "../../../lib/tagesauswertungVersand";
 import { erinnereAnOnboarding } from "../../../lib/onboardingErinnerung";
 import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen, schickeUebungen } from "../../../lib/buddy";
 import { istImpulsTag } from "../../../lib/wochenimpuls";
+import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -101,6 +102,10 @@ export default async function handler(req, res) {
     // Antworten aus Telegram abholen und beantworten (lib/buddy.js).
     let buddy = { impulse: 0, antworten: 0 };
     try {
+      // Sorgt dafür, dass Telegram von selbst meldet — auch wenn der Bot
+      // gewechselt wurde oder die Adresse der Academy sich geändert hat.
+      const webhook = await stelleWebhookSicher();
+      buddy.webhook = webhook.aktiv ? (webhook.gesetzt ? "neu eingerichtet" : "läuft") : webhook.grund;
       if (istImpulsTag()) {
         // Erst das Gespräch der Woche auswerten, dann den neuen Impuls —
         // so kann er an die Vorwoche anknüpfen.

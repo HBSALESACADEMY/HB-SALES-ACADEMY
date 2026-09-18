@@ -819,3 +819,10 @@ test("Der Telegram-Eingang ist ohne Geheimnis dicht und meldet nie einen Fehler 
   assert.ok(webhookStelle > 0);
   assert.match(verbindung.slice(webhookStelle, webhookStelle + 600), /is_platform_admin/);
 });
+
+test("Die Sofort-Antworten brauchen keinen Knopf und keinen Plattform-Admin", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  // Beim Verbinden und im Tageslauf richtet die Academy den Webhook selbst ein.
+  assert.match(lies("pages/api/telegram-verbindung.js"), /const webhook = await stelleWebhookSicher\(\);/);
+  assert.match(lies("pages/api/cron/tagesbericht.js"), /await stelleWebhookSicher\(\)/);
+});
