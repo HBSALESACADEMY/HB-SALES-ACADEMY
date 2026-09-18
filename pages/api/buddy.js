@@ -1,0 +1,80 @@
+import { requireUser } from "../../lib/supabaseServer";
+import { getAdminSupabase } from "../../lib/supabaseAdmin";
+import { sendeWochenimpulse, holeAntworten } from "../../lib/buddy";
+
+// Der Vertriebsbuddy aus Sicht der angemeldeten Person.
+//
+// Jede Aktion betrifft ausschliesslich sie selbst: ihr eigenes Gespräch
+// lesen, ihren eigenen Impuls testen, ihre eigene Einstellung ändern. Es
+// gibt keinen Weg, über diese Route den Buddy einer anderen Person
+// anzustossen oder deren Gespräch zu sehen.
+export const config = { maxDuration: 60 };
+
+const MIGRATION_FEHLT = "In der Datenbank fehlen die Tabellen für den Vertriebsbuddy (migration_168).";
+const lesbar = (e) => (/buddy_|impuls_fuer/.test(e?.message || "") ? MIGRATION_FEHLT : (e?.message || "Unbekannter Fehler."));
+
+export default async function handler(req, res) {
+  const auth = await requireUser(req, res);
+  if (!auth) return;
+  const userId = auth.user.id;
+  const admin = getAdminSupabase();
+
+  try {
+    const { data: verknuepfung, error } = await admin.from("telegram_verknuepfungen")
+      .select("user_id, chat_id, buddy, impuls_fuer").eq("user_id", userId).maybeSingle();
+    if (error) return res.status(500).json({ error: lesbar(error) });
+    const verbunden = !!verknuepfung?.chat_id;
+
+    if (req.method === "GET") {
+      const { data: verlauf } = await admin.from("buddy_nachrichten")
+        .select("id, richtung, text, created_at").eq("user_id", userId)
+        .order("created_at", { ascending: false }).limit(30);
+      return res.status(200).json({
+        verbunden,
+        buddy: verknuepfung ? verknuepfung.buddy !== false : true,
+        impulsFuer: verknuepfung?.impuls_fuer || null,
+        verlauf: (verlauf || []).reverse(),
+      });
+    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+    const { aktion } = req.body || {};
+
+    if (aktion === "einstellung") {
+      if (typeof req.body.buddy !== "boolean") return res.status(400).json({ error: "Keine Einstellung angegeben." });
+      const { error: schreibFehler } = await admin.from("telegram_verknuepfungen")
+        .upsert({ user_id: userId, buddy: req.body.buddy, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      if (schreibFehler) throw schreibFehler;
+      return res.status(200).json({ ok: true, buddy: req.body.buddy });
+    }
+
+    if (aktion === "test-impuls") {
+      if (!verbunden) return res.status(400).json({ error: "Dein Konto ist noch nicht mit Telegram verbunden." });
+      // erzwingen: Der Testknopf soll auch dienstags gehen und auch dann,
+      // wenn diese Woche schon ein Impuls raus ist.
+      const ergebnis = await sendeWochenimpulse(admin, { nurFuer: userId, erzwingen: true });
+      if (!ergebnis.gesendet) {
+        return res.status(200).json({
+          ok: true, gesendet: 0,
+          hinweis: ergebnis.grund
+            ? `Der Impuls ging nicht raus: ${ergebnis.grund}`
+            : "Der Impuls ging nicht raus. Ist der Vertriebsbuddy eingeschaltet und die Telegram-Verbindung noch gültig?",
+        });
+      }
+      return res.status(200).json({ ok: true, gesendet: ergebnis.gesendet, woche: ergebnis.woche });
+    }
+
+    if (aktion === "abholen") {
+      // Vom Testknopf erzwungen, im Hintergrund gedrosselt: Telegram gibt
+      // alle Chats auf einmal heraus, eine Abfrage je Seitenaufruf wäre
+      // Verschwendung.
+      const ergebnis = await holeAntworten(admin, { erzwingen: !!req.body.erzwingen });
+      return res.status(200).json({ ok: true, ...ergebnis });
+    }
+
+    return res.status(400).json({ error: "Unbekannte Aktion." });
+  } catch (e) {
+    console.error("Vertriebsbuddy fehlgeschlagen:", e.message);
+    return res.status(500).json({ error: lesbar(e) });
+  }
+}

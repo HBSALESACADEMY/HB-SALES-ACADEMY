@@ -38,6 +38,7 @@ const FALLBACK_NAV = [
   { id: "email-marketing", label: "E-Mail Marketing", icon: "send", route: "/email-marketing", is_builtin: true, requires_manager: false },
   { id: "manager", label: "Team (Manager)", icon: "users", route: "/manager", is_builtin: true, requires_manager: true },
   { id: "onboarding", label: "Onboarding", icon: "check", route: "/onboarding", is_builtin: true, requires_manager: true },
+  { id: "herausforderungen", label: "Herausforderungen", icon: "flame", route: "/herausforderungen", is_builtin: true, requires_manager: true },
   { id: "admin", label: "Verwaltung", icon: "lock", route: "/admin", is_builtin: true, requires_manager: true },
 ];
 
@@ -81,7 +82,7 @@ const NAV_GROUPS = {
 
   // Getrennt, weil es einen anderen Zweck hat: hier wird beurteilt, nicht
   // gearbeitet. Wer es nicht sehen darf, sieht die Gruppe gar nicht.
-  auswertung: "Führung", manager: "Führung", onboarding: "Führung",
+  auswertung: "Führung", manager: "Führung", onboarding: "Führung", herausforderungen: "Führung",
 
   admin: "Verwaltung", "admin-suggestions": "Verwaltung", "admin-logins": "Verwaltung", "admin-insights": "Verwaltung",
   "admin-activity": "Verwaltung", "admin-navigation": "Verwaltung", "admin-content": "Verwaltung", "admin-flashcards": "Verwaltung",
@@ -142,6 +143,11 @@ function fasseZusammen(items) {
     .filter((n) => !(n.is_builtin && IN_BEREICH_AUFGEGANGEN.has(n.route)))
     .map((n) => (NEUE_NAMEN[n.route] ? { ...n, label: NEUE_NAMEN[n.route] } : n));
 }
+
+// Einmal je Sitzung nach neuen Telegram-Antworten für den Vertriebsbuddy
+// sehen. Der Server drosselt zusätzlich (lib/buddy.js) — Telegram gibt alle
+// Chats auf einmal heraus, eine Abfrage je Seitenaufruf wäre Verschwendung.
+let buddyAbgeholt = false;
 
 let cachedProfile = null;
 let cachedNavItems = null;
@@ -369,6 +375,11 @@ export default function Layout({ children, fullBleed }) {
         router.replace(`/login${weiter}`);
         return;
       }
+      if (!buddyAbgeholt) {
+        buddyAbgeholt = true;
+        apiPost("/api/buddy", { aktion: "abholen" }).catch((e) => console.error("Vertriebsbuddy:", e.message));
+      }
+
       let { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
 
       // Streak-Verfall: es gibt keinen Hintergrund-Job, der abgelaufene

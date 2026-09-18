@@ -3851,3 +3851,97 @@ test("Die Seitenhinweise erklären kurz und genau dort, wo man ist", async () =>
   ["/call-tracker", "/termine", "/follow-up", "/courses", "/settings"].forEach((p) =>
     assert.ok(hinweisFuer(p), p));
 });
+
+test("Der Wochenimpuls rechnet die Woche zusammen und erfindet keine Zahl", async () => {
+  const { impulsWochen, summiereTage, zahlenBlock, impulsNachricht, impulsFallback, impulsFrage, istImpulsTag, hatWochenaktivitaet } =
+    await import("../lib/wochenimpuls.js");
+  const { leereZahlen } = await import("../lib/tagesauswertung.js");
+
+  // Mittwoch, 16.9.2026: Montag bis Mittwoch, Vorwoche voll.
+  const w = impulsWochen(new Date("2026-09-16T07:00:00Z"));
+  assert.equal(w.woche, "2026-09-14");
+  assert.deepEqual(w.diese, ["2026-09-14", "2026-09-15", "2026-09-16"]);
+  assert.equal(w.vorher.length, 7);
+  assert.equal(w.vorher[0], "2026-09-07");
+  assert.equal(istImpulsTag(new Date("2026-09-18T07:00:00Z")), true);   // Freitag
+  assert.equal(istImpulsTag(new Date("2026-09-16T07:00:00Z")), false);
+
+  const tagesZahlen = (werte) => ({ ...leereZahlen(), ...werte });
+  const proTag = new Map([
+    ["2026-09-14", new Map([["anna", tagesZahlen({ anwahlen: 40, terminiert: 1 })]])],
+    ["2026-09-15", new Map([["anna", tagesZahlen({ anwahlen: 35 })], ["ben", tagesZahlen({ anwahlen: 10 })]])],
+    ["2026-09-16", new Map()],
+  ]);
+  const summe = summiereTage(proTag, w.diese, "anna");
+  assert.equal(summe.anwahlen, 75);
+  assert.equal(summe.terminiert, 1);
+  assert.equal(summiereTage(proTag, w.diese, "cem").anwahlen, 0);
+  assert.equal(hatWochenaktivitaet(summe), true);
+  assert.equal(hatWochenaktivitaet(leereZahlen()), false);
+
+  // Der Zahlenblock zeigt nur Zeilen mit Inhalt, mit Richtungspfeil.
+  const block = zahlenBlock(summe, tagesZahlen({ anwahlen: 90 }));
+  assert.deepEqual(block, ["Anwahlen: 75 (Vorwoche: 90) ↓", "Terminiert: 1 (Vorwoche: 0) ↑"]);
+
+  // Die Nachricht setzt Zahlen, KI-Text, Anknüpfung und Frage zusammen.
+  const text = impulsNachricht({
+    name: "Anna Muster", zahlen: summe, vorher: tagesZahlen({ anwahlen: 90 }),
+    frage: "Wie lief die Woche?", kiText: "Die Anwahlen sind etwas runter.", anknuepfung: "Letzte Woche wolltest du: früher anfangen",
+  });
+  assert.match(text, /^🎯 Deine Woche, Anna/);
+  assert.match(text, /Anwahlen: 75 \(Vorwoche: 90\) ↓/);
+  assert.match(text, /🔁 Letzte Woche wolltest du: früher anfangen/);
+  assert.match(text, /❓ Wie lief die Woche\?/);
+  assert.match(text, /Antworte einfach hier im Chat/);
+  assert.ok(!/\n\n\n/.test(text), "doppelte Leerzeilen");
+
+  // Ohne KI geht trotzdem etwas raus — mit denselben Zahlen.
+  const ersatz = impulsFallback({ name: "Anna", zahlen: summe, vorher: tagesZahlen({ anwahlen: 90 }), frage: "Und?" });
+  assert.match(ersatz, /Anwahlen: 75 \(Vorwoche: 90\)/);
+  assert.match(ersatz, /❓ Und\?/);
+
+  // Jede Woche eine andere Frage, dieselbe Woche dieselbe.
+  assert.equal(impulsFrage("2026-09-14"), impulsFrage("2026-09-14"));
+  assert.notEqual(impulsFrage("2026-09-14"), impulsFrage("2026-09-21"));
+});
+
+test("Der Wochenrückblick liest Herausforderungen heraus, auch aus unsauberem JSON", async () => {
+  const { leseRueckblick, anknuepfung, gedaechtnisZeilen, haeufigeHerausforderungen, stimmungsBild, HOECHSTENS_HERAUSFORDERUNGEN } =
+    await import("../lib/buddyRueckblick.js");
+
+  // Sprach-KIs verpacken JSON gern in Codeblöcke oder schreiben davor.
+  const roh = 'Klar, hier:\n```json\n{"herausforderungen": ["Kommt selten am Vorzimmer vorbei", "Zu wenig Zeit zum Telefonieren"], "stimmung": "gemischt", "vorhaben": "Morgens vor 10 Uhr starten", "zusammenfassung": "Woche war zäh, Motivation aber da."}\n```';
+  const r = leseRueckblick(roh);
+  assert.deepEqual(r.herausforderungen, ["Kommt selten am Vorzimmer vorbei", "Zu wenig Zeit zum Telefonieren"]);
+  assert.equal(r.stimmung, "gemischt");
+  assert.equal(r.vorhaben, "Morgens vor 10 Uhr starten");
+
+  // Unsinn ergibt nichts, statt halbe Wahrheiten zu speichern.
+  assert.equal(leseRueckblick("Ich kann das nicht beantworten."), null);
+  assert.equal(leseRueckblick(""), null);
+  assert.equal(leseRueckblick('{"stimmung": "euphorisch"}'), null);
+
+  // Zu viele, zu lange Einträge werden gekappt.
+  const viele = leseRueckblick(JSON.stringify({
+    herausforderungen: ["a".repeat(200), "b", "c", "d", "e"], stimmung: "schwer",
+  }));
+  assert.equal(viele.herausforderungen.length, HOECHSTENS_HERAUSFORDERUNGEN);
+  assert.equal(viele.herausforderungen[0].length, 80);
+
+  assert.match(anknuepfung(r), /^Letzte Woche wolltest du: Morgens vor 10 Uhr starten$/);
+  assert.equal(anknuepfung(null), "");
+  assert.ok(gedaechtnisZeilen(r).some((z) => z.startsWith("Hakte bei:")));
+
+  // Für die Leitung: gleiche Themen zusammengefasst, je Person einmal gezählt.
+  const haeufig = haeufigeHerausforderungen([
+    { user_id: "a", herausforderungen: ["Kommt selten am Vorzimmer vorbei.", "kommt selten am vorzimmer vorbei"] },
+    { user_id: "b", herausforderungen: ["Kommt selten am Vorzimmer vorbei"] },
+    { user_id: "c", herausforderungen: ["Zu wenig Zeit zum Telefonieren"] },
+  ]);
+  assert.equal(haeufig[0].personen, 2);
+  assert.equal(haeufig[0].anzahl, 2);
+  assert.equal(haeufig.length, 2);
+
+  assert.deepEqual(stimmungsBild([{ stimmung: "gut" }, { stimmung: "gut" }, { stimmung: "schwer" }, {}]),
+    { gut: 2, gemischt: 0, schwer: 1, ohne: 1 });
+});

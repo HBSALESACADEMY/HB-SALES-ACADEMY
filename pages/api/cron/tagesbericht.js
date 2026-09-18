@@ -7,6 +7,8 @@ import { erinnereAnNachfassTermine } from "../../../lib/nachfassTermineErinnerun
 import { erinnereAnBestaetigungen } from "../../../lib/bestaetigungErinnerung";
 import { sendeTagesauswertungen } from "../../../lib/tagesauswertungVersand";
 import { erinnereAnOnboarding } from "../../../lib/onboardingErinnerung";
+import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen } from "../../../lib/buddy";
+import { istImpulsTag } from "../../../lib/wochenimpuls";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
 // Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
@@ -95,6 +97,24 @@ export default async function handler(req, res) {
       console.error("Onboarding-Erinnerung fehlgeschlagen:", e.message);
     }
 
+    // Freitags der Wochenimpuls des Vertriebsbuddys, und jeden Tag die
+    // Antworten aus Telegram abholen und beantworten (lib/buddy.js).
+    let buddy = { impulse: 0, antworten: 0 };
+    try {
+      if (istImpulsTag()) {
+        // Erst das Gespräch der Woche auswerten, dann den neuen Impuls —
+        // so kann er an die Vorwoche anknüpfen.
+        const rueckblicke = await fasseWochenZusammen(admin);
+        buddy.rueckblicke = rueckblicke.erstellt || 0;
+        const impulse = await sendeWochenimpulse(admin);
+        buddy.impulse = impulse.gesendet || 0;
+      }
+      const antworten = await holeAntworten(admin, { erzwingen: true });
+      buddy.antworten = antworten.neu || 0;
+    } catch (e) {
+      console.error("Vertriebsbuddy fehlgeschlagen:", e.message);
+    }
+
     // Fällige Aufnahmen entfernen. Auch das darf den Bericht nicht
     // nachträglich als gescheitert dastehen lassen.
     let aufgeraeumt = { geloescht: 0 };
@@ -104,7 +124,7 @@ export default async function handler(req, res) {
       console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
     }
 
-    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, onboarding, aufgeraeumt });
+    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, onboarding, buddy, aufgeraeumt });
   } catch (e) {
     console.error("Tagesbericht fehlgeschlagen:", e.message);
     await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);

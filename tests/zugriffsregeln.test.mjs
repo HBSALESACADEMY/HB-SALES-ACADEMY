@@ -743,3 +743,30 @@ test("Der Einstieg ist kurz: eine Folie vorab, Erklärungen an Ort und Stelle", 
   const layout = lies("components/Layout.js");
   assert.match(layout, /<SeitenHinweis pfad=\{router\.pathname\} \/>/);
 });
+
+test("Der Buddy-Chat bleibt privat — die Leitung sieht nur die Themen", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const sql168 = lies("supabase/migration_168_vertriebsbuddy.sql").replace(/--.*$/gm, "");
+  const sql169 = lies("supabase/migration_169_buddy_rueckblick.sql").replace(/--.*$/gm, "");
+
+  // Beide Tabellen: nur die eigene Zeile, und niemand schreibt ausser dem Server.
+  for (const [sql, tabelle] of [[sql168, "buddy_nachrichten"], [sql169, "buddy_wochen"]]) {
+    assert.match(sql, new RegExp(`alter table ${tabelle} enable row level security`), tabelle);
+    assert.match(sql, new RegExp(`on ${tabelle}\\s+for select using \\(user_id = auth\\.uid\\(\\)\\)`), tabelle);
+    assert.ok(!new RegExp(`on ${tabelle}\\s+for (insert|update|delete|all)`).test(sql), `${tabelle} hat Schreibregeln`);
+    // Keine Leseregel für die Leitung — sie bekommt nur, was die Route herausgibt.
+    assert.ok(!new RegExp(`on ${tabelle}[\\s\\S]{0,200}ist_fuehrungsrolle`).test(sql), `${tabelle} für die Leitung geöffnet`);
+  }
+
+  // Die Route der Leitung liest die Zusammenfassung des Gesprächs nicht einmal aus.
+  const route = lies("pages/api/herausforderungen.js");
+  assert.match(route, /istFuehrungsrolle\(profil\)/);
+  assert.match(route, /\.eq\("organization_id", orgId\)/);
+  assert.match(route, /\.select\("user_id, woche, herausforderungen, stimmung, vorhaben"\)/);
+  assert.ok(!/zusammenfassung/.test(route.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")));
+
+  // Der Buddy handelt immer nur für die angemeldete Person.
+  const buddyRoute = lies("pages/api/buddy.js");
+  assert.match(buddyRoute, /nurFuer: userId/);
+  assert.ok(!/req\.body[^\n]*userId/.test(buddyRoute));
+});

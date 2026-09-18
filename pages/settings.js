@@ -142,6 +142,26 @@ export default function Settings() {
     setTgBusy(false);
   }
 
+  // Den Buddy ausprobieren, ohne bis Freitag zu warten: Impuls sofort
+  // schicken, oder eine Antwort aus Telegram sofort abholen und beantworten.
+  async function buddyAktion(aktion) {
+    setTgBusy(true);
+    setTgHinweis("");
+    try {
+      const antwort = await apiPost("/api/buddy", { aktion, erzwingen: true });
+      if (aktion === "test-impuls") {
+        setTgHinweis(antwort.hinweis || "Der Wochenimpuls ist raus — schau in Telegram.");
+      } else {
+        setTgHinweis(antwort.neu
+          ? `${antwort.neu} ${antwort.neu === 1 ? "Antwort" : "Antworten"} abgeholt und beantwortet — schau in Telegram.`
+          : "Keine neue Antwort gefunden. Schreib dem Bot etwas und hol dann noch einmal ab.");
+      }
+    } catch (e) {
+      setTgHinweis(e.message);
+    }
+    setTgBusy(false);
+  }
+
   function toggleVisibility(key) {
     setVisibility((v) => ({ ...v, [key]: v[key] === "friends" ? "public" : "friends" }));
   }
@@ -342,6 +362,7 @@ export default function Settings() {
               {[
                 ["tagesauswertung", "Tägliche Auswertung", "Montag bis Freitag morgens: deine Zahlen vom letzten Arbeitstag, verglichen mit dem Tag davor, und Lob"],
                 ["followups", "Follow-up-Erinnerungen", "Wenn dir jemand ein Follow-up zuweist, und morgens deine fälligen Follow-ups"],
+                ["buddy", "Vertriebsbuddy", "Freitags dein Wochenimpuls mit deinen Zahlen und einer Frage — du kannst direkt im Chat antworten"],
               ].map(([key, label, hinweis]) => (
                 <label key={key} className="flex items-start gap-2.5 cursor-pointer">
                   <input type="checkbox" className="mt-1" checked={tg[key] !== false} disabled={tgBusy}
@@ -353,6 +374,15 @@ export default function Settings() {
                 </label>
               ))}
             </div>
+            {tg.buddy !== false && (
+              <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-line">
+                <span className="text-[11px] text-textMuted flex-1 min-w-[8rem]">Vertriebsbuddy ausprobieren:</span>
+                <button type="button" onClick={() => buddyAktion("test-impuls")} disabled={tgBusy}
+                  className="btn-ghost text-xs disabled:opacity-40">Wochenimpuls testen</button>
+                <button type="button" onClick={() => buddyAktion("abholen")} disabled={tgBusy}
+                  className="btn-ghost text-xs disabled:opacity-40">Antworten abholen</button>
+              </div>
+            )}
           </>
         ) : tgCode ? (
           <ol className="text-xs text-textMuted flex flex-col gap-3 list-decimal pl-4">

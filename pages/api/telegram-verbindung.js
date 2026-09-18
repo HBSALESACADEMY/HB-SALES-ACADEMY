@@ -76,6 +76,7 @@ export default async function handler(req, res) {
       verbundenAm: zeile?.verbunden_am || null,
       tagesauswertung: zeile ? zeile.tagesauswertung !== false : true,
       followups: zeile ? zeile.followups !== false : true,
+      buddy: zeile ? zeile.buddy !== false : true,
     });
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -133,6 +134,7 @@ export default async function handler(req, res) {
       const felder = {};
       if (typeof req.body.tagesauswertung === "boolean") felder.tagesauswertung = req.body.tagesauswertung;
       if (typeof req.body.followups === "boolean") felder.followups = req.body.followups;
+      if (typeof req.body.buddy === "boolean") felder.buddy = req.body.buddy;
       if (!Object.keys(felder).length) return res.status(400).json({ error: "Keine Einstellung angegeben." });
       await speichere(felder);
       return res.status(200).json({ ok: true, ...felder });
