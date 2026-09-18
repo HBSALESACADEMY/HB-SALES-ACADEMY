@@ -885,3 +885,28 @@ test("Die Verbindungsliste zeigt nur das Ob, nicht den Chat", () => {
   // Fehlen die Rückblicke noch, erscheint die Liste trotzdem.
   assert.match(route, /wochen: \[\], verbindungen, diese: wochenStartTag\(\)/);
 });
+
+test("Hochgeladene Dateien bleiben in der Organisation", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Die Speicherbereiche sind privat, die "jeder darf lesen"-Regeln weg.
+  const sql = lies("supabase/migration_174_dateien_organisationsintern.sql").replace(/--.*$/gm, "");
+  assert.match(sql, /set public = false\s+where id in \('script-files', 'content-files', 'course-videos', 'community-uploads'\)/);
+  assert.match(sql, /drop policy if exists "script_files_public_read"/);
+  assert.match(sql, /drop policy if exists "content_files_public_read"/);
+
+  // Der Link wird erst unterschrieben, NACHDEM mit den Rechten der
+  // anfragenden Person geprüft ist, dass sie den Eintrag sehen darf.
+  const route = lies("pages/api/datei-link.js");
+  assert.match(route, /const ort = await darfSehen\(auth\.client, url\)/);
+  assert.ok(route.indexOf("darfSehen(auth.client") < route.indexOf("createSignedUrl("));
+  assert.match(route, /\.eq\(quelle\.spalte, url\)/);
+
+  // Keine Seite verlinkt oder bettet eine solche Datei mehr direkt ein.
+  const seiten = ["pages/scripts.js", "pages/flashcards.js", "pages/admin/flashcards.js", "pages/admin/content.js",
+    "pages/custom-courses/[id].js", "pages/community.js"];
+  for (const pfad of seiten) {
+    const code = lies(pfad);
+    assert.ok(!/(href|src)=\{[^}]*\b(file_url|video_url|attachment_url)\b[^}]*\}/.test(code), `${pfad} verlinkt eine Datei direkt`);
+  }
+});

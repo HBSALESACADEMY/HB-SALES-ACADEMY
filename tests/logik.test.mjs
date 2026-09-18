@@ -4252,3 +4252,23 @@ test("Der Buddy trennt für die Leitung Tages- und Wochenzahlen", async () => {
   assert.match(regeln, /niemals die Wochensumme als Tageszahl/);
   assert.match(regeln, /Gibt es für den gefragten Zeitraum keine Zahlen, sag genau das/);
 });
+
+test("Ein gespeicherter Datei-Link wird sicher in Bereich und Pfad zerlegt", async () => {
+  const { bereichUndPfad, DATEI_QUELLEN } = await import("../lib/dateiQuellen.js");
+  const basis = "https://abc.supabase.co/storage/v1/object";
+
+  assert.deepEqual(bereichUndPfad(`${basis}/public/script-files/u1/1700000000.pdf`), { bereich: "script-files", pfad: "u1/1700000000.pdf" });
+  // Leerzeichen und Umlaute im Namen, Abfrageteil gehört nicht dazu.
+  assert.deepEqual(bereichUndPfad(`${basis}/public/content-files/u1/Leitfaden%20B%C3%BCro.pdf?t=1`),
+    { bereich: "content-files", pfad: "u1/Leitfaden Büro.pdf" });
+  // Nur die geschützten Bereiche — alles andere ist keine Datei dieser Art.
+  assert.equal(bereichUndPfad(`${basis}/public/avatars/u1/bild.jpg`), null);
+  assert.equal(bereichUndPfad("https://example.com/datei.pdf"), null);
+  assert.equal(bereichUndPfad(""), null);
+  // Kein Ausweg aus dem Bereich.
+  assert.equal(bereichUndPfad(`${basis}/public/script-files/../email-anhaenge/x.pdf`), null);
+  assert.equal(bereichUndPfad(`${basis}/public/script-files/u1/%2E%2E/x.pdf`), null);
+
+  // Jede Datei gehört zu mindestens einem Eintrag, an dem die Rechte hängen.
+  Object.values(DATEI_QUELLEN).forEach((quellen) => assert.ok(quellen.length > 0));
+});

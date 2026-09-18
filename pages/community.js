@@ -12,6 +12,7 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { effectiveStreak } from "../lib/streak";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { wochenStartZeitpunkt } from "../lib/woche";
+import { DateiKnopf, GeschuetztesBild, GeschuetztesVideo } from "../components/GeschuetzteDatei";
 
 // "@alle" erwähnt alle in der eigenen Organisation. Als eigener Name statt
 // als Aufzählung: sonst müsste man dreissig Namen einzeln antippen, und wer
@@ -953,15 +954,15 @@ export default function Community() {
               })()}
 
               {p.attachment_url && p.attachment_type === "image" && (
-                <img src={p.attachment_url} alt="" className="rounded-lg max-h-96 w-auto mb-3 border border-line" />
+                <GeschuetztesBild url={p.attachment_url} className="rounded-lg max-h-96 w-auto mb-3 border border-line" />
               )}
               {p.attachment_url && p.attachment_type === "video" && (
-                <video src={p.attachment_url} controls className="rounded-lg max-h-96 w-full mb-3 border border-line" />
+                <GeschuetztesVideo url={p.attachment_url} className="rounded-lg max-h-96 w-full mb-3 border border-line" />
               )}
               {p.attachment_url && p.attachment_type === "file" && (
-                <a href={p.attachment_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs inline-flex mb-3">
+                <DateiKnopf url={p.attachment_url} className="btn-ghost text-xs inline-flex mb-3">
                   <Icon name="download" size={13} /> Datei öffnen
-                </a>
+                </DateiKnopf>
               )}
 
               <div className="flex items-center gap-1">

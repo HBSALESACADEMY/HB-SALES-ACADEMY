@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../../components/Layout";
 import Icon from "../../components/Icon";
 import { supabase } from "../../lib/supabaseClient";
+import { DateiKnopf, GeschuetztesVideo } from "../../components/GeschuetzteDatei";
 
 export default function CustomCourseDetail() {
   const router = useRouter();
@@ -37,13 +38,13 @@ export default function CustomCourseDetail() {
           <div key={m.id} className="card">
             <div className="font-display text-base font-semibold text-textMain mb-2">{m.title}</div>
             {m.video_url && (
-              <video controls className="w-full rounded-lg mb-3" src={m.video_url} />
+              <GeschuetztesVideo url={m.video_url} className="w-full rounded-lg mb-3" />
             )}
             {m.content && <p className="text-sm text-textMuted whitespace-pre-wrap">{m.content}</p>}
             {m.file_url && (
-              <a href={m.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
+              <DateiKnopf url={m.file_url} className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
                 <Icon name="download" size={12} /> {m.file_name || "Anhang herunterladen"}
-              </a>
+              </DateiKnopf>
             )}
           </div>
         ))}

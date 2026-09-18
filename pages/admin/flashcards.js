@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { apiPost } from "../../lib/apiClient";
 import { COURSES } from "../../lib/curriculum";
 import { loescheGeprueft } from "../../lib/loeschen";
+import { DateiKnopf } from "../../components/GeschuetzteDatei";
 
 export default function FlashcardsAdmin() {
   const [isManager, setIsManager] = useState(true);
@@ -167,9 +168,9 @@ export default function FlashcardsAdmin() {
                     <p className="text-sm text-textMain">{c.front}</p>
                     <p className="text-xs text-textMuted mt-1">{c.back}</p>
                     {c.file_url && (
-                      <a href={c.file_url} target="_blank" rel="noreferrer" className="text-[11px] text-teal inline-flex items-center gap-1 mt-1">
+                      <DateiKnopf url={c.file_url} className="text-[11px] text-teal inline-flex items-center gap-1 mt-1">
                         <Icon name="download" size={10} /> {c.file_name || "Anhang"}
-                      </a>
+                      </DateiKnopf>
                     )}
                   </div>
                   <button onClick={() => deleteCard(c.id)} className="btn-ghost text-xs text-coral flex-shrink-0">Löschen</button>

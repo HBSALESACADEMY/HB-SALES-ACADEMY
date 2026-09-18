@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { getActiveOrgId } from "../../lib/activeOrg";
 import { loescheGeprueft, aendereGeprueft } from "../../lib/loeschen";
 import { pfadAusOeffentlicherUrl } from "../../lib/speicherPfad";
+import { DateiKnopf } from "../../components/GeschuetzteDatei";
 
 const COLORS = ["amber", "teal", "coral", "violet"];
 const COLOR_HEX = { amber: "var(--org-accent, #CE3A5C)", teal: "#00E5C7", coral: "#FF4D6D", violet: "var(--org-color-1, #4C5DC9)" };
@@ -459,9 +460,9 @@ export default function ContentAdmin() {
                       <span className="text-sm flex-1">{m.title}</span>
                       {m.video_url && <span className="text-[10px] uppercase text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
                       {m.file_url && (
-                        <a href={m.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs inline-flex items-center gap-1">
+                        <DateiKnopf url={m.file_url} className="btn-ghost text-xs inline-flex items-center gap-1">
                           <Icon name="download" size={11} /> {m.file_name || "Anhang"}
-                        </a>
+                        </DateiKnopf>
                       )}
                       <span className="flex items-center gap-0.5">
                         <button onClick={() => verschiebeModul(m, -1)} disabled={mods[0]?.id === m.id}

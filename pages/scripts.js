@@ -7,6 +7,7 @@ import { loescheGeprueft } from "../lib/loeschen";
 import BereichsTabs, { WISSEN } from "../components/BereichsTabs";
 import { apiPost } from "../lib/apiClient";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { DateiKnopf } from "../components/GeschuetzteDatei";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState([]);
@@ -295,9 +296,9 @@ export default function Scripts() {
                     </div>
                   )}
                   {s.file_url && (
-                    <a href={s.file_url} target="_blank" rel="noreferrer" className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
+                    <DateiKnopf url={s.file_url} className="btn-ghost text-xs mt-2.5 inline-flex items-center gap-1.5 w-fit">
                       <Icon name="download" size={12} /> {s.file_name || "Anhang"}
-                    </a>
+                    </DateiKnopf>
                   )}
                 </div>
               );
