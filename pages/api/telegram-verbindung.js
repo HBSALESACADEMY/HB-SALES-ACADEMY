@@ -2,7 +2,7 @@ import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeAlarm } from "../../lib/alarm";
 import { neuerVerbindungsCode, startLink, codeGueltig, findeStart, CODE_GUELTIG_MINUTEN } from "../../lib/telegramPersoenlich";
-import { begruessung } from "../../lib/telegramBegruessung";
+import { sendeBegruessung } from "../../lib/telegramBegruessung";
 import { istFuehrungsrolle } from "../../lib/rollen";
 import { webhookGeheimnis, webhookAdresse, stelleWebhookSicher } from "../../lib/telegramWebhook";
 import { setzeBefehle } from "../../lib/telegramApi";
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
         });
       }
       await speichere({ chat_id: treffer.chatId, chat_name: treffer.name, verbunden_am: jetzt, code: null, code_seit: null });
-      await sendeAlarm(await begruessung(admin, userId), treffer.chatId);
+      await sendeBegruessung(admin, userId, treffer.chatId);
       return res.status(200).json({ verbunden: true, chatName: treffer.name });
     }
 

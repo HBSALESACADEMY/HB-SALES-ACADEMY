@@ -104,7 +104,8 @@ export default function Datenschutz() {
               <li>die Nachrichten, die du dem „Vertriebsbuddy" schreibst, sowie die daraus wöchentlich
                 erzeugte Zusammenfassung (Themen, Stimmung, Vorhaben);</li>
               <li>im Morgen-Briefing deine Termine des Tages mit Notiz und bekannten Einwänden, und die Ergebnisse,
-                die du über die Knöpfe unter einer Nachricht einträgst;</li>
+                die du über die Knöpfe unter einer Nachricht einträgst oder als Satz schreibst — aus einem Satz
+                liest der KI-Dienst Kundenname und Ergebnis heraus; eingetragen wird erst nach deiner Bestätigung;</li>
               <li>im Rollenspiel dein Wortwechsel mit dem gespielten Kunden — nur solange es läuft; danach wird er
                 gelöscht und fließt weder in die Wochenzusammenfassung noch an Vorgesetzte.</li>
             </ul>

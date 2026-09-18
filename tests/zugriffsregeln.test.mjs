@@ -730,9 +730,10 @@ test("Die Begrüssung nennt die aktive Organisation, nicht die Heimat-Organisati
   const lib = readFileSync(new URL("../lib/telegramBegruessung.js", import.meta.url), "utf8");
   assert.match(lib, /const orgId = await aktiveOrgId\(admin, profil, userId\)/);
   const knopf = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
-  assert.match(knopf, /await sendeAlarm\(await begruessung\(admin, userId\), treffer\.chatId\)/);
+  // Beide Wege schicken Begrüssung UND Erklärung des Buddys.
+  assert.match(knopf, /await sendeBegruessung\(admin, userId, treffer\.chatId\)/);
   const eingang = readFileSync(new URL("../pages/api/telegram-eingang.js", import.meta.url), "utf8");
-  assert.match(eingang, /await sendeAlarm\(await begruessung\(admin, zeile\.user_id\), eingang\.chat_id\)/);
+  assert.match(eingang, /await sendeBegruessung\(admin, zeile\.user_id, eingang\.chat_id\)/);
 });
 
 test("Der Einstieg ist kurz: eine Folie vorab, Erklärungen an Ort und Stelle", () => {

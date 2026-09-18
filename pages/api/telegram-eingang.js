@@ -1,11 +1,11 @@
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { sendeAlarm } from "../../lib/alarm";
 import { geheimnisPasst, leseUpdate, verbindungsCodeAus } from "../../lib/telegramWebhook";
 import { codeGueltig } from "../../lib/telegramPersoenlich";
-import { begruessung } from "../../lib/telegramBegruessung";
+import { sendeBegruessung } from "../../lib/telegramBegruessung";
 import { beantworteEingang, beantworteBefehl } from "../../lib/buddy";
 import { leseBefehl } from "../../lib/buddyBefehle";
 import { bearbeiteErgebnisKnopf } from "../../lib/buddyErgebnis";
+import { bearbeiteEintragKnopf } from "../../lib/buddyEintrag";
 
 // Der Eingang: Telegram meldet hier jede Nachricht, sobald sie geschrieben
 // wird. Damit antwortet der Vertriebsbuddy in Sekunden, statt bis zum
@@ -46,9 +46,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, doppelt: schonBekannt });
     }
 
-    // Ein Ergebnis-Knopf aus dem Morgen-Briefing.
+    // Ein Knopf: "b:…" bestätigt einen Eintrag aus einem freien Satz
+    // (lib/buddyEintrag.js), alles andere ist ein Ergebnis-Knopf aus dem
+    // Morgen-Briefing.
     if (knopf) {
-      await bearbeiteErgebnisKnopf(admin, knopf);
+      if (knopf.daten.startsWith("b:")) await bearbeiteEintragKnopf(admin, knopf);
+      else await bearbeiteErgebnisKnopf(admin, knopf);
       return res.status(200).json({ ok: true, knopf: true });
     }
 
@@ -105,5 +108,5 @@ async function verbinde(admin, code, eingang) {
   }).eq("user_id", zeile.user_id);
   if (error) { console.error("Verbinden über den Webhook fehlgeschlagen:", error.message); return; }
 
-  await sendeAlarm(await begruessung(admin, zeile.user_id), eingang.chat_id);
+  await sendeBegruessung(admin, zeile.user_id, eingang.chat_id);
 }

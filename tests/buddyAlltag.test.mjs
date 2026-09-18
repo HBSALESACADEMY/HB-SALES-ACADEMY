@@ -412,3 +412,201 @@ test("Der Buddy behauptet im Gespräch nie, etwas eingetragen zu haben", () => {
   // Auch die Ersatzantwort ohne KI sagt nicht "notiert".
   assert.doesNotMatch(antworte, /notiert\./);
 });
+
+// ---------------------------------------------------------------------------
+// Ergebnisse als freier Satz
+
+import {
+  klingtNachErgebnis, leseVorschlag, passendeTermine, eintragPatch, vorschlagText, versucheEintrag,
+  bearbeiteEintragKnopf, JA_NEIN, hatEtwasZuTun,
+} from "../lib/buddyEintrag.js";
+import { buddyErklaerung, willkommensText } from "../lib/telegramPersoenlich.js";
+
+test("Nur Sätze über Termine gehen an die KI", () => {
+  assert.equal(klingtNachErgebnis("Müller: Kunde geworden"), true);
+  assert.equal(klingtNachErgebnis("Schneider – Closing am Donnerstag 14 Uhr"), true);
+  assert.equal(klingtNachErgebnis("Weber ist nicht erschienen"), true);
+  assert.equal(klingtNachErgebnis("Termin mit Hoffmann lief gut, will noch überlegen"), true);
+  assert.equal(klingtNachErgebnis("Mir geht's heute nicht so gut"), false);
+  assert.equal(klingtNachErgebnis("Wie geht Einwandbehandlung?"), false);
+});
+
+test("Der Vorschlag nimmt nur, was die KI sauber geliefert hat", () => {
+  const heute = "2026-09-15";
+  const voll = leseVorschlag('```json\n{"kunde":"Schneider","ergebnis":"stattgefunden","naechster":{"art":"closing","datum":"2026-09-17","uhrzeit":"14:00"},"notiz":"Budget kommt im Oktober"}\n```', heute);
+  assert.equal(voll.kunde, "Schneider");
+  assert.equal(voll.ergebnis, "stattgefunden");
+  // 14 Uhr in Berlin ist im September 12 Uhr UTC.
+  assert.equal(voll.naechster.zeitpunkt, "2026-09-17T12:00:00.000Z");
+  assert.equal(voll.notiz, "Budget kommt im Oktober");
+
+  // Ohne Uhrzeit kein Zeitpunkt — erfunden wird keine.
+  assert.equal(leseVorschlag({ kunde: "X", naechster: { art: "closing", datum: "2026-09-17", uhrzeit: null } }, heute).naechster.zeitpunkt, null);
+  // Vergangenheit, falsche Stufe, falsches Ergebnis: weg.
+  assert.equal(leseVorschlag({ kunde: "X", naechster: { art: "closing", datum: "2026-09-01", uhrzeit: "10:00" } }, heute), null);
+  assert.equal(leseVorschlag({ kunde: "X", naechster: { art: "party", datum: "2026-09-17", uhrzeit: "10:00" } }, heute), null);
+  assert.equal(leseVorschlag({ kunde: "X", ergebnis: "gewonnen" }, heute), null);
+  assert.equal(leseVorschlag({ kunde: null, ergebnis: "kunde" }, heute), null);
+  assert.equal(leseVorschlag("keine Ahnung", heute), null);
+  assert.equal(leseVorschlag({ kunde: "Müller", ergebnis: "kunde" }, heute).ergebnis, "kunde");
+});
+
+test("Der passende Termin: ganzer Name vor Wortteil, vergangene zuerst", () => {
+  const jetzt = new Date("2026-09-15T10:00:00Z");
+  const leads = [
+    termin({ id: "zukunft", name: "Max Müller", appointment_at: "2026-09-16T10:00:00Z" }),
+    termin({ id: "gestern", name: "Max Müller", appointment_at: "2026-09-14T10:00:00Z" }),
+    termin({ id: "andere", name: "Anna Müllerschön", company: "Schön AG" }),
+    termin({ id: "firma", name: "Petra Lang", company: "Schneider Bau" }),
+  ];
+  assert.deepEqual(passendeTermine(leads, "Herr Müller", jetzt).map((l) => l.id), ["gestern", "zukunft"]);
+  assert.deepEqual(passendeTermine(leads, "Max Müller", jetzt).map((l) => l.id), ["gestern", "zukunft"]);
+  assert.deepEqual(passendeTermine(leads, "Schneider", jetzt).map((l) => l.id), ["firma"]);
+  assert.deepEqual(passendeTermine(leads, "Klaus", jetzt), []);
+  assert.deepEqual(passendeTermine(leads, "", jetzt), []);
+});
+
+test("Eingetragen wird wie auf der Termin-Seite: Ergebnis zur alten Stufe, dann weiterrücken", () => {
+  const lead = termin({ appointment_at: "2026-09-14T10:00:00Z", notes: "Zwei Standorte" });
+  const kunde = eintragPatch(lead, { ergebnis: "kunde" }, ICH, "2026-09-15");
+  assert.deepEqual(kunde, { outcome: "kunde", status: "wahrgenommen" });
+
+  const weiter = eintragPatch(lead, {
+    ergebnis: "ueberlegt", naechster: { art: "folgetermin", zeitpunkt: "2026-09-17T12:00:00.000Z" }, notiz: "Will mit Partner reden",
+  }, ICH, "2026-09-15");
+  assert.equal(weiter.termin_art, "folgetermin");
+  assert.equal(weiter.appointment_at, "2026-09-17T12:00:00.000Z");
+  assert.equal(weiter.status, "geplant");
+  assert.equal(weiter.outcome, null);
+  const zuletzt = weiter.stufen_verlauf[weiter.stufen_verlauf.length - 1];
+  assert.equal(zuletzt.art, "erstgespraech");
+  assert.equal(zuletzt.ergebnis, "follow_up");
+  assert.equal(zuletzt.von, ICH);
+  assert.equal(weiter.notes, "Zwei Standorte\n15.9.: Will mit Partner reden");
+
+  // Ein Kunde bleibt Kunde, auch wenn der Check-in geplant wird.
+  const checkin = eintragPatch(lead, { ergebnis: "kunde", naechster: { art: "checkin", zeitpunkt: "2026-10-15T08:00:00.000Z" } }, ICH);
+  assert.equal(checkin.outcome, "kunde");
+});
+
+test("Der Vorschlag zeigt, was passiert — und sagt, wenn die Uhrzeit fehlt", () => {
+  const lead = termin({ appointment_at: "2026-09-14T10:00:00Z" });
+  const text = vorschlagText(lead, { ergebnis: "kunde", naechster: null, notiz: null });
+  assert.match(text, /^📝 Soll ich das so eintragen\?/);
+  assert.match(text, /Max Muster \(Muster GmbH\) · Setting Call Mo\., 14\.9\., 12:00/);
+  assert.match(text, /• Ergebnis: Kunde geworden/);
+  const ohneZeit = vorschlagText(lead, { ergebnis: null, naechster: { art: "closing", datum: "2026-09-17", uhrzeit: null, zeitpunkt: null }, notiz: null });
+  assert.match(ohneZeit, /trage ich nicht ein — die Uhrzeit fehlt/);
+  assert.equal(hatEtwasZuTun({ naechster: { zeitpunkt: null } }), false);
+  assert.deepEqual(JA_NEIN.inline_keyboard[0].map((k) => k.callback_data), ["b:j", "b:n"]);
+});
+
+// Nachbildung für den Eintrag: Termine lesen (seitenweise), Vorschlag merken.
+function eintragsDatenbank({ leads = [], verknuepfung = null, lead = null }) {
+  const aenderungen = [];
+  const kette = (tabelle) => {
+    const k = {
+      select: () => k, eq: () => k, is: () => k, gte: () => k, lt: () => k, in: () => k, order: () => k,
+      range: () => Promise.resolve({ data: tabelle === "leads" ? leads : [], error: null }),
+      limit: () => Promise.resolve({ data: verknuepfung ? [verknuepfung] : [], error: null }),
+      maybeSingle: () => Promise.resolve({ data: tabelle === "leads" ? lead : tabelle === "profiles" ? { full_name: "Anna" } : {}, error: null }),
+      update: (patch) => {
+        aenderungen.push({ tabelle, patch });
+        const weiter = { eq: () => Promise.resolve({ error: null }) };
+        return weiter;
+      },
+    };
+    return k;
+  };
+  return { admin: { from: kette }, aenderungen };
+}
+
+test("Aus einem Satz wird ein Vorschlag — eingetragen wird noch nichts", async () => {
+  const jetzt = new Date("2026-09-15T10:00:00Z");
+  let gefragt = 0;
+  const ki = async () => { gefragt += 1; return '{"kunde":"Muster","ergebnis":"kunde","naechster":null,"notiz":null}'; };
+  const db = eintragsDatenbank({ leads: [termin({ appointment_at: "2026-09-14T10:00:00Z" })] });
+
+  assert.equal(await versucheEintrag(db.admin, { user_id: ICH, chat_id: "1" }, "Hallo, wie geht's?", { jetzt, ki }), false);
+  assert.equal(gefragt, 0);
+
+  assert.equal(await versucheEintrag(db.admin, { user_id: ICH, chat_id: "1" }, "Muster ist Kunde geworden", { jetzt, ki }), true);
+  assert.equal(gefragt, 1);
+  // Nur der Vorschlag wird gemerkt — der Termin selbst bleibt unberührt.
+  assert.ok(!db.aenderungen.some((a) => a.tabelle === "leads"));
+  const gemerkt = db.aenderungen.find((a) => a.tabelle === "telegram_verknuepfungen").patch;
+  assert.equal(gemerkt.modus, "eintrag");
+  assert.equal(gemerkt.modus_daten.leadId, LEAD);
+  assert.equal(gemerkt.modus_daten.vorschlag.ergebnis, "kunde");
+});
+
+test("Erst „Ja, eintragen“ schreibt — und nur in den eigenen, noch gültigen Vorschlag", async () => {
+  const jetzt = new Date("2026-09-15T10:00:00Z");
+  const vorschlag = { kunde: "Muster", ergebnis: "kunde", naechster: null, notiz: null };
+  const knopf = (daten) => ({ id: "k", daten, chat_id: "1", nachricht_id: 5, nachricht_text: "📝 Soll ich das so eintragen?\n\nMax Muster" });
+  const offen = { user_id: ICH, modus: "eintrag", modus_seit: "2026-09-15T09:50:00Z", modus_daten: { vorschlag, leadId: LEAD } };
+
+  const ja = eintragsDatenbank({ verknuepfung: offen, lead: termin() });
+  const ergebnis = await bearbeiteEintragKnopf(ja.admin, knopf("b:j"), { jetzt });
+  assert.equal(ergebnis.eingetragen, true);
+  assert.deepEqual(ja.aenderungen.find((a) => a.tabelle === "leads").patch, { outcome: "kunde", status: "wahrgenommen" });
+
+  const nein = eintragsDatenbank({ verknuepfung: offen, lead: termin() });
+  await bearbeiteEintragKnopf(nein.admin, knopf("b:n"), { jetzt });
+  assert.ok(!nein.aenderungen.some((a) => a.tabelle === "leads"));
+
+  // Ein fremder Termin — etwa über eine manipulierte Kennung.
+  const fremd = eintragsDatenbank({ verknuepfung: offen, lead: termin({ created_by: ANDERE }) });
+  assert.equal((await bearbeiteEintragKnopf(fremd.admin, knopf("b:j"), { jetzt })).ok, false);
+  assert.ok(!fremd.aenderungen.some((a) => a.tabelle === "leads"));
+
+  // Nach einer Stunde gilt der Vorschlag nicht mehr.
+  const alt = eintragsDatenbank({ verknuepfung: { ...offen, modus_seit: "2026-09-15T08:30:00Z" }, lead: termin() });
+  assert.equal((await bearbeiteEintragKnopf(alt.admin, knopf("b:j"), { jetzt })).ok, false);
+  assert.ok(!alt.aenderungen.some((a) => a.tabelle === "leads"));
+
+  // Ohne offenen Vorschlag ändert "Ja" nichts.
+  const ohne = eintragsDatenbank({ verknuepfung: { ...offen, modus: null }, lead: termin() });
+  assert.equal((await bearbeiteEintragKnopf(ohne.admin, knopf("b:j"), { jetzt })).ok, false);
+  assert.ok(!ohne.aenderungen.some((a) => a.tabelle === "leads"));
+});
+
+test("Der Eintrags-Versuch kommt vor dem Gesprächsverlauf, und Knöpfe finden ihren Weg", () => {
+  const buddy = lies("lib/buddy.js");
+  const start = buddy.indexOf("export async function beantworteEingang");
+  const eingang = buddy.slice(start, buddy.indexOf("export async function verknuepfungZumChat"));
+  assert.ok(eingang.indexOf("versucheEintrag(") > 0);
+  assert.ok(eingang.indexOf("versucheEintrag(") < eingang.indexOf('from("buddy_nachrichten")'));
+  const route = lies("pages/api/telegram-eingang.js");
+  assert.match(route, /knopf\.daten\.startsWith\("b:"\)\) await bearbeiteEintragKnopf/);
+  assert.match(lies("lib/buddyBefehle.js"), /\.in\("modus", \["rollenspiel", "eintrag"\]\)/);
+});
+
+test("Nach dem Verbinden erklärt eine zweite Nachricht, wie der Buddy funktioniert", () => {
+  const text = buddyErklaerung({ istLeitung: false });
+  assert.match(text, /^🤝 So funktioniert dein Vertriebsbuddy/);
+  assert.match(text, /„Müller: Kunde geworden“/);
+  assert.match(text, /Erst wenn du auf „Ja, eintragen“ tippst, steht es in der Academy/);
+  assert.match(text, /\/rollenspiel/);
+  assert.match(text, /\/heute · \/woche · \/ziel · \/termine/);
+  assert.match(text, /Was du mir schreibst, sieht deine Leitung nicht/);
+  assert.doesNotMatch(text, /gespraech|\/team/);
+  assert.ok(text.length < 4000);
+
+  const leitung = buddyErklaerung({ istLeitung: true });
+  assert.match(leitung, /\/gespraech Anna/);
+  assert.match(leitung, /\/team/);
+  assert.match(leitung, /siehst auch du nicht/);
+  assert.ok(leitung.length < 4000);
+
+  // Die Begrüssung kündigt sie an und bleibt unter Telegrams Grenze.
+  const willkommen = willkommensText({ organisation: "VolkWork", name: "Houman", appUrl: "https://academy.example", istLeitung: true, imOnboarding: true, tag: "2026-09-18" });
+  assert.match(willkommen, /erkläre ich dir gleich in der nächsten Nachricht/);
+  assert.ok(willkommen.length < 4000);
+
+  // Beide Nachrichten gehen raus, in dieser Reihenfolge.
+  const lib = lies("lib/telegramBegruessung.js");
+  const stelle = lib.indexOf("export async function sendeBegruessung");
+  const teil = lib.slice(stelle);
+  assert.ok(teil.indexOf("willkommensText(") < teil.indexOf("buddyErklaerung("));
+});

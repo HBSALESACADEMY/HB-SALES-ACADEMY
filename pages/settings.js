@@ -421,7 +421,8 @@ export default function Settings() {
             {/* Die Kurzbefehle muss man kennen, um sie zu benutzen — Telegram
                 zeigt sie zwar beim Tippen auf "/", aber darauf kommt niemand. */}
             <p className="text-[11px] text-textMuted mt-3 pt-3 border-t border-line">
-              Im Chat mit dem Bot: <span className="font-mono text-textMain">/heute</span>,{" "}
+              Ergebnisse kannst du dem Bot einfach als Satz schreiben, etwa „Müller: Kunde geworden“ — er fragt nach,
+              bevor er etwas einträgt. Außerdem: <span className="font-mono text-textMain">/heute</span>,{" "}
               <span className="font-mono text-textMain">/woche</span>, <span className="font-mono text-textMain">/ziel</span>,{" "}
               <span className="font-mono text-textMain">/termine</span>, <span className="font-mono text-textMain">/einwand</span> und{" "}
               <span className="font-mono text-textMain">/rollenspiel</span>
