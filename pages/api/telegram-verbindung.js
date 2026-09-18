@@ -47,6 +47,7 @@ export default async function handler(req, res) {
       buddy: zeile ? zeile.buddy !== false : true,
       teamlage: zeile ? zeile.teamlage !== false : true,
       istLeitung: istFuehrungsrolle(ich),
+      einwilligungAm: zeile?.einwilligung_am || null,
     });
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -62,6 +63,11 @@ export default async function handler(req, res) {
 
   try {
     if (aktion === "code") {
+      // Ohne bestätigte Einwilligung gibt es keinen Code — und ohne Code
+      // keine Verbindung (Art. 7 Abs. 1 DSGVO, migration_173).
+      if (req.body.einwilligung !== true) {
+        return res.status(400).json({ error: "Bitte bestätige zuerst die Einwilligung zur Nutzung des Telegram-Bots." });
+      }
       const antwort = await fetch(`https://api.telegram.org/bot${token}/getMe`);
       const bot = await antwort.json();
       if (!bot?.ok || !bot.result?.username) {
@@ -73,7 +79,7 @@ export default async function handler(req, res) {
       if (!webhook.aktiv) console.error("Webhook nicht eingerichtet:", webhook.grund);
 
       const code = neuerVerbindungsCode();
-      await speichere({ code, code_seit: jetzt });
+      await speichere({ code, code_seit: jetzt, einwilligung_am: zeile?.einwilligung_am || jetzt });
       return res.status(200).json({ code, link: startLink(bot.result.username, code), botName: bot.result.username, gueltigMinuten: CODE_GUELTIG_MINUTEN });
     }
 

@@ -845,3 +845,25 @@ test("Die Teamlage bekommt nur die Leitung, und auch sie ohne den Chat", () => {
   assert.ok(stelle > 0);
   assert.match(route.slice(stelle, stelle + 500), /istFuehrungsrolle\(profil\)/);
 });
+
+test("Telegram läuft nur mit bestätigter, festgehaltener Einwilligung", () => {
+  const route = readFileSync(new URL("../pages/api/telegram-verbindung.js", import.meta.url), "utf8");
+  // Ohne Häkchen kein Code — und ohne Code keine Verbindung.
+  const stelle = route.indexOf('aktion === "code"');
+  assert.ok(stelle > 0);
+  assert.match(route.slice(stelle, stelle + 400), /req\.body\.einwilligung !== true/);
+  // Der Zeitpunkt wird festgehalten und nicht bei jedem Mal überschrieben.
+  assert.match(route, /einwilligung_am: zeile\?\.einwilligung_am \|\| jetzt/);
+
+  // In den Einstellungen steht, worum es geht, mit Verweis auf den Datenschutz.
+  const settings = readFileSync(new URL("../pages/settings.js", import.meta.url), "utf8");
+  assert.match(settings, /disabled=\{tgBusy \|\| !tgEinwilligung\}/);
+  assert.match(settings, /href="\/datenschutz"/);
+
+  // Und die Datenschutzerklärung nennt Telegram beim Namen.
+  const seite = readFileSync(new URL("../pages/datenschutz.js", import.meta.url), "utf8");
+  ["Telegram FZ-LLC", "Vertriebsbuddy", "Art. 6 Abs. 1 lit. a DSGVO", "Leistungs- und"].forEach((satz) =>
+    assert.ok(seite.includes(satz), satz));
+  // Für Vorgesetzte ist der Chat ausdrücklich nicht einsehbar.
+  assert.match(seite, /für Vorgesetzte[\s\S]{0,80}nicht[\s\S]{0,40}einsehbar/);
+});

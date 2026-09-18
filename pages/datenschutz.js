@@ -85,9 +85,54 @@ export default function Datenschutz() {
           </section>
 
           <section>
-            <h2 className="text-textMain font-display font-semibold text-base mb-2">5. Empfänger und Auftragsverarbeiter</h2>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">5. Telegram-Bot und Vertriebsbuddy (freiwillig)</h2>
+            <p>
+              Die Academy kann Benachrichtigungen über einen Telegram-Bot verschicken. Die Nutzung ist{" "}
+              <strong className="text-textMain">freiwillig</strong>: Sie beginnt erst, wenn du dein Konto in den
+              Einstellungen selbst mit Telegram verbindest, und endet, sobald du dort auf „Trennen" tippst oder den
+              Bot in Telegram blockierst. Rechtsgrundlage ist deine Einwilligung — Art. 6 Abs. 1 lit. a DSGVO. Den
+              Zeitpunkt deiner Einwilligung halten wir fest. Ein Widerruf wirkt für die Zukunft.
+            </p>
+            <p className="mt-2">Über den Bot werden verarbeitet:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>deine Telegram-Chat-Kennung, dein angezeigter Telegram-Name und dein Vorname;</li>
+              <li>Erinnerungen an Follow-ups, Termine und Onboarding-Schritte — diese enthalten auch{" "}
+                <strong className="text-textMain">Namen und Firmen der von dir erfassten Kund:innen und
+                Interessent:innen</strong>;</li>
+              <li>deine Arbeitszahlen aus der Academy (z.B. Anwahlen, Termine, Abschlüsse) für die tägliche
+                Auswertung und den wöchentlichen Impuls;</li>
+              <li>die Nachrichten, die du dem „Vertriebsbuddy" schreibst, sowie die daraus wöchentlich
+                erzeugte Zusammenfassung (Themen, Stimmung, Vorhaben).</li>
+            </ul>
+            <p className="mt-2">
+              <strong className="text-textMain">Übermittlung an Telegram:</strong> Betreiberin des Dienstes ist die
+              Telegram FZ-LLC, Dubai (Vereinigte Arabische Emirate). Für dieses Land liegt kein
+              Angemessenheitsbeschluss der EU-Kommission vor, und für die Bot-Schnittstelle steht regelmäßig kein
+              Auftragsverarbeitungsvertrag zur Verfügung. Inhalte, die an den Bot gehen, verlassen damit den
+              Schutzbereich der DSGVO. [Platzhalter: Bewertung und Dokumentation dieser Übermittlung, insbesondere
+              zu Kundendaten Dritter, mit dem/der Datenschutzbeauftragten abstimmen.]
+            </p>
+            <p className="mt-2">
+              <strong className="text-textMain">Vertriebsbuddy und KI:</strong> Deine Nachrichten an den
+              Vertriebsbuddy, deine Wochenzahlen und die Wochenzusammenfassung werden zur Erzeugung der Antwort an
+              den in Abschnitt 4 genannten KI-Dienst übermittelt. [Platzhalter: Prüfen, ob der eingesetzte
+              KI-Tarif eine Nutzung der Inhalte zu Trainingszwecken ausschließt.]
+            </p>
+            <p className="mt-2">
+              <strong className="text-textMain">Wer was sieht:</strong> Deine Nachrichten an den Vertriebsbuddy sind
+              für Vorgesetzte <strong className="text-textMain">nicht</strong> einsehbar. Führungsrollen deiner
+              Organisation erhalten ausschließlich die daraus abgeleiteten Stichpunkte (Themen, Stimmung, Vorhaben,
+              laufendes Trainingsthema) sowie deine Arbeitszahlen. Diese Auswertungen können eine Leistungs- und
+              Verhaltenskontrolle darstellen. [Platzhalter: Falls ein Betriebsrat besteht, ist eine
+              Betriebsvereinbarung erforderlich.]
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">6. Empfänger und Auftragsverarbeiter</h2>
             <p>Wir setzen folgende Dienstleister ein, mit denen jeweils ein Auftragsverarbeitungsvertrag gemäß Art. 28 DSGVO besteht bzw. abzuschließen ist:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li><strong className="text-textMain">Telegram FZ-LLC</strong> (Versand der Benachrichtigungen und des Vertriebsbuddys, nur bei freiwillig verbundenem Konto) — Dubai, VAE; siehe Abschnitt 5;</li>
               <li><strong className="text-textMain">Supabase</strong> (Datenbank, Authentifizierung, Datei-Speicher) — [Platzhalter: Supabase-Projektregion prüfen/eintragen, AVV mit Supabase Inc. abschließen];</li>
               <li><strong className="text-textMain">Vercel</strong> (Hosting der Anwendung) — [Platzhalter: AVV mit Vercel Inc. abschließen];</li>
               <li><strong className="text-textMain">Google (Gemini API)</strong> (KI-gestützte Auswertungen, siehe Ziffer 4) — [Platzhalter: AVV/Datenverarbeitungsbedingungen mit Google abschließen].</li>
@@ -100,7 +145,7 @@ export default function Datenschutz() {
           </section>
 
           <section>
-            <h2 className="text-textMain font-display font-semibold text-base mb-2">6. Speicherdauer</h2>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">7. Speicherdauer</h2>
             <p>
               Kontodaten, Lerndaten, Kundendaten (Leads) und Anruf-Aufnahmen speichern wir, solange das Nutzerkonto
               bzw. die Organisation besteht, bzw. bis eine Löschung durch die Nutzer:in selbst oder eine berechtigte
@@ -112,10 +157,17 @@ export default function Datenschutz() {
               nach 180 Tagen (KI-Anfrage-Protokolle nach 90 Tagen) gelöscht, soweit keine gesetzlichen
               Aufbewahrungspflichten entgegenstehen.
             </p>
-          </section>
+                      <p className="mt-2">
+              Nachrichten an den Vertriebsbuddy, die daraus erzeugten Wochenzusammenfassungen und die
+              Trainingsverläufe werden mit dem Konto gelöscht. Trennst du die Telegram-Verbindung, werden keine
+              neuen Daten mehr an Telegram übermittelt; bereits in Telegram zugestellte Nachrichten liegen in deinem
+              Chatverlauf und unterliegen den Regeln von Telegram. [Platzhalter: Eigene Löschfrist für den
+              Chatverlauf in der Academy festlegen, sofern gewünscht.]
+            </p>
+</section>
 
           <section>
-            <h2 className="text-textMain font-display font-semibold text-base mb-2">7. Cookies und lokale Speicherung</h2>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">8. Cookies und lokale Speicherung</h2>
             <p>
               Diese Plattform setzt keine Cookies zu Analyse- oder Marketingzwecken ein und bindet keine
               Drittanbieter-Tracking-Dienste ein. Zur Anmeldung wird ein Sitzungs-Token technisch notwendig im lokalen
@@ -126,7 +178,7 @@ export default function Datenschutz() {
           </section>
 
           <section>
-            <h2 className="text-textMain font-display font-semibold text-base mb-2">8. Deine Rechte</h2>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">9. Deine Rechte</h2>
             <p>Dir stehen nach Maßgabe der gesetzlichen Bestimmungen folgende Rechte zu:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>Auskunft über die zu dir gespeicherten Daten (Art. 15 DSGVO) — du kannst deine Daten jederzeit selbst unter „Einstellungen → Meine Daten" als Datei herunterladen;</li>
@@ -140,7 +192,7 @@ export default function Datenschutz() {
           </section>
 
           <section>
-            <h2 className="text-textMain font-display font-semibold text-base mb-2">9. Datensicherheit</h2>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">10. Datensicherheit</h2>
             <p>
               Die Übertragung erfolgt verschlüsselt (TLS). Der Zugriff auf Daten anderer Organisationen ist technisch
               durch Zugriffsregeln auf Datenbankebene unterbunden (Mandantentrennung). Passwörter werden ausschließlich
@@ -149,7 +201,7 @@ export default function Datenschutz() {
           </section>
 
           <section>
-            <h2 className="text-textMain font-display font-semibold text-base mb-2">10. Änderungen dieser Erklärung</h2>
+            <h2 className="text-textMain font-display font-semibold text-base mb-2">11. Änderungen dieser Erklärung</h2>
             <p>
               Wir passen diese Datenschutzerklärung an, wenn sich die Datenverarbeitung oder die Rechtslage ändert.
               Es gilt jeweils die zum Zeitpunkt deines Besuchs aktuelle Fassung.

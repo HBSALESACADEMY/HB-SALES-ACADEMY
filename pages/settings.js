@@ -48,6 +48,7 @@ export default function Settings() {
   const [tgBusy, setTgBusy] = useState(false);
   const [tgHinweis, setTgHinweis] = useState("");
   const [tgWebhook, setTgWebhook] = useState("");
+  const [tgEinwilligung, setTgEinwilligung] = useState(false);
 
   useEffect(() => { setThemePrefState(getStoredThemePref()); }, []);
 
@@ -123,7 +124,7 @@ export default function Settings() {
     setTgBusy(true);
     setTgHinweis("");
     try {
-      const antwort = await apiPost("/api/telegram-verbindung", { aktion, ...extra });
+      const antwort = await apiPost("/api/telegram-verbindung", { aktion, ...extra, einwilligung: tgEinwilligung });
       if (aktion === "code") setTgCode(antwort);
       if (aktion === "pruefen") {
         if (antwort.verbunden) {
@@ -373,7 +374,12 @@ export default function Settings() {
         ) : tg.verbunden ? (
           <>
             <div className="flex items-center gap-2 flex-wrap mb-3">
-              <span className="text-xs text-teal flex-1">✓ Verbunden{tg.chatName ? ` mit „${tg.chatName}“` : ""}</span>
+              <span className="text-xs text-teal flex-1">
+                ✓ Verbunden{tg.chatName ? ` mit „${tg.chatName}“` : ""}
+                {tg.einwilligungAm && (
+                  <span className="text-textMuted"> · Einwilligung vom {new Date(tg.einwilligungAm).toLocaleDateString("de-DE")}</span>
+                )}
+              </span>
               <button type="button" onClick={() => telegram("test")} disabled={tgBusy} className="btn-ghost text-xs disabled:opacity-40">Test</button>
               <button type="button" onClick={() => telegram("trennen")} disabled={tgBusy} className="btn-ghost text-xs disabled:opacity-40">Trennen</button>
             </div>
@@ -429,10 +435,24 @@ export default function Settings() {
             </li>
           </ol>
         ) : (
-          <button type="button" onClick={() => telegram("code")} disabled={tgBusy}
-            className="btn-ghost text-xs border-teal/40 text-teal disabled:opacity-40">
-            {tgBusy ? "Einen Moment…" : "Telegram verbinden"}
-          </button>
+          <>
+            {/* Freiwillig war es immer — nachweisbar ist es erst mit
+                Häkchen und Zeitpunkt (migration_173). */}
+            <label className="flex items-start gap-2.5 cursor-pointer mb-3">
+              <input type="checkbox" className="mt-1" checked={tgEinwilligung}
+                onChange={(e) => setTgEinwilligung(e.target.checked)} />
+              <span className="text-[11px] text-textMuted leading-relaxed">
+                Ich bin damit einverstanden, dass die Academy mir Benachrichtigungen über Telegram schickt und dafür
+                meine Telegram-Kennung, meine Arbeitszahlen und meine Nachrichten an den Vertriebsbuddy verarbeitet.
+                Telegram sitzt ausserhalb der EU. Ich kann die Verbindung jederzeit hier wieder trennen.{" "}
+                <a href="/datenschutz" target="_blank" rel="noopener noreferrer" className="underline">Datenschutz</a>
+              </span>
+            </label>
+            <button type="button" onClick={() => telegram("code")} disabled={tgBusy || !tgEinwilligung}
+              className="btn-ghost text-xs border-teal/40 text-teal disabled:opacity-40">
+              {tgBusy ? "Einen Moment…" : "Telegram verbinden"}
+            </button>
+          </>
         )}
         {tg && tgHinweis && <p className="text-xs text-textMuted mt-3">{tgHinweis}</p>}
 
