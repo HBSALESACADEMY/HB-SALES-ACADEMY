@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
+import { briefingUmAcht } from "../../../lib/buddyBriefing";
 
 // DSGVO-Datenminimierung: reine Protokoll-/Telemetriedaten haben keinen
 // dauerhaften Geschäftszweck (anders als z.B. Kundendaten/Leads, die aktiv
@@ -25,7 +26,9 @@ const RETENTION_DAYS = {
   ai_request_log: 7,
 };
 
-export const config = { maxDuration: 30 };
+// Mehr Zeit als fürs reine Aufräumen: Im Sommer verschickt dieser Lauf
+// auch das Morgen-Briefing (siehe unten).
+export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
   const expected = `Bearer ${process.env.CRON_SECRET || ""}`;
@@ -44,7 +47,17 @@ export default async function handler(req, res) {
       if (error) { console.error(`cleanup-logs: ${table}:`, error.message); results[table] = error.message; continue; }
       results[table] = count || 0;
     }
-    return res.status(200).json({ ok: true, deleted: results });
+
+    // Dieser Lauf ist um 6 Uhr UTC — im Sommer 8 Uhr in Berlin, die Zeit
+    // fürs Morgen-Briefing. Im Winter ist es hier 7 Uhr, dann schickt
+    // briefingUmAcht nichts, und der Tagesbericht um 8 übernimmt.
+    let briefings = { gesendet: 0 };
+    try {
+      briefings = await briefingUmAcht(admin);
+    } catch (e) {
+      console.error("Morgen-Briefing fehlgeschlagen:", e.message);
+    }
+    return res.status(200).json({ ok: true, deleted: results, briefings });
   } catch (e) {
     console.error("cleanup-logs failed:", e.message);
     return res.status(500).json({ error: e.message, deleted: results });

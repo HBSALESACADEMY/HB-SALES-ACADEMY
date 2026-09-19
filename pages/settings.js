@@ -389,7 +389,7 @@ export default function Settings() {
               {[
                 ["tagesauswertung", "Tägliche Auswertung", "Montag bis Freitag morgens: deine Zahlen vom letzten Arbeitstag, verglichen mit dem Tag davor, und Lob"],
                 ["followups", "Follow-up-Erinnerungen", "Wenn dir jemand ein Follow-up zuweist, und morgens deine fälligen Follow-ups"],
-                ["briefing", "Morgen-Briefing", "Montag bis Freitag morgens deine Termine des Tages mit dem, was du vorher wissen solltest — und Knöpfe für Termine ohne Ergebnis"],
+                ["briefing", "Morgen-Briefing", "Montag bis Freitag um 8 Uhr deine Termine des Tages mit dem, was du vorher wissen solltest — und Knöpfe für Termine ohne Ergebnis"],
                 ["buddy", "Vertriebsbuddy", "Freitags dein Wochenimpuls mit deinen Zahlen und einer Frage — du kannst direkt im Chat antworten"],
                 ...(tg.istLeitung ? [["teamlage", "Teamlage (nur Leitung)", "Freitags die Zahlen deines Teams, die häufigsten Themen und worauf du achten solltest"]] : []),
               ].map(([key, label, hinweis]) => (

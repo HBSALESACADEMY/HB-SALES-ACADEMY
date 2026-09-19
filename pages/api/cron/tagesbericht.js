@@ -11,7 +11,8 @@ import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen, schickeUebungen
 import { istImpulsTag } from "../../../lib/wochenimpuls";
 import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
 import { sendeTeamlage } from "../../../lib/teamlageVersand";
-import { sendeBriefings } from "../../../lib/buddyBriefing";
+import { briefingUmAcht } from "../../../lib/buddyBriefing";
+import { berlinStunde } from "../../../lib/woche";
 import { setzeBefehle } from "../../../lib/telegramApi";
 import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
 
@@ -27,13 +28,6 @@ import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
 // 8 Uhr deutscher Zeit — beides wird akzeptiert. Ein Lauf zu einer ganz
 // anderen Stunde (versehentlicher Aufruf) sendet dagegen nicht.
 export const config = { maxDuration: 60 };
-
-function berlinStunde() {
-  // Über formatToParts statt format(): die deutsche Schreibweise hängt " Uhr"
-  // an ("09 Uhr"), daraus liesse sich keine Zahl lesen — der Bericht käme nie.
-  const teile = new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "numeric", hour12: false }).formatToParts(new Date());
-  return Number(teile.find((t) => t.type === "hour")?.value);
-}
 
 export default async function handler(req, res) {
   const erwartet = `Bearer ${process.env.CRON_SECRET || ""}`;
@@ -93,11 +87,13 @@ export default async function handler(req, res) {
       console.error("Tagesauswertungen fehlgeschlagen:", e.message);
     }
 
-    // Direkt danach das Morgen-Briefing: die Termine von heute und die
-    // Knöpfe für Termine ohne Ergebnis (lib/buddyBriefing.js).
+    // Das Morgen-Briefing soll um 8 Uhr da sein. Im Winter ist dieser Lauf
+    // um 8 — dann geht es hier raus. Im Sommer ist er um 9, und der
+    // Aufräum-Lauf hat es um 8 schon verschickt; hier kommt dann nur noch,
+    // was dort liegen blieb (lib/buddyBriefing.js, briefingUmAcht).
     let briefings = { gesendet: 0 };
     try {
-      briefings = await sendeBriefings(admin);
+      briefings = await briefingUmAcht(admin);
     } catch (e) {
       console.error("Morgen-Briefing fehlgeschlagen:", e.message);
     }

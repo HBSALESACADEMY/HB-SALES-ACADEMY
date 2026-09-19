@@ -363,7 +363,7 @@ test("Ein alter Webhook ohne Knöpfe wird von selbst neu eingerichtet", async ()
 
 test("Morgen-Briefing und Befehlsliste laufen im Morgenlauf mit", () => {
   const lauf = lies("pages/api/cron/tagesbericht.js");
-  assert.match(lauf, /sendeBriefings\(admin\)/);
+  assert.match(lauf, /briefingUmAcht\(admin\)/);
   assert.match(lauf, /setzeBefehle\(BEFEHLE\)/);
   const einstellungen = lies("pages/api/telegram-verbindung.js");
   assert.match(einstellungen, /felder\.briefing = req\.body\.briefing/);
@@ -609,4 +609,35 @@ test("Nach dem Verbinden erklärt eine zweite Nachricht, wie der Buddy funktioni
   const stelle = lib.indexOf("export async function sendeBegruessung");
   const teil = lib.slice(stelle);
   assert.ok(teil.indexOf("willkommensText(") < teil.indexOf("buddyErklaerung("));
+});
+
+// ---------------------------------------------------------------------------
+// Das Briefing um 8 Uhr, Sommer wie Winter
+
+import { berlinStunde } from "../lib/woche.js";
+import { briefingUmAcht, BRIEFING_STUNDE } from "../lib/buddyBriefing.js";
+
+test("Das Briefing kommt um 8 Uhr Berliner Zeit — im Sommer und im Winter", async () => {
+  assert.equal(BRIEFING_STUNDE, 8);
+  const plan = JSON.parse(lies("vercel.json")).crons;
+  const utcStunden = plan.map((c) => Number(c.schedule.split(" ")[1]));
+  // Sommer (MESZ) und Winter (MEZ): Einer der beiden Läufe liegt jeweils um 8.
+  for (const tag of ["2026-07-15", "2026-12-15"]) {
+    const stunden = utcStunden.map((h) => berlinStunde(new Date(`${tag}T${String(h).padStart(2, "0")}:10:00Z`)));
+    assert.ok(stunden.includes(8), `${tag}: ${stunden.join(", ")}`);
+    // Und keiner davor verschickt etwas — sonst käme es im Winter um 7.
+    assert.ok(stunden.every((s) => s >= 7));
+  }
+  // Beide Läufe fragen, ob es Zeit ist.
+  assert.match(lies("pages/api/cron/cleanup-logs.js"), /briefingUmAcht\(admin\)/);
+  assert.match(lies("pages/api/cron/tagesbericht.js"), /briefingUmAcht\(admin\)/);
+
+  // Vor 8 Uhr geht nichts raus — die Datenbank wird gar nicht erst gefragt.
+  let gefragt = false;
+  const admin = { from: () => { gefragt = true; throw new Error("sollte nicht fragen"); } };
+  const frueh = await briefingUmAcht(admin, { jetzt: new Date("2026-12-15T06:10:00Z") });
+  assert.equal(frueh.gesendet, 0);
+  assert.equal(gefragt, false);
+  assert.equal(berlinStunde(new Date("2026-07-15T06:10:00Z")), 8);
+  assert.equal(berlinStunde(new Date("2026-12-15T07:10:00Z")), 8);
 });
