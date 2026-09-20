@@ -803,3 +803,96 @@ test("Die Erklärung nennt auch den Weg zum neuen Termin", () => {
   assert.deepEqual(leseBefehl("/termine").befehl, "termine");
   assert.deepEqual(leseBefehl("/neu").befehl, "termin");
 });
+
+// ---------------------------------------------------------------------------
+// Termine über den Bot bestätigen
+
+import {
+  willBestaetigen, gemeinteStufe, offenerSchritt, bestaetigungsPatch, bestaetigungsKnoepfe,
+  leseBestaetigungsKnopf, auswahlListe, auswahlText, bearbeiteBestaetigungsKnopf,
+} from "../lib/buddyBestaetigung.js";
+
+test("Der Bot erkennt, dass jemand bestätigen will — und welche Stufe", () => {
+  assert.equal(willBestaetigen("Ich möchte einen Setting Call bestätigen"), true);
+  assert.equal(willBestaetigen("Closing bestätigt"), true);
+  assert.equal(willBestaetigen("Wie war meine Woche?"), false);
+  assert.equal(gemeinteStufe("Ich möchte einen Setting Call bestätigen"), "erstgespraech");
+  assert.equal(gemeinteStufe("Closing Call bestätigen"), "closing");
+  assert.equal(gemeinteStufe("Termin bestätigen"), null);
+});
+
+test("Zur Auswahl stehen nur eigene Termine, denen die Bestätigung fehlt", () => {
+  const leads = [
+    termin({ id: "offen", name: "Max Müller", appointment_at: "2026-09-21T09:00:00Z" }),
+    termin({ id: "schon", name: "Petra Lang", schritte: { setting_bestaetigt: { am: "2026-09-15T10:00:00Z" } } }),
+    termin({ id: "closing", name: "Anna Weber", termin_art: "closing", appointment_at: "2026-09-22T09:00:00Z" }),
+    termin({ id: "eigener", name: "Zahnarzt", kein_kundentermin: true }),
+    termin({ id: "folge", name: "Hans Kunz", termin_art: "folgetermin" }),
+  ];
+  // Nach Zeitpunkt sortiert: der nächste zuerst.
+  assert.deepEqual(auswahlListe(leads).map((l) => l.id), ["offen", "closing"]);
+  assert.deepEqual(auswahlListe(leads, "", "closing").map((l) => l.id), ["closing"]);
+  // Steht ein Name in der Nachricht, bleibt nur er übrig.
+  assert.deepEqual(auswahlListe(leads, "Weber bestätigen").map((l) => l.id), ["closing"]);
+  // Ein Folgetermin hat keinen Bestätigungs-Haken, ein eigener Eintrag auch nicht.
+  assert.equal(offenerSchritt(leads.find((l) => l.id === "folge")), null);
+  assert.equal(offenerSchritt(leads.find((l) => l.id === "eigener")), null);
+  assert.equal(offenerSchritt(leads.find((l) => l.id === "schon")), null);
+  assert.equal(offenerSchritt(leads.find((l) => l.id === "offen")).key, "setting_bestaetigt");
+
+  const text = auswahlText(auswahlListe(leads));
+  assert.match(text, /^Welchen Termin willst du bestätigen\?/);
+  assert.match(text, /Setting Call · Max Müller \(Muster GmbH\)/);
+  assert.match(auswahlText([], "erstgespraech"), /fehlt keine Bestätigung/);
+
+  const knoepfe = bestaetigungsKnoepfe(leads);
+  assert.equal(knoepfe.inline_keyboard.length, 2);
+  assert.equal(leseBestaetigungsKnopf(`s:${LEAD}`), LEAD);
+  assert.equal(leseBestaetigungsKnopf("s:kaputt"), null);
+});
+
+test("Der Haken landet an der richtigen Stelle, und nur im eigenen Termin", async () => {
+  const lead = termin();
+  const { schritt, patch } = bestaetigungsPatch(lead, ICH);
+  assert.equal(schritt.key, "setting_bestaetigt");
+  assert.equal(patch.schritte.setting_bestaetigt.von, ICH);
+  assert.ok(patch.schritte.setting_bestaetigt.am);
+  // Ein Closing Call bekommt den Closing-Haken.
+  assert.equal(bestaetigungsPatch(termin({ termin_art: "closing" }), ICH).schritt.key, "closing_bestaetigt");
+  assert.equal(bestaetigungsPatch(termin({ schritte: { setting_bestaetigt: { am: "x" } } }), ICH), null);
+
+  const knopf = { id: "k", daten: `s:${LEAD}`, chat_id: "1", nachricht_id: 3, nachricht_text: "☀️ Guten Morgen" };
+  const eigen = eintragsDatenbank({ verknuepfung: { user_id: ICH }, lead: termin() });
+  assert.equal((await bearbeiteBestaetigungsKnopf(eigen.admin, knopf)).ok, true);
+  assert.ok(eigen.aenderungen.find((a) => a.tabelle === "leads").patch.schritte.setting_bestaetigt);
+
+  const fremd = eintragsDatenbank({ verknuepfung: { user_id: ANDERE }, lead: termin() });
+  assert.equal((await bearbeiteBestaetigungsKnopf(fremd.admin, knopf)).ok, false);
+  assert.equal(fremd.aenderungen.length, 0);
+
+  const schon = eintragsDatenbank({ verknuepfung: { user_id: ICH }, lead: termin({ schritte: { setting_bestaetigt: { am: "x" } } }) });
+  assert.equal((await bearbeiteBestaetigungsKnopf(schon.admin, knopf)).ok, false);
+  assert.equal(schon.aenderungen.length, 0);
+});
+
+test("Bestätigen geht auch als Satz — und meldet sich wie aus der Academy", () => {
+  const lead = termin();
+  const patch = eintragPatch(lead, { ergebnis: "bestaetigt" }, ICH, "2026-09-15");
+  assert.ok(patch.schritte.setting_bestaetigt.am);
+  // Kein Ergebnis und kein Statuswechsel: Der Termin steht ja noch aus.
+  assert.equal(patch.outcome, undefined);
+  assert.equal(patch.status, undefined);
+  assert.match(vorschlagText(lead, { ergebnis: "bestaetigt" }), /• Setting Call bestätigt/);
+  // Ein Folgetermin hat keinen Haken — dann gibt es nichts zu tun.
+  assert.equal(hatEtwasZuTun({ ergebnis: "bestaetigt" }, termin({ termin_art: "folgetermin" })), false);
+  assert.equal(hatEtwasZuTun({ ergebnis: "bestaetigt" }, lead), true);
+
+  const quelle = lies("lib/buddyEintrag.js");
+  assert.match(quelle, /bestaetigt.*Der Termin ist noch nicht gewesen/);
+  assert.match(quelle, /meldeBestaetigung\(admin/);
+  // Der Weg über den Satz und der über die Auswahl hängen am Eingang.
+  assert.match(lies("lib/buddy.js"), /willBestaetigen\(text\) && await zeigeBestaetigungsAuswahl/);
+  assert.match(lies("pages/api/telegram-eingang.js"), /startsWith\("s:"\)\) await bearbeiteBestaetigungsKnopf/);
+  // Und das Briefing bietet die Knöpfe gleich mit an.
+  assert.match(lies("lib/buddyBriefing.js"), /bestaetigungsKnoepfe\(heute\)/);
+});
