@@ -509,7 +509,12 @@ function eintragsDatenbank({ leads = [], verknuepfung = null, lead = null }) {
       select: () => k, eq: () => k, is: () => k, gte: () => k, lt: () => k, in: () => k, order: () => k,
       range: () => Promise.resolve({ data: tabelle === "leads" ? leads : [], error: null }),
       limit: () => Promise.resolve({ data: verknuepfung ? [verknuepfung] : [], error: null }),
-      maybeSingle: () => Promise.resolve({ data: tabelle === "leads" ? lead : tabelle === "profiles" ? { full_name: "Anna" } : {}, error: null }),
+      maybeSingle: () => Promise.resolve({
+        data: tabelle === "leads" ? lead
+          : tabelle === "profiles" ? { id: verknuepfung?.user_id || ICH, full_name: "Anna", organization_id: ORG, role: "member" }
+            : {},
+        error: null,
+      }),
       update: (patch) => {
         aenderungen.push({ tabelle, patch });
         const weiter = { eq: () => Promise.resolve({ error: null }) };
@@ -579,7 +584,7 @@ test("Der Eintrags-Versuch kommt vor dem Gesprächsverlauf, und Knöpfe finden i
   assert.ok(eingang.indexOf("versucheEintrag(") < eingang.indexOf('from("buddy_nachrichten")'));
   const route = lies("pages/api/telegram-eingang.js");
   assert.match(route, /knopf\.daten\.startsWith\("b:"\)\) await bearbeiteEintragKnopf/);
-  assert.match(lies("lib/buddyBefehle.js"), /\.in\("modus", \["rollenspiel", "eintrag", "neuerTermin"\]\)/);
+  assert.match(lies("lib/buddyBefehle.js"), /\.in\("modus", \["rollenspiel", "eintrag", "neuerTermin", "stufe"\]\)/);
 });
 
 test("Nach dem Verbinden erklärt eine zweite Nachricht, wie der Buddy funktioniert", () => {
@@ -895,4 +900,102 @@ test("Bestätigen geht auch als Satz — und meldet sich wie aus der Academy", (
   assert.match(lies("pages/api/telegram-eingang.js"), /startsWith\("s:"\)\) await bearbeiteBestaetigungsKnopf/);
   // Und das Briefing bietet die Knöpfe gleich mit an.
   assert.match(lies("lib/buddyBriefing.js"), /bestaetigungsKnoepfe\(heute\)/);
+});
+
+// ---------------------------------------------------------------------------
+// Eine Stufe weiter, ohne den Namen zu tippen
+
+import {
+  willStufe, kandidaten, auswahlText as stufenAuswahlText, auswahlKnoepfe as stufenKnoepfe,
+  leseStufenKnopf, bestaetigungsFrage, darfRuecken, bearbeiteStufenKnopf, ZIELE,
+} from "../lib/buddyStufe.js";
+
+test("„Closing Call ausgemacht“ meint die nächste Stufe — ein Bericht nicht", () => {
+  assert.equal(willStufe("Closing Call ausgemacht"), "closing");
+  assert.equal(willStufe("Hab mit Müller einen Folgetermin vereinbart"), "folgetermin");
+  assert.equal(willStufe("Check-in geplant"), "checkin");
+  assert.equal(willStufe("Setting Call ausgemacht"), "erstgespraech");
+  // Ohne Vereinbarung ist es ein Bericht über ein Gespräch.
+  assert.equal(willStufe("Der Closing Call lief gut"), null);
+  assert.equal(willStufe("Wie bereite ich einen Closing Call vor?"), null);
+});
+
+test("Zur Auswahl steht, wofür dieser Schritt der nächste wäre", () => {
+  const jetzt = new Date("2026-09-15T10:00:00Z");
+  const leads = [
+    termin({ id: "setting", name: "Max Müller", appointment_at: "2026-09-14T10:00:00Z" }),
+    termin({ id: "folge", name: "Anna Weber", termin_art: "folgetermin", appointment_at: "2026-09-10T10:00:00Z" }),
+    termin({ id: "closing", name: "Petra Lang", termin_art: "closing", appointment_at: "2026-09-12T10:00:00Z" }),
+    termin({ id: "kunde", name: "Hans Kunz", termin_art: "closing", outcome: "kunde", appointment_at: "2026-09-11T10:00:00Z" }),
+    termin({ id: "eigener", name: "Zahnarzt", kein_kundentermin: true }),
+  ];
+  // Für ein Closing kommen Setting Calls und Folgetermine infrage.
+  assert.deepEqual(kandidaten(leads, "closing", "", jetzt).map((l) => l.id), ["setting", "folge"]);
+  // Ein Check-in erst nach dem Abschluss.
+  assert.deepEqual(kandidaten(leads, "checkin", "", jetzt).map((l) => l.id), ["kunde"]);
+  // Der zuletzt geführte Termin steht oben.
+  assert.equal(kandidaten(leads, "folgetermin", "", jetzt)[0].id, "setting");
+  // Steht ein Name im Satz, bleibt nur er übrig.
+  assert.deepEqual(kandidaten(leads, "closing", "Closing mit Weber ausgemacht", jetzt).map((l) => l.id), ["folge"]);
+  // Eigene Einträge sind keine Kundentermine.
+  assert.ok(!kandidaten(leads, "closing", "", jetzt).some((l) => l.id === "eigener"));
+
+  const text = stufenAuswahlText("closing", kandidaten(leads, "closing", "", jetzt));
+  assert.match(text, /^Für wen ist der Closing Call\?/);
+  assert.match(text, /Setting Call 14\.9\., 12:00 · Max Müller/);
+  assert.match(stufenAuswahlText("checkin", []), /keinen passenden Kontakt/);
+  assert.equal(stufenKnoepfe([leads[0]]).inline_keyboard[0][0].callback_data, "w:setting");
+  assert.deepEqual(leseStufenKnopf(`w:${LEAD}`), { leadId: LEAD });
+  assert.deepEqual(leseStufenKnopf("w:j"), { antwort: "j" });
+  assert.equal(leseStufenKnopf("w:irgendwas"), null);
+});
+
+test("Die Rückfrage zeigt alt und neu, und weiterrücken darf nur, wer darf", () => {
+  const lead = termin({ appointment_at: "2026-09-14T10:00:00Z" });
+  const frage = bestaetigungsFrage(lead, "closing", { zeitpunkt: "2026-09-24T12:00:00.000Z" });
+  assert.match(frage, /• Bisher: Setting Call/);
+  assert.match(frage, /• Neu: Closing Call/);
+
+  assert.equal(darfRuecken(lead, { id: ICH, organization_id: ORG, role: "member" }), true);
+  assert.equal(darfRuecken(lead, { id: ANDERE, organization_id: ORG, role: "member" }), false);
+  // Die Leitung darf im eigenen Haus — wie beim Ergebnis.
+  assert.equal(darfRuecken(lead, { id: ANDERE, organization_id: ORG, role: "manager" }), true);
+  assert.equal(darfRuecken(lead, { id: ANDERE, organization_id: "fremd", role: "manager" }), false);
+});
+
+test("Erst nach dem Ja rückt der Termin weiter — mit Verlauf", async () => {
+  const zeit = { datum: "2026-09-24", uhrzeit: "14:00", zeitpunkt: "2026-09-24T12:00:00.000Z" };
+  const knopf = (daten) => ({ id: "k", daten, chat_id: "1", nachricht_id: 4, nachricht_text: "📋 Soll ich das so eintragen?" });
+  const offen = { user_id: ICH, modus: "stufe", modus_seit: "2026-09-15T09:50:00Z", modus_daten: { ziel: "closing", leadId: LEAD, zeit } };
+
+  const ja = eintragsDatenbank({ verknuepfung: offen, lead: termin({ appointment_at: "2026-09-14T10:00:00Z" }) });
+  const ergebnis = await bearbeiteStufenKnopf(ja.admin, knopf("w:j"));
+  assert.equal(ergebnis.eingetragen, true);
+  const patch = ja.aenderungen.find((a) => a.tabelle === "leads").patch;
+  assert.equal(patch.termin_art, "closing");
+  assert.equal(patch.appointment_at, zeit.zeitpunkt);
+  assert.equal(patch.status, "geplant");
+  assert.equal(patch.stufen_verlauf[0].art, "erstgespraech");
+  assert.equal(patch.stufen_verlauf[0].am, "2026-09-14T10:00:00Z");
+
+  // Abbrechen ändert nichts.
+  const nein = eintragsDatenbank({ verknuepfung: offen, lead: termin() });
+  await bearbeiteStufenKnopf(nein.admin, knopf("w:n"));
+  assert.ok(!nein.aenderungen.some((a) => a.tabelle === "leads"));
+
+  // Fremder Termin ohne Führungsrolle: nichts.
+  const fremd = eintragsDatenbank({ verknuepfung: offen, lead: termin({ created_by: ANDERE, organization_id: "fremd" }) });
+  assert.equal((await bearbeiteStufenKnopf(fremd.admin, knopf("w:j"))).ok, false);
+  assert.ok(!fremd.aenderungen.some((a) => a.tabelle === "leads"));
+
+  // Ohne offenen Dialog passiert nichts.
+  const ohne = eintragsDatenbank({ verknuepfung: { ...offen, modus: null }, lead: termin() });
+  assert.equal((await bearbeiteStufenKnopf(ohne.admin, knopf("w:j"))).ok, false);
+  assert.ok(!ohne.aenderungen.some((a) => a.tabelle === "leads"));
+
+  // Und der Weg dorthin hängt am Eingang.
+  assert.match(lies("lib/buddy.js"), /willStufe\(text\) && await zeigeStufenAuswahl/);
+  assert.match(lies("lib/buddy.js"), /v\.modus === "stufe"/);
+  assert.match(lies("pages/api/telegram-eingang.js"), /startsWith\("w:"\)\) await bearbeiteStufenKnopf/);
+  assert.ok(Object.keys(ZIELE).length >= 4);
 });
