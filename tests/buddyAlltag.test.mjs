@@ -787,14 +787,19 @@ test("Ein Termin aus dem Chat meldet sich wie einer aus der Academy", () => {
   const buddy = lies("lib/buddy.js");
   assert.match(buddy, /v\.modus === "neuerTermin"/);
   assert.match(buddy, /willNeuenTermin\(text\)/);
-  assert.match(lies("lib/buddyBefehle.js"), /case "neu":/);
+  assert.match(lies("lib/buddyBefehle.js"), /case "termin":/);
   assert.match(lies("pages/api/telegram-eingang.js"), /startsWith\("n:"\)\) await bearbeiteNeuerTerminKnopf/);
 });
 
 test("Die Erklärung nennt auch den Weg zum neuen Termin", () => {
   const text = buddyErklaerung({ istLeitung: false });
   assert.match(text, /➕ Neuen Termin anlegen/);
-  assert.match(text, /„neuer Termin“ oder \/neu/);
+  assert.match(text, /„neuer Termin“ oder \/termin/);
   assert.ok(text.length < 4000);
-  assert.match(hilfeText(false), /\/neu — Neuen Termin anlegen/);
+  assert.match(hilfeText(false), /\/termin — Neuen Termin anlegen \(ich frage alles ab\)/);
+  // Im Menü stehen beide, und sie sagen, was sie tun.
+  assert.match(hilfeText(false), /\/termine — Deine Termine heute/);
+  assert.deepEqual(leseBefehl("/termin Berger").befehl, "termin");
+  assert.deepEqual(leseBefehl("/termine").befehl, "termine");
+  assert.deepEqual(leseBefehl("/neu").befehl, "termin");
 });
