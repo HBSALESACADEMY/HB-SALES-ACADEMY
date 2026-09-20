@@ -579,7 +579,7 @@ test("Der Eintrags-Versuch kommt vor dem Gesprächsverlauf, und Knöpfe finden i
   assert.ok(eingang.indexOf("versucheEintrag(") < eingang.indexOf('from("buddy_nachrichten")'));
   const route = lies("pages/api/telegram-eingang.js");
   assert.match(route, /knopf\.daten\.startsWith\("b:"\)\) await bearbeiteEintragKnopf/);
-  assert.match(lies("lib/buddyBefehle.js"), /\.in\("modus", \["rollenspiel", "eintrag"\]\)/);
+  assert.match(lies("lib/buddyBefehle.js"), /\.in\("modus", \["rollenspiel", "eintrag", "neuerTermin"\]\)/);
 });
 
 test("Nach dem Verbinden erklärt eine zweite Nachricht, wie der Buddy funktioniert", () => {
@@ -658,4 +658,143 @@ test("Im Gespräch antwortet der Buddy auf die Frage, nicht auf die Zahlen", () 
 
   // Fehlende Kennzahlen werden zu 0, nicht zu "undefined".
   assert.deepEqual(zahlenBlock({ anwahlen: 5 }, {}), ["Anwahlen: 5 (Vorwoche: 0) ↑"]);
+});
+
+// ---------------------------------------------------------------------------
+// Neuen Termin im Chat anlegen
+
+import {
+  willNeuenTermin, leseZeitpunkt, fragenFuer, naechsteFrage, leseAntwort, zusammenfassung,
+  baueTermin, ANLEGEN_KNOEPFE,
+} from "../lib/buddyNeuerTermin.js";
+
+test("Der Buddy erkennt, dass ein neuer Termin gemeint ist", () => {
+  assert.equal(willNeuenTermin("Ich will einen neuen Termin anlegen"), true);
+  assert.equal(willNeuenTermin("neuer Kontakt bitte"), true);
+  assert.equal(willNeuenTermin("Termin anlegen"), true);
+  assert.equal(willNeuenTermin("Wie lief mein Termin gestern?"), false);
+  assert.equal(willNeuenTermin("Müller: Kunde geworden"), false);
+});
+
+test("Datum und Uhrzeit rechnet die Academy, nicht die KI", () => {
+  // Dienstag, 15. September 2026.
+  const heute = "2026-09-15";
+  assert.deepEqual(leseZeitpunkt("Montag 11 Uhr", heute), { datum: "2026-09-21", uhrzeit: "11:00", zeitpunkt: "2026-09-21T09:00:00.000Z" });
+  assert.equal(leseZeitpunkt("morgen 9:30", heute).datum, "2026-09-16");
+  assert.equal(leseZeitpunkt("heute um 17", heute).uhrzeit, "17:00");
+  assert.equal(leseZeitpunkt("23.9. 14:00", heute).datum, "2026-09-23");
+  assert.equal(leseZeitpunkt("23.09.2027 14 Uhr", heute).datum, "2027-09-23");
+  // Ein Datum darf nie als Uhrzeit gelesen werden ("23.09" wäre 23:09).
+  assert.equal(leseZeitpunkt("23.09.2027 14 Uhr", heute).uhrzeit, "14:00");
+  assert.equal(leseZeitpunkt("1.10.2026 10.30 Uhr", heute).uhrzeit, "10:30");
+  assert.equal(leseZeitpunkt("1.10.26 9 Uhr", heute).datum, "2026-10-01");
+  // Ein Datum ohne Jahr, das schon vorbei ist, meint das nächste Jahr.
+  assert.equal(leseZeitpunkt("3.2. 10:00", heute).datum, "2027-02-03");
+  // Winterzeit: 11 Uhr in Berlin ist 10 Uhr UTC.
+  assert.equal(leseZeitpunkt("15.12. 11:00", heute).zeitpunkt, "2026-12-15T10:00:00.000Z");
+  // Ohne Uhrzeit kein Termin — und kein erfundener.
+  assert.equal(leseZeitpunkt("Montag", heute), null);
+  assert.equal(leseZeitpunkt("irgendwann", heute), null);
+  assert.equal(leseZeitpunkt("Montag 25 Uhr", heute), null);
+});
+
+test("Gefragt wird genau das, was das Formular der Organisation verlangt", () => {
+  // Standard: Telefon und E-Mail sind Pflicht, Firma und Notiz freiwillig.
+  const standard = fragenFuer({});
+  assert.deepEqual(standard.map((f) => f.key), ["name", "termin", "phone", "email", "company", "notes"]);
+  assert.equal(standard.find((f) => f.key === "company").pflicht, false);
+
+  // Ohne E-Mail-Pflicht fällt die Frage weg; eigene Pflichtfelder kommen dazu.
+  const eigene = fragenFuer({
+    lead_core_required: { phone: true, email: false },
+    lead_field_config: [
+      { key: "company", label: "Firma", type: "text", required: true },
+      { key: "branche", label: "Branche", type: "text", required: true },
+      { key: "is_decision_maker", label: "Ist Entscheider", type: "checkbox", required: true },
+      { key: "website", label: "Webseite", type: "text" },
+    ],
+  });
+  assert.deepEqual(eigene.map((f) => f.key), ["name", "termin", "phone", "company", "branche", "is_decision_maker"]);
+  assert.match(eigene.find((f) => f.key === "is_decision_maker").frage, /ja oder nein/);
+
+  const werte = { name: "Anna", termin: {} };
+  assert.equal(naechsteFrage(eigene, werte).key, "phone");
+  assert.equal(naechsteFrage(eigene, { name: "A", termin: {}, phone: "1", company: null, branche: "Bau", is_decision_maker: false }), null);
+});
+
+test("Antworten werden geprüft, Freiwilliges darf übersprungen werden", () => {
+  const heute = "2026-09-15";
+  const frage = (key, extra = {}) => ({ key, label: key, pflicht: true, ...extra });
+  assert.equal(leseAntwort(frage("name"), "  Max Müller ").wert, "Max Müller");
+  assert.match(leseAntwort(frage("termin"), "irgendwann", heute).fehler, /nicht als Zeitpunkt verstanden/);
+  assert.equal(leseAntwort(frage("termin"), "Montag 11 Uhr", heute).wert.uhrzeit, "11:00");
+  assert.match(leseAntwort(frage("email"), "keine-mail").fehler, /E-Mail-Adresse/);
+  assert.equal(leseAntwort(frage("email"), "max@firma.de").wert, "max@firma.de");
+  assert.match(leseAntwort(frage("phone"), "abc").fehler, /Telefonnummer/);
+  assert.equal(leseAntwort(frage("is_decision_maker", { typ: "checkbox" }), "ja").wert, true);
+  assert.equal(leseAntwort(frage("is_decision_maker", { typ: "checkbox" }), "nein").wert, false);
+  assert.match(leseAntwort(frage("is_decision_maker", { typ: "checkbox" }), "vielleicht").fehler, /ja oder nein/);
+  // Pflicht lässt sich nicht überspringen, Freiwilliges schon.
+  assert.equal(leseAntwort(frage("company"), "–").wert, "–");
+  assert.equal(leseAntwort({ key: "company", label: "Firma", pflicht: false }, "–").wert, null);
+});
+
+test("Erst die Zusammenfassung, dann der Knopf — und die Zeile für die Datenbank stimmt", () => {
+  const fragen = fragenFuer({ lead_field_config: [{ key: "company", label: "Firma", type: "text" }, { key: "is_decision_maker", label: "Ist Entscheider", type: "checkbox", required: true }] });
+  const werte = {
+    name: "Max Müller",
+    termin: { datum: "2026-09-21", uhrzeit: "11:00", zeitpunkt: "2026-09-21T09:00:00.000Z" },
+    phone: "0170 1234567",
+    email: "max@firma.de",
+    company: "Müller Bau",
+    is_decision_maker: true,
+  };
+  const text = zusammenfassung(fragen, werte);
+  assert.match(text, /^📋 Soll ich diesen Termin anlegen\?/);
+  assert.match(text, /• Termin: Montag, 21\.9\., 11:00 Uhr/);
+  assert.match(text, /• Firma: Müller Bau/);
+  assert.match(text, /• Ist Entscheider: Ja/);
+  assert.match(text, /Stufe: Setting Call/);
+  assert.deepEqual(ANLEGEN_KNOEPFE.inline_keyboard[0].map((k) => k.callback_data), ["n:j", "n:n"]);
+
+  const { zeile, felder } = baueTermin(fragen, werte, { userId: ICH, orgId: ORG });
+  assert.equal(zeile.created_by, ICH);
+  assert.equal(zeile.organization_id, ORG);
+  assert.equal(zeile.name, "Max Müller");
+  assert.equal(zeile.appointment_at, "2026-09-21T09:00:00.000Z");
+  assert.equal(zeile.termin_art, "erstgespraech");
+  // Reservierte Felder gehen in ihre Spalte, alles andere in custom_fields.
+  assert.equal(zeile.company, "Müller Bau");
+  assert.equal(zeile.is_decision_maker, true);
+  assert.deepEqual(zeile.custom_fields, {});
+  assert.ok(felder.some((f) => f.key === "company" && f.value === "Müller Bau"));
+
+  const mitEigenem = baueTermin(
+    fragenFuer({ lead_field_config: [{ key: "branche", label: "Branche", type: "text", required: true }] }),
+    { ...werte, branche: "Handwerk" }, { userId: ICH, orgId: ORG },
+  );
+  assert.deepEqual(mitEigenem.zeile.custom_fields, { branche: "Handwerk" });
+});
+
+test("Ein Termin aus dem Chat meldet sich wie einer aus der Academy", () => {
+  // Mail an die Leitung und Meldung in die Gruppe stehen an einer Stelle.
+  const gemeinsam = lies("lib/terminAngelegt.js");
+  assert.match(gemeinsam, /notifyOrgManagers\(admin, orgId/);
+  assert.match(gemeinsam, /org\?\.telegram_chat_id/);
+  assert.match(lies("pages/api/lead-created.js"), /meldeNeuenTermin\(admin, \{/);
+  assert.match(lies("lib/buddyNeuerTermin.js"), /await meldeNeuenTermin\(admin, \{/);
+  // Der Dialog hängt am Eingang und am Befehl /neu.
+  const buddy = lies("lib/buddy.js");
+  assert.match(buddy, /v\.modus === "neuerTermin"/);
+  assert.match(buddy, /willNeuenTermin\(text\)/);
+  assert.match(lies("lib/buddyBefehle.js"), /case "neu":/);
+  assert.match(lies("pages/api/telegram-eingang.js"), /startsWith\("n:"\)\) await bearbeiteNeuerTerminKnopf/);
+});
+
+test("Die Erklärung nennt auch den Weg zum neuen Termin", () => {
+  const text = buddyErklaerung({ istLeitung: false });
+  assert.match(text, /➕ Neuen Termin anlegen/);
+  assert.match(text, /„neuer Termin“ oder \/neu/);
+  assert.ok(text.length < 4000);
+  assert.match(hilfeText(false), /\/neu — Neuen Termin anlegen/);
 });

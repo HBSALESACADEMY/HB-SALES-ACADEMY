@@ -6,6 +6,7 @@ import { beantworteEingang, beantworteBefehl } from "../../lib/buddy";
 import { leseBefehl } from "../../lib/buddyBefehle";
 import { bearbeiteErgebnisKnopf } from "../../lib/buddyErgebnis";
 import { bearbeiteEintragKnopf } from "../../lib/buddyEintrag";
+import { bearbeiteNeuerTerminKnopf } from "../../lib/buddyNeuerTermin";
 
 // Der Eingang: Telegram meldet hier jede Nachricht, sobald sie geschrieben
 // wird. Damit antwortet der Vertriebsbuddy in Sekunden, statt bis zum
@@ -51,6 +52,7 @@ export default async function handler(req, res) {
     // Morgen-Briefing.
     if (knopf) {
       if (knopf.daten.startsWith("b:")) await bearbeiteEintragKnopf(admin, knopf);
+      else if (knopf.daten.startsWith("n:")) await bearbeiteNeuerTerminKnopf(admin, knopf);
       else await bearbeiteErgebnisKnopf(admin, knopf);
       return res.status(200).json({ ok: true, knopf: true });
     }
