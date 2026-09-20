@@ -1089,3 +1089,85 @@ test("Ein Termin lässt sich auch nur verschieben", async () => {
   assert.equal(patch.termin_art, undefined);
   assert.equal(patch.stufen_verlauf, undefined);
 });
+
+// ---------------------------------------------------------------------------
+// Wenn etwas fehlt, sagt der Bot es
+
+import { setzeModus, fehltMigration, MIGRATION_FEHLT } from "../lib/buddyModus.js";
+import { stelleWebhookSicherEinmal, vergissWebhookPruefung } from "../lib/telegramWebhook.js";
+
+test("Fehlt die Datenbank-Änderung, schweigt der Bot nicht", async () => {
+  assert.equal(fehltMigration({ message: 'column leads.modus does not exist' }), true);
+  assert.equal(fehltMigration({ message: "Netzwerkfehler" }), false);
+  assert.match(MIGRATION_FEHLT, /migration_175/);
+
+  // Schlägt das Speichern fehl, geht eine Erklärung in den Chat.
+  const gesendet = [];
+  const admin = {
+    from: () => ({
+      update: () => ({ eq: () => Promise.resolve({ error: { message: 'column "modus" does not exist' } }) }),
+      select: () => ({ eq: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
+    }),
+  };
+  const v = { user_id: ICH, chat_id: null };
+  // Ohne chat_id verschickt sendePersoenlich nichts — geprüft wird der Rückgabewert.
+  assert.equal(await setzeModus(admin, v, "stufe", {}), false);
+  assert.equal(gesendet.length, 0);
+
+  // Kein Modul schreibt den Dialogstand noch an der gemeinsamen Stelle vorbei.
+  ["lib/buddyStufe.js", "lib/buddyNeuerTermin.js", "lib/buddyBefehle.js", "lib/buddyEintrag.js"].forEach((datei) => {
+    assert.ok(!/async function setzeModus/.test(lies(datei)), datei);
+    assert.match(lies(datei), /from "\.\/buddyModus\.js"/, datei);
+  });
+});
+
+test("Der Webhook zieht fehlende Meldungsarten von selbst nach", async () => {
+  vergissWebhookPruefung();
+  let aufrufe = 0;
+  const fetchFn = async (url) => {
+    aufrufe += 1;
+    return { json: async () => ({ ok: true, result: { url: "https://academy.example/api/telegram-eingang", allowed_updates: MELDUNGSARTEN } }) };
+  };
+  const optionen = { token: "t", appUrl: "https://academy.example", geheimnis: "g", fetchFn };
+  await stelleWebhookSicherEinmal(optionen);
+  await stelleWebhookSicherEinmal(optionen);
+  // Nur einmal je Instanz, nicht bei jeder Nachricht.
+  assert.equal(aufrufe, 1);
+  vergissWebhookPruefung();
+
+  assert.match(lies("pages/api/telegram-eingang.js"), /eingang\.art === "message"\) await stelleWebhookSicherEinmal\(\)/);
+});
+
+test("Die Erklärung geht einmal an alle — und an niemanden zweimal", async () => {
+  const { nachgereichtText, sendeErklaerungen } = await import("../lib/buddyErklaerungVersand.js");
+  assert.match(nachgereichtText(false), /^Kurz in eigener Sache/);
+  assert.match(nachgereichtText(false), /So funktioniert dein Vertriebsbuddy/);
+  assert.match(nachgereichtText(true), /\/gespraech/);
+
+  // Wer sie schon hat, bekommt nichts mehr.
+  const zeilen = [
+    { user_id: ICH, chat_id: null, erklaerung_am: null },
+    { user_id: ANDERE, chat_id: null, erklaerung_am: "2026-09-18T07:00:00Z" },
+  ];
+  const gefragt = [];
+  const admin = {
+    from: (tabelle) => {
+      const k = {
+        select: () => k, not: () => k, eq: () => k, in: () => Promise.resolve({ data: [], error: null }),
+        limit: () => Promise.resolve({ data: tabelle === "telegram_verknuepfungen" ? zeilen : [], error: null }),
+        update: (patch) => { gefragt.push(patch); return { eq: () => Promise.resolve({ error: null }) }; },
+      };
+      return k;
+    },
+  };
+  const ergebnis = await sendeErklaerungen(admin);
+  // Ohne Telegram-Schlüssel geht nichts raus — gezählt wird trotzdem nichts Falsches.
+  assert.equal(ergebnis.gesendet, 0);
+
+  // Neu Verbundene bekommen sie mit der Begrüssung und werden vermerkt.
+  const begruessung = lies("lib/telegramBegruessung.js");
+  assert.match(begruessung, /erklaerung_am: new Date\(\)\.toISOString\(\)/);
+  // Und der Morgenlauf reicht sie nach.
+  assert.match(lies("pages/api/cron/tagesbericht.js"), /sendeErklaerungen\(admin\)/);
+  assert.match(lies("supabase/migration_176_buddy_erklaerung.sql"), /add column if not exists erklaerung_am timestamptz/);
+});

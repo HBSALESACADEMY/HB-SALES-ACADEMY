@@ -14,6 +14,7 @@ import { sendeTeamlage } from "../../../lib/teamlageVersand";
 import { briefingUmAcht } from "../../../lib/buddyBriefing";
 import { berlinStunde } from "../../../lib/woche";
 import { setzeBefehle } from "../../../lib/telegramApi";
+import { sendeErklaerungen } from "../../../lib/buddyErklaerungVersand";
 import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
 
 // Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
@@ -118,6 +119,10 @@ export default async function handler(req, res) {
       // Die Kurzbefehle (/heute, /rollenspiel …) — falls sich die Liste geändert hat.
       await setzeBefehle(BEFEHLE);
       await raeumeRollenspieleAuf(admin);
+      // Einmalig: Wer schon verbunden war, bevor es den Buddy in dieser
+      // Form gab, bekommt seine Erklärung nachgereicht.
+      const erklaerungen = await sendeErklaerungen(admin);
+      buddy.erklaerungen = erklaerungen.gesendet || 0;
       if (istImpulsTag()) {
         // Erst das Gespräch der Woche auswerten, dann den neuen Impuls —
         // so kann er an die Vorwoche anknüpfen.

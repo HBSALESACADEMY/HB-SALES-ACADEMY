@@ -1,5 +1,5 @@
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
-import { geheimnisPasst, leseUpdate, verbindungsCodeAus } from "../../lib/telegramWebhook";
+import { geheimnisPasst, leseUpdate, verbindungsCodeAus, stelleWebhookSicherEinmal } from "../../lib/telegramWebhook";
 import { codeGueltig } from "../../lib/telegramPersoenlich";
 import { sendeBegruessung } from "../../lib/telegramBegruessung";
 import { beantworteEingang, beantworteBefehl } from "../../lib/buddy";
@@ -60,6 +60,11 @@ export default async function handler(req, res) {
       else await bearbeiteErgebnisKnopf(admin, knopf);
       return res.status(200).json({ ok: true, knopf: true });
     }
+
+    // Kommt eine Nachricht an, läuft der Webhook — aber vielleicht noch
+    // ohne die Knöpfe. Einmal je Instanz nachziehen, damit ein Tippen
+    // nicht ins Leere läuft.
+    if (eingang.art === "message") await stelleWebhookSicherEinmal();
 
     if (eingang.chat_typ === "private" && eingang.text) {
       const code = verbindungsCodeAus(eingang.text);
