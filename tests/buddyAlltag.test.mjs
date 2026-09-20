@@ -19,6 +19,7 @@ import { nameAusFrage, findePerson, vorbereitungsText, fragenOhneKI } from "../l
 import { zielZeile } from "../lib/buddyZiele.js";
 import { leseUpdate, stelleWebhookSicher, MELDUNGSARTEN } from "../lib/telegramWebhook.js";
 import { leereZahlen } from "../lib/tagesauswertung.js";
+import { SCHRITTE } from "../lib/terminArt.js";
 
 const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
 
@@ -852,7 +853,8 @@ test("Zur Auswahl stehen nur eigene Termine, denen die Bestätigung fehlt", () =
 
   const knoepfe = bestaetigungsKnoepfe(leads);
   assert.equal(knoepfe.inline_keyboard.length, 2);
-  assert.equal(leseBestaetigungsKnopf(`s:${LEAD}`), LEAD);
+  assert.deepEqual(leseBestaetigungsKnopf(`s:${LEAD}`), { leadId: LEAD, schritt: null });
+  assert.equal(leseBestaetigungsKnopf(`s:${LEAD}:pu`).schritt.key, "projektumsetzung");
   assert.equal(leseBestaetigungsKnopf("s:kaputt"), null);
 });
 
@@ -1018,4 +1020,72 @@ test("Geht es um einen Termin, bleibt der Buddy beim Termin", () => {
   assert.match(buddy, /umEinenTermin \? \["", \.\.\.BEIM_TERMIN_BLEIBEN\] : \[\]/);
   // Und "übermittelt" ist genauso verboten wie "eingetragen".
   assert.match(buddy, /notiert, übermittelt, weitergegeben oder vorgemerkt/);
+});
+
+// ---------------------------------------------------------------------------
+// Jeder Schritt am Termin, auch im Chat
+
+import {
+  gemeinterSchritt, willHaken, kandidatenFuerSchritt, darfHaken, hakenText, SCHRITT_CODES, schrittVonCode,
+} from "../lib/buddyBestaetigung.js";
+
+test("Der Bot kennt alle vier Haken am Termin", () => {
+  assert.equal(gemeinterSchritt("Setting Call bestätigt"), "setting_bestaetigt");
+  assert.equal(gemeinterSchritt("Closing bestätigt"), "closing_bestaetigt");
+  assert.equal(gemeinterSchritt("Check-in erledigt"), "checkin_erledigt");
+  assert.equal(gemeinterSchritt("Projekt bei Müller umgesetzt"), "projektumsetzung");
+  assert.equal(gemeinterSchritt("Termin bestätigen"), null);
+  // Nur die beiden ohne Bestätigung laufen über den zweiten Weg.
+  assert.equal(willHaken("Check-in erledigt"), "checkin_erledigt");
+  assert.equal(willHaken("Setting Call bestätigen"), null);
+  // Jeder Haken hat ein Kurzzeichen für den Knopf.
+  Object.entries(SCHRITT_CODES).forEach(([key, code]) => assert.equal(schrittVonCode(code).key, key));
+});
+
+test("Zur Auswahl steht nur, wo der Haken wirklich ansteht", () => {
+  const kunde = termin({ id: "kunde", name: "Hans Kunz", termin_art: "closing", outcome: "kunde" });
+  const leads = [
+    termin({ id: "setting", name: "Max Müller" }),
+    termin({ id: "checkin", name: "Petra Lang", termin_art: "checkin", outcome: "kunde" }),
+    kunde,
+    termin({ id: "kein_kunde", name: "Anna Weber", termin_art: "closing" }),
+    termin({ id: "erledigt", name: "Tom Ort", termin_art: "checkin", outcome: "kunde", schritte: { checkin_erledigt: { am: "x" } } }),
+  ];
+  const vertrieb = { id: ICH, organization_id: ORG, role: "member" };
+  const leitung = { id: ANDERE, organization_id: ORG, role: "manager" };
+
+  assert.deepEqual(kandidatenFuerSchritt(leads, "setting_bestaetigt", vertrieb).map((l) => l.id), ["setting"]);
+  assert.deepEqual(kandidatenFuerSchritt(leads, "checkin_erledigt", vertrieb).map((l) => l.id), ["checkin"]);
+  // Die Projektumsetzung gibt es nur bei Kunden — und nur für die Leitung.
+  assert.deepEqual(kandidatenFuerSchritt(leads, "projektumsetzung", leitung).map((l) => l.id).sort(), ["checkin", "erledigt", "kunde"]);
+  assert.deepEqual(kandidatenFuerSchritt(leads, "projektumsetzung", vertrieb), []);
+
+  const schritt = (key) => SCHRITTE.find((s) => s.key === key);
+  assert.equal(darfHaken(kunde, leitung, schritt("projektumsetzung")), true);
+  assert.equal(darfHaken(kunde, vertrieb, schritt("projektumsetzung")), false);
+  assert.equal(darfHaken(kunde, vertrieb, schritt("setting_bestaetigt")), true);
+  assert.equal(darfHaken(kunde, { id: "x", organization_id: "fremd", role: "manager" }, schritt("projektumsetzung")), false);
+
+  assert.match(hakenText([kunde], "projektumsetzung"), /Bei wem willst du „Projektumsetzung“ abhaken\?/);
+  assert.match(hakenText([], "checkin_erledigt"), /kein Check-in offen/);
+});
+
+test("Ein Termin lässt sich auch nur verschieben", async () => {
+  assert.equal(willStufe("Termin mit Müller verschoben"), "verschieben");
+  assert.equal(willStufe("Closing Call verschoben"), "verschieben");
+  const lead = termin({ termin_art: "closing", appointment_at: "2026-09-14T10:00:00Z" });
+  assert.match(bestaetigungsFrage(lead, "verschieben", { zeitpunkt: "2026-09-24T12:00:00.000Z" }), /• Neu: Closing Call/);
+
+  const zeit = { datum: "2026-09-24", uhrzeit: "14:00", zeitpunkt: "2026-09-24T12:00:00.000Z" };
+  const db = eintragsDatenbank({
+    verknuepfung: { user_id: ICH, modus: "stufe", modus_seit: "2026-09-15T09:50:00Z", modus_daten: { ziel: "verschieben", leadId: LEAD, zeit } },
+    lead,
+  });
+  await bearbeiteStufenKnopf(db.admin, { id: "k", daten: "w:j", chat_id: "1", nachricht_id: 2, nachricht_text: "📋" });
+  const patch = db.aenderungen.find((a) => a.tabelle === "leads").patch;
+  // Gleiche Stufe, neuer Zeitpunkt — und kein zusätzlicher Verlaufseintrag.
+  assert.equal(patch.appointment_at, zeit.zeitpunkt);
+  assert.equal(patch.status, "geplant");
+  assert.equal(patch.termin_art, undefined);
+  assert.equal(patch.stufen_verlauf, undefined);
 });
