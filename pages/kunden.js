@@ -4,7 +4,8 @@ import FilterAuswahl from "../components/FilterAuswahl";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { openProfile } from "../lib/profileModalBus";
-import { ABSTAND } from "../lib/autoRefresh";
+import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
+import AktualisierenKnopf from "../components/AktualisierenKnopf";
 import { meldeTerminAenderung } from "../lib/leadNotify";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { getActiveOrgId } from "../lib/activeOrg";
@@ -93,13 +94,13 @@ export default function Kunden() {
 
   useEffect(() => {
     load();
-    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
-    // Abstand: keine Echtzeit, ändert sich selten.
-    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
-    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
-    document.addEventListener("visibilitychange", beiSichtbar);
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, [viewMode, outcomeTab]);
+
+  // Von selbst aktuell bleiben — nicht, während jemand einen Kunden
+  // einträgt (lib/autoRefresh.js).
+  const { zuletzt, laeuft: aktualisiert, jetzt: jetztAktualisieren } = useAutoAktualisieren(
+    (still) => load(still), { abstand: ABSTAND.GELEGENTLICH, pausiert: saving || showAddForm || !!editingId },
+  );
 
   async function addCustomer() {
     if (!form.name.trim()) { setError("Name ist erforderlich."); return; }
@@ -213,7 +214,10 @@ export default function Kunden() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Erfolge und Abschlüsse</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Erfolge und Abschlüsse</h1>
+        <AktualisierenKnopf zuletzt={zuletzt} laeuft={aktualisiert} onClick={jetztAktualisieren} className="mt-1 flex-shrink-0" />
+      </div>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-5">Kunden, die aus einem Termin geworden sind — oder direkt manuell eingetragen. Wo es nicht zum Abschluss kam, steht im Reiter daneben.</p>
 

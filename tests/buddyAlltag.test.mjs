@@ -1204,8 +1204,9 @@ test("Die Erklärung an alle verschickt nur der Betreiber, und nur auf Knopfdruc
   const stelle = route.indexOf('aktion === "erklaerung-an-alle"');
   assert.ok(stelle > 0);
   const teil = route.slice(stelle, stelle + 700);
-  assert.match(teil, /is_platform_admin/);
-  assert.ok(teil.indexOf("is_platform_admin") < teil.indexOf("sendeErklaerungen("));
+  // Ohne Betreiber-Recht: 403, und zwar bevor irgendetwas verschickt wird.
+  assert.match(teil, /if \(!ich\?\.is_platform_admin\) return res\.status\(403\)/);
+  assert.ok(teil.indexOf("status(403)") < teil.indexOf("sendeErklaerungen("));
   // In der Seite hängt sie hinter einer Rückfrage und ist nur für den Betreiber sichtbar.
   const seite = lies("pages/settings.js");
   assert.match(seite, /tg\.plattformAdmin && \(/);

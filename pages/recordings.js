@@ -14,7 +14,8 @@ import { verstaendlicherSpeicherFehler } from "../lib/speicherFehler";
 import { deutscheZeit } from "../lib/terminzeit";
 import { meldeStoerung } from "../lib/fehlerMelden";
 import { openProfile } from "../lib/profileModalBus";
-import { ABSTAND } from "../lib/autoRefresh";
+import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
+import AktualisierenKnopf from "../components/AktualisierenKnopf";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 
 const STATUS_LABELS = { pending: "Wird ausgewertet...", evaluated: "Ausgewertet", failed: "Auswertung fehlgeschlagen" };
@@ -96,11 +97,13 @@ export default function Recordings() {
     // <audio>-Element zerstören und die Wiedergabe abrupt abbrechen.
     // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
     // Abstand: keine Echtzeit, ändert sich selten.
-    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.GELEGENTLICH);
-    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
-    document.addEventListener("visibilitychange", beiSichtbar);
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, []);
+
+  // Von selbst aktuell bleiben — aber nicht, während eine Aufnahme läuft
+  // (lib/autoRefresh.js).
+  const { zuletzt, laeuft: aktualisiert, jetzt: jetztAktualisieren } = useAutoAktualisieren(
+    (still) => load(still), { abstand: ABSTAND.GELEGENTLICH, pausiert: !!playingId },
+  );
 
   async function upload() {
     if (!file) return;
@@ -261,7 +264,10 @@ export default function Recordings() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Recordings</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Recordings</h1>
+        <AktualisierenKnopf zuletzt={zuletzt} laeuft={aktualisiert} onClick={jetztAktualisieren} className="mt-1 flex-shrink-0" />
+      </div>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-5">Anruf-Aufnahmen hochladen — du entscheidest selbst, ob sie in den Ordner "Positiv" oder "Negativ" kommen, die KI liefert dazu eine ausführliche inhaltliche Auswertung.</p>
 

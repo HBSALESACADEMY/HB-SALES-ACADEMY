@@ -22,7 +22,8 @@ import { getActiveOrgId } from "../lib/activeOrg";
 import { meldeTerminAenderung } from "../lib/leadNotify";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveLeadFields, getLeadFieldValue, resolveCoreRequired, fehlendePflichtfelder } from "../lib/leadFields";
-import { ABSTAND } from "../lib/autoRefresh";
+import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
+import AktualisierenKnopf from "../components/AktualisierenKnopf";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { formatiereDatum, formatiereUhrzeit, terminAnzeige } from "../lib/zeit";
@@ -237,15 +238,17 @@ export default function Termine() {
   useEffect(() => {
     if (!router.isReady) return;
     load();
-    // silent=true: kein voller Seiten-Unmount bei jedem Poll, sonst würde
-    // eine gerade abgespielte Aufnahme abrupt abbrechen.
-    // Nur abfragen, wenn der Tab sichtbar ist; beim Zurückwechseln sofort.
-    // Abstand: keine Echtzeit, aber Kolleg:innen legen laufend Termine an.
-    const interval = setInterval(() => { if (!document.hidden) (() => load(true))(); }, ABSTAND.LAUFEND);
-    const beiSichtbar = () => { if (!document.hidden) (() => load(true))(); };
-    document.addEventListener("visibilitychange", beiSichtbar);
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", beiSichtbar); };
   }, [viewMode, router.isReady, router.query.leadId]);
+
+  // Von selbst aktuell bleiben — aber nie mitten in einer Eingabe. Wer
+  // gerade einen Termin bearbeitet, einen Folgetermin plant, eine Aufnahme
+  // hört oder eine Aufgabe anlegt, bekommt die neue Liste erst danach
+  // (lib/autoRefresh.js).
+  const inArbeit = !!(followUpId || editingLeadId || editingEmailId || confirmDelete || showAddForm
+    || showTaskFormFor || playingId || notizenLaeuftId || deleting);
+  const { zuletzt, laeuft: aktualisiert, jetzt: jetztAktualisieren } = useAutoAktualisieren(
+    (still) => load(still), { abstand: ABSTAND.LAUFEND, pausiert: inArbeit, aktiv: router.isReady },
+  );
 
   // Deep-Link aus der Termin-Benachrichtigungsmail (?leadId=...): Kachel
   // aufklappen, zum passenden Termin scrollen und ihn kurz hervorheben.
@@ -932,7 +935,10 @@ export default function Termine() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Termine</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">Termine</h1>
+        <AktualisierenKnopf zuletzt={zuletzt} laeuft={aktualisiert} onClick={jetztAktualisieren} className="mt-1 flex-shrink-0" />
+      </div>
       <div className="brand-stripe w-16 mb-4" />
       <p className="text-textMuted text-sm mb-5">Beim Call Tracker erfasste Kundendaten und Termine.</p>
 

@@ -4272,3 +4272,37 @@ test("Ein gespeicherter Datei-Link wird sicher in Bereich und Pfad zerlegt", asy
   // Jede Datei gehört zu mindestens einem Eintrag, an dem die Rechte hängen.
   Object.values(DATEI_QUELLEN).forEach((quellen) => assert.ok(quellen.length > 0));
 });
+
+test("Die Seiten halten sich aktuell, ohne eine Eingabe zu stören", async () => {
+  const { vorZeit, ABSTAND } = await import("../lib/autoRefresh.js");
+  const jetzt = Date.parse("2026-09-20T12:00:00Z");
+  assert.equal(vorZeit(jetzt - 10000, jetzt), "gerade eben");
+  assert.equal(vorZeit(jetzt - 60000, jetzt), "vor 1 Minute");
+  assert.equal(vorZeit(jetzt - 5 * 60000, jetzt), "vor 5 Minuten");
+  assert.equal(vorZeit(jetzt - 2 * 3600000, jetzt), "vor 2 Stunden");
+  assert.equal(vorZeit(null), "");
+  assert.ok(ABSTAND.LAUFEND >= 30000);
+
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const auto = lies("lib/autoRefresh.js");
+  // Pausiert wird nicht verschluckt: Was ausfiel, wird danach nachgeholt.
+  assert.match(auto, /if \(pausiertRef\.current\) \{ versaeumt\.current = true; return; \}/);
+  assert.match(auto, /if \(!pausiert && versaeumt\.current\)/);
+  // Nur bei sichtbarem Tab.
+  assert.match(auto, /if \(!document\.hidden\) hole\(true\)/);
+
+  // Die Seiten mit laufenden Eingaben pausieren währenddessen.
+  const termine = lies("pages/termine.js");
+  assert.match(termine, /const inArbeit = !!\(followUpId \|\| editingLeadId/);
+  assert.match(termine, /pausiert: inArbeit/);
+  assert.match(termine, /<AktualisierenKnopf /);
+  ["pages/kunden.js", "pages/recordings.js"].forEach((datei) => {
+    assert.match(lies(datei), /useAutoAktualisieren\(/, datei);
+    assert.match(lies(datei), /<AktualisierenKnopf /, datei);
+    assert.match(lies(datei), /pausiert:/, datei);
+  });
+  // Kein Doppel-Takt: Der alte Zeitgeber ist raus.
+  ["pages/termine.js", "pages/kunden.js", "pages/recordings.js"].forEach((datei) => {
+    assert.ok(!/setInterval\(\(\) => \{ if \(!document\.hidden\)/.test(lies(datei)), datei);
+  });
+});
