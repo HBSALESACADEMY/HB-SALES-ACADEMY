@@ -409,7 +409,7 @@ test("Der Buddy behauptet im Gespräch nie, etwas eingetragen zu haben", () => {
   const stelle = buddy.indexOf("async function antworte(");
   const antworte = buddy.slice(stelle, buddy.indexOf("export async function beantworteEingang"));
   assert.match(antworte, /\.\.\.NICHTS_EINGETRAGEN/);
-  assert.match(buddy, /Behaupte nie, etwas eingetragen/);
+  assert.match(buddy, /Behaupte deshalb nie, etwas eingetragen/);
   // Auch die Ersatzantwort ohne KI sagt nicht "notiert".
   assert.doesNotMatch(antworte, /notiert\./);
 });
@@ -1019,7 +1019,9 @@ test("Geht es um einen Termin, bleibt der Buddy beim Termin", () => {
   assert.match(buddy, /const schulungsZeilen = baustein && !umEinenTermin/);
   assert.match(buddy, /umEinenTermin \? \["", \.\.\.BEIM_TERMIN_BLEIBEN\] : \[\]/);
   // Und "übermittelt" ist genauso verboten wie "eingetragen".
-  assert.match(buddy, /notiert, übermittelt, weitergegeben oder vorgemerkt/);
+  assert.match(buddy, /notiert, hinterlegt, übermittelt, weitergegeben,/);
+  // Und er behauptet auch nicht das Gegenteil: dass nichts möglich sei.
+  assert.match(buddy, /Sag aber auch NICHT, dass in der Academy nichts/);
 });
 
 // ---------------------------------------------------------------------------
@@ -1170,4 +1172,29 @@ test("Die Erklärung geht einmal an alle — und an niemanden zweimal", async ()
   // Und der Morgenlauf reicht sie nach.
   assert.match(lies("pages/api/cron/tagesbericht.js"), /sendeErklaerungen\(admin\)/);
   assert.match(lies("supabase/migration_176_buddy_erklaerung.sql"), /add column if not exists erklaerung_am timestamptz/);
+});
+
+test("Greift kein Dialog, sagt der Buddy fest, dass nichts eingetragen wurde", async () => {
+  const { terminAktion, terminHinweisText } = await import("../lib/buddy.js");
+  // Klare Ansagen.
+  assert.equal(terminAktion("Closing Call ausgemacht"), true);
+  assert.equal(terminAktion("Setting Call bestätigen"), true);
+  assert.equal(terminAktion("Müller ist Kunde geworden"), true);
+  assert.equal(terminAktion("Termin mit Weber verschoben"), true);
+  assert.equal(terminAktion("neuer Termin"), true);
+  // Ein Bericht über ein Gespräch ist keine Ansage — da bleibt der Coach.
+  assert.equal(terminAktion("Der Closing Call lief gut"), false);
+  assert.equal(terminAktion("Wie bereite ich ein Closing vor?"), false);
+
+  const text = terminHinweisText("https://academy.example");
+  assert.match(text, /^Dazu habe ich keinen passenden Termin gefunden — eingetragen habe ich nichts\./);
+  assert.match(text, /„Closing Call ausgemacht“/);
+  assert.doesNotMatch(text, /hinterlegt|übermittelt/);
+
+  // Der feste Hinweis kommt VOR der KI-Antwort.
+  const buddy = lies("lib/buddy.js");
+  const start = buddy.indexOf("export async function beantworteEingang");
+  const eingang = buddy.slice(start, buddy.indexOf("export async function verknuepfungZumChat"));
+  assert.ok(eingang.indexOf("terminAktion(text)") > 0);
+  assert.ok(eingang.indexOf("terminAktion(text)") < eingang.indexOf("antworte(admin, v, profil, woche, text)"));
 });
