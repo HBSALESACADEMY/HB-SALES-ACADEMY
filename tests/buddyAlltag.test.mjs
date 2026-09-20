@@ -641,3 +641,21 @@ test("Das Briefing kommt um 8 Uhr Berliner Zeit — im Sommer und im Winter", as
   assert.equal(berlinStunde(new Date("2026-07-15T06:10:00Z")), 8);
   assert.equal(berlinStunde(new Date("2026-12-15T07:10:00Z")), 8);
 });
+
+import { gespraechsAnweisung, zahlenBlock } from "../lib/wochenimpuls.js";
+
+test("Im Gespräch antwortet der Buddy auf die Frage, nicht auf die Zahlen", () => {
+  const zahlen = { ...leereZahlen(), anwahlen: 40, terminiert: 3 };
+  const anweisung = gespraechsAnweisung({ name: "Anna Muster", organisation: "VolkWork", zahlen, vorher: leereZahlen() });
+
+  // Die fachliche Antwort steht vorn, die Zahlen ganz hinten.
+  assert.ok(anweisung.indexOf("Antworte immer auf DAS, was gefragt ist") < anweisung.indexOf("Anwahlen: 40"));
+  assert.match(anweisung, /Kein Rückgriff auf Zahlen, keine Überleitung dorthin/);
+  assert.match(anweisung, /Diese Zahlen erwähnst du NICHT von dir aus/);
+  assert.match(anweisung, /wörtlich sagen kann, in Anführungszeichen/);
+  // Persönliches ohne Zahlen.
+  assert.match(anweisung, /Geht es um Persönliches oder um Druck.*ohne Zahlen/);
+
+  // Fehlende Kennzahlen werden zu 0, nicht zu "undefined".
+  assert.deepEqual(zahlenBlock({ anwahlen: 5 }, {}), ["Anwahlen: 5 (Vorwoche: 0) ↑"]);
+});
