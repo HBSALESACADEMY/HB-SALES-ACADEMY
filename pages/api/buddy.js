@@ -3,6 +3,7 @@ import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { sendeWochenimpulse, holeAntworten } from "../../lib/buddy";
 import { sendeTeamlage } from "../../lib/teamlageVersand";
 import { sendeBriefings } from "../../lib/buddyBriefing";
+import { sendeErklaerungen } from "../../lib/buddyErklaerungVersand";
 import { stelleWebhookSicher } from "../../lib/telegramWebhook";
 import { setzeBefehle } from "../../lib/telegramApi";
 import { BEFEHLE } from "../../lib/buddyBefehle";
@@ -72,6 +73,30 @@ export default async function handler(req, res) {
         });
       }
       return res.status(200).json({ ok: true, gesendet: ergebnis.gesendet, woche: ergebnis.woche });
+    }
+
+    // Die Erklärung des Buddys an alle, die sie noch nicht haben.
+    //
+    // Nur der Betreiber der Academy: Es ist eine Nachricht an jede
+    // verbundene Person, über alle Organisationen hinweg.
+    if (aktion === "erklaerung-an-alle") {
+      const { data: ich } = await admin.from("profiles").select("is_platform_admin").eq("id", userId).maybeSingle();
+      if (!ich?.is_platform_admin) return res.status(403).json({ error: "Das verschickt der Betreiber der Academy." });
+      const ergebnis = await sendeErklaerungen(admin, { erzwingen: req.body.erneut === true });
+      if (ergebnis.grund) {
+        return res.status(200).json({
+          ok: true, gesendet: ergebnis.gesendet || 0,
+          hinweis: /erklaerung_am/.test(ergebnis.grund)
+            ? "In der Datenbank fehlt noch eine Änderung (migration_176) — ohne sie käme die Erklärung jeden Tag erneut."
+            : `Abgebrochen nach ${ergebnis.gesendet || 0}: ${ergebnis.grund}`,
+        });
+      }
+      return res.status(200).json({
+        ok: true, gesendet: ergebnis.gesendet || 0,
+        hinweis: ergebnis.gesendet
+          ? `Die Erklärung ist an ${ergebnis.gesendet} ${ergebnis.gesendet === 1 ? "Person" : "Personen"} raus.`
+          : "Alle verbundenen Personen haben die Erklärung schon.",
+      });
     }
 
     if (aktion === "test-briefing") {

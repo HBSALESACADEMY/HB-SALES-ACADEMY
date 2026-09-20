@@ -1198,3 +1198,16 @@ test("Greift kein Dialog, sagt der Buddy fest, dass nichts eingetragen wurde", a
   assert.ok(eingang.indexOf("terminAktion(text)") > 0);
   assert.ok(eingang.indexOf("terminAktion(text)") < eingang.indexOf("antworte(admin, v, profil, woche, text)"));
 });
+
+test("Die Erklärung an alle verschickt nur der Betreiber, und nur auf Knopfdruck", () => {
+  const route = lies("pages/api/buddy.js");
+  const stelle = route.indexOf('aktion === "erklaerung-an-alle"');
+  assert.ok(stelle > 0);
+  const teil = route.slice(stelle, stelle + 700);
+  assert.match(teil, /is_platform_admin/);
+  assert.ok(teil.indexOf("is_platform_admin") < teil.indexOf("sendeErklaerungen("));
+  // In der Seite hängt sie hinter einer Rückfrage und ist nur für den Betreiber sichtbar.
+  const seite = lies("pages/settings.js");
+  assert.match(seite, /tg\.plattformAdmin && \(/);
+  assert.match(seite, /window\.confirm\("Die Erklärung des Vertriebsbuddys an alle/);
+});

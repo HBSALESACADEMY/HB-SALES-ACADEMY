@@ -155,6 +155,8 @@ export default function Settings() {
         setTgHinweis(antwort.hinweis || "Der Wochenimpuls ist raus — schau in Telegram.");
       } else if (aktion === "test-teamlage") {
         setTgHinweis(antwort.hinweis || "Die Teamlage ist raus — schau in Telegram.");
+      } else if (aktion === "erklaerung-an-alle") {
+        setTgHinweis(antwort.hinweis || "Die Erklärung ist raus.");
       } else if (aktion === "test-briefing") {
         setTgHinweis(antwort.hinweis || "Das Briefing ist raus — schau in Telegram.");
       } else {
@@ -416,6 +418,16 @@ export default function Settings() {
                   <button type="button" onClick={() => buddyAktion("test-teamlage")} disabled={tgBusy}
                     className="btn-ghost text-xs disabled:opacity-40">Teamlage testen</button>
                 )}
+              </div>
+            )}
+            {/* Nur für den Betreiber: die Erklärung des Buddys an alle, die
+                schon verbunden sind. Neu Verbundene bekommen sie ohnehin. */}
+            {tg.plattformAdmin && (
+              <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-line">
+                <span className="text-[11px] text-textMuted flex-1 min-w-[8rem]">Betreiber: Erklärung des Buddys an alle Verbundenen, die sie noch nicht haben.</span>
+                <button type="button" disabled={tgBusy}
+                  onClick={() => { if (window.confirm("Die Erklärung des Vertriebsbuddys an alle verbundenen Personen schicken, die sie noch nicht haben?")) buddyAktion("erklaerung-an-alle"); }}
+                  className="btn-ghost text-xs disabled:opacity-40">Erklärung an alle schicken</button>
               </div>
             )}
             {/* Die Kurzbefehle muss man kennen, um sie zu benutzen — Telegram
