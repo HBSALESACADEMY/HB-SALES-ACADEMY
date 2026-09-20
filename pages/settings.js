@@ -422,12 +422,20 @@ export default function Settings() {
             )}
             {/* Nur für den Betreiber: die Erklärung des Buddys an alle, die
                 schon verbunden sind. Neu Verbundene bekommen sie ohnehin. */}
-            {tg.plattformAdmin && (
+            {(tg.istLeitung || tg.plattformAdmin) && (
               <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-line">
-                <span className="text-[11px] text-textMuted flex-1 min-w-[8rem]">Betreiber: Erklärung des Buddys an alle Verbundenen, die sie noch nicht haben.</span>
+                <span className="text-[11px] text-textMuted flex-1 min-w-[8rem]">
+                  Erklärung des Buddys an {tg.plattformAdmin ? "alle Verbundenen" : "dein Team"}, die sie noch nicht haben —
+                  was er kann und wie man ihm schreibt.
+                </span>
                 <button type="button" disabled={tgBusy}
-                  onClick={() => { if (window.confirm("Die Erklärung des Vertriebsbuddys an alle verbundenen Personen schicken, die sie noch nicht haben?")) buddyAktion("erklaerung-an-alle"); }}
-                  className="btn-ghost text-xs disabled:opacity-40">Erklärung an alle schicken</button>
+                  onClick={() => {
+                    const frage = tg.plattformAdmin
+                      ? "Die Erklärung des Vertriebsbuddys an ALLE verbundenen Personen schicken, die sie noch nicht haben?"
+                      : "Die Erklärung des Vertriebsbuddys an alle verbundenen Personen deiner Organisation schicken, die sie noch nicht haben?";
+                    if (window.confirm(frage)) buddyAktion("erklaerung-an-alle");
+                  }}
+                  className="btn-ghost text-xs disabled:opacity-40">Erklärung verschicken</button>
               </div>
             )}
             {/* Die Kurzbefehle muss man kennen, um sie zu benutzen — Telegram

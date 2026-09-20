@@ -1199,16 +1199,19 @@ test("Greift kein Dialog, sagt der Buddy fest, dass nichts eingetragen wurde", a
   assert.ok(eingang.indexOf("terminAktion(text)") < eingang.indexOf("antworte(admin, v, profil, woche, text)"));
 });
 
-test("Die Erklärung an alle verschickt nur der Betreiber, und nur auf Knopfdruck", () => {
+test("Die Erklärung verschickt nur die Leitung — und nur an ihr eigenes Haus", () => {
   const route = lies("pages/api/buddy.js");
   const stelle = route.indexOf('aktion === "erklaerung-an-alle"');
   assert.ok(stelle > 0);
-  const teil = route.slice(stelle, stelle + 700);
-  // Ohne Betreiber-Recht: 403, und zwar bevor irgendetwas verschickt wird.
-  assert.match(teil, /if \(!ich\?\.is_platform_admin\) return res\.status\(403\)/);
+  const teil = route.slice(stelle, stelle + 1600);
+  // Ohne Führungsrolle: 403, und zwar bevor irgendetwas verschickt wird.
+  assert.match(teil, /if \(!ich\?\.is_platform_admin && !istFuehrungsrolle\(ich\)\) \{/);
   assert.ok(teil.indexOf("status(403)") < teil.indexOf("sendeErklaerungen("));
-  // In der Seite hängt sie hinter einer Rückfrage und ist nur für den Betreiber sichtbar.
+  // Die Leitung erreicht nur die eigene Organisation.
+  assert.match(teil, /const orgId = ich\?\.is_platform_admin \? null : await aktiveOrgId/);
+  assert.match(lies("lib/buddyErklaerungVersand.js"), /if \(orgId\) offen = offen\.filter\(\(v\) => profilVon\.get\(v\.user_id\)\?\.organization_id === orgId\)/);
+  // In der Seite hängt sie hinter einer Rückfrage und ist für die Leitung sichtbar.
   const seite = lies("pages/settings.js");
-  assert.match(seite, /tg\.plattformAdmin && \(/);
-  assert.match(seite, /window\.confirm\("Die Erklärung des Vertriebsbuddys an alle/);
+  assert.match(seite, /\(tg\.istLeitung \|\| tg\.plattformAdmin\) && \(/);
+  assert.match(seite, /window\.confirm\(frage\)/);
 });
