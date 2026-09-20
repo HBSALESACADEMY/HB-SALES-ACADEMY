@@ -999,3 +999,23 @@ test("Erst nach dem Ja rückt der Termin weiter — mit Verlauf", async () => {
   assert.match(lies("pages/api/telegram-eingang.js"), /startsWith\("w:"\)\) await bearbeiteStufenKnopf/);
   assert.ok(Object.keys(ZIELE).length >= 4);
 });
+
+import { terminThema, BEIM_TERMIN_BLEIBEN } from "../lib/buddy.js";
+
+test("Geht es um einen Termin, bleibt der Buddy beim Termin", () => {
+  assert.equal(terminThema("Closing Call ausgemacht"), true);
+  assert.equal(terminThema("Müller ist Kunde geworden"), true);
+  assert.equal(terminThema("Setting Call bestätigen"), true);
+  assert.equal(terminThema("neuer Termin"), true);
+  assert.equal(terminThema("Wie komme ich am Vorzimmer vorbei?"), false);
+
+  // Kein Anhängsel zur Übung und keine Wochenfrage.
+  assert.match(BEIM_TERMIN_BLEIBEN.join(" "), /Keine Frage nach der Woche, keine Nachfrage zur Übung/);
+
+  const buddy = lies("lib/buddy.js");
+  // Die Schulung bleibt draussen, solange es um einen Termin geht.
+  assert.match(buddy, /const schulungsZeilen = baustein && !umEinenTermin/);
+  assert.match(buddy, /umEinenTermin \? \["", \.\.\.BEIM_TERMIN_BLEIBEN\] : \[\]/);
+  // Und "übermittelt" ist genauso verboten wie "eingetragen".
+  assert.match(buddy, /notiert, übermittelt, weitergegeben oder vorgemerkt/);
+});
