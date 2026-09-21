@@ -21,7 +21,7 @@ const BASIS = `http://localhost:${PORT}`;
 
 // Seiten, die ohne Anmeldung erreichbar sind. Alles dahinter braucht eine
 // Sitzung und lässt sich hier nicht sinnvoll prüfen.
-const SEITEN = ["/login", "/reset-password", "/agb", "/datenschutz"];
+const SEITEN = ["/login", "/reset-password", "/agb", "/datenschutz", "/impressum"];
 
 let fehler = 0;
 const meldung = (ok, text) => {

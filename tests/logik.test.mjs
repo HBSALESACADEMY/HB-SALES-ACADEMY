@@ -4619,6 +4619,35 @@ test("Das eigene Anwahl-Ziel: selbst setzbar, geprüft, und ein zugewiesenes hat
   const tracker = lies("pages/call-tracker.js");
   assert.match(tracker, /async function speichereZiel\(\)/);
   assert.match(tracker, /aendereGeprueft\(\s*supabase\.from\("profiles"\)\.update\(\{ anwahl_tagesziel: gelesen\.wert \}\)/);
-  assert.match(tracker, /Eigenes Tagesziel setzen/);
+  assert.match(tracker, /"Tagesziel setzen"/);
   assert.match(tracker, /migration_177/);
+});
+
+test("Neue Funktionen werden erklärt — einmal, auch wenn man die Seite längst kennt", async () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const hinweis = lies("components/NeuHinweis.js");
+  // Gemerkt im Browser, nicht am Konto: eine Erklärung ist keine Einstellung.
+  assert.match(hinweis, /localStorage\.setItem\(speicher, "1"\)/);
+  assert.match(hinweis, /hb-neu:\$\{id\}/);
+  // Ohne Punkte keine leere Karte.
+  assert.match(hinweis, /if \(!zeigen \|\| !punkte\.length\) return null;/);
+
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /<NeuHinweis/);
+  assert.match(tracker, /id="anwahl-anreiz"/);
+  // Alle vier neuen Dinge werden benannt.
+  ["Tagesziel:", "Serie:", "Telefonblock:", "Heute im Team:"].forEach((was) => assert.match(tracker, new RegExp(was)));
+  // Und es steht dabei, was NICHT passiert — das ist die Frage, die
+  // niemand stellt und jeder hat.
+  assert.match(tracker, /bleibt auf diesem Gerät/);
+
+  // Der Ring ist wieder gross genug, um erkennbar zu sein, und trägt eine
+  // Beschriftung.
+  assert.match(tracker, /groesse=\{96\}/);
+  assert.match(tracker, /label=\{`Tagesziel · \$\{ziel\.titel\}`\}/);
+  // Der Telefonblock steht offen da statt hinter einem Aufklapper.
+  const blockStelle = tracker.indexOf('<div className="label mb-2">Telefonblock</div>');
+  assert.ok(blockStelle > 0);
+  // Der Seitenhinweis nennt das Ziel mit.
+  assert.match(lies("lib/seitenHinweise.js"), /Tagesziel-Ring/);
 });
