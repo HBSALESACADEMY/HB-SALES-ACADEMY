@@ -1101,7 +1101,11 @@ export default function Layout({ children, fullBleed }) {
           <Icon name="logout" size={15} /> Abmelden
         </button>
       </aside>
-      <main key={router.asPath} className={`flex-1 overflow-y-auto animate-fadein ${fullBleed ? "p-3" : "p-4 md:p-8"}`} style={{ background: "radial-gradient(600px 300px at 85% -5%, rgba(232,54,143,.09), transparent), radial-gradient(500px 260px at 0% 100%, rgba(123,47,247,.07), transparent)" }}>
+      {/* Ohne dekorativen Farbschimmer in den Ecken: Er war in festem Pink
+          und Violett gehalten — unabhängig davon, welche Farben eine
+          Organisation eingestellt hat — und legte sich hinter jede Karte.
+          Mehr Aussenabstand am Rechner, damit die Seite Luft bekommt. */}
+      <main key={router.asPath} className={`flex-1 overflow-y-auto animate-fadein ${fullBleed ? "p-3" : "p-4 md:p-10"}`}>
         {/* Ein Satz zur Seite, beim ersten Besuch. Hier statt in jeder
             Seite einzeln: sonst fehlt er in der Hälfte. */}
         <SeitenHinweis pfad={router.pathname} />

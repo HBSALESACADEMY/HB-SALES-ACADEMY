@@ -66,11 +66,13 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   border-radius: 999px;
   background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%);
 }
+/* Überschriften einfarbig: Der Markenverlauf steht als Strich darunter
+   (.brand-stripe) und im Logo — in jeder Überschrift wiederholt war er
+   Dekoration, die das Lesen nicht leichter macht. Die Klasse bleibt, damit
+   die Seiten unverändert bleiben. */
 .brand-text-gradient {
-  background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 60%, var(--org-color-3, #B2314F) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--org-heading-text, var(--org-text, rgb(var(--theme-text-rgb))));
+  letter-spacing: -.01em;
 }
 /* lib/orgBranding.js prüft den Verlauf gegen den Seitenhintergrund; reicht
    der Kontrast nicht aus, wird auf einfarbige, sicher lesbare Schrift
@@ -83,21 +85,29 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   color: var(--org-heading-text, rgb(var(--theme-text-rgb)));
 }
 
+/* Karten: eine Fläche, ein hauchdünner Rand, viel Innenabstand.
+   Vorher: Farbverlauf von oben nach unten, innerer Lichtrand, Schlagschatten
+   und ein Anheben beim Überfahren. Drei Effekte übereinander lassen jede
+   Kachel wie einen eigenen Gegenstand wirken; bei fünfundzwanzig Kacheln auf
+   einer Seite ist das Unruhe ohne Aussage. Flach und mit Luft liest sich
+   dieselbe Seite deutlich schneller. */
 .card {
-  background: linear-gradient(180deg, var(--org-surface-raised, rgb(var(--theme-surface-raised-rgb))) 0%, var(--org-surface, rgb(var(--theme-surface-rgb))) 100%);
+  background: var(--org-surface-raised, rgb(var(--theme-surface-raised-rgb)));
   border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
-  border-radius: 14px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 20px -12px rgba(0,0,0,.5);
-  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  border-radius: 12px;
+  padding: 22px 24px;
+  transition: border-color .18s ease, background .18s ease;
 }
+/* Anklickbares zeigt sich am Rand, nicht durch Anheben. */
 .card.cursor-pointer:hover, .card[class*="hover:-translate"]:hover {
   border-color: var(--org-color-1, #35406E);
-  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px -14px rgba(0,0,0,.65), 0 0 0 1px rgb(var(--org-accent-rgb, 206 58 92) / .15);
+  transform: none;
 }
 
 .btn {
-  background: linear-gradient(120deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%);
+  /* Eine Fläche in der Akzentfarbe statt eines dreifarbigen Verlaufs: Der
+     Verlauf war bei jedem Knopf anders eingefärbt, je nach Breite. */
+  background: var(--org-accent, #CE3A5C);
   /* Automatischer Kontrast: lib/orgBranding.js berechnet per WCAG-Formel aus
      dem SCHLECHTESTEN Punkt im Verlauf, ob helle oder dunkle Schrift lesbar
      ist (siehe applyOrgBranding/textColorForColors). Der Fallback #FFFFFF
@@ -107,32 +117,37 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   color: var(--org-button-text, #FFFFFF);
   border: none;
   padding: 10px 18px;
-  border-radius: 9px;
+  border-radius: 10px;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 16px -4px rgb(var(--org-accent-rgb, 206 58 92) / .5);
-  transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
+  transition: filter .15s ease;
 }
-.btn:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 20px -4px rgb(var(--org-accent-rgb, 206 58 92) / .6); }
-.btn:active { transform: translateY(0); }
-.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn:hover { filter: brightness(1.07); }
+.btn:active { filter: brightness(.95); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .btn-ghost {
-  background: rgba(255,255,255,.02);
+  background: transparent;
   color: var(--org-text-muted, #8D90A6);
   border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
-  border-radius: 9px;
+  border-radius: 10px;
+  /* Vorher ohne eigene Innenabstände: Am Rechner waren die Knöpfe dadurch
+     nur so hoch wie ihre Schrift. */
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.btn-ghost:hover { color: var(--org-text, rgb(var(--theme-text-rgb))); border-color: var(--org-color-1, #35406E); background: rgb(var(--org-accent-rgb, 206 58 92) / .08); }
+.btn-ghost:hover { color: var(--org-text, rgb(var(--theme-text-rgb))); border-color: var(--org-color-1, #35406E); background: rgb(var(--org-accent-rgb, 206 58 92) / .06); }
 
 .input {
   padding: 10px 14px;
-  border-radius: 9px;
+  border-radius: 10px;
   border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
   background: var(--org-bg, rgb(var(--theme-bg-rgb)));
   color: var(--org-text, rgb(var(--theme-text-rgb)));
@@ -152,17 +167,18 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   justify-content: center;
   border-radius: 999px;
   font-family: var(--font-fraunces), serif;
-  font-weight: 700;
+  font-weight: 600;
   color: #0B0D13;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px -2px rgba(0,0,0,.4);
 }
 
 .badge-count {
-  background: linear-gradient(180deg, #FF6E85 0%, #FF4D6D 100%);
-  color: #fff;
+  /* Vorher festes Pink — unabhängig davon, welche Farben eine Organisation
+     eingestellt hat. */
+  background: var(--org-accent, #CE3A5C);
+  color: var(--org-button-text, #fff);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 500;
   border-radius: 999px;
   min-width: 18px;
   height: 18px;
@@ -171,7 +187,30 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   justify-content: center;
   padding: 0 4px;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px -1px rgba(255,77,109,.5);
+}
+
+/* Beschriftung über einem Wert: klein, ruhig, gesperrt. Bisher schrieb jede
+   Seite das mit drei bis vier Tailwind-Klassen selbst — und jede etwas
+   anders. */
+.label {
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--org-text-muted, rgb(var(--theme-text-muted-rgb)));
+}
+
+/* Zahlen mit gleicher Zeichenbreite: Untereinander stehende Beträge und
+   Zähler springen sonst bei jeder Aktualisierung. */
+.zahl { font-variant-numeric: tabular-nums; }
+
+/* Die grosse Zahl einer Kennzahl-Kachel. */
+.kennzahl {
+  font-family: var(--font-fraunces), serif;
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--org-text, rgb(var(--theme-text-rgb)));
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
