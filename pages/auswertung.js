@@ -10,6 +10,8 @@ import VergleichsDiagramm from "../components/VergleichsDiagramm";
 import TempoKarte from "../components/TempoKarte";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Kennzahl from "../components/Kennzahl";
+import Kurve from "../components/Kurve";
+import { tagesReihe } from "../lib/kurve";
 import KartenKopf from "../components/KartenKopf";
 import { stufenAuswertung } from "../lib/terminArt";
 import { kursStand, kursDetails } from "../lib/kursstand";
@@ -377,6 +379,22 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
           „Gesamt“ ist der gewichtete Wert der ganzen Organisation, nicht der Mittelwert der Teamquoten — ein Team
           mit zehn Anrufen darf den Vergleichswert nicht so stark bewegen wie eines mit tausend.
         </p>
+      </div>
+
+      {/* Der Verlauf über den Zeitraum. Eine Kurve, weil hier die
+          Entwicklung die Frage ist — die Verteilung steht weiter unten als
+          Ring, der Vergleich als Balken (components/Kurve.js). */}
+      <div className="card mb-4">
+        <KartenKopf titel="Verlauf" zeitraum={zeitraumText(daten.zeitraum)} />
+        <Kurve
+          hoehe={120}
+          reihen={[
+            { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen", daten.zeitraum?.von, daten.zeitraum?.bis) },
+            { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin", daten.zeitraum?.von, daten.zeitraum?.bis) },
+          ]}
+          leerText="Im Zeitraum wurden keine Anrufe erfasst."
+          erklaerung="Beide Kurven teilen einen Maßstab: Die Termin-Kurve liegt deshalb flach, solange auf viele Anwahlen wenige Termine kommen — genau das ist die Aussage."
+        />
       </div>
 
       {/* Conversion — der Weg vom Anruf bis zum Kunden. */}

@@ -17,6 +17,7 @@ import { deutscheZeit } from "../lib/terminzeit";
 import { berlinHeute, tagPlus } from "../lib/woche";
 import Kennzahl from "../components/Kennzahl";
 import KartenKopf from "../components/KartenKopf";
+import Kurve from "../components/Kurve";
 import { feldFarbe } from "../lib/diagrammFarben";
 import LogoHintergrund from "../components/LogoHintergrund";
 import { goalMetricLabel } from "../lib/goalMetrics";
@@ -482,28 +483,15 @@ export default function Dashboard() {
                 <Kennzahl label="Erreicht" wert={leistung.erreicht} farbe={feldFarbe("erreicht")} />
                 <Kennzahl label="Terminiert" wert={leistung.termin} farbe={feldFarbe("termin")} />
               </div>
-              <div className="flex items-end gap-5 flex-wrap mt-3">
-
-                {/* Ein Balken je Tag, ältester links. Zeigt den Verlauf, ohne
-                    ein zweites Diagramm zu brauchen. */}
-                <div className="flex items-end gap-1 h-12">
-                  {leistung.tage.map((t) => {
-                    const groesster = Math.max(1, ...leistung.tage.map((x) => x.wert));
-                    const heute = t.tag === berlinHeute();
-                    return (
-                      <div key={t.tag} className="flex flex-col items-center gap-1" title={`${t.wert} Anwahlen`}>
-                        <div className="w-3 rounded-t transition-all duration-300"
-                          style={{
-                            height: `${Math.max(2, Math.round((t.wert / groesster) * 38))}px`,
-                            background: heute ? feldFarbe("anwahlen") : `color-mix(in srgb, ${feldFarbe("anwahlen")} 45%, transparent)`,
-                          }} />
-                        <span className="text-[9px] text-textMuted">
-                          {new Date(`${t.tag}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short" }).slice(0, 2)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+              {/* Der Verlauf als Kurve: "wie entwickelt es sich" ist bei
+                  sieben Tagen die interessantere Frage als "wie viel war an
+                  diesem Tag" (components/Kurve.js). */}
+              <div className="mt-3">
+                <Kurve
+                  hoehe={80}
+                  reihen={[{ label: "Anwahlen je Tag", farbe: feldFarbe("anwahlen"), werte: leistung.tage.map((t) => ({ tag: t.tag, wert: t.wert })) }]}
+                  leerText="Noch keine Anwahlen in den letzten sieben Tagen."
+                />
               </div>
             </div>
           )}

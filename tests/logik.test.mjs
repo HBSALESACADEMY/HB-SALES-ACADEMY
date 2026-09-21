@@ -4370,3 +4370,76 @@ test("Kennzahlen sehen überall gleich aus, und die Veränderung zeigt die richt
   assert.match(css, /\.kennzahl \{/);
   assert.match(css, /\.zahl \{ font-variant-numeric: tabular-nums; \}/);
 });
+
+test("Die Verlaufskurve rechnet richtig: Maßstab ab null, lückenlose Tage, keine Schwünge ins Negative", async () => {
+  const { punkteFuer, weicherPfad, flaechenPfad, tagesReihe } = await import("../lib/kurve.js");
+
+  // Maßstab immer ab 0: Aus 48 und 50 darf kein Berg werden.
+  const { punkte, hoechster } = punkteFuer([48, 50], 100, 100, 0);
+  assert.equal(hoechster, 50);
+  assert.equal(Math.round(punkte[1].y), 0);
+  assert.equal(Math.round(punkte[0].y), 4);
+
+  // Ein einzelner Punkt steht in der Mitte, und es gibt keinen Pfad.
+  assert.equal(punkteFuer([7], 100, 50).punkte[0].x, 50);
+  assert.equal(weicherPfad(punkteFuer([7], 100, 50).punkte), "");
+  assert.equal(flaechenPfad([], 50), "");
+
+  // Die gezeichnete Kurve bleibt zwischen null und dem Höchstwert. Geprüft
+  // wird die Kurve selbst, nicht die Kontrollpunkte: Ein Sprung (zwei
+  // gleiche Werte, dann ein hoher) liess sie früher unter null tauchen —
+  // also Anwahlen behaupten, die es nicht gab.
+  const abtasten = (d) => {
+    const start = d.match(/M ([\d.-]+) ([\d.-]+)/);
+    let p0 = Number(start[2]);
+    const ys = [p0];
+    [...d.matchAll(/C ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+)/g)].forEach((c) => {
+      const [c1y, c2y, p1y] = [Number(c[2]), Number(c[4]), Number(c[6])];
+      for (let i = 0; i <= 20; i += 1) {
+        const u = i / 20;
+        ys.push(((1 - u) ** 3) * p0 + 3 * ((1 - u) ** 2) * u * c1y + 3 * (1 - u) * u * u * c2y + (u ** 3) * p1y);
+      }
+      p0 = p1y;
+    });
+    return ys;
+  };
+  [[0, 0, 90, 90, 0], [0, 90, 0, 90, 0], [0, 10, 90, 20], [10, 70, 20, 90, 30]].forEach((werte) => {
+    const ys = abtasten(weicherPfad(punkteFuer(werte, 400, 100, 4).punkte));
+    assert.ok(Math.min(...ys) >= 4 - 0.01, `${werte}: schwingt über den Höchstwert hinaus (${Math.min(...ys).toFixed(1)})`);
+    assert.ok(Math.max(...ys) <= 96 + 0.01, `${werte}: taucht unter null (${Math.max(...ys).toFixed(1)})`);
+  });
+  const zacken = punkteFuer([0, 90, 0, 90, 0], 400, 100, 4).punkte;
+  // Die Fläche ist unten geschlossen.
+  assert.match(flaechenPfad(zacken, 100), /L 400\.00 100 L 0\.00 100 Z$/);
+
+  // Tageswerte: Lücken werden 0, nicht übersprungen.
+  const zeilen = [
+    { log_date: "2026-09-14", counts: { anwahlen: 10, termin: 1 } },
+    { log_date: "2026-09-14", counts: { anwahlen: 5 } },
+    { log_date: "2026-09-16", counts: { anwahlen: 7 } },
+  ];
+  const reihe = tagesReihe(zeilen, "anwahlen");
+  assert.deepEqual(reihe, [
+    { tag: "2026-09-14", wert: 15 },
+    { tag: "2026-09-15", wert: 0 },
+    { tag: "2026-09-16", wert: 7 },
+  ]);
+  // Mit Zeitraum: auch Tage ohne jeden Eintrag am Rand.
+  assert.equal(tagesReihe(zeilen, "anwahlen", "2026-09-13", "2026-09-17").length, 5);
+  assert.deepEqual(tagesReihe([], "anwahlen"), []);
+  // Ein falsch gesetzter Zeitraum zeichnet nicht zehntausend Punkte.
+  assert.ok(tagesReihe(zeilen, "anwahlen", "2020-01-01", "2030-01-01").length <= 400);
+
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  // Mehrere Reihen teilen einen Maßstab — sonst ist der Vergleich gelogen.
+  const kurve = lies("components/Kurve.js");
+  assert.match(kurve, /Ein Maßstab für alle Reihen/);
+  assert.match(kurve, /const faktor = eigenerHoechster \/ hoechster;/);
+  // Startbildschirm und Auswertung nutzen sie.
+  assert.match(lies("pages/index.js"), /<Kurve/);
+  assert.match(lies("pages/auswertung.js"), /<Kurve/);
+  // Und die Auswertung mischt bewusst: Kurve, Ring, Balken.
+  const auswertung = lies("pages/auswertung.js");
+  assert.match(auswertung, /<Kreisdiagramm/);
+  assert.match(auswertung, /<VergleichsDiagramm/);
+});
