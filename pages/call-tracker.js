@@ -23,7 +23,8 @@ import Kreisdiagramm from "../components/Kreisdiagramm";
 import Balkenliste from "../components/Balkenliste";
 import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
-import { anwahlSerie, tagesZiel, zielStand, naechsterMeilenstein } from "../lib/anwahlSpiel";
+import { anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX } from "../lib/anwahlSpiel";
+import { aendereGeprueft } from "../lib/loeschen";
 import Kurve from "../components/Kurve";
 import { tagesReihe } from "../lib/kurve";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
@@ -98,6 +99,11 @@ export default function CallTracker() {
   // Tagesziel, Serie, Meilenstein und die Tagesrangliste (lib/anwahlSpiel.js).
   const [spiel, setSpiel] = useState(null);
   const [rangliste, setRangliste] = useState(null);
+  // Das eigene Anwahl-Ziel für den Tag (migration_177).
+  const [eigenesZiel, setEigenesZiel] = useState(null);
+  const [zielEingabe, setZielEingabe] = useState("");
+  const [zielOffen, setZielOffen] = useState(false);
+  const [zielFehler, setZielFehler] = useState("");
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
   // Wurde ein angefangener Anruf wieder aufgenommen? Dann steht ein Hinweis
@@ -406,6 +412,27 @@ export default function CallTracker() {
 
   // Beim Verlassen oder Wegschalten der Seite alles Ausstehende noch
   // hinausschicken. Genau hier gingen Tage verloren: gezählt, Tab zu, weg.
+  // Das eigene Tagesziel setzen oder löschen. Über aendereGeprueft, damit
+  // eine abgelehnte Änderung nicht still verschwindet.
+  async function speichereZiel() {
+    const gelesen = leseZielEingabe(zielEingabe);
+    if (gelesen.fehler) { setZielFehler(gelesen.fehler); return; }
+    setZielFehler("");
+    const fehler = await aendereGeprueft(
+      supabase.from("profiles").update({ anwahl_tagesziel: gelesen.wert }).eq("id", userId),
+      "Dein Ziel liess sich nicht speichern.",
+    );
+    if (fehler) {
+      setZielFehler(/anwahl_tagesziel/.test(fehler)
+        ? "In der Datenbank fehlt noch eine Änderung (migration_177)."
+        : fehler);
+      return;
+    }
+    setEigenesZiel(gelesen.wert);
+    setZielOffen(false);
+    showToast(gelesen.wert ? `Tagesziel: ${gelesen.wert} Anwahlen` : "Tagesziel entfernt");
+  }
+
   // Die Grundlage für Ziel, Serie und Meilenstein: die eigenen Tageszeilen
   // und die eigenen Ziele. Einmal beim Öffnen der Heute-Ansicht — die
   // Zahlen von heute kommen live aus dem Zähler.
@@ -413,14 +440,18 @@ export default function CallTracker() {
     if (!userId || view !== "today") return;
     let aktiv = true;
     (async () => {
-      const [tage, ziele] = await Promise.all([
+      const [tage, ziele, eigen] = await Promise.all([
         supabase.from("call_log_days").select("log_date, counts")
           .eq("user_id", userId).order("log_date", { ascending: false }).limit(1200),
         supabase.from("team_goals").select("title, metric, target_count, starts_on, ends_on, week_start")
           .eq("user_id", userId).limit(50),
+        // Eigene Abfrage: Fehlt die Spalte (migration_177 nicht eingespielt),
+        // scheiterte sonst der ganze Abruf — und mit ihm Serie und Ring.
+        supabase.from("profiles").select("anwahl_tagesziel").eq("id", userId).maybeSingle(),
       ]);
       if (!aktiv) return;
       setSpiel({ tage: tage.data || [], ziele: ziele.data || [] });
+      setEigenesZiel(eigen.data?.anwahl_tagesziel ?? null);
     })();
     apiGet("/api/tagesrangliste")
       .then((a) => { if (aktiv) setRangliste(a.liste || []); })
@@ -1135,7 +1166,10 @@ export default function CallTracker() {
     return [...ohneHeute, { log_date: heute, counts: { anwahlen: todayCounts.anwahlen || 0 } }];
   }, [spiel, todayCounts.anwahlen]);
   const serie = useMemo(() => anwahlSerie(spielTage), [spielTage]);
-  const ziel = useMemo(() => tagesZiel(spiel?.ziele || []), [spiel]);
+  const ziel = useMemo(
+    () => pensumFuerHeute({ ziele: spiel?.ziele || [], eigenes: eigenesZiel }),
+    [spiel, eigenesZiel],
+  );
   const stand = ziel ? zielStand(ziel.proTag, todayCounts.anwahlen || 0) : null;
   const anwahlenGesamt = useMemo(
     () => spielTage.reduce((summe, t) => summe + (Number(t?.counts?.anwahlen) || 0), 0),
@@ -1260,17 +1294,57 @@ export default function CallTracker() {
           {isToday && (
             <div className="card mb-3 flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
-                {stand ? (
-                  <Zielring wert={stand.wert} ziel={stand.ziel} label={`Tagesziel · ${ziel.titel}`} />
-                ) : (
-                  <div className="min-w-0">
-                    <div className="label">Heute</div>
-                    <div className="kennzahl mt-0.5">{todayCounts.anwahlen || 0}</div>
-                    <div className="text-[11px] text-textMuted">
-                      Anwahlen. Ein Tagesziel bekommst du, sobald dir jemand ein persönliches Anwahl-Ziel setzt.
+                <div className="min-w-0">
+                  {stand ? (
+                    <Zielring wert={stand.wert} ziel={stand.ziel} label={`Tagesziel · ${ziel.titel}`} />
+                  ) : (
+                    <>
+                      <div className="label">Heute</div>
+                      <div className="kennzahl mt-0.5">{todayCounts.anwahlen || 0}</div>
+                      <div className="text-[11px] text-textMuted">Anwahlen — noch ohne Tagesziel.</div>
+                    </>
+                  )}
+
+                  {/* Das Ziel setzt man dort, wo man telefoniert. Ein selbst
+                      gesetztes Ziel wirkt stärker als ein zugewiesenes —
+                      und ein zugewiesenes hat trotzdem Vorrang, damit eine
+                      Absprache mit der Leitung nicht überschrieben wird
+                      (lib/anwahlSpiel.js, pensumFuerHeute). */}
+                  {zielOffen ? (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="number" min="1" max={ZIEL_MAX} inputMode="numeric"
+                          className="input !w-24 !py-1.5 text-xs"
+                          placeholder="z. B. 60"
+                          value={zielEingabe}
+                          onChange={(e) => { setZielEingabe(e.target.value); setZielFehler(""); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") speichereZiel(); }}
+                        />
+                        <span className="text-[11px] text-textMuted">Anwahlen am Tag</span>
+                        <button onClick={speichereZiel} className="btn-ghost text-xs">Speichern</button>
+                        <button onClick={() => { setZielOffen(false); setZielFehler(""); }} className="btn-ghost text-xs">Abbrechen</button>
+                      </div>
+                      {zielFehler && <p className="text-[11px] text-coral mt-1">{zielFehler}</p>}
+                      {eigenesZiel && !zielFehler && (
+                        <p className="text-[11px] text-textMuted mt-1">Leer lassen und speichern entfernt dein Ziel.</p>
+                      )}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <button
+                      onClick={() => { setZielEingabe(eigenesZiel ? String(eigenesZiel) : ""); setZielOffen(true); }}
+                      className="btn-ghost text-xs mt-2">
+                      <Icon name="target" size={12} />
+                      {eigenesZiel ? `Eigenes Ziel: ${eigenesZiel} ändern` : "Eigenes Tagesziel setzen"}
+                    </button>
+                  )}
+
+                  {ziel?.quelle === "zugewiesen" && eigenesZiel && (
+                    <p className="text-[11px] text-textMuted mt-1">
+                      Angezeigt wird das zugewiesene Ziel. Dein eigenes ({eigenesZiel}) greift wieder, sobald es ausläuft.
+                    </p>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-4 flex-wrap">
                   <div>

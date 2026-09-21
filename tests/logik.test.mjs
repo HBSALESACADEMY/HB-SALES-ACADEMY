@@ -4570,3 +4570,55 @@ test("Die Anwahl-Serie zählt Arbeitstage, nicht Kalendertage", async () => {
   assert.match(s.blockText({ anwahlen: 20, minuten: 25, bestwert: 12 }), /neuer Bestwert/);
   assert.match(s.blockText({ anwahlen: 8, minuten: 25, bestwert: 12 }), /4 mehr/);
 });
+
+test("Das eigene Anwahl-Ziel: selbst setzbar, geprüft, und ein zugewiesenes hat Vorrang", async () => {
+  const s = await import("../lib/anwahlSpiel.js");
+  const jetzt = new Date("2026-09-22T10:00:00Z");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Ohne alles: kein Pensum.
+  assert.equal(s.pensumFuerHeute({ jetzt }), null);
+  // Nur eigenes Ziel: es gilt, mit Herkunft.
+  const eigen = s.pensumFuerHeute({ eigenes: 60, jetzt });
+  assert.equal(eigen.proTag, 60);
+  assert.equal(eigen.quelle, "eigenes");
+  // Zugewiesenes Ziel hat Vorrang — eine Absprache überschreibt man nicht still.
+  const beides = s.pensumFuerHeute({
+    eigenes: 60,
+    ziele: [{ metric: "anwahlen", target_count: 100, starts_on: "2026-09-21", ends_on: "2026-09-25", title: "Woche" }],
+    jetzt,
+  });
+  assert.equal(beides.quelle, "zugewiesen");
+  assert.equal(beides.proTag, 20);
+  // Ein ausgelaufenes zugewiesenes Ziel lässt das eigene wieder greifen.
+  assert.equal(s.pensumFuerHeute({
+    eigenes: 60,
+    ziele: [{ metric: "anwahlen", target_count: 100, starts_on: "2026-08-01", ends_on: "2026-08-07" }],
+    jetzt,
+  }).quelle, "eigenes");
+
+  // Eingabe: leer entfernt das Ziel, Unsinn und Vertipper werden abgelehnt.
+  assert.deepEqual(s.leseZielEingabe(""), { wert: null });
+  assert.deepEqual(s.leseZielEingabe("  "), { wert: null });
+  assert.deepEqual(s.leseZielEingabe("60"), { wert: 60 });
+  assert.match(s.leseZielEingabe("sechzig").fehler, /ganze Zahl/);
+  assert.match(s.leseZielEingabe("0").fehler, /Zwischen 1 und 500/);
+  assert.match(s.leseZielEingabe("6000").fehler, /Zwischen 1 und 500/);
+  assert.match(s.leseZielEingabe("-5").fehler, /ganze Zahl/);
+  assert.match(s.leseZielEingabe("12,5").fehler, /ganze Zahl/);
+
+  // Die Datenbank hält dieselbe Grenze — nicht nur das Formular.
+  const migration = lies("supabase/migration_177_anwahl_tagesziel.sql");
+  assert.match(migration, /anwahl_tagesziel > 0 and anwahl_tagesziel <= 500/);
+  // Und die Spalte steht nicht unter dem Rechte-Schutz von migration_166:
+  // ein eigenes Vorhaben darf jede Person selbst setzen.
+  assert.ok(!/anwahl_tagesziel/.test(lies("supabase/migration_166_profilrechte_und_freischaltung.sql")));
+
+  // Im Call Tracker: Eingabe, Prüfung, und die Änderung läuft über
+  // aendereGeprueft, damit eine Ablehnung nicht still verschwindet.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /async function speichereZiel\(\)/);
+  assert.match(tracker, /aendereGeprueft\(\s*supabase\.from\("profiles"\)\.update\(\{ anwahl_tagesziel: gelesen\.wert \}\)/);
+  assert.match(tracker, /Eigenes Tagesziel setzen/);
+  assert.match(tracker, /migration_177/);
+});
