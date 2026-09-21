@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
@@ -164,7 +165,12 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgb(var(--org-color-1-rgb, 76 93 201) / .10), transparent), radial-gradient(600px 350px at 100% 100%, rgb(var(--org-color-3-rgb, 178 49 79) / .08), transparent), var(--org-bg, transparent)" }}>
+    <>
+    <Head>
+      <title>Anmelden · HB Sales Academy</title>
+      <meta name="description" content="Zugang zur HB Sales Academy: Anrufe erfassen, Termine führen, nachfassen und im Vertrieb besser werden. Anmeldung mit dem Firmencode der eigenen Organisation." />
+    </Head>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgb(var(--org-color-1-rgb, 76 93 201) / .10), transparent), radial-gradient(600px 350px at 100% 100%, rgb(var(--org-color-3-rgb, 178 49 79) / .08), transparent), var(--org-bg, transparent)" }}>
       <div className="card w-full max-w-sm overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
@@ -245,6 +251,28 @@ export default function Login() {
         )}
         </div>
       </div>
+
+      {/* Der einzige öffentliche Text der Academy — und damit das Einzige,
+          was eine Suchmaschine von ihr sieht. Drei Sätze genügen dafür:
+          Google zeigt eine Seite nur, wenn es versteht, worum es geht.
+          Alles andere steht hinter der Anmeldung und ist ausdrücklich auf
+          "noindex" gesetzt (lib/oeffentlicheSeiten.js). */}
+      <footer className="w-full max-w-sm mt-6 text-center">
+        <h1 className="text-sm font-display font-semibold text-textMain">HB Sales Academy</h1>
+        <p className="text-[12px] text-textMuted leading-snug mt-1">
+          Die Trainings- und Vertriebsplattform für Vertriebsteams: Anrufe erfassen, Termine durch ihre Stufen
+          führen, nachfassen und mit Rollenspielen und Einwand-Training besser werden. Der Zugang läuft über den
+          Firmencode der eigenen Organisation.
+        </p>
+        <p className="text-[11px] text-textMuted mt-3 flex items-center justify-center gap-2 flex-wrap">
+          <Link href="/impressum" className="underline">Impressum</Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/datenschutz" className="underline">Datenschutz</Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/agb" className="underline">AGB</Link>
+        </p>
+      </footer>
     </div>
+    </>
   );
 }

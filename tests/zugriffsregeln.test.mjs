@@ -923,3 +923,43 @@ test("Die Herausforderungen sind eine Übersicht mit Reitern, keine lange Liste"
   // Kein Chat, keine Zusammenfassung des Gesprächs auf der Seite.
   assert.ok(!/zusammenfassung/.test(seite));
 });
+
+test("Nur die Seiten ohne Anmeldung dürfen in eine Suchmaschine", async () => {
+  const { darfInDenIndex, OEFFENTLICHE_PFADE, seitenAdresse } = await import("../lib/oeffentlicheSeiten.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Öffentlich ist genau das, was ohne Anmeldung Sinn hat.
+  assert.deepEqual(OEFFENTLICHE_PFADE.sort(), ["/agb", "/datenschutz", "/impressum", "/login", "/reset-password"]);
+  ["/login", "/agb", "/datenschutz", "/impressum"].forEach((p) => assert.equal(darfInDenIndex(p), true, p));
+  // Alles, wo Kundendaten stehen, gehört nicht in den Index.
+  ["/", "/termine", "/kunden", "/call-tracker", "/auswertung", "/herausforderungen", "/admin", "/messages", "/community"]
+    .forEach((p) => assert.equal(darfInDenIndex(p), false, p));
+  // Auch mit Schrägstrich am Ende oder Abfrage dahinter.
+  assert.equal(darfInDenIndex("/login/"), true);
+  assert.equal(darfInDenIndex("/termine?leadId=1"), false);
+  assert.equal(darfInDenIndex(undefined), false);
+
+  // Die Seiten melden es selbst — eine robots.txt ist nur eine Bitte.
+  const app = lies("pages/_app.js");
+  assert.match(app, /const oeffentlich = darfInDenIndex\(router\.pathname\)/);
+  assert.match(app, /\{!oeffentlich && <meta name="robots" content="noindex, nofollow" \/>\}/);
+
+  // robots.txt und sitemap.xml führen nur die öffentlichen Pfade.
+  const robots = lies("pages/robots.txt.js");
+  assert.match(robots, /OEFFENTLICHE_PFADE\.map\(\(p\) => `Allow: \$\{p\}`\)/);
+  assert.match(robots, /"Disallow: \/"/);
+  assert.match(robots, /"Disallow: \/api\/"/);
+  const sitemap = lies("pages/sitemap.xml.js");
+  assert.match(sitemap, /OEFFENTLICHE_PFADE/);
+  assert.ok(!/termine|kunden|auswertung/.test(sitemap));
+  // Ohne hinterlegte Adresse keine relativen Einträge.
+  assert.equal(seitenAdresse("/login", ""), null);
+  assert.equal(seitenAdresse("/login", "https://academy.example/"), "https://academy.example/login");
+
+  // Das Impressum ist Pflicht, sobald die Academy öffentlich erreichbar
+  // ist — und trägt Platzhalter statt erfundener Angaben.
+  const impressum = lies("pages/impressum.js");
+  assert.match(impressum, /§ 5 DDG/);
+  assert.match(impressum, /\[Platzhalter: Firmenname, Rechtsform\]/);
+  assert.match(lies("pages/login.js"), /\/impressum/);
+});

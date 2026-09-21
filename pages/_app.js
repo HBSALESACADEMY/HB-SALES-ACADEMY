@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
+import { darfInDenIndex } from "../lib/oeffentlicheSeiten";
 import { Work_Sans, Fraunces, JetBrains_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { meldeStoerung } from "../lib/fehlerMelden";
@@ -12,6 +14,12 @@ const fraunces = Fraunces({ subsets: ["latin"], weight: ["500", "600", "700"], s
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-jetbrains-mono", display: "swap" });
 
 export default function App({ Component, pageProps }) {
+  const router = useRouter();
+  // Alles hinter der Anmeldung gehört in keine Suchmaschine: Dort stehen
+  // Namen von Kund:innen, Auswertungen und Gesprächsnotizen
+  // (lib/oeffentlicheSeiten.js).
+  const oeffentlich = darfInDenIndex(router.pathname);
+
   // Abstürze im Browser an den Betreiber melden. Genau diese Fehler waren
   // bisher unsichtbar: eine weisse Seite oder ein toter Knopf steht auf dem
   // Bildschirm EINER Person, und ob sie sich meldet, ist Zufall. Die
@@ -31,7 +39,10 @@ export default function App({ Component, pageProps }) {
     <div className={`${workSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} font-sans`}>
       {/* Der Name im Browser-Reiter. Stand bisher nirgends — der Reiter
           zeigte nur die Adresse. */}
-      <Head><title>HB Sales Academy</title></Head>
+      <Head>
+        <title>HB Sales Academy</title>
+        {!oeffentlich && <meta name="robots" content="noindex, nofollow" />}
+      </Head>
       <Component {...pageProps} />
     </div>
   );
