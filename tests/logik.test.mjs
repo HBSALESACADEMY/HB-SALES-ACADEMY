@@ -4341,3 +4341,32 @@ test("Vergangene Termine stehen aufgeräumt: nach Monat gebündelt, eine Zeile j
   // Angetippt öffnet sich die vollständige Ansicht.
   assert.match(zeile, /setExpandedLeadId\(lead\.id\)/);
 });
+
+test("Kennzahlen sehen überall gleich aus, und die Veränderung zeigt die richtige Richtung", async () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const kennzahl = lies("components/Kennzahl.js");
+  // Eine Beschriftung, eine Zahl, ein Zeitraum — aus den zentralen Klassen.
+  assert.match(kennzahl, /className="label"/);
+  assert.match(kennzahl, /kennzahl text-\[32px\]/);
+  // Bei Absagen ist ein Plus keine gute Nachricht.
+  assert.match(kennzahl, /const besser = gut === "hoch" \? delta > 0 : delta < 0;/);
+  assert.match(kennzahl, /besser \? "text-teal" : "text-coral"/);
+  // Zahlen mit gleicher Zeichenbreite, damit Spalten nicht springen.
+  assert.match(kennzahl, /zahl/);
+
+  // Die Auswertung zeigt vier Zählwerte über der Tabelle, keine Quoten:
+  // die Differenz zweier Quoten wäre irreführend.
+  const auswertung = lies("pages/auswertung.js");
+  assert.match(auswertung, /const KOPF_KENNZAHLEN = \[/);
+  assert.match(auswertung, /label: "Neue Kunden".*ohneVergleich: true/s);
+  assert.ok(!/KOPF_KENNZAHLEN[\s\S]{0,400}quote: true/.test(auswertung));
+  assert.match(auswertung, /<KartenKopf/);
+  // Der Startbildschirm nutzt dieselben Kacheln.
+  assert.match(lies("pages/index.js"), /<Kennzahl label="Heute"/);
+
+  // Die zentralen Klassen gibt es wirklich.
+  const css = lies("styles/globals.css");
+  assert.match(css, /\.label \{/);
+  assert.match(css, /\.kennzahl \{/);
+  assert.match(css, /\.zahl \{ font-variant-numeric: tabular-nums; \}/);
+});

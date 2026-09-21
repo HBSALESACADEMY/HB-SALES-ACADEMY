@@ -15,6 +15,8 @@ import { aendereGeprueft } from "../lib/loeschen";
 import { meldeFehler } from "../lib/errorBus";
 import { deutscheZeit } from "../lib/terminzeit";
 import { berlinHeute, tagPlus } from "../lib/woche";
+import Kennzahl from "../components/Kennzahl";
+import KartenKopf from "../components/KartenKopf";
 import { feldFarbe } from "../lib/diagrammFarben";
 import LogoHintergrund from "../components/LogoHintergrund";
 import { goalMetricLabel } from "../lib/goalMetrics";
@@ -469,32 +471,22 @@ export default function Dashboard() {
 
           {leistung && (leistung.woche > 0 || leistung.heute > 0) && (
             <div className="card mb-5 cursor-pointer" onClick={() => router.push("/call-tracker")}>
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className="text-[11px] uppercase tracking-wide text-textMuted">Deine Anwahlen</span>
-                <span className="text-[11px] text-textMuted">· letzte 7 Tage</span>
-                <span className="text-[11px] text-textMuted ml-auto">Zum Call Tracker →</span>
+              <KartenKopf titel="Deine Anwahlen" zeitraum="letzte 7 Tage">
+                <span className="text-[11px] text-textMuted">Zum Call Tracker →</span>
+              </KartenKopf>
+              {/* Vier Kennzahlen im gleichen Raster statt vier verschieden
+                  grosser Zahlen in einer Reihe (components/Kennzahl.js). */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <Kennzahl label="Heute" wert={leistung.heute} farbe={feldFarbe("anwahlen")} gross />
+                <Kennzahl label="In 7 Tagen" wert={leistung.woche} />
+                <Kennzahl label="Erreicht" wert={leistung.erreicht} farbe={feldFarbe("erreicht")} />
+                <Kennzahl label="Terminiert" wert={leistung.termin} farbe={feldFarbe("termin")} />
               </div>
-              <div className="flex items-end gap-5 flex-wrap">
-                <div>
-                  <div className="text-3xl font-display font-semibold" style={{ color: feldFarbe("anwahlen") }}>{leistung.heute}</div>
-                  <div className="text-[11px] text-textMuted">heute</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-display font-semibold text-textMain">{leistung.woche}</div>
-                  <div className="text-[11px] text-textMuted">in 7 Tagen</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-display font-semibold" style={{ color: feldFarbe("erreicht") }}>{leistung.erreicht}</div>
-                  <div className="text-[11px] text-textMuted">erreicht</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-display font-semibold" style={{ color: feldFarbe("termin") }}>{leistung.termin}</div>
-                  <div className="text-[11px] text-textMuted">terminiert</div>
-                </div>
+              <div className="flex items-end gap-5 flex-wrap mt-3">
 
                 {/* Ein Balken je Tag, ältester links. Zeigt den Verlauf, ohne
                     ein zweites Diagramm zu brauchen. */}
-                <div className="flex items-end gap-1 h-12 ml-auto">
+                <div className="flex items-end gap-1 h-12">
                   {leistung.tage.map((t) => {
                     const groesster = Math.max(1, ...leistung.tage.map((x) => x.wert));
                     const heute = t.tag === berlinHeute();

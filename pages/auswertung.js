@@ -9,6 +9,8 @@ import WochentagAnalyse from "../components/WochentagAnalyse";
 import VergleichsDiagramm from "../components/VergleichsDiagramm";
 import TempoKarte from "../components/TempoKarte";
 import FilterAuswahl from "../components/FilterAuswahl";
+import Kennzahl from "../components/Kennzahl";
+import KartenKopf from "../components/KartenKopf";
 import { stufenAuswertung } from "../lib/terminArt";
 import { kursStand, kursDetails } from "../lib/kursstand";
 import { supabase } from "../lib/supabaseClient";
@@ -33,6 +35,24 @@ import { downloadCsv } from "../lib/csv";
 //
 // Wer sie sehen darf, entscheidet der Server (pages/api/auswertung.js). Die
 // Prüfung hier blendet nur aus — sie schützt nichts.
+
+// Die vier Zahlen über der Tabelle. Bewusst nur Zählwerte: Die Differenz
+// zweier Quoten wäre irreführend — "+4 %" hiesse dort mal Prozentpunkte,
+// mal Prozent vom Vorwert.
+const KOPF_KENNZAHLEN = [
+  { label: "Anwahlen", wert: (g) => g.anwahlen || 0 },
+  { label: "Erstgespräche", wert: (g) => g.erreicht || 0 },
+  { label: "Termine", wert: (g) => g.termin || 0 },
+  // Abschlüsse stecken nicht in den Anruf-Zeilen, deshalb ohne Vergleich.
+  { label: "Neue Kunden", wert: (g, extra) => extra.kunden || 0, ohneVergleich: true },
+];
+
+/** "1.9.2026 – 21.9.2026" */
+function zeitraumText(zeitraum) {
+  if (!zeitraum?.von || !zeitraum?.bis) return "";
+  const tag = (t) => new Date(`${t}T12:00:00`).toLocaleDateString("de-DE");
+  return `${tag(zeitraum.von)} – ${tag(zeitraum.bis)}`;
+}
 
 const KPI_ZEILEN = [
   { key: "anwahlen", label: "Anwahlen", art: "zahl" },
@@ -252,24 +272,44 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
 
   return (
     <>
+      {/* Die vier Zahlen, nach denen zuerst gefragt wird — vor der Tabelle,
+          mit dem Zeitraum darunter und der Veränderung dahinter
+          (components/Kennzahl.js). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {KOPF_KENNZAHLEN.map((k) => {
+          const jetzt = k.wert(gesamt, { termineGesamt, wahrgenommen, kunden });
+          const davor = vorZeitraum && !k.ohneVergleich ? k.wert(gesamtVorher, {}) : null;
+          const d = davor === null ? null : differenz(jetzt, davor);
+          return (
+            <Kennzahl
+              key={k.label}
+              label={k.label}
+              wert={jetzt}
+              zusatz={zeitraumText(daten.zeitraum)}
+              gross
+              delta={d && d.richtung !== "gleich" ? { delta: d.delta, prozent: d.prozent } : null}
+            />
+          );
+        })}
+      </div>
+
       {/* KPI zuerst, ohne Vorrede. */}
       <div className="card mb-4">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="font-semibold text-textMain text-sm">KPI-Übersicht</span>
-          <span className="text-[11px] text-textMuted">
-            {new Date(`${daten.zeitraum.von}T12:00:00`).toLocaleDateString("de-DE")} – {new Date(`${daten.zeitraum.bis}T12:00:00`).toLocaleDateString("de-DE")}
-          </span>
-          {/* Überschneiden sich die Zeiträume, stecken dieselben Tage in
-              beiden Zahlen — die Veränderung wirkt dann immer klein. */}
-          {ueberlappung > 0 && (
+        <KartenKopf
+          titel="KPI-Übersicht"
+          zeitraum={zeitraumText(daten.zeitraum)}
+          hinweis={ueberlappung > 0 ? (
+            /* Überschneiden sich die Zeiträume, stecken dieselben Tage in
+               beiden Zahlen — die Veränderung wirkt dann immer klein. */
             <span className="text-[11px] text-amber">
               {ueberlappung} {ueberlappung === 1 ? "Tag steckt" : "Tage stecken"} in beiden Zeiträumen
             </span>
-          )}
-          <button onClick={exportiere} className="btn-ghost text-xs ml-auto">
+          ) : null}
+        >
+          <button onClick={exportiere} className="btn-ghost text-xs">
             <Icon name="download" size={12} /> Für Excel herunterladen
           </button>
-        </div>
+        </KartenKopf>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
