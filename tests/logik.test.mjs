@@ -4651,3 +4651,40 @@ test("Neue Funktionen werden erklärt — einmal, auch wenn man die Seite längs
   // Der Seitenhinweis nennt das Ziel mit.
   assert.match(lies("lib/seitenHinweise.js"), /Tagesziel-Ring/);
 });
+
+test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () => {
+  const { punktBeiAnteil, tagKurz } = await import("../lib/kurve.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Aus dem Anteil der Breite wird der nächstgelegene Punkt — gerundet,
+  // denn wer zwischen zwei Tagen steht, meint den näheren.
+  assert.equal(punktBeiAnteil(5, 0), 0);
+  assert.equal(punktBeiAnteil(5, 1), 4);
+  assert.equal(punktBeiAnteil(5, 0.5), 2);
+  assert.equal(punktBeiAnteil(5, 0.13), 1);
+  // Ausserhalb bleibt es am Rand, nicht daneben.
+  assert.equal(punktBeiAnteil(5, -0.4), 0);
+  assert.equal(punktBeiAnteil(5, 1.8), 4);
+  assert.equal(punktBeiAnteil(0, 0.5), null);
+  assert.equal(punktBeiAnteil(1, 0.5), 0);
+
+  assert.equal(tagKurz("2026-09-22"), "Di, 22.9.");
+  assert.equal(tagKurz(null), "");
+  assert.equal(tagKurz("kaputt"), "");
+
+  const kurve = lies("components/Kurve.js");
+  // Gerechnet wird über den Anteil der Breite, nicht über Pixel: Die Kurve
+  // wird gestreckt, ein Pixelvergleich träfe sonst die falsche Stelle.
+  assert.match(kurve, /punktBeiAnteil\(anzahl, x \/ kasten\.width\)/);
+  // Zeiger, Finger und Tastatur.
+  assert.match(kurve, /onMouseMove=\{beiBewegung\}/);
+  assert.match(kurve, /onTouchMove=\{beiBewegung\}/);
+  assert.match(kurve, /e\.key !== "ArrowLeft" && e\.key !== "ArrowRight"/);
+  assert.match(kurve, /tabIndex=\{0\}/);
+  // Beim Verlassen verschwindet die Hilfslinie wieder.
+  assert.match(kurve, /onMouseLeave=\{\(\) => setAktiv\(null\)\}/);
+  assert.match(kurve, /onBlur=\{\(\) => setAktiv\(null\)\}/);
+  // Die Werte stehen an der Legende, nicht in einer Sprechblase über der
+  // Kurve — dort verdecken sie nichts.
+  assert.match(kurve, /r\.werte\[gewaehlt\]\?\.wert \?\? 0/);
+});
