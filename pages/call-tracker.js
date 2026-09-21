@@ -103,6 +103,8 @@ export default function CallTracker() {
   const [eigenesZiel, setEigenesZiel] = useState(null);
   const [zielEingabe, setZielEingabe] = useState("");
   const [zielOffen, setZielOffen] = useState(false);
+  const [blockOffen, setBlockOffen] = useState(false);
+  const [teamOffen, setTeamOffen] = useState(false);
   const [zielFehler, setZielFehler] = useState("");
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
@@ -1288,103 +1290,91 @@ export default function CallTracker() {
             </div>
           )}
 
-          {/* Ziel, Serie, Block und die Tagesliste — der Anreiz steht dort,
-              wo telefoniert wird, nicht in einer Auswertung von gestern
-              (lib/anwahlSpiel.js). */}
+          {/* Ziel, Serie, Block und die Tagesliste in EINER Zeile.
+              Ausführlich stand dort vorher ein halber Bildschirm über dem
+              Anwahl-Knopf — und der Knopf ist das, weswegen man die Seite
+              öffnet. Details klappen auf (lib/anwahlSpiel.js). */}
           {isToday && (
-            <div className="card mb-3 flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="min-w-0">
-                  {stand ? (
-                    <Zielring wert={stand.wert} ziel={stand.ziel} label={`Tagesziel · ${ziel.titel}`} />
-                  ) : (
-                    <>
-                      <div className="label">Heute</div>
-                      <div className="kennzahl mt-0.5">{todayCounts.anwahlen || 0}</div>
-                      <div className="text-[11px] text-textMuted">Anwahlen — noch ohne Tagesziel.</div>
-                    </>
-                  )}
+            <div className="card !py-3 mb-3">
+              <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+                {stand ? (
+                  <Zielring wert={stand.wert} ziel={stand.ziel} groesse={52} label={ziel.titel} />
+                ) : (
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="kennzahl text-[22px]">{todayCounts.anwahlen || 0}</span>
+                    <span className="text-[11px] text-textMuted">Anwahlen heute</span>
+                  </span>
+                )}
 
-                  {/* Das Ziel setzt man dort, wo man telefoniert. Ein selbst
-                      gesetztes Ziel wirkt stärker als ein zugewiesenes —
-                      und ein zugewiesenes hat trotzdem Vorrang, damit eine
-                      Absprache mit der Leitung nicht überschrieben wird
-                      (lib/anwahlSpiel.js, pensumFuerHeute). */}
-                  {zielOffen ? (
-                    <div className="mt-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          type="number" min="1" max={ZIEL_MAX} inputMode="numeric"
-                          className="input !w-24 !py-1.5 text-xs"
-                          placeholder="z. B. 60"
-                          value={zielEingabe}
-                          onChange={(e) => { setZielEingabe(e.target.value); setZielFehler(""); }}
-                          onKeyDown={(e) => { if (e.key === "Enter") speichereZiel(); }}
-                        />
-                        <span className="text-[11px] text-textMuted">Anwahlen am Tag</span>
-                        <button onClick={speichereZiel} className="btn-ghost text-xs">Speichern</button>
-                        <button onClick={() => { setZielOffen(false); setZielFehler(""); }} className="btn-ghost text-xs">Abbrechen</button>
-                      </div>
-                      {zielFehler && <p className="text-[11px] text-coral mt-1">{zielFehler}</p>}
-                      {eigenesZiel && !zielFehler && (
-                        <p className="text-[11px] text-textMuted mt-1">Leer lassen und speichern entfernt dein Ziel.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => { setZielEingabe(eigenesZiel ? String(eigenesZiel) : ""); setZielOffen(true); }}
-                      className="btn-ghost text-xs mt-2">
-                      <Icon name="target" size={12} />
-                      {eigenesZiel ? `Eigenes Ziel: ${eigenesZiel} ändern` : "Eigenes Tagesziel setzen"}
+                <span className="flex items-baseline gap-1.5" title={serie.heuteGeschafft
+                  ? `Serie gehalten — heute ${serie.anwahlenHeute} Anwahlen`
+                  : `Noch ${Math.max(0, serie.mindestens - serie.anwahlenHeute)} Anwahlen, dann zählt heute mit`}>
+                  <Icon name="flame" size={13} color={serie.heuteGeschafft ? "var(--org-accent, #CE3A5C)" : "currentColor"} />
+                  <span className="kennzahl text-[18px]">{serie.laenge}</span>
+                  <span className="text-[11px] text-textMuted">Serie</span>
+                </span>
+
+                {meilenstein && (
+                  <span className="flex items-baseline gap-1.5 text-textMuted" title={`${anwahlenGesamt} Anwahlen insgesamt`}>
+                    <Icon name="medal" size={13} />
+                    <span className="text-[11px] zahl">noch {meilenstein.fehlt} bis {meilenstein.ziel}</span>
+                  </span>
+                )}
+
+                <span className="ml-auto flex items-center gap-1">
+                  <button onClick={() => { setZielEingabe(eigenesZiel ? String(eigenesZiel) : ""); setZielOffen((o) => !o); setZielFehler(""); }}
+                    title={eigenesZiel ? `Eigenes Tagesziel: ${eigenesZiel} Anwahlen` : "Eigenes Tagesziel setzen"}
+                    className="btn-ghost text-xs">
+                    <Icon name="target" size={13} />
+                  </button>
+                  <button onClick={() => setBlockOffen((o) => !o)} className="btn-ghost text-xs">
+                    <Icon name="timer" size={13} /> Block
+                  </button>
+                  {(rangliste || []).length > 1 && (
+                    <button onClick={() => setTeamOffen((o) => !o)} className="btn-ghost text-xs">
+                      <Icon name="users" size={13} /> Team
                     </button>
                   )}
+                </span>
+              </div>
 
+              {/* Das eigene Ziel: erst auf Wunsch sichtbar. Ein zugewiesenes
+                  hat Vorrang, damit eine Absprache mit der Leitung nicht
+                  stillschweigend überschrieben wird. */}
+              <Aufklapper offen={zielOffen}>
+                <div className="pt-3 mt-3 border-t border-line">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="number" min="1" max={ZIEL_MAX} inputMode="numeric"
+                      className="input !w-24 !py-1.5 text-xs" placeholder="z. B. 60"
+                      value={zielEingabe}
+                      onChange={(e) => { setZielEingabe(e.target.value); setZielFehler(""); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") speichereZiel(); }}
+                    />
+                    <span className="text-[11px] text-textMuted">Anwahlen am Tag</span>
+                    <button onClick={speichereZiel} className="btn-ghost text-xs">Speichern</button>
+                    {eigenesZiel && <span className="text-[11px] text-textMuted">Leer speichern entfernt es.</span>}
+                  </div>
+                  {zielFehler && <p className="text-[11px] text-coral mt-1">{zielFehler}</p>}
                   {ziel?.quelle === "zugewiesen" && eigenesZiel && (
                     <p className="text-[11px] text-textMuted mt-1">
                       Angezeigt wird das zugewiesene Ziel. Dein eigenes ({eigenesZiel}) greift wieder, sobald es ausläuft.
                     </p>
                   )}
                 </div>
+              </Aufklapper>
 
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div>
-                    <div className="label">Serie</div>
-                    <div className="flex items-baseline gap-1.5 mt-0.5">
-                      <Icon name="flame" size={14} color={serie.laenge > 0 ? "var(--org-accent, #CE3A5C)" : "currentColor"} />
-                      <span className="kennzahl text-[22px]">{serie.laenge}</span>
-                      <span className="text-[11px] text-textMuted">{serie.laenge === 1 ? "Tag" : "Tage"}</span>
-                    </div>
-                    <div className="text-[11px] text-textMuted">
-                      {serie.heuteGeschafft
-                        ? `Heute schon ${serie.anwahlenHeute} Anwahlen — Serie gehalten.`
-                        : `Noch ${Math.max(0, serie.mindestens - serie.anwahlenHeute)} Anwahlen, dann zählt heute mit.`}
-                    </div>
-                  </div>
-
-                  {meilenstein && (
-                    <div>
-                      <div className="label">Meilenstein</div>
-                      <div className="flex items-baseline gap-1.5 mt-0.5">
-                        <Icon name="medal" size={14} />
-                        <span className="kennzahl text-[22px]">{meilenstein.ziel}</span>
-                      </div>
-                      <div className="text-[11px] text-textMuted zahl">
-                        {anwahlenGesamt} gesamt · noch {meilenstein.fehlt}
-                      </div>
-                    </div>
-                  )}
+              <Aufklapper offen={blockOffen}>
+                <div className="pt-3 mt-3 border-t border-line">
+                  <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} />
                 </div>
-              </div>
+              </Aufklapper>
 
-              <div className="border-t border-line pt-3">
-                <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} />
-              </div>
-
-              {(rangliste || []).length > 1 && (
-                <div className="border-t border-line pt-3">
+              <Aufklapper offen={teamOffen}>
+                <div className="pt-3 mt-3 border-t border-line">
                   <div className="label mb-2">Heute im Team</div>
                   <div className="flex flex-col gap-1">
-                    {rangliste.slice(0, 5).map((p, i) => (
+                    {(rangliste || []).slice(0, 5).map((p, i) => (
                       <div key={p.id} className={`flex items-center gap-2 text-xs ${p.ich ? "text-textMain" : "text-textMuted"}`}>
                         <span className="w-4 text-right zahl">{i + 1}.</span>
                         <span className="flex-1 truncate">{p.ich ? "Du" : p.name}</span>
@@ -1394,7 +1384,7 @@ export default function CallTracker() {
                     ))}
                   </div>
                 </div>
-              )}
+              </Aufklapper>
             </div>
           )}
 
