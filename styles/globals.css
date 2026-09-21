@@ -16,20 +16,26 @@
      im Dunkelmodus wäre z.B. das Kalendersymbol im Termin-Feld dunkel auf
      dunklem Grund und der Kalender öffnete weiß. */
   color-scheme: dark;
-  --theme-bg-rgb: 20 21 28;
-  --theme-surface-rgb: 28 30 41;
-  --theme-surface-raised-rgb: 34 36 47;
-  --theme-line-rgb: 47 50 66;
-  --theme-text-rgb: 236 237 245;
-  --theme-text-muted-rgb: 141 144 166;
-  --theme-sidebar-mid: #17181F;
+  /* Ohne Verläufe und Schatten trägt allein der Helligkeitsunterschied die
+     Trennung zwischen Seite und Karte. Die Seite ist deshalb dunkler, die
+     Karte heller und der Rand deutlicher als vorher — flach heisst nicht
+     kontrastarm. */
+  --theme-bg-rgb: 15 16 22;
+  --theme-surface-rgb: 26 28 38;
+  --theme-surface-raised-rgb: 33 36 49;
+  --theme-line-rgb: 58 62 82;
+  --theme-text-rgb: 240 241 248;
+  /* Heller als zuvor (141/144/166): auf der Karte kam der gedämpfte Text
+     sonst bei 4,6:1 heraus — lesbar, aber kraftlos. */
+  --theme-text-muted-rgb: 157 161 184;
+  --theme-sidebar-mid: #131420;
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --theme-bg-rgb: 244 245 249;
-  --theme-surface-rgb: 241 242 247;
+  --theme-bg-rgb: 238 240 246;
+  --theme-surface-rgb: 247 248 251;
   --theme-surface-raised-rgb: 255 255 255;
-  --theme-line-rgb: 223 225 234;
+  --theme-line-rgb: 210 214 226;
   --theme-text-rgb: 27 29 39;
   /* Bewusst so dunkel, dass gedämpfter Text auch auf der HELLSTEN Fläche
      (Kartenhintergrund) noch WCAG AA (4.5:1) erreicht — mit dem naheliegenden
@@ -62,7 +68,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
    --org-color-3) — ohne gesetzte Werte exakt wie bisher. */
 .brand-gradient { background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%); }
 .brand-stripe {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%);
 }
@@ -96,11 +102,15 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
   border-radius: 12px;
   padding: 22px 24px;
+  /* Ein flacher, weicher Schatten statt des alten Schlagschattens: Er macht
+     keinen Gegenstand aus der Karte, hebt sie aber von der Fläche ab. */
+  box-shadow: 0 1px 2px rgba(0,0,0,.18);
   transition: border-color .18s ease, background .18s ease;
 }
 /* Anklickbares zeigt sich am Rand, nicht durch Anheben. */
 .card.cursor-pointer:hover, .card[class*="hover:-translate"]:hover {
-  border-color: var(--org-color-1, #35406E);
+  border-color: var(--org-accent, #CE3A5C);
+  background: color-mix(in srgb, var(--org-surface-raised, rgb(var(--theme-surface-raised-rgb))) 94%, var(--org-accent, #CE3A5C));
   transform: none;
 }
 
@@ -119,20 +129,20 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   padding: 10px 18px;
   border-radius: 10px;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   transition: filter .15s ease;
 }
-.btn:hover { filter: brightness(1.07); }
+.btn:hover { filter: brightness(1.12) saturate(1.05); }
 .btn:active { filter: brightness(.95); }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .btn-ghost {
-  background: transparent;
-  color: var(--org-text-muted, #8D90A6);
+  background: rgb(var(--org-line-rgb, var(--theme-line-rgb)) / .22);
+  color: var(--org-text, rgb(var(--theme-text-rgb)));
   border: 1px solid var(--org-line, rgb(var(--theme-line-rgb)));
   border-radius: 10px;
   /* Vorher ohne eigene Innenabstände: Am Rechner waren die Knöpfe dadurch
@@ -143,7 +153,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   gap: 6px;
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
-.btn-ghost:hover { color: var(--org-text, rgb(var(--theme-text-rgb))); border-color: var(--org-color-1, #35406E); background: rgb(var(--org-accent-rgb, 206 58 92) / .06); }
+.btn-ghost:hover { color: var(--org-text, rgb(var(--theme-text-rgb))); border-color: var(--org-accent, #CE3A5C); background: rgb(var(--org-accent-rgb, 206 58 92) / .14); }
 
 .input {
   padding: 10px 14px;
