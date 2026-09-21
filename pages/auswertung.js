@@ -11,6 +11,7 @@ import TempoKarte from "../components/TempoKarte";
 import FilterAuswahl from "../components/FilterAuswahl";
 import Kennzahl from "../components/Kennzahl";
 import Kurve from "../components/Kurve";
+import Balkenliste from "../components/Balkenliste";
 import { tagesReihe } from "../lib/kurve";
 import KartenKopf from "../components/KartenKopf";
 import { stufenAuswertung } from "../lib/terminArt";
@@ -42,9 +43,9 @@ import { downloadCsv } from "../lib/csv";
 // zweier Quoten wäre irreführend — "+4 %" hiesse dort mal Prozentpunkte,
 // mal Prozent vom Vorwert.
 const KOPF_KENNZAHLEN = [
-  { label: "Anwahlen", wert: (g) => g.anwahlen || 0 },
-  { label: "Erstgespräche", wert: (g) => g.erreicht || 0 },
-  { label: "Termine", wert: (g) => g.termin || 0 },
+  { label: "Anwahlen", wert: (g) => g.anwahlen || 0, reihe: "anwahlen" },
+  { label: "Erstgespräche", wert: (g) => g.erreicht || 0, reihe: "erreicht" },
+  { label: "Termine", wert: (g) => g.termin || 0, reihe: "termin" },
   // Abschlüsse stecken nicht in den Anruf-Zeilen, deshalb ohne Vergleich.
   { label: "Neue Kunden", wert: (g, extra) => extra.kunden || 0, ohneVergleich: true },
 ];
@@ -289,6 +290,8 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
               wert={jetzt}
               zusatz={zeitraumText(daten.zeitraum)}
               gross
+              verlauf={k.reihe ? tagesReihe(zeilen, k.reihe, daten.zeitraum?.von, daten.zeitraum?.bis) : null}
+              farbe={k.reihe ? feldFarbe(k.reihe) : null}
               delta={d && d.richtung !== "gleich" ? { delta: d.delta, prozent: d.prozent } : null}
             />
           );
@@ -430,17 +433,25 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
         <div className="grid grid-cols-3 gap-2 mt-4">
           {[
             { label: "Termine angelegt", wert: termineGesamt },
-            { label: "Wahrgenommen", wert: wahrgenommen, zusatz: termineGesamt > 0 ? `${Math.round((wahrgenommen / termineGesamt) * 100)} %` : null },
-            { label: "Kunden geworden", wert: kunden, zusatz: wahrgenommen > 0 ? `${Math.round((kunden / wahrgenommen) * 100)} % der wahrgenommenen` : null },
-          ].map((k) => (
-            <div key={k.label} className="rounded-xl border border-line px-3 py-2.5">
-              <div className="text-lg font-display font-semibold text-textMain">{k.wert}</div>
-              <div className="text-[11px] text-textMain leading-tight">{k.label}</div>
-              {k.zusatz && <div className="text-[10px] text-textMuted leading-tight mt-0.5">{k.zusatz}</div>}
-            </div>
-          ))}
+            { label: "Wahrgenommen", wert: wahrgenommen, zusatz: termineGesamt > 0 ? `${Math.round((wahrgenommen / termineGesamt) * 100)} % der angelegten` : "" },
+            { label: "Kunden geworden", wert: kunden, zusatz: wahrgenommen > 0 ? `${Math.round((kunden / wahrgenommen) * 100)} % der wahrgenommenen` : "" },
+          ].map((k) => <Kennzahl key={k.label} label={k.label} wert={k.wert} zusatz={k.zusatz} />)}
         </div>
       </div>
+
+      {/* Teams im Vergleich — als Rangfolge, nicht als Tabelle: Gefragt ist
+          hier, wer vorn liegt und wie gross der Abstand ist. */}
+      {teamsMitZahlen.length > 1 && (
+        <div className="card mb-4">
+          <KartenKopf titel="Teams im Vergleich" zeitraum={zeitraumText(daten.zeitraum)} />
+          <Balkenliste
+            daten={teamsMitZahlen.map((t, i) => ({ label: t.name, wert: t.counts.anwahlen || 0, farbe: paletteFarbe(i) }))}
+            einheit="Anwahlen"
+            leerText="Kein Team mit Aktivität im Zeitraum."
+            erklaerung="Anwahlen sagen, wie viel telefoniert wurde — nicht wie gut. Die Quoten dazu stehen in der KPI-Übersicht oben."
+          />
+        </div>
+      )}
 
       {/* Impact: wirkt Training auf die Terminquote? */}
       <div className="card mb-4">

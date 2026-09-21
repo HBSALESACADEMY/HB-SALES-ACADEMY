@@ -8,7 +8,10 @@
 //
 // Ohne Rahmen, nur mit eigener Fläche: Die Kacheln stehen meist INNERHALB
 // einer Karte, und ein Rahmen im Rahmen ist eine Trennung ohne Aussage.
-export default function Kennzahl({ label, wert, zusatz = "", delta = null, farbe = null, gross = false, className = "" }) {
+import { punkteFuer, weicherPfad, flaechenPfad } from "../lib/kurve";
+export default function Kennzahl({
+  label, wert, zusatz = "", delta = null, farbe = null, gross = false, className = "", verlauf = null,
+}) {
   return (
     <div className={`bg-surface rounded-xl px-4 py-3 ${className}`}>
       <div className="label">{label}</div>
@@ -17,7 +20,23 @@ export default function Kennzahl({ label, wert, zusatz = "", delta = null, farbe
         {delta && <Veraenderung {...delta} />}
       </div>
       {zusatz && <div className="text-[11px] text-textMuted mt-0.5">{zusatz}</div>}
+      {/* Die kleine Kurve darunter beantwortet die Frage, die eine einzelne
+          Zahl offen lässt: Geht es rauf oder runter? */}
+      {verlauf && verlauf.length >= 2 && <Sparkline werte={verlauf} farbe={farbe} />}
     </div>
+  );
+}
+
+/** Eine Kurve in Daumennagelgrösse — ohne Achsen, ohne Zahlen. */
+export function Sparkline({ werte = [], farbe = null, hoehe = 26 }) {
+  const { punkte } = punkteFuer(werte.map((w) => (typeof w === "number" ? w : w.wert || 0)), 100, hoehe, 2);
+  if (punkte.length < 2) return null;
+  const strich = farbe || "currentColor";
+  return (
+    <svg viewBox={`0 0 100 ${hoehe}`} className="w-full mt-2" style={{ height: hoehe }} preserveAspectRatio="none" aria-hidden="true">
+      <path d={flaechenPfad(punkte, hoehe)} fill={strich} opacity=".13" />
+      <path d={weicherPfad(punkte)} fill="none" stroke={strich} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+    </svg>
   );
 }
 

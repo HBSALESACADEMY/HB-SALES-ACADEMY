@@ -4479,3 +4479,34 @@ test("Das Design trägt eine eigene Handschrift: keine Regenbogen-Palette, gemis
   const termine = lies("pages/termine.js");
   assert.ok(!/📎|📝|💬 \{|✅ \{/.test(termine), "Emoji in der Terminliste");
 });
+
+test("Die Statistiken mischen die Darstellung: Kurve, Balken, Ring und Raster", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  const balken = lies("components/Balkenliste.js");
+  // Ein gemeinsamer Maßstab und eine Rangfolge — sonst ist es kein Vergleich.
+  assert.match(balken, /const groesster = gefuellt\[0\]\.wert;/);
+  assert.match(balken, /\.sort\(\(a, b\) => b\.wert - a\.wert\)/);
+  // Lange Listen laufen nicht ins Endlose.
+  assert.match(balken, /hoechstens = 12/);
+
+  const tracker = lies("pages/call-tracker.js");
+  // Gründe jetzt als Balken, Verlauf als Kurve — der Ring bleibt für die
+  // Verteilung der Gespräche.
+  assert.match(tracker, /<Balkenliste daten=\{gruendeDaten\}/);
+  assert.match(tracker, /<Kurve/);
+  assert.match(tracker, /<Kreisdiagramm/);
+  assert.match(tracker, /<WochentagAnalyse/);
+  assert.match(tracker, /<TageszeitAnalyse/);
+
+  const auswertung = lies("pages/auswertung.js");
+  assert.match(auswertung, /titel="Teams im Vergleich"/);
+  assert.match(auswertung, /<Balkenliste/);
+  // Die Kopfzahlen tragen eine kleine Kurve.
+  assert.match(auswertung, /verlauf=\{k\.reihe \? tagesReihe\(zeilen, k\.reihe/);
+
+  // Die Sparkline zeichnet nur mit mindestens zwei Punkten.
+  const kennzahl = lies("components/Kennzahl.js");
+  assert.match(kennzahl, /verlauf && verlauf\.length >= 2/);
+  assert.match(kennzahl, /if \(punkte\.length < 2\) return null;/);
+});

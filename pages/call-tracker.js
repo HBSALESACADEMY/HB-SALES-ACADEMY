@@ -20,6 +20,9 @@ import { berlinHeute, tagPlus } from "../lib/woche";
 import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidung, differenz, vergleichsText } from "../lib/vergleich";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
+import Balkenliste from "../components/Balkenliste";
+import Kurve from "../components/Kurve";
+import { tagesReihe } from "../lib/kurve";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import { korrigiere, regleEin, ziehreAnteiligMit } from "../lib/anrufKorrektur";
@@ -2465,8 +2468,11 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
 
       <div className="card mb-4">
         <div className="font-semibold text-textMain text-sm mb-1">Warum negative Anrufe?</div>
-        <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum</p>
-        <Kreisdiagramm daten={gruendeDaten} mitteText="Gründe" leerText="Noch keine negativen Anrufe mit Grund erfasst."
+        <p className="text-xs text-textMuted mb-3">Die Gründe im gewählten Zeitraum, der häufigste oben</p>
+        {/* Waagerechte Balken statt Ring: Gefragt ist "was ist am
+            grössten", nicht "wie verteilt sich das" — und sechs Ringstücke
+            muss man erst der Legende zuordnen. */}
+        <Balkenliste daten={gruendeDaten} einheit="Anrufe" leerText="Noch keine negativen Anrufe mit Grund erfasst."
           erklaerung="Zeigt, woran die Gespräche scheitern. Ein Grund, der deutlich heraussticht, ist ein Trainingsthema — ein Skript-Baustein dagegen wirkt breiter als jede allgemeine Schulung." />
       </div>
 
@@ -2534,6 +2540,22 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
       )}
 
       {/* Dieselben Zeilen wie die Kacheln, nur nach Wochentag gebündelt. */}
+      {/* Der Verlauf über den Zeitraum — die Entwicklung als Kurve, bevor
+          die Raster die Frage "wann genau" beantworten (components/Kurve.js). */}
+      <div className="card mb-4">
+        <div className="font-semibold text-textMain text-sm mb-1">Verlauf</div>
+        <p className="text-xs text-textMuted mb-3">Anwahlen und Termine je Tag im gewählten Zeitraum</p>
+        <Kurve
+          hoehe={110}
+          reihen={[
+            { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen") },
+            { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin") },
+          ]}
+          leerText="Im Zeitraum wurden keine Anrufe erfasst."
+          erklaerung="Beide Kurven teilen einen Maßstab: Die Termin-Kurve liegt deshalb flach, solange auf viele Anwahlen wenige Termine kommen — genau das ist die Aussage."
+        />
+      </div>
+
       <WochentagAnalyse zeilen={zeilen} />
 
       <TageszeitAnalyse
