@@ -4306,3 +4306,38 @@ test("Die Seiten halten sich aktuell, ohne eine Eingabe zu stören", async () =>
     assert.ok(!/setInterval\(\(\) => \{ if \(!document\.hidden\)/.test(lies(datei)), datei);
   });
 });
+
+test("Vergangene Termine stehen aufgeräumt: nach Monat gebündelt, eine Zeile je Termin", async () => {
+  const { gruppiereNachMonat, monatsTitel, gruppiereNachTag } = await import("../lib/terminGruppen.js");
+
+  assert.equal(monatsTitel("2026-09-22"), "September 2026");
+  assert.equal(monatsTitel(null), "Ohne Zeitpunkt");
+
+  const leads = [
+    { id: "a", appointment_at: "2026-09-22T09:00:00Z" },
+    { id: "b", appointment_at: "2026-09-15T09:00:00Z" },
+    { id: "c", appointment_at: "2026-08-31T09:00:00Z" },
+    { id: "d", appointment_at: null },
+  ];
+  const monate = gruppiereNachMonat(leads);
+  assert.deepEqual(monate.map((g) => g.titel), ["September 2026", "August 2026", "Ohne Zeitpunkt"]);
+  assert.deepEqual(monate[0].leads.map((l) => l.id), ["a", "b"]);
+  // Ohne Zeitpunkt bleibt am Ende, wie bei der Tagesgruppierung.
+  assert.equal(monate[monate.length - 1].leads[0].id, "d");
+  // Dieselben Termine nach Tagen ergäben vier Überschriften — genau das war
+  // das Problem.
+  assert.ok(gruppiereNachTag(leads).length > monate.length);
+
+  // Die Seite bündelt die Vergangenheit nach Monat und zeichnet Zeilen.
+  const seite = readFileSync(new URL("../pages/termine.js", import.meta.url), "utf8");
+  assert.match(seite, /ansicht === "vergangen" \? gruppiereNachMonat\(sichtbareLeads\) : gruppiereNachTag\(sichtbareLeads\)/);
+  const stelle = seite.indexOf('if (ansicht === "vergangen" && !isExpanded)');
+  assert.ok(stelle > 0);
+  const zeile = seite.slice(stelle, stelle + 2600);
+  // Volle Breite statt Kachel, kein Fortschrittsbalken, dafür das Ergebnis.
+  assert.match(zeile, /sm:col-span-2 lg:col-span-3/);
+  assert.ok(!/Fortschrittsbalken/.test(zeile));
+  assert.match(zeile, /OUTCOME_LABELS\[lead\.outcome\]/);
+  // Angetippt öffnet sich die vollständige Ansicht.
+  assert.match(zeile, /setExpandedLeadId\(lead\.id\)/);
+});

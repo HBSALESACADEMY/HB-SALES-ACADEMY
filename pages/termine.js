@@ -7,7 +7,7 @@ import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, ROLLEN_NAMEN, kuerz
 import { namensHinweis } from "../lib/kundenname";
 import { ERGEBNIS_LABELS, ERGEBNISSE } from "../lib/ergebnis";
 import { istKundentermin } from "../lib/terminArt";
-import { gruppiereNachTag } from "../lib/terminGruppen";
+import { gruppiereNachTag, gruppiereNachMonat } from "../lib/terminGruppen";
 import Fortschrittsbalken from "../components/Fortschrittsbalken";
 import InfoCard from "../components/InfoCard";
 import Icon from "../components/Icon";
@@ -27,7 +27,7 @@ import AktualisierenKnopf from "../components/AktualisierenKnopf";
 import { bereichFuer, startOfMonth, endOfMonth, istGleicherTag, monatsRaster } from "../lib/dateRange";
 import { loescheGeprueft, aendereGeprueft } from "../lib/loeschen";
 import { formatiereDatum, formatiereUhrzeit, terminAnzeige } from "../lib/zeit";
-import { deutscheZeit, nurUhrzeit, DEUTSCHE_ZONE } from "../lib/terminzeit";
+import { deutscheZeit, nurUhrzeit, inZone, DEUTSCHE_ZONE } from "../lib/terminzeit";
 import { berlinHeute, tagesBeginnZeitpunkt } from "../lib/woche";
 
 const STATUS_LABELS = { geplant: "Geplant", wahrgenommen: "Wahrgenommen", abgesagt: "Abgesagt" };
@@ -860,6 +860,13 @@ export default function Termine() {
     return zusatz ? `${uhr} Uhr (bei dir ${zusatz})` : `${uhr} Uhr`;
   }
 
+  // In der Vergangenheitsansicht steht der Tag an der Zeile, nicht in der
+  // Überschrift: dort ist nur noch der Monat gruppiert.
+  function tagUndZeit(iso) {
+    if (!iso) return "ohne Zeitpunkt";
+    return inZone(iso, DEUTSCHE_ZONE, { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
   if (loading) return <Layout><p className="text-textMuted text-sm">Lädt...</p></Layout>;
 
   // Abgeleitet aus der pro Organisation anpassbaren Feld-Konfiguration:
@@ -931,7 +938,9 @@ export default function Termine() {
   const sichtbareLeads = ansicht === "vergangen"
     ? [...filteredLeads].sort((a, b) => String(b.appointment_at).localeCompare(String(a.appointment_at)))
     : filteredLeads;
-  const gruppen = gruppiereNachTag(sichtbareLeads);
+  // Vergangene Termine nach Monaten: Nach Tagen gebündelt bestand die
+  // Ansicht zur Hälfte aus Überschriften (lib/terminGruppen.js).
+  const gruppen = ansicht === "vergangen" ? gruppiereNachMonat(sichtbareLeads) : gruppiereNachTag(sichtbareLeads);
 
   return (
     <Layout>
@@ -1164,6 +1173,48 @@ export default function Termine() {
           // Interessenten. Keine Stufe, kein Balken, kein Ergebnis, kein
           // Closing Call — er steht hier nur, weil er einen Zeitpunkt hat.
           const kundentermin = istKundentermin(lead);
+
+          // Vergangene Termine als Zeile statt als Karte: Dreissig Kacheln
+          // mit Fortschrittsbalken füllen drei Bildschirme, obwohl man dort
+          // nur nachsieht, was aus einem Kontakt geworden ist. Angetippt
+          // öffnet sich dieselbe vollständige Ansicht wie überall.
+          if (ansicht === "vergangen" && !isExpanded) {
+            const firma = companyField ? getLeadFieldValue(lead, companyField) : "";
+            return (
+              <button
+                key={lead.id}
+                ref={(el) => { leadRefs.current[lead.id] = el; }}
+                onClick={() => setExpandedLeadId(lead.id)}
+                className={`sm:col-span-2 lg:col-span-3 text-left w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-line bg-surface hover:bg-surfaceRaised transition ${isHighlighted ? "ring-2 ring-amber" : ""}`}
+              >
+                <span className="text-[11px] font-mono text-textMuted flex-shrink-0 w-[8.5rem] hidden sm:block">{tagUndZeit(lead.appointment_at)}</span>
+                <span className="text-[11px] font-mono text-textMuted flex-shrink-0 sm:hidden">{nurUhrzeit(lead.appointment_at, DEUTSCHE_ZONE)}</span>
+                {kundentermin && kuerzelVon(art) && (
+                  <span className="font-mono text-[11px] flex-shrink-0" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}</span>
+                )}
+                {!kundentermin && <span className="flex-shrink-0" title="Persönlicher Termin">📎</span>}
+                <span className="text-sm text-textMain truncate flex-1 min-w-0">
+                  {lead.name}{firma ? <span className="text-textMuted"> · {firma}</span> : null}
+                </span>
+                {openTaskCount > 0 && <span className="text-[10px] text-textMuted flex-shrink-0">✅ {openTaskCount}</span>}
+                {leadComments.length > 0 && <span className="text-[10px] text-textMuted flex-shrink-0 hidden sm:inline">💬 {leadComments.length}</span>}
+                {viewMode === "team" && owner && (
+                  <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} />
+                )}
+                {/* Das Ergebnis ist in der Vergangenheit die eigentliche
+                    Auskunft — der Status sagt dort nur noch wenig. */}
+                {kundentermin && lead.outcome ? (
+                  <span className={`text-[10px] uppercase tracking-wide flex-shrink-0 text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
+                    {OUTCOME_LABELS[lead.outcome]}
+                  </span>
+                ) : (
+                  <span className={`text-[10px] uppercase tracking-wide flex-shrink-0 text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>
+                    {STATUS_LABELS[lead.status]}
+                  </span>
+                )}
+              </button>
+            );
+          }
 
           if (!isExpanded) {
             return (
