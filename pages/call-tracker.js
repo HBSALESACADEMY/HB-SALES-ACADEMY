@@ -21,6 +21,9 @@ import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidun
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
 import Kreisdiagramm from "../components/Kreisdiagramm";
 import Balkenliste from "../components/Balkenliste";
+import Zielring from "../components/Zielring";
+import Telefonblock from "../components/Telefonblock";
+import { anwahlSerie, tagesZiel, zielStand, naechsterMeilenstein } from "../lib/anwahlSpiel";
 import Kurve from "../components/Kurve";
 import { tagesReihe } from "../lib/kurve";
 import { feldFarbe, grundFarbe, paletteFarbe } from "../lib/diagrammFarben";
@@ -92,6 +95,9 @@ export default function CallTracker() {
   // hängt vom Geschäft ab und nicht von einer Voreinstellung.
   const [vergleichsArt, setVergleichsArt] = useState("davor");
   const [eigenerVergleich, setEigenerVergleich] = useState({ von: "", bis: "" });
+  // Tagesziel, Serie, Meilenstein und die Tagesrangliste (lib/anwahlSpiel.js).
+  const [spiel, setSpiel] = useState(null);
+  const [rangliste, setRangliste] = useState(null);
   // Nur die Leitung sieht den Hinweis auf eigene Ablehnungsgründe.
   const [darfOrgVerwalten, setDarfOrgVerwalten] = useState(false);
   // Wurde ein angefangener Anruf wieder aufgenommen? Dann steht ein Hinweis
@@ -400,6 +406,28 @@ export default function CallTracker() {
 
   // Beim Verlassen oder Wegschalten der Seite alles Ausstehende noch
   // hinausschicken. Genau hier gingen Tage verloren: gezählt, Tab zu, weg.
+  // Die Grundlage für Ziel, Serie und Meilenstein: die eigenen Tageszeilen
+  // und die eigenen Ziele. Einmal beim Öffnen der Heute-Ansicht — die
+  // Zahlen von heute kommen live aus dem Zähler.
+  useEffect(() => {
+    if (!userId || view !== "today") return;
+    let aktiv = true;
+    (async () => {
+      const [tage, ziele] = await Promise.all([
+        supabase.from("call_log_days").select("log_date, counts")
+          .eq("user_id", userId).order("log_date", { ascending: false }).limit(1200),
+        supabase.from("team_goals").select("title, metric, target_count, starts_on, ends_on, week_start")
+          .eq("user_id", userId).limit(50),
+      ]);
+      if (!aktiv) return;
+      setSpiel({ tage: tage.data || [], ziele: ziele.data || [] });
+    })();
+    apiGet("/api/tagesrangliste")
+      .then((a) => { if (aktiv) setRangliste(a.liste || []); })
+      .catch(() => { if (aktiv) setRangliste([]); });
+    return () => { aktiv = false; };
+  }, [userId, view]);
+
   useEffect(() => {
     const beiVerlassen = () => { if (letzterStand.current) sendeZahlen(); };
     // Zurück auf der Seite: erst prüfen, ob inzwischen ein neuer Tag ist.
@@ -1098,6 +1126,23 @@ export default function CallTracker() {
     [ready, view, prefix, reasons, nachtragen]
   );
 
+  // Ziel, Serie und Meilenstein. Der heutige Tag kommt aus dem LIVE-Zähler,
+  // die Vortage aus der Datenbank — sonst hinkt der Ring hinter dem letzten
+  // Klick her.
+  const spielTage = useMemo(() => {
+    const heute = berlinHeute();
+    const ohneHeute = (spiel?.tage || []).filter((t) => t.log_date !== heute);
+    return [...ohneHeute, { log_date: heute, counts: { anwahlen: todayCounts.anwahlen || 0 } }];
+  }, [spiel, todayCounts.anwahlen]);
+  const serie = useMemo(() => anwahlSerie(spielTage), [spielTage]);
+  const ziel = useMemo(() => tagesZiel(spiel?.ziele || []), [spiel]);
+  const stand = ziel ? zielStand(ziel.proTag, todayCounts.anwahlen || 0) : null;
+  const anwahlenGesamt = useMemo(
+    () => spielTage.reduce((summe, t) => summe + (Number(t?.counts?.anwahlen) || 0), 0),
+    [spielTage],
+  );
+  const meilenstein = naechsterMeilenstein(anwahlenGesamt);
+
   const isToday = view === "today";
   const counts = todayCounts;
   const reasonCounts = todayReasons;
@@ -1206,6 +1251,76 @@ export default function CallTracker() {
               <button onClick={() => switchView("statistik")} className="btn-ghost text-xs">
                 Zu den Statistiken
               </button>
+            </div>
+          )}
+
+          {/* Ziel, Serie, Block und die Tagesliste — der Anreiz steht dort,
+              wo telefoniert wird, nicht in einer Auswertung von gestern
+              (lib/anwahlSpiel.js). */}
+          {isToday && (
+            <div className="card mb-3 flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                {stand ? (
+                  <Zielring wert={stand.wert} ziel={stand.ziel} label={`Tagesziel · ${ziel.titel}`} />
+                ) : (
+                  <div className="min-w-0">
+                    <div className="label">Heute</div>
+                    <div className="kennzahl mt-0.5">{todayCounts.anwahlen || 0}</div>
+                    <div className="text-[11px] text-textMuted">
+                      Anwahlen. Ein Tagesziel bekommst du, sobald dir jemand ein persönliches Anwahl-Ziel setzt.
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <div className="label">Serie</div>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <Icon name="flame" size={14} color={serie.laenge > 0 ? "var(--org-accent, #CE3A5C)" : "currentColor"} />
+                      <span className="kennzahl text-[22px]">{serie.laenge}</span>
+                      <span className="text-[11px] text-textMuted">{serie.laenge === 1 ? "Tag" : "Tage"}</span>
+                    </div>
+                    <div className="text-[11px] text-textMuted">
+                      {serie.heuteGeschafft
+                        ? `Heute schon ${serie.anwahlenHeute} Anwahlen — Serie gehalten.`
+                        : `Noch ${Math.max(0, serie.mindestens - serie.anwahlenHeute)} Anwahlen, dann zählt heute mit.`}
+                    </div>
+                  </div>
+
+                  {meilenstein && (
+                    <div>
+                      <div className="label">Meilenstein</div>
+                      <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <Icon name="medal" size={14} />
+                        <span className="kennzahl text-[22px]">{meilenstein.ziel}</span>
+                      </div>
+                      <div className="text-[11px] text-textMuted zahl">
+                        {anwahlenGesamt} gesamt · noch {meilenstein.fehlt}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-line pt-3">
+                <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} />
+              </div>
+
+              {(rangliste || []).length > 1 && (
+                <div className="border-t border-line pt-3">
+                  <div className="label mb-2">Heute im Team</div>
+                  <div className="flex flex-col gap-1">
+                    {rangliste.slice(0, 5).map((p, i) => (
+                      <div key={p.id} className={`flex items-center gap-2 text-xs ${p.ich ? "text-textMain" : "text-textMuted"}`}>
+                        <span className="w-4 text-right zahl">{i + 1}.</span>
+                        <span className="flex-1 truncate">{p.ich ? "Du" : p.name}</span>
+                        <span className="zahl">{p.anwahlen}</span>
+                        {p.termin > 0 && <span className="zahl text-teal">+{p.termin} T</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

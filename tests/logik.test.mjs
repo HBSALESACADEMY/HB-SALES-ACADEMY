@@ -4510,3 +4510,63 @@ test("Die Statistiken mischen die Darstellung: Kurve, Balken, Ring und Raster", 
   assert.match(kennzahl, /verlauf && verlauf\.length >= 2/);
   assert.match(kennzahl, /if \(punkte\.length < 2\) return null;/);
 });
+
+test("Die Anwahl-Serie zählt Arbeitstage, nicht Kalendertage", async () => {
+  const s = await import("../lib/anwahlSpiel.js");
+  const tag = (d, anwahlen) => ({ log_date: d, counts: { anwahlen } });
+  // Freitag 18.9.2026, Montag 21.9., Dienstag 22.9. (heute)
+  const jetzt = new Date("2026-09-22T10:00:00Z");
+
+  // Das Wochenende bricht die Serie nicht.
+  const serie = s.anwahlSerie([tag("2026-09-17", 30), tag("2026-09-18", 25), tag("2026-09-21", 22), tag("2026-09-22", 21)], { jetzt });
+  assert.equal(serie.laenge, 4);
+  assert.equal(serie.heuteGeschafft, true);
+
+  // Heute noch nicht geschafft: Die Serie der Vortage bleibt stehen, der
+  // heutige Tag zählt noch nicht mit.
+  const offen = s.anwahlSerie([tag("2026-09-18", 25), tag("2026-09-21", 22), tag("2026-09-22", 5)], { jetzt });
+  assert.equal(offen.laenge, 2);
+  assert.equal(offen.heuteGeschafft, false);
+  assert.equal(offen.anwahlenHeute, 5);
+
+  // Ein verpasster Arbeitstag bricht sie.
+  assert.equal(s.anwahlSerie([tag("2026-09-17", 30), tag("2026-09-18", 3), tag("2026-09-21", 22)], { jetzt }).laenge, 1);
+  assert.equal(s.anwahlSerie([], { jetzt }).laenge, 0);
+  // Mehrere Zeilen am selben Tag werden addiert (zwei Geräte).
+  assert.equal(s.anwahlenAm([tag("2026-09-22", 12), tag("2026-09-22", 9)], "2026-09-22"), 21);
+
+  // Bestwert über die ganze Zeit, mit Lücke dazwischen.
+  assert.equal(s.besteSerie([tag("2026-09-01", 30), tag("2026-09-02", 30), tag("2026-09-03", 30), tag("2026-09-07", 30)]), 3);
+
+  // Meilensteine: weit auseinander, und der nächste steht mit Reststand da.
+  assert.deepEqual(s.naechsterMeilenstein(120), { ziel: 500, fehlt: 380, anteil: 24 });
+  assert.equal(s.naechsterMeilenstein(99999), null);
+
+  // Das Tagesziel kommt aus dem laufenden persönlichen Ziel mit dem
+  // kleinsten Zeitraum, geteilt auf die Arbeitstage.
+  const ziel = s.tagesZiel([
+    { metric: "anwahlen", target_count: 100, starts_on: "2026-09-21", ends_on: "2026-09-25", title: "Woche" },
+    { metric: "anwahlen", target_count: 1000, starts_on: "2026-09-01", ends_on: "2026-09-30", title: "Monat" },
+  ], { jetzt });
+  assert.equal(ziel.titel, "Woche");
+  assert.equal(ziel.arbeitstage, 5);
+  assert.equal(ziel.proTag, 20);
+  // Ziele auf andere Kennzahlen oder ausserhalb des Zeitraums zählen nicht.
+  assert.equal(s.tagesZiel([{ metric: "termin", target_count: 5, starts_on: "2026-09-21", ends_on: "2026-09-25" }], { jetzt }), null);
+  assert.equal(s.tagesZiel([{ metric: "anwahlen", target_count: 50, starts_on: "2026-08-01", ends_on: "2026-08-07" }], { jetzt }), null);
+
+  // Der Stand: nie über 100 %, und ohne Ziel keine Division.
+  assert.deepEqual(s.zielStand(20, 5), { ziel: 20, wert: 5, anteil: 25, fehlt: 15, erreicht: false });
+  assert.equal(s.zielStand(20, 40).anteil, 100);
+  assert.equal(s.zielStand(20, 40).erreicht, true);
+  assert.equal(s.zielStand(0, 10).anteil, 0);
+
+  // Der Block zählt die Differenz des Tageszählers.
+  assert.deepEqual(s.blockErgebnis({ start: 12, ende: 31, minuten: 25 }), { anwahlen: 19, minuten: 25, proStunde: 46 });
+  // Eine Korrektur nach unten ergibt keine negative Runde.
+  assert.equal(s.blockErgebnis({ start: 30, ende: 20 }).anwahlen, 0);
+  // Kein Tadel bei einer schwachen Runde.
+  assert.match(s.blockText({ anwahlen: 0 }), /neuer Anfang/);
+  assert.match(s.blockText({ anwahlen: 20, minuten: 25, bestwert: 12 }), /neuer Bestwert/);
+  assert.match(s.blockText({ anwahlen: 8, minuten: 25, bestwert: 12 }), /4 mehr/);
+});

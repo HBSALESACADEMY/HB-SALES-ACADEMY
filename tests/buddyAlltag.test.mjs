@@ -1215,3 +1215,56 @@ test("Die Erklärung verschickt nur die Leitung — und nur an ihr eigenes Haus"
   assert.match(seite, /\(tg\.istLeitung \|\| tg\.plattformAdmin\) && \(/);
   assert.match(seite, /window\.confirm\(frage\)/);
 });
+
+// ---------------------------------------------------------------------------
+// Anreiz: mehr Anwahlen
+
+test("Ziel, Serie, Block und Tagesliste hängen an den erfassten Zahlen", async () => {
+  const { serienZeile, briefingText } = await import("../lib/buddyBriefing.js");
+
+  // Der Buddy nennt die Serie — und bei geschaffter Serie nicht noch einmal
+  // eine Aufforderung.
+  assert.match(serienZeile({ laenge: 4, heuteGeschafft: false, mindestens: 20 }), /4 Tage\. 20 Anwahlen halten sie heute/);
+  assert.match(serienZeile({ laenge: 1, heuteGeschafft: true, mindestens: 20 }), /1 Tag — heute schon gehalten/);
+  assert.equal(serienZeile({ laenge: 0 }), null);
+  assert.equal(serienZeile(null), null);
+  // Ohne Termine kein Briefing, also auch keine Serienzeile ohne Anlass.
+  assert.equal(briefingText({ termine: [], serie: { laenge: 3, mindestens: 20 } }), null);
+
+  const tracker = lies("pages/call-tracker.js");
+  // Der Ring hängt am LIVE-Zähler, nicht an der Datenbank von vorhin.
+  assert.match(tracker, /log_date: heute, counts: \{ anwahlen: todayCounts\.anwahlen \|\| 0 \}/);
+  assert.match(tracker, /<Zielring/);
+  assert.match(tracker, /<Telefonblock/);
+  assert.match(tracker, /Heute im Team/);
+
+  // Der Block zählt die Differenz des Tageszählers, keinen zweiten Zähler.
+  const block = lies("components/Telefonblock.js");
+  assert.match(block, /blockErgebnis\(\{ start: aktuell\.start, ende: anwahlenRef\.current/);
+  // Die Uhr läuft nach echter Zeit — ein Tab im Hintergrund bekommt seltener
+  // einen Takt.
+  assert.match(block, /Math\.round\(\(laufend\.bis - Date\.now\(\)\) \/ 1000\)/);
+  // Der Bestwert bleibt im Gerät und wird nie zur Kennzahl für die Leitung.
+  assert.match(block, /localStorage\.setItem/);
+  assert.ok(!/supabase|apiPost/.test(block), "Der Bestwert gehört nicht auf den Server");
+
+  // Die Tagesrangliste: eigene Organisation, Vornamen, und wer ausgestiegen
+  // ist, steht nicht darin — sich selbst sieht man immer.
+  const route = lies("pages/api/tagesrangliste.js");
+  assert.match(route, /\.eq\("organization_id", orgId\)/);
+  assert.match(route, /m\.id === user\.id \|\| !m\.leaderboard_opt_out/);
+  assert.match(route, /\.split\(\/\\s\+\/\)\[0\]/);
+  assert.match(route, /\.eq\("log_date", heute\)/);
+  // Keine fremden Namen in voller Länge, keine anderen Kennzahlen.
+  assert.ok(!/full_name \}\)/.test(route));
+
+  // Abzeichen für Anwahlen und Serie.
+  const { BADGE_DEFS } = await import("../lib/badges.js");
+  const ids = BADGE_DEFS.map((b) => b.id);
+  ["anwahlen_100", "anwahlen_1000", "serie_5"].forEach((id) => assert.ok(ids.includes(id), id));
+  const tausend = BADGE_DEFS.find((b) => b.id === "anwahlen_1000");
+  assert.equal(tausend.check({ anwahlenGesamt: 1000 }), true);
+  assert.equal(tausend.check({ anwahlenGesamt: 999 }), false);
+  // Ohne Zahl kein Abzeichen — fremde Anruf-Zahlen darf man nicht lesen.
+  assert.equal(tausend.check({}), false);
+});

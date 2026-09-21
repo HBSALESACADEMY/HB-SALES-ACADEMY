@@ -4,6 +4,7 @@ import Avatar from "./Avatar";
 import Icon from "./Icon";
 import { supabase } from "../lib/supabaseClient";
 import { computeBadges } from "../lib/badges";
+import { anwahlSerie } from "../lib/anwahlSpiel";
 import { COURSES } from "../lib/curriculum";
 import { effectiveStreak } from "../lib/streak";
 
@@ -49,6 +50,14 @@ export default function ProfileModal({ userId, onClose }) {
         supabase.from("quiz_results").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("community_posts").select("id").eq("user_id", userId),
       ]);
+      // Anwahlen für die Meilenstein-Abzeichen. Fremde Anruf-Zahlen darf
+      // ein normales Teammitglied nicht lesen (siehe call_log_days) — dann
+      // kommt hier nichts zurück, und die Abzeichen bleiben beim Blick auf
+      // ein anderes Profil eben aus. Beim eigenen Profil stimmen sie.
+      const { data: anwahlTage } = await supabase.from("call_log_days")
+        .select("log_date, counts").eq("user_id", userId).order("log_date", { ascending: false }).limit(1200);
+      const anwahlenGesamt = (anwahlTage || []).reduce((summe, t) => summe + (Number(t?.counts?.anwahlen) || 0), 0);
+
       let kudosReceived = 0;
       if (myPosts && myPosts.length) {
         const { count } = await supabase.from("community_kudos").select("id", { count: "exact", head: true }).in("post_id", myPosts.map((p) => p.id));
@@ -57,6 +66,7 @@ export default function ProfileModal({ userId, onClose }) {
       setBadges(computeBadges({
         roleplayCount: roleplayCount || 0, certCount: certCount || 0, totalCourses: COURSES.length,
         streak: effectiveStreak(profile?.streak_count, profile?.last_challenge_date), quizCount: quizCount || 0, kudosReceived,
+        anwahlenGesamt, anwahlSerie: anwahlSerie(anwahlTage || []).laenge,
       }));
 
       setLoading(false);
