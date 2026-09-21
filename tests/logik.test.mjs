@@ -4443,3 +4443,39 @@ test("Die Verlaufskurve rechnet richtig: Maßstab ab null, lückenlose Tage, kei
   assert.match(auswertung, /<Kreisdiagramm/);
   assert.match(auswertung, /<VergleichsDiagramm/);
 });
+
+test("Das Design trägt eine eigene Handschrift: keine Regenbogen-Palette, gemischte Rundungen, Icons statt Emoji", async () => {
+  const { PALETTE, JETZT, feldFarbe } = await import("../lib/diagrammFarben.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Karmesin ist die Farbe für Aktionen und für "jetzt" — nicht eine von
+  // zehn in der Verteilungsreihe.
+  assert.ok(!PALETTE.some((f) => /org-accent|CE3A5C/.test(f)), "Karmesin gehört nicht in die Palette");
+  // Und kein Violett mehr, das ist der Ton, der überall nach Vorlage aussieht.
+  assert.ok(!PALETTE.some((f) => /4C5DC9|9E8CF0|org-color-1/.test(f)), "Violett/Indigo raus aus der Palette");
+  assert.match(JETZT, /org-accent/);
+  assert.equal(feldFarbe("termin"), "#3FBFA6");
+
+  // Gemischte Rundungen statt eines Radius auf allem.
+  const css = lies("styles/globals.css");
+  const radius = (block) => {
+    const stelle = css.indexOf(block);
+    const treffer = css.slice(stelle, stelle + 1400).match(/border-radius: (\d+)px/);
+    assert.ok(treffer, `${block} hat keinen Radius`);
+    return Number(treffer[1]);
+  };
+  assert.equal(radius(".card {"), 10);
+  assert.equal(radius(".btn {"), 6);
+  assert.equal(radius(".input {"), 6);
+
+  // Abzeichen tragen Icons; das Emoji bleibt nur als Rückfall für Text.
+  const { BADGE_DEFS } = await import("../lib/badges.js");
+  BADGE_DEFS.forEach((b) => assert.ok(b.icon, `${b.id} ohne Icon`));
+  const icons = lies("components/Icon.js");
+  BADGE_DEFS.forEach((b) => assert.match(icons, new RegExp(`\\b${b.icon}:`), `Icon ${b.icon} fehlt`));
+  assert.match(lies("components/ProfileModal.js"), /<Icon name=\{b\.icon\}/);
+
+  // In den Terminlisten stehen keine Emoji mehr.
+  const termine = lies("pages/termine.js");
+  assert.ok(!/📎|📝|💬 \{|✅ \{/.test(termine), "Emoji in der Terminliste");
+});

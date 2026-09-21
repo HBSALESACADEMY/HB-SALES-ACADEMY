@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Avatar from "./Avatar";
+import Icon from "./Icon";
 import { supabase } from "../lib/supabaseClient";
 import { computeBadges } from "../lib/badges";
 import { COURSES } from "../lib/curriculum";
@@ -150,7 +151,7 @@ export default function ProfileModal({ userId, onClose }) {
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {badges.filter((b) => b.earned).map((b) => (
                   <span key={b.id} title={b.desc} className="text-xs bg-surfaceRaised border border-line rounded-full px-2 py-1 flex items-center gap-1">
-                    <span>{b.emoji}</span> <span className="text-textMuted">{b.label}</span>
+                    <Icon name={b.icon} size={14} /> <span className="text-textMuted">{b.label}</span>
                   </span>
                 ))}
               </div>

@@ -1192,12 +1192,12 @@ export default function Termine() {
                 {kundentermin && kuerzelVon(art) && (
                   <span className="font-mono text-[11px] flex-shrink-0" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}</span>
                 )}
-                {!kundentermin && <span className="flex-shrink-0" title="Persönlicher Termin">📎</span>}
+                {!kundentermin && <span className="flex-shrink-0 text-textMuted" title="Persönlicher Termin"><Icon name="pin" size={12} /></span>}
                 <span className="text-sm text-textMain truncate flex-1 min-w-0">
                   {lead.name}{firma ? <span className="text-textMuted"> · {firma}</span> : null}
                 </span>
-                {openTaskCount > 0 && <span className="text-[10px] text-textMuted flex-shrink-0">✅ {openTaskCount}</span>}
-                {leadComments.length > 0 && <span className="text-[10px] text-textMuted flex-shrink-0 hidden sm:inline">💬 {leadComments.length}</span>}
+                {openTaskCount > 0 && <span className="text-[10px] text-textMuted flex-shrink-0 inline-flex items-center gap-1"><Icon name="check" size={11} /> {openTaskCount}</span>}
+                {leadComments.length > 0 && <span className="text-[10px] text-textMuted flex-shrink-0 hidden sm:inline-flex items-center gap-1"><Icon name="chat" size={11} /> {leadComments.length}</span>}
                 {viewMode === "team" && owner && (
                   <Avatar name={owner.full_name || "?"} src={owner.avatar_url} size={16} />
                 )}
@@ -1227,7 +1227,7 @@ export default function Termine() {
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold text-textMain text-sm truncate">
                     {kundentermin && kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>}
-                    {!kundentermin && <span className="mr-1" title="Persönlicher Termin">📎</span>}
+                    {!kundentermin && <span className="mr-1 inline-flex align-[-2px] text-textMuted" title="Persönlicher Termin"><Icon name="pin" size={12} /></span>}
                     {lead.name}
                   </span>
                   <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
@@ -1244,13 +1244,13 @@ export default function Termine() {
                 )}
                 {(openTaskCount > 0 || leadComments.length > 0 || lead.call_notes_status) && (
                   <div className="flex items-center gap-2 text-[10px] text-textMuted mt-1 pt-1.5 border-t border-line">
-                    {openTaskCount > 0 && <span>✅ {openTaskCount} offen</span>}
-                    {leadComments.length > 0 && <span>💬 {leadComments.length}</span>}
+                    {openTaskCount > 0 && <span className="inline-flex items-center gap-1"><Icon name="check" size={11} /> {openTaskCount} offen</span>}
+                    {leadComments.length > 0 && <span className="inline-flex items-center gap-1"><Icon name="chat" size={11} /> {leadComments.length}</span>}
                     {/* Ohne diesen Hinweis waren die Gesprächsnotizen nur zu
                         finden, wenn man den Termin zufällig aufklappte. */}
-                    {lead.call_notes_status === "done" && <span className="text-violet">📝 Notizen</span>}
-                    {lead.call_notes_status === "pending" && <span>📝 Notizen laufen…</span>}
-                    {lead.call_notes_status === "failed" && <span className="text-coral">📝 fehlgeschlagen</span>}
+                    {lead.call_notes_status === "done" && <span className="text-teal inline-flex items-center gap-1"><Icon name="note" size={11} /> Notizen</span>}
+                    {lead.call_notes_status === "pending" && <span className="inline-flex items-center gap-1"><Icon name="timer" size={11} /> Notizen laufen…</span>}
+                    {lead.call_notes_status === "failed" && <span className="text-coral inline-flex items-center gap-1"><Icon name="note" size={11} /> fehlgeschlagen</span>}
                   </div>
                 )}
               </button>
@@ -1269,7 +1269,7 @@ export default function Termine() {
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     <span>
                       {kundentermin && kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{kuerzelVon(art)}:</span>}
-                      {!kundentermin && <span className="mr-1" title="Persönlicher Termin">📎</span>}
+                      {!kundentermin && <span className="mr-1 inline-flex align-[-2px] text-textMuted" title="Persönlicher Termin"><Icon name="pin" size={12} /></span>}
                       {lead.name}
                     </span>
                     {lead.follow_up_of && (
@@ -1298,7 +1298,7 @@ export default function Termine() {
                   der Kundenmaske. */}
               {!kundentermin && (
                 <div className="flex items-center gap-2 flex-wrap mb-3 text-xs text-textMuted">
-                  <span>📎 Persönlicher Termin — ohne Stufe, ohne Ergebnis, nicht in der Auswertung.</span>
+                  <span className="inline-flex items-center gap-1.5"><Icon name="pin" size={12} /> Persönlicher Termin — ohne Stufe, ohne Ergebnis, nicht in der Auswertung.</span>
                   <button onClick={() => setzeKundentermin(lead, true)} className="btn-ghost text-xs">
                     Doch ein Kundentermin
                   </button>
@@ -1548,7 +1548,7 @@ export default function Termine() {
                     )}
                     {lead.recording_path && lead.call_notes_status !== "done" && (
                       <button disabled={notizenLaeuftId === lead.id} onClick={() => notizenErstellen(lead.id)} className="btn-ghost text-xs disabled:opacity-40">
-                        📝 {notizenLaeuftId === lead.id ? "Erstellt…" : "Notizen erstellen"}
+                        <Icon name="note" size={12} /> {notizenLaeuftId === lead.id ? "Erstellt…" : "Notizen erstellen"}
                       </button>
                     )}
                   </div>
@@ -1778,7 +1778,7 @@ export default function Termine() {
                       den es nie gab. */}
                   {kundentermin && editingLeadId !== lead.id && (
                     <button onClick={() => setzeKundentermin(lead, false)} className="btn-ghost text-xs mr-auto">
-                      📎 Kein Kundentermin
+                      <Icon name="pin" size={12} /> Kein Kundentermin
                     </button>
                   )}
                   {editingLeadId !== lead.id && (
