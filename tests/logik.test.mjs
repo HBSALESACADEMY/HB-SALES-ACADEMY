@@ -3745,6 +3745,114 @@ test("Der Morgen-Impuls: fest formuliert, passend zur Lage, ohne Zeigefinger", a
   assert.match(lies("lib/tagesauswertungVersand.js"), /\n      heuteTag,\n/);
 });
 
+test("Die Leitung kann dem Team schreiben — mit Namen, nur ins eigene Haus", async () => {
+  const t = await import("../lib/teamNachricht.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Geprüfte Länge: nichts Leeres, nichts Endloses.
+  assert.ok(t.leseNachricht("").fehler);
+  assert.ok(t.leseNachricht("   \n  ").fehler);
+  assert.ok(t.leseNachricht("ok").fehler, "zwei Zeichen sind keine Nachricht");
+  assert.equal(t.leseNachricht("  Morgen 9 Uhr Runde.  ").text, "Morgen 9 Uhr Runde.");
+  assert.ok(t.leseNachricht("x".repeat(t.MAX_LAENGE + 1)).fehler);
+  assert.equal(t.leseNachricht("x".repeat(t.MAX_LAENGE)).text.length, t.MAX_LAENGE);
+
+  // Der Name steht drüber, der Hinweis drunter — beides fügt die Academy
+  // hinzu, damit niemand anonym ans ganze Team schreiben kann.
+  const text = t.nachrichtText({ text: "Morgen 9 Uhr Runde.", von: "Anna Muster" });
+  assert.match(text, /^📣 Nachricht von Anna Muster\n\nMorgen 9 Uhr Runde\.\n\n—/);
+  assert.match(text, /Antwort hier landet beim Buddy und nicht bei Anna Muster/);
+  // Ohne Namen bleibt es trotzdem zugeordnet, nicht namenlos.
+  assert.match(t.nachrichtText({ text: "Kurz durchgeben." }), /von der Vertriebsleitung/);
+
+  // Ohne Organisation geht nichts raus: eine Nachricht an alle Häuser gibt
+  // es hier nicht, auch nicht für den Betreiber.
+  const versand = await import("../lib/teamNachrichtVersand.js");
+  assert.match((await versand.sendeTeamNachricht(null, { text: "Hallo Team", orgId: null })).grund, /Organisation/);
+  assert.ok((await versand.sendeTeamNachricht(null, { text: "ok", orgId: "o1" })).grund, "zu kurzer Text kommt nicht durch");
+
+  // Das Prüfen darf keinen Server-Code in den Browser ziehen — die
+  // Einstellungen-Seite lädt die Höchstlänge von dort.
+  const rein = lies("lib/teamNachricht.js");
+  assert.ok(!/telegramPersoenlich|supabase|node:/.test(rein), "lib/teamNachricht.js bleibt ohne Server-Code");
+  assert.match(lies("pages/settings.js"), /import \{ MAX_LAENGE as MAX_TEAM_LAENGE \} from "\.\.\/lib\/teamNachricht"/);
+
+  // Die Route: erst Leitung prüfen, dann Text, dann die aktive Organisation.
+  const route = lies("pages/api/buddy.js");
+  const stelle = route.indexOf('aktion === "nachricht-an-team"');
+  assert.ok(stelle > 0);
+  const abschnitt = route.slice(stelle, stelle + 1200);
+  assert.match(abschnitt, /if \(!istFuehrungsrolle\(ich\)\) \{\n\s+return res\.status\(403\)/);
+  assert.match(abschnitt, /const orgId = await aktiveOrgId\(admin, ich, userId\);/);
+  assert.match(abschnitt, /von: ich\?\.full_name \|\| ""/);
+  // Die Prüfung auf die Leitung steht VOR dem Versand.
+  assert.ok(abschnitt.indexOf("istFuehrungsrolle") < abschnitt.indexOf("sendeTeamNachricht"));
+  // Und die Bedienung sieht nur die Leitung.
+  assert.match(lies("pages/settings.js"), /\{tg\.istLeitung && \(\n\s+<div className="mt-3 pt-3 border-t border-line">/);
+
+  // Eine einzelne Person statt des ganzen Teams — aber über denselben
+  // Filter auf die Organisation.
+  const versandQuelle = lies("lib/teamNachrichtVersand.js");
+  assert.match(versandQuelle, /if \(nurFuer\) abfrage = abfrage\.eq\("user_id", nurFuer\);/);
+  const orgFilter = versandQuelle.indexOf('orgVon.get(v.user_id) === orgId');
+  const einzeln = versandQuelle.indexOf('abfrage.eq("user_id", nurFuer)');
+  assert.ok(orgFilter > einzeln, "der Filter auf die Organisation gilt auch für die einzelne Person");
+  assert.match(abschnitt, /nurFuer/);
+
+  // Die Empfängerliste: nur die Leitung, nur die eigene Organisation, und
+  // nur Name und Konto-Kennung — keine Chat-Kennung.
+  const stelle2 = route.indexOf('aktion === "empfaenger"');
+  assert.ok(stelle2 > 0);
+  const liste = route.slice(stelle2, stelle2 + 1400);
+  assert.match(liste, /if \(!istFuehrungsrolle\(ich\)\) return res\.status\(403\)/);
+  assert.match(liste, /\.eq\("organization_id", orgId\)\.eq\("status", "approved"\)/);
+  assert.match(liste, /map\(\(m\) => \(\{ id: m\.id, name: m\.full_name \|\| "Unbenannt" \}\)\)/);
+  assert.ok(!/chat_id: /.test(liste), "die Chat-Kennung bleibt auf dem Server");
+});
+
+test("Eine verschickte Mail fliegt als Papierflieger davon", async () => {
+  const f = await import("../lib/papierflieger.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Ohne Browser passiert nichts, statt einen Fehler zu werfen.
+  assert.equal(typeof document, "undefined");
+  assert.equal(f.zeigePapierflieger(), false);
+
+  const quelle = lies("lib/papierflieger.js");
+  // Dieselbe Handschrift wie die Icons: der Umriss von "send", kein Emoji.
+  const send = lies("components/Icon.js").match(/send: '(.+)',/)[1];
+  const umriss = "22 2 15 22 11 13 2 9 22 2";
+  assert.ok(send.includes(umriss), "das Senden-Icon hat diesen Umriss");
+  assert.ok(quelle.includes(umriss), "der Flieger benutzt denselben");
+  assert.ok(!/✈|📧|📨/.test(quelle), "gezeichnet, nicht als Emoji");
+  // Nichts von fremden Servern (ausser dem SVG-Namensraum, der keine
+  // Adresse ist, die geladen wird).
+  assert.ok(!/https?:\/\/(?!www\.w3\.org\/2000\/svg)/.test(quelle));
+  // Die Drehung der Spur steht in den Keyframes, sonst läge sie waagerecht.
+  assert.match(quelle, /0% \{ transform: rotate\(-24deg\) scaleX\(0\)/);
+  // Und die Bühne räumt sich selbst weg.
+  assert.match(quelle, /setTimeout\(\(\) => buehne\.remove\(\), FLUG_DAUER\)/);
+
+  // Beide Stellen, an denen eine Mail rausgeht, lassen ihn fliegen — und er
+  // startet am gedrückten Knopf.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /showToast\("Mail ist raus"\);[\s\S]{0,200}zeigePapierflieger\(\{ von: knopf \}\)/);
+  assert.match(tracker, /onClick=\{\(e\) => sendeEigeneMail\(e\)\}/);
+  const marketing = lies("pages/email-marketing.js");
+  assert.match(marketing, /zeigePapierflieger\(\{ von: knopf \}\)/);
+  assert.match(marketing, /onClick=\{\(e\) => sendeMail\(k, false, e\)\}/);
+  // Die Probemail an mich selbst fliegt NICHT: sie hat nichts verlassen.
+  // Deshalb genau EIN Flug in dieser Datei, und er steht hinter dem Zweig
+  // der Probemail.
+  const fluege = marketing.match(/zeigePapierflieger\(/g) || [];
+  assert.equal(fluege.length, 1, "genau eine Stelle lässt den Flieger fliegen");
+  const probeZweig = marketing.indexOf("if (anMichSelbst) {");
+  const echtZweig = marketing.indexOf("} else {", probeZweig);
+  const flug = marketing.indexOf("zeigePapierflieger(");
+  assert.ok(probeZweig > 0 && echtZweig > probeZweig, "die Verzweigung steht so noch da");
+  assert.ok(flug > echtZweig, "der Flieger steht im Zweig für echte Mails");
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));

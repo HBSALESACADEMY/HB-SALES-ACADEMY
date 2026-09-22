@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import Layout, { patchCachedProfile, getCachedOrg } from "../components/Layout";
+import Icon from "../components/Icon";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiGetBlob, apiPost } from "../lib/apiClient";
 import { getStoredThemePref, hasStoredThemePref, setThemePref } from "../lib/theme";
 import { applyOrgBranding } from "../lib/orgBranding";
 import { ZEITZONEN, merkeZeitzone, formatiere } from "../lib/zeit";
 import { MELDUNGSARTEN, standardWahl } from "../lib/benachrichtigungen";
+import { MAX_LAENGE as MAX_TEAM_LAENGE } from "../lib/teamNachricht";
 
 const THEME_OPTIONS = [
   ["light", "Hell"],
@@ -47,6 +49,11 @@ export default function Settings() {
   const [tgCode, setTgCode] = useState(null);
   const [tgBusy, setTgBusy] = useState(false);
   const [tgHinweis, setTgHinweis] = useState("");
+  // Die Nachricht der Leitung an das eigene Team — oder an eine Person.
+  const [teamText, setTeamText] = useState("");
+  const [teamOffen, setTeamOffen] = useState(false);
+  const [teamAn, setTeamAn] = useState("");
+  const [teamEmpfaenger, setTeamEmpfaenger] = useState([]);
   const [tgWebhook, setTgWebhook] = useState("");
   const [tgEinwilligung, setTgEinwilligung] = useState(false);
 
@@ -168,6 +175,40 @@ export default function Settings() {
       setTgHinweis(e.message);
     }
     setTgBusy(false);
+  }
+
+  // Eine kurze Nachricht an das eigene Team. Der Name der Leitung steht
+  // in der Nachricht — das macht die Academy, nicht das Textfeld.
+  async function sendeTeamNachricht() {
+    const text = teamText.trim();
+    if (!text) { setTgHinweis("Es steht noch keine Nachricht da."); return; }
+    const an = teamEmpfaenger.find((e) => e.id === teamAn);
+    const wohin = an ? `an ${an.name}` : "an alle in deinem Team, die Telegram verbunden haben";
+    if (!window.confirm(`Diese Nachricht ${wohin} schicken?\n\n${text}`)) return;
+    setTgBusy(true);
+    setTgHinweis("");
+    try {
+      const antwort = await apiPost("/api/buddy", { aktion: "nachricht-an-team", text, nurFuer: teamAn || null });
+      setTgHinweis(antwort.hinweis || "Die Nachricht ist raus.");
+      if (antwort.gesendet) setTeamText("");
+    } catch (e) {
+      setTgHinweis(e.message);
+    }
+    setTgBusy(false);
+  }
+
+  // Die Auswahl erst holen, wenn das Feld aufgeklappt wird: Wer nie
+  // schreibt, soll dafür keine Abfrage auslösen.
+  async function oeffneTeamNachricht() {
+    const offen = !teamOffen;
+    setTeamOffen(offen);
+    if (!offen || teamEmpfaenger.length) return;
+    try {
+      const antwort = await apiPost("/api/buddy", { aktion: "empfaenger" });
+      setTeamEmpfaenger(antwort.empfaenger || []);
+    } catch (e) {
+      setTgHinweis(e.message);
+    }
   }
 
   // Nur für den Betreiber: Telegram meldet Nachrichten dann sofort, statt
@@ -436,6 +477,43 @@ export default function Settings() {
                     if (window.confirm(frage)) buddyAktion("erklaerung-an-alle");
                   }}
                   className="btn-ghost text-xs disabled:opacity-40">Erklärung verschicken</button>
+              </div>
+            )}
+            {/* Die Leitung kann dem Team etwas durchgeben, ohne den Umweg über
+                eine Gruppe. Absender und Hinweis setzt die Academy dazu. */}
+            {tg.istLeitung && (
+              <div className="mt-3 pt-3 border-t border-line">
+                <button type="button" onClick={oeffneTeamNachricht} className="btn-ghost text-xs">
+                  <Icon name="send" size={12} /> Nachricht über den Bot {teamOffen ? "zuklappen" : "schreiben"}
+                </button>
+                {teamOffen && (
+                  <div className="mt-3">
+                    <label className="text-[11px] text-textMuted block mb-1">An</label>
+                    <select className="input text-sm mb-2" value={teamAn} onChange={(e) => setTeamAn(e.target.value)}>
+                      <option value="">Alle im Team mit verbundenem Telegram</option>
+                      {teamEmpfaenger.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                    <textarea
+                      className="input text-sm"
+                      rows={4}
+                      value={teamText}
+                      maxLength={MAX_TEAM_LAENGE}
+                      onChange={(e) => setTeamText(e.target.value)}
+                      placeholder="Zum Beispiel: Morgen 9 Uhr kurze Runde zu den neuen Leitfäden. Bringt eure Fragen mit."
+                    />
+                    <div className="flex items-center gap-2 flex-wrap mt-2">
+                      <span className="text-[11px] text-textMuted flex-1 min-w-[10rem]">
+                        Dein Name steht über der Nachricht, und es steht dabei, dass eine Antwort im Chat beim
+                        Buddy landet und nicht bei dir. Bei „Alle im Team" bekommst du sie selbst mit, damit du
+                        siehst, was angekommen ist.
+                        {teamEmpfaenger.length ? ` Erreichbar sind gerade ${teamEmpfaenger.length}.` : ""}
+                      </span>
+                      <span className="text-[11px] text-textMuted zahl">{teamText.trim().length}/{MAX_TEAM_LAENGE}</span>
+                      <button type="button" onClick={sendeTeamNachricht} disabled={tgBusy || !teamText.trim()}
+                        className="btn text-xs disabled:opacity-40">Verschicken</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {/* Die Kurzbefehle muss man kennen, um sie zu benutzen — Telegram

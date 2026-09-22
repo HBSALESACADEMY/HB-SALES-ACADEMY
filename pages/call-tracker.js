@@ -23,6 +23,7 @@ import Kreisdiagramm from "../components/Kreisdiagramm";
 import Balkenliste from "../components/Balkenliste";
 import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
+import { zeigePapierflieger } from "../lib/papierflieger";
 import { anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX } from "../lib/anwahlSpiel";
 import { aendereGeprueft } from "../lib/loeschen";
 import Kurve from "../components/Kurve";
@@ -670,8 +671,10 @@ export default function CallTracker() {
     setMailEntwurf({ vorlage: vorlage.name, ...fertig });
   }
 
-  async function sendeEigeneMail() {
+  async function sendeEigeneMail(ereignis) {
     if (!mailKontakt) return;
+    // Der Knopf, der gedrückt wurde: von dort startet der Flieger.
+    const knopf = ereignis?.currentTarget || null;
     setMailBusy(true);
     setEmailFehler("");
     try {
@@ -682,6 +685,9 @@ export default function CallTracker() {
         vorlage: mailEntwurf.vorlage,
       });
       showToast("Mail ist raus");
+      // Der Flieger ist die Bestätigung, die man sieht: Die Mail hat den
+      // Tisch verlassen.
+      zeigePapierflieger({ von: knopf });
       // Raus ist sie — aber was der Server dazu meldet, muss sichtbar sein.
       if (antwort?.hinweis) setEmailFehler(antwort.hinweis);
       setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
@@ -1733,7 +1739,7 @@ export default function CallTracker() {
                     <button onClick={() => setStep("mailWeg")} className="btn-ghost text-sm">
                       Zurück
                     </button>
-                    <button onClick={sendeEigeneMail} disabled={mailBusy} className="btn text-sm disabled:opacity-40">
+                    <button onClick={(e) => sendeEigeneMail(e)} disabled={mailBusy} className="btn text-sm disabled:opacity-40">
                       {mailBusy ? "Wird verschickt…" : "Jetzt senden"}
                     </button>
                   </div>

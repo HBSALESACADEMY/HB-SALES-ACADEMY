@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
+import { zeigePapierflieger } from "../lib/papierflieger";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
 import MailVorschau from "../components/MailVorschau";
@@ -422,7 +423,8 @@ export default function EmailMarketing() {
     return new Date(k.verschickt_am).toDateString() === new Date().toDateString();
   }
 
-  async function sendeMail(k, anMichSelbst = false) {
+  async function sendeMail(k, anMichSelbst = false, ereignis = null) {
+    const knopf = ereignis?.currentTarget || null;
     if (!mail.betreff.trim() || (mail.format !== "html" && !mail.text.trim())) {
       setFehler("Betreff und Text dürfen nicht leer sein.");
       return;
@@ -452,6 +454,9 @@ export default function EmailMarketing() {
         // verschickte Mail.
         setProbeStand(`Probemail ist raus an ${antwort.an}.`);
       } else {
+        // Eine echte Mail an einen Kontakt: der Flieger geht los. Bei der
+        // Probemail an mich selbst nicht — die hat nichts verlassen.
+        zeigePapierflieger({ von: knopf });
         setMailFuer(null);
         setMail({ betreff: "", text: "" });
         setGewaehlteAnhaenge([]);
@@ -1124,7 +1129,7 @@ export default function EmailMarketing() {
                 )}
 
                 <div className="flex items-center gap-2 flex-wrap mt-2">
-                  <button onClick={() => sendeMail(k)} disabled={mailBusy} className="btn text-xs disabled:opacity-40">
+                  <button onClick={(e) => sendeMail(k, false, e)} disabled={mailBusy} className="btn text-xs disabled:opacity-40">
                     {mailBusy ? "Wird verschickt…" : `An ${k.email} senden`}
                   </button>
                   {/* Die Sicherheitsstufe vor dem Ernstfall: dieselbe Mail,
@@ -1146,7 +1151,7 @@ export default function EmailMarketing() {
                         An {k.name} ging heute schon eine Mail ({deutscheZeit(k.verschickt_am)} Uhr). Trotzdem senden?
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={() => sendeMail(k)} className="btn-ghost text-xs">Ja, noch einmal</button>
+                        <button onClick={(e) => sendeMail(k, false, e)} className="btn-ghost text-xs">Ja, noch einmal</button>
                         <button onClick={() => setNochmalFuer(null)} className="btn-ghost text-xs text-textMuted">Abbrechen</button>
                       </div>
                     </div>

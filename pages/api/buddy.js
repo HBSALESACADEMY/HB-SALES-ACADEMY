@@ -4,6 +4,8 @@ import { sendeWochenimpulse, holeAntworten } from "../../lib/buddy";
 import { sendeTeamlage } from "../../lib/teamlageVersand";
 import { sendeBriefings } from "../../lib/buddyBriefing";
 import { sendeErklaerungen } from "../../lib/buddyErklaerungVersand";
+import { leseNachricht } from "../../lib/teamNachricht";
+import { sendeTeamNachricht } from "../../lib/teamNachrichtVersand";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
 import { stelleWebhookSicher } from "../../lib/telegramWebhook";
 import { setzeBefehle } from "../../lib/telegramApi";
@@ -12,10 +14,15 @@ import { istFuehrungsrolle } from "../../lib/rollen";
 
 // Der Vertriebsbuddy aus Sicht der angemeldeten Person.
 //
-// Jede Aktion betrifft ausschliesslich sie selbst: ihr eigenes Gespräch
-// lesen, ihren eigenen Impuls testen, ihre eigene Einstellung ändern. Es
-// gibt keinen Weg, über diese Route den Buddy einer anderen Person
-// anzustossen oder deren Gespräch zu sehen.
+// Fast jede Aktion betrifft ausschliesslich sie selbst: ihr eigenes
+// Gespräch lesen, ihren eigenen Impuls testen, ihre eigene Einstellung
+// ändern. Über diese Route kommt niemand an das Gespräch einer anderen
+// Person.
+//
+// Zwei Aktionen verschicken an mehrere, und beide kann nur die Leitung
+// auslösen, beide nur in die eigene Organisation: "erklaerung-an-alle"
+// (fester Text) und "nachricht-an-team" (freier Text, mit dem Namen der
+// Leitung darüber — siehe lib/teamNachricht.js).
 export const config = { maxDuration: 60 };
 
 const MIGRATION_FEHLT = "In der Datenbank fehlen die Tabellen für den Vertriebsbuddy (migration_168).";
@@ -104,6 +111,64 @@ export default async function handler(req, res) {
         hinweis: ergebnis.gesendet
           ? `Die Erklärung ist an ${ergebnis.gesendet} ${ergebnis.gesendet === 1 ? "Person" : "Personen"} raus.`
           : "Alle verbundenen Personen haben die Erklärung schon.",
+      });
+    }
+
+    // Wer im eigenen Team überhaupt erreichbar ist — für die Auswahl beim
+    // Schreiben. Heraus kommen nur Name und Kennung des Kontos, keine
+    // Chat-Kennung und nichts aus einem Gespräch.
+    if (aktion === "empfaenger") {
+      const { data: ich } = await admin.from("profiles")
+        .select("role, is_admin, is_platform_admin, organization_id").eq("id", userId).maybeSingle();
+      if (!istFuehrungsrolle(ich)) return res.status(403).json({ error: "Das sieht die Leitung." });
+      const orgId = await aktiveOrgId(admin, ich, userId);
+      if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
+      const { data: mitglieder } = await admin.from("profiles")
+        .select("id, full_name").eq("organization_id", orgId).eq("status", "approved");
+      const ids = (mitglieder || []).map((m) => m.id);
+      if (!ids.length) return res.status(200).json({ ok: true, empfaenger: [] });
+      const { data: verknuepfungen } = await admin.from("telegram_verknuepfungen")
+        .select("user_id, chat_id").in("user_id", ids).not("chat_id", "is", null);
+      const verbunden = new Set((verknuepfungen || []).map((v) => v.user_id));
+      return res.status(200).json({
+        ok: true,
+        empfaenger: (mitglieder || [])
+          .filter((m) => verbunden.has(m.id))
+          .map((m) => ({ id: m.id, name: m.full_name || "Unbenannt" }))
+          .sort((a, b) => a.name.localeCompare(b.name, "de")),
+      });
+    }
+
+    // Eine kurze Nachricht der Leitung an das eigene Team.
+    //
+    // Der einzige Weg, über den freier Text an mehrere Personen geht.
+    // Deshalb: nur die Leitung, nur die eigene aktive Organisation, und
+    // der Name der Leitung steht in der Nachricht (lib/teamNachricht.js).
+    if (aktion === "nachricht-an-team") {
+      const { data: ich } = await admin.from("profiles")
+        .select("full_name, role, is_admin, is_platform_admin, organization_id").eq("id", userId).maybeSingle();
+      if (!istFuehrungsrolle(ich)) {
+        return res.status(403).json({ error: "Nachrichten an das Team verschickt die Vertriebsleitung." });
+      }
+      const gelesen = leseNachricht(req.body?.text);
+      if (gelesen.fehler) return res.status(400).json({ error: gelesen.fehler });
+      const orgId = await aktiveOrgId(admin, ich, userId);
+      if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
+      // Eine einzelne Person ist erlaubt — aber nur eine aus dem eigenen
+      // Haus. Die Prüfung dafür steckt in sendeTeamNachricht: Sie filtert
+      // beide Wege über die Organisation.
+      const nurFuer = typeof req.body?.nurFuer === "string" && req.body.nurFuer ? req.body.nurFuer : null;
+      const ergebnis = await sendeTeamNachricht(admin, {
+        text: gelesen.text, von: ich?.full_name || "", orgId, nurFuer,
+      });
+      if (ergebnis.grund) return res.status(200).json({ ok: true, gesendet: 0, hinweis: `Abgebrochen: ${ergebnis.grund}` });
+      return res.status(200).json({
+        ok: true, gesendet: ergebnis.gesendet || 0,
+        hinweis: ergebnis.gesendet
+          ? `Die Nachricht ist an ${ergebnis.gesendet} ${ergebnis.gesendet === 1 ? "Person" : "Personen"} raus.`
+          : nurFuer
+            ? "Diese Person hat Telegram nicht (mehr) verbunden — deshalb ging nichts raus."
+            : "Niemand in deinem Team hat Telegram verbunden — deshalb ging nichts raus.",
       });
     }
 
