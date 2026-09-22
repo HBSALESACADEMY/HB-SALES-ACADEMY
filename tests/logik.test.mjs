@@ -4681,8 +4681,8 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   assert.match(kurve, /punktBeiAnteil\(bild\.anzahl, anteil\)/);
   // Die Pfade entstehen EINMAL, nicht bei jeder Zeigerbewegung — sonst
   // wurden bei jedem Pixel alle Bézier-Pfade neu gebaut.
-  assert.match(kurve, /linie: weicherPfad\(skaliert\)/);
-  assert.match(kurve, /\}, \[mitWerten, hoehe\]\);/);
+  assert.match(kurve, /linie: weicherPfad\(skaliert, spannung\)/);
+  assert.match(kurve, /\}, \[mitWerten, hoehe, spannung\]\);/);
   // Höchstens eine Zeichnung je Bild, und nur bei echtem Wechsel.
   assert.match(kurve, /requestAnimationFrame\(\(\) => \{/);
   assert.match(kurve, /if \(naechster !== aktivRef\.current\) zeige\(naechster\);/);
@@ -4690,6 +4690,7 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   // ein Zeiger meldet bis zu 120 Bewegungen pro Sekunde.
   assert.ok(!/useState/.test(kurve), "Kein Zustand in der Kurve — sonst zeichnet React bei jeder Bewegung neu");
   assert.match(kurve, /linieRef\.current\.setAttribute\("x1", x\)/);
+  assert.match(kurve, /marke\.setAttribute\("y1", punkt\.y - 4\.5\)/);
   assert.match(kurve, /feld\.textContent = sichtbar/);
   // Und die Kurve zeichnet sich nicht mit, wenn die Seite es tut.
   assert.match(kurve, /const Kurve = memo\(KurveInhalt\);/);
@@ -4704,6 +4705,9 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   assert.match(kurve, /bild\.marken\.map/);
   assert.match(kurve, /r\.art === "balken"/);
   assert.match(kurve, /const mitPunkten = bild\.anzahl <= 14;/);
+  // Marken als senkrechte Striche: Ein Kreis würde im gestreckten Bild zur
+  // Ellipse.
+  assert.match(kurve, /senkrechte Marke/);
   // Die Zahlen stehen NEBEN dem Bild: Das SVG wird gestreckt, Schrift
   // darin wäre verzerrt.
   assert.match(kurve, /Die Zahlen der Achse stehen NEBEN dem Bild/);

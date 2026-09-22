@@ -17,9 +17,11 @@ import {
 //   2. Eine Reihe mit eigener Größenordnung — drei Termine neben siebzig
 //      Anwahlen — bekommt `art: "balken"` und ihre eigene Achse rechts.
 //      Auf dem gemeinsamen Maßstab war sie eine Linie am Boden.
-//   3. Die Kurve ist nur leicht gerundet. Zwischen zwei Tagen gibt es
-//      keine Messwerte; ein weicher Bogen dort behauptet einen Verlauf,
-//      den niemand gemessen hat.
+//   3. Die Rundung ist ein Mittelweg (0.2, je Diagramm über "spannung"
+//      nachziehbar): Kantig gezogen liest sich der Verlauf wie ein Blitz,
+//      ganz glatt sieht er gefälliger aus, als die Daten sind. Dass
+//      zwischen den Tagen nichts gemessen wurde, zeigen stattdessen die
+//      Punkte auf jedem Messtag — die Kurve darf dabei ruhig rund laufen.
 //   4. Beim Abfahren werden Hilfslinie, Punkte und Werte DIREKT am Bild
 //      geändert, nicht über den Zustand. Ein Zeiger meldet bis zu 120
 //      Bewegungen pro Sekunde — jede davon als Neuzeichnung ist das
@@ -28,6 +30,7 @@ const BREITE = 600;
 
 function KurveInhalt({
   reihen = [], hoehe = 96, leerText = "Noch keine Zahlen im Zeitraum.", erklaerung = null, achse = true,
+  spannung = 0.2,
 }) {
   const bildRef = useRef(null);
   // Alles, was beim Abfahren angefasst wird — ohne den Umweg über React.
@@ -54,7 +57,12 @@ function KurveInhalt({
       const eigenerHoechster = Math.max(1, ...r.werte.map((p) => p.wert || 0));
       const faktor = eigenerHoechster / hoechster;
       const skaliert = punkte.map((pt) => ({ ...pt, y: hoehe - (hoehe - pt.y) * faktor }));
-      return { ...r, punkte: skaliert, linie: weicherPfad(skaliert), flaeche: flaechenPfad(skaliert, hoehe) };
+      return {
+        ...r,
+        punkte: skaliert,
+        linie: weicherPfad(skaliert, spannung),
+        flaeche: flaechenPfad(skaliert, hoehe, spannung),
+      };
     });
 
     const balken = balkenReihen.map((r) => ({ ...r, ...balkenRechtecke(r.werte, BREITE, hoehe) }));
@@ -71,7 +79,7 @@ function KurveInhalt({
       stellen: gezeichnet[0]?.punkte.map((p) => p.x)
         || tage.map((_, i) => (BREITE / tage.length) * i + BREITE / tage.length / 2),
     };
-  }, [mitWerten, hoehe]);
+  }, [mitWerten, hoehe, spannung]);
 
   /**
    * Die Anzeige an einer Stelle setzen — direkt am Bild.
@@ -93,13 +101,15 @@ function KurveInhalt({
       }
     }
     bild.gezeichnet.forEach((r, nr) => {
-      const kreis = punktRefs.current[nr];
-      if (!kreis) return;
+      const marke = punktRefs.current[nr];
+      if (!marke) return;
       const punkt = sichtbar ? r.punkte[i] : null;
-      kreis.style.display = punkt ? "" : "none";
+      marke.style.display = punkt ? "" : "none";
       if (punkt) {
-        kreis.setAttribute("cx", punkt.x);
-        kreis.setAttribute("cy", punkt.y);
+        marke.setAttribute("x1", punkt.x);
+        marke.setAttribute("x2", punkt.x);
+        marke.setAttribute("y1", punkt.y - 4.5);
+        marke.setAttribute("y2", punkt.y + 4.5);
       }
     });
     [...bild.gezeichnet, ...bild.balken].forEach((r, nr) => {
@@ -229,11 +239,21 @@ function KurveInhalt({
               <g key={r.label}>
                 <path d={r.flaeche} fill={r.farbe} opacity=".12" />
                 <path d={r.linie} fill="none" stroke={r.farbe} strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                {/* Wo wirklich gemessen wurde: eine kurze senkrechte Marke
+                    je Tag. Ein Kreis würde hier zur Ellipse — das Bild wird
+                    in der Breite gestreckt, und senkrechte Striche sind das
+                    Einzige, was das unverzerrt übersteht. */}
                 {mitPunkten && r.punkte.map((p) => (
-                  <circle key={p.x} cx={p.x} cy={p.y} r="2.5" fill={r.farbe} opacity=".85" />
+                  <line key={p.x} x1={p.x} x2={p.x} y1={p.y - 4} y2={p.y + 4}
+                    stroke={r.farbe} strokeWidth="2" strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke" opacity=".9" />
                 ))}
-                {/* Der letzte Punkt ist der, der zählt: "wo stehen wir jetzt". */}
-                <circle cx={r.punkte[r.punkte.length - 1].x} cy={r.punkte[r.punkte.length - 1].y} r="4" fill={r.farbe} />
+                {/* Der letzte Wert ist der, der zählt: "wo stehen wir
+                    jetzt" — als kräftigere Marke. */}
+                <line
+                  x1={r.punkte[r.punkte.length - 1].x} x2={r.punkte[r.punkte.length - 1].x}
+                  y1={r.punkte[r.punkte.length - 1].y - 6} y2={r.punkte[r.punkte.length - 1].y + 6}
+                  stroke={r.farbe} strokeWidth="3.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
               </g>
             ))}
 
@@ -243,10 +263,9 @@ function KurveInhalt({
               stroke="rgb(var(--org-text-muted-rgb, var(--theme-text-muted-rgb)))"
               strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity=".8" />
             {bild.gezeichnet.map((r, nr) => (
-              <circle key={r.label} ref={(el) => { punktRefs.current[nr] = el; }}
-                cx="0" cy="0" r="4.5" style={{ display: "none" }}
-                fill="rgb(var(--org-surface-raised-rgb, var(--theme-surface-raised-rgb)))"
-                stroke={r.farbe} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+              <line key={r.label} ref={(el) => { punktRefs.current[nr] = el; }}
+                x1="0" x2="0" y1="0" y2="0" style={{ display: "none" }}
+                stroke={r.farbe} strokeWidth="9" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             ))}
           </svg>
         </div>
