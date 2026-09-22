@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { punkteFuer, weicherPfad, flaechenPfad, punktBeiAnteil, tagKurz } from "../lib/kurve";
 
 // Der Verlauf als Kurve mit Fläche darunter — für Zahlen über die Zeit.
@@ -16,13 +16,89 @@ import { punkteFuer, weicherPfad, flaechenPfad, punktBeiAnteil, tagKurz } from "
 //
 // "erklaerung" steht klein darunter, wie beim Kreisdiagramm: Ein Diagramm
 // ohne Aussage wird schnell falsch verstanden.
-export default function Kurve({
+function KurveInhalt({
   reihen = [], hoehe = 96, leerText = "Noch keine Zahlen im Zeitraum.", erklaerung = null, achse = true,
 }) {
   const [aktiv, setAktiv] = useState(null);
+  // Die angeforderte Bildnummer — damit nicht jede Zeigerbewegung eine
+  // eigene Zeichnung auslöst.
+  const bildRef = useRef(null);
 
-  const mitWerten = reihen.filter((r) => (r.werte || []).length >= 2);
+  const mitWerten = useMemo(() => reihen.filter((r) => (r.werte || []).length >= 2), [reihen]);
   const etwasDa = mitWerten.some((r) => r.werte.some((p) => (p.wert || 0) > 0));
+
+  const BREITE = 600;
+  // Die Pfade EINMAL rechnen, nicht bei jeder Mausbewegung: Beim Abfahren
+  // ändert sich nur der Punkt unter dem Zeiger. Vorher wurden bei jedem
+  // Pixel alle Bézier-Pfade neu gebaut — das war der Grund, warum es
+  // gehakt hat.
+  const { gezeichnet, hoechster, tage, anzahl } = useMemo(() => {
+    // Läuft auch ohne Reihen: Hooks dürfen nicht hinter einem vorzeitigen
+    // Rücksprung stehen, sonst gerät ihre Reihenfolge zwischen zwei
+    // Zeichnungen durcheinander.
+    if (!mitWerten.length) return { gezeichnet: [], hoechster: 1, tage: [], anzahl: 0 };
+    // Ein Maßstab für alle Reihen, sonst lügt der Vergleich.
+    const alleWerte = mitWerten.flatMap((r) => r.werte.map((p) => p.wert || 0));
+    const hoechsterWert = Math.max(1, ...alleWerte);
+    const reihenMitPfad = mitWerten.map((r) => {
+      const { punkte } = punkteFuer(r.werte.map((p) => p.wert || 0), BREITE, hoehe);
+      // Alle Reihen auf denselben Maßstab bringen: punkteFuer skaliert je
+      // Reihe auf ihr eigenes Maximum.
+      const eigenerHoechster = Math.max(1, ...r.werte.map((p) => p.wert || 0));
+      const faktor = eigenerHoechster / hoechsterWert;
+      const skaliert = punkte.map((pt) => ({ ...pt, y: hoehe - (hoehe - pt.y) * faktor }));
+      return {
+        label: r.label,
+        farbe: r.farbe,
+        werte: r.werte,
+        punkte: skaliert,
+        linie: weicherPfad(skaliert),
+        flaeche: flaechenPfad(skaliert, hoehe),
+      };
+    });
+    return {
+      gezeichnet: reihenMitPfad,
+      hoechster: hoechsterWert,
+      tage: mitWerten[0].werte,
+      anzahl: Math.max(...reihenMitPfad.map((r) => r.punkte.length)),
+    };
+    // Die Reihen kommen als fertige Listen herein; ihre Kennung genügt.
+  }, [mitWerten, hoehe]);
+
+  // Aus der Position im Kasten wird der Anteil der Breite — gerechnet wird
+  // nicht in Pixeln, weil die Kurve in der Breite gestreckt wird.
+  //
+  // Höchstens einmal je Bild (requestAnimationFrame) und nur, wenn sich der
+  // Punkt wirklich ändert: Ein Zeiger meldet bis zu 120 Bewegungen pro
+  // Sekunde, und jede davon hat vorher ein Neuzeichnen ausgelöst.
+  const beiBewegung = useCallback((e) => {
+    const kasten = e.currentTarget.getBoundingClientRect();
+    if (!kasten.width) return;
+    const x = (e.touches?.[0]?.clientX ?? e.clientX) - kasten.left;
+    const anteil = x / kasten.width;
+    if (bildRef.current) return;
+    bildRef.current = requestAnimationFrame(() => {
+      bildRef.current = null;
+      const naechster = punktBeiAnteil(anzahl, anteil);
+      setAktiv((vorher) => (vorher === naechster ? vorher : naechster));
+    });
+  }, [anzahl]);
+
+  const verlassen = useCallback(() => {
+    if (bildRef.current) {
+      cancelAnimationFrame(bildRef.current);
+      bildRef.current = null;
+    }
+    setAktiv(null);
+  }, []);
+
+  function beiTaste(e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const start = aktiv === null ? anzahl - 1 : aktiv;
+    setAktiv(Math.min(anzahl - 1, Math.max(0, start + (e.key === "ArrowRight" ? 1 : -1))));
+  }
+
   if (!mitWerten.length || !etwasDa) {
     return (
       <>
@@ -30,38 +106,6 @@ export default function Kurve({
         {erklaerung && <p className="text-[11px] text-textMuted mt-2 leading-snug">{erklaerung}</p>}
       </>
     );
-  }
-
-  const BREITE = 600;
-  // Ein Maßstab für alle Reihen, sonst lügt der Vergleich.
-  const alleWerte = mitWerten.flatMap((r) => r.werte.map((p) => p.wert || 0));
-  const hoechster = Math.max(1, ...alleWerte);
-  const gezeichnet = mitWerten.map((r) => {
-    const { punkte } = punkteFuer(r.werte.map((p) => p.wert || 0), BREITE, hoehe);
-    // Alle Reihen auf denselben Maßstab bringen: punkteFuer skaliert je
-    // Reihe auf ihr eigenes Maximum.
-    const eigenerHoechster = Math.max(1, ...r.werte.map((p) => p.wert || 0));
-    const faktor = eigenerHoechster / hoechster;
-    const skaliert = punkte.map((pt) => ({ ...pt, y: hoehe - (hoehe - pt.y) * faktor }));
-    return { ...r, punkte: skaliert };
-  });
-  const tage = mitWerten[0].werte;
-  const anzahl = Math.max(...gezeichnet.map((r) => r.punkte.length));
-
-  // Aus der Position im Kasten wird der Anteil der Breite — gerechnet wird
-  // nicht in Pixeln, weil die Kurve in der Breite gestreckt wird.
-  function beiBewegung(e) {
-    const kasten = e.currentTarget.getBoundingClientRect();
-    if (!kasten.width) return;
-    const x = (e.touches?.[0]?.clientX ?? e.clientX) - kasten.left;
-    setAktiv(punktBeiAnteil(anzahl, x / kasten.width));
-  }
-
-  function beiTaste(e) {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const start = aktiv === null ? anzahl - 1 : aktiv;
-    setAktiv(Math.min(anzahl - 1, Math.max(0, start + (e.key === "ArrowRight" ? 1 : -1))));
   }
 
   const gewaehlt = aktiv === null ? null : aktiv;
@@ -98,18 +142,18 @@ export default function Kurve({
         role="img"
         aria-label={`Verlauf: ${gezeichnet.map((r) => r.label).join(", ")}`}
         onMouseMove={beiBewegung}
-        onMouseLeave={() => setAktiv(null)}
+        onMouseLeave={verlassen}
         onTouchStart={beiBewegung}
         onTouchMove={beiBewegung}
-        onTouchEnd={() => setAktiv(null)}
+        onTouchEnd={verlassen}
         onKeyDown={beiTaste}
-        onBlur={() => setAktiv(null)}
+        onBlur={verlassen}
       >
         <svg viewBox={`0 0 ${BREITE} ${hoehe}`} className="w-full h-full" preserveAspectRatio="none">
           {gezeichnet.map((r) => (
             <g key={r.label}>
-              <path d={flaechenPfad(r.punkte, hoehe)} fill={r.farbe} opacity=".14" />
-              <path d={weicherPfad(r.punkte)} fill="none" stroke={r.farbe} strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              <path d={r.flaeche} fill={r.farbe} opacity=".14" />
+              <path d={r.linie} fill="none" stroke={r.farbe} strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
               {/* Der letzte Punkt ist der, der zählt: "wo stehen wir jetzt". */}
               <circle cx={r.punkte[r.punkte.length - 1].x} cy={r.punkte[r.punkte.length - 1].y} r="3.5" fill={r.farbe} />
             </g>
@@ -149,3 +193,9 @@ function tagText(tag) {
   const d = new Date(`${tag}T12:00:00Z`);
   return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
 }
+
+// memo: Die Seiten um die Kurve herum zeichnen sich aus vielen Gründen neu
+// (Zähler, Aktualisierung, Eingaben). Solange dieselben Reihen hereinkommen,
+// muss die Kurve dabei nicht mit.
+const Kurve = memo(KurveInhalt);
+export default Kurve;

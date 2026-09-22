@@ -1,6 +1,6 @@
 import { OnboardingBalken, schrittInfo } from "../components/OnboardingSchritt";
 import { darfAbhaken } from "../lib/onboarding";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout, { patchCachedProfile } from "../components/Layout";
 import Icon from "../components/Icon";
@@ -81,6 +81,12 @@ export default function Dashboard() {
   // des Call Trackers: der liegt auf EINEM Gerät, das Dashboard schaut man
   // auch mal vom Handy an.
   const [leistung, setLeistung] = useState(null);
+  // Einmal je Datenstand: Die Kurve soll nicht bei jedem Neuzeichnen des
+  // Startbildschirms alle Pfade neu rechnen.
+  const anwahlReihen = useMemo(
+    () => [{ label: "Anwahlen je Tag", farbe: feldFarbe("anwahlen"), werte: (leistung?.tage || []).map((t) => ({ tag: t.tag, wert: t.wert })) }],
+    [leistung],
+  );
   const [teamZiele, setTeamZiele] = useState([]);
   const [showCourseList, setShowCourseList] = useState(false);
 
@@ -489,7 +495,7 @@ export default function Dashboard() {
               <div className="mt-3">
                 <Kurve
                   hoehe={80}
-                  reihen={[{ label: "Anwahlen je Tag", farbe: feldFarbe("anwahlen"), werte: leistung.tage.map((t) => ({ tag: t.tag, wert: t.wert })) }]}
+                  reihen={anwahlReihen}
                   leerText="Noch keine Anwahlen in den letzten sieben Tagen."
                 />
               </div>

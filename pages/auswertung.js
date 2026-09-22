@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "../components/Layout";
 import LogoHintergrund from "../components/LogoHintergrund";
 import Aufklapper from "../components/Aufklapper";
@@ -235,6 +235,13 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
   const vergleich = benchmark(teamsMitZahlen);
   const impact = impactAnalyse(mitZahlen);
 
+  // Einmal je Datenstand — die Kurve rechnet sonst bei jedem Neuzeichnen
+  // der Seite alle Pfade neu.
+  const verlaufsReihen = useMemo(() => [
+    { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen", daten.zeitraum?.von, daten.zeitraum?.bis) },
+    { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin", daten.zeitraum?.von, daten.zeitraum?.bis) },
+  ], [zeilen, daten.zeitraum?.von, daten.zeitraum?.bis]);
+
   const gruendeGesamt = summiereGruende(zeilen);
   const gruende = kategorien.map((k) => ({
     key: k.key, label: k.label, wert: gruendeGesamt[k.key] || 0, color: grundFarbe(kategorien, k.key),
@@ -391,10 +398,7 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
         <KartenKopf titel="Verlauf" zeitraum={zeitraumText(daten.zeitraum)} />
         <Kurve
           hoehe={120}
-          reihen={[
-            { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen", daten.zeitraum?.von, daten.zeitraum?.bis) },
-            { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin", daten.zeitraum?.von, daten.zeitraum?.bis) },
-          ]}
+          reihen={verlaufsReihen}
           leerText="Im Zeitraum wurden keine Anrufe erfasst."
           erklaerung="Beide Kurven teilen einen Maßstab: Die Termin-Kurve liegt deshalb flach, solange auf viele Anwahlen wenige Termine kommen — genau das ist die Aussage."
         />

@@ -2088,11 +2088,6 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
   // gewählt ist, ohne ein Menü zu öffnen.
   const [auswahl, setAuswahl] = useState([]);
 
-  if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
-  if (state.status === "error") {
-    return <div className="card border border-coral/40 text-coral text-sm">Die Statistiken konnten nicht geladen werden.</div>;
-  }
-
   const alleMitglieder = state.members || [];
   const teams = state.teams || [];
   const reasons = state.reasons || [];
@@ -2106,6 +2101,21 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
   const sichtbare = gewaehlt.length ? imTeam.filter((m) => gewaehlt.includes(m.id)) : imTeam;
   const sichtbareIds = new Set(sichtbare.map((m) => m.id));
   const zeilen = (state.logs || []).filter((l) => sichtbareIds.has(l.user_id));
+  // Einmal je Datenstand statt bei jedem Neuzeichnen: Neue Listen bedeuten
+  // für die Kurve, dass sie alle Pfade neu rechnen muss.
+  const verlaufsReihen = useMemo(() => [
+    { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen") },
+    { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin") },
+  ], [zeilen]);
+
+  // Die Ausstiege stehen BEWUSST unter allen Hooks: Ein Hook hinter einem
+  // frühen return wird beim zweiten Zeichnen übersprungen, und React
+  // verliert die Zuordnung der Zustände (ein Wächtertest hält das fest).
+  // Die Ableitungen darüber kommen ohne geladene Daten aus.
+  if (state.status === "loading" || state.status === "idle") return <p className="text-textMuted text-sm">Lädt...</p>;
+  if (state.status === "error") {
+    return <div className="card border border-coral/40 text-coral text-sm">Die Statistiken konnten nicht geladen werden.</div>;
+  }
   // Genau eine Person: dann ist der Verlauf nach Tagen die interessante
   // Frage. Ab zwei geht es ums Vergleichen, und dafür sagt der Kreis mehr.
   const einePerson = sichtbare.length === 1 && gewaehlt.length === 1 ? sichtbare[0] : null;
@@ -2756,10 +2766,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
         <p className="text-xs text-textMuted mb-3">Anwahlen und Termine je Tag im gewählten Zeitraum</p>
         <Kurve
           hoehe={110}
-          reihen={[
-            { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen") },
-            { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin") },
-          ]}
+          reihen={verlaufsReihen}
           leerText="Im Zeitraum wurden keine Anrufe erfasst."
           erklaerung="Beide Kurven teilen einen Maßstab: Die Termin-Kurve liegt deshalb flach, solange auf viele Anwahlen wenige Termine kommen — genau das ist die Aussage."
         />

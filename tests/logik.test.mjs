@@ -4434,7 +4434,7 @@ test("Die Verlaufskurve rechnet richtig: Maßstab ab null, lückenlose Tage, kei
   // Mehrere Reihen teilen einen Maßstab — sonst ist der Vergleich gelogen.
   const kurve = lies("components/Kurve.js");
   assert.match(kurve, /Ein Maßstab für alle Reihen/);
-  assert.match(kurve, /const faktor = eigenerHoechster \/ hoechster;/);
+  assert.match(kurve, /const faktor = eigenerHoechster \/ hoechsterWert;/);
   // Startbildschirm und Auswertung nutzen sie.
   assert.match(lies("pages/index.js"), /<Kurve/);
   assert.match(lies("pages/auswertung.js"), /<Kurve/);
@@ -4675,15 +4675,28 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   const kurve = lies("components/Kurve.js");
   // Gerechnet wird über den Anteil der Breite, nicht über Pixel: Die Kurve
   // wird gestreckt, ein Pixelvergleich träfe sonst die falsche Stelle.
-  assert.match(kurve, /punktBeiAnteil\(anzahl, x \/ kasten\.width\)/);
+  assert.match(kurve, /const anteil = x \/ kasten\.width;/);
+  assert.match(kurve, /punktBeiAnteil\(anzahl, anteil\)/);
+  // Die Pfade entstehen EINMAL, nicht bei jeder Zeigerbewegung — sonst
+  // wurden bei jedem Pixel alle Bézier-Pfade neu gebaut.
+  assert.match(kurve, /linie: weicherPfad\(skaliert\)/);
+  assert.match(kurve, /\}, \[mitWerten, hoehe\]\);/);
+  // Höchstens eine Zeichnung je Bild, und nur bei echtem Wechsel.
+  assert.match(kurve, /requestAnimationFrame\(\(\) => \{/);
+  assert.match(kurve, /setAktiv\(\(vorher\) => \(vorher === naechster \? vorher : naechster\)\)/);
+  // Und die Kurve zeichnet sich nicht mit, wenn die Seite es tut.
+  assert.match(kurve, /const Kurve = memo\(KurveInhalt\);/);
   // Zeiger, Finger und Tastatur.
   assert.match(kurve, /onMouseMove=\{beiBewegung\}/);
   assert.match(kurve, /onTouchMove=\{beiBewegung\}/);
   assert.match(kurve, /e\.key !== "ArrowLeft" && e\.key !== "ArrowRight"/);
   assert.match(kurve, /tabIndex=\{0\}/);
   // Beim Verlassen verschwindet die Hilfslinie wieder.
-  assert.match(kurve, /onMouseLeave=\{\(\) => setAktiv\(null\)\}/);
-  assert.match(kurve, /onBlur=\{\(\) => setAktiv\(null\)\}/);
+  assert.match(kurve, /onMouseLeave=\{verlassen\}/);
+  assert.match(kurve, /onBlur=\{verlassen\}/);
+  // Beim Verlassen wird eine angeforderte Zeichnung verworfen, sonst
+  // blitzt die Hilfslinie nach dem Wegfahren noch einmal auf.
+  assert.match(kurve, /cancelAnimationFrame\(bildRef\.current\)/);
   // Die Werte stehen an der Legende, nicht in einer Sprechblase über der
   // Kurve — dort verdecken sie nichts.
   assert.match(kurve, /r\.werte\[gewaehlt\]\?\.wert \?\? 0/);
