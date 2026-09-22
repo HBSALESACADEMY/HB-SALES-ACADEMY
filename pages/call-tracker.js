@@ -71,6 +71,11 @@ const DEFAULT_BOOKING_STEPS = [
 // Farben für die Team-Auswertung: erst der Marken-Verlauf der Organisation,
 // dann neutrale Zusatztöne. Als CSS-Variablen, damit sie dem Branding und
 // beiden Themes folgen.
+// Die Schritte, die zum Mail-Ablauf gehören. Sie hängen am Schalter für das
+// E-Mail-Marketing (migration_179) — auch beim Wiederaufnehmen eines
+// angefangenen Anrufs.
+const MAIL_SCHRITTE = ["emailForm", "mailWeg", "mailForm", "nachfass"];
+
 export default function CallTracker() {
   const [view, setView] = useState("today");
   const [org, setOrg] = useState(getCachedOrg());
@@ -298,7 +303,15 @@ export default function CallTracker() {
       // gezählt und das Ergebnis für immer offen — der graue Rest in der
       // Auswertung (siehe lib/callTracker.js).
       const offen = offenerSchritt(prefixJetzt);
-      if (offen) { setStep(offen); setWiederaufgenommen(true); }
+      // Ein Schritt aus dem Mail-Ablauf wird nicht wieder aufgenommen, wenn
+      // die Leitung das E-Mail-Marketing inzwischen abgeschaltet hat
+      // (migration_179) — sonst steht man nach dem Neuladen wieder im
+      // Formular und läuft beim Absenden in die Sperre des Servers.
+      const mailSchritt = MAIL_SCHRITTE.includes(offen);
+      if (offen && !(mailSchritt && !emailMarketingAktiv(orgRow))) {
+        setStep(offen);
+        setWiederaufgenommen(true);
+      }
 
       setReady(true);
     })();

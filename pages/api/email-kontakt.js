@@ -1,6 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
+import { emailMarketingAktiv, AUS_TEXT } from "../../lib/emailMarketing";
 import { sendeAlarm } from "../../lib/alarm";
 import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
 import { ganzerName } from "../../lib/marketingVorlage";
@@ -25,6 +26,17 @@ export default async function handler(req, res) {
     .select("id, full_name, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
   const orgId = await aktiveOrgId(admin, profil, user.id);
   if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
+
+  // Ist das E-Mail-Marketing abgeschaltet (migration_179), entstehen auch
+  // keine neuen Kontakte mehr. Nur den Versand zu sperren, hiesse: Die
+  // Adressen sammeln sich weiter an, und niemand schreibt sie je an.
+  // Das Nachschlagen (GET) bleibt offen — bestehende Kontakte soll man
+  // weiter finden können.
+  if (req.method !== "GET") {
+    const { data: orgSchalter } = await admin.from("organizations")
+      .select("email_marketing_aktiv").eq("id", orgId).maybeSingle();
+    if (!emailMarketingAktiv(orgSchalter)) return res.status(403).json({ error: AUS_TEXT });
+  }
 
   // --- Dublettenprüfung ---
   if (req.method === "GET") {

@@ -3973,6 +3973,19 @@ test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den C
   const ungesichert = tracker.match(/(?<!\{mailsErlaubt && )<button onClick=\{\(\) => starteEmailKontakt\(/g) || [];
   assert.equal(ungesichert.length, 0, "kein Einstieg ohne Schalter");
 
+  // Auch das ANLEGEN eines Kontakts ist zu — sonst sammeln sich Adressen
+  // an, die niemand je anschreibt. Nachschlagen (GET) bleibt offen.
+  const kontaktRoute = lies("pages/api/email-kontakt.js");
+  assert.match(kontaktRoute, /if \(req\.method !== "GET"\) \{[\s\S]{0,260}emailMarketingAktiv\(orgSchalter\)\) return res\.status\(403\)/);
+  assert.ok(kontaktRoute.indexOf("emailMarketingAktiv(orgSchalter)") < kontaktRoute.indexOf('from("email_kontakte").insert'),
+    "die Sperre steht vor dem Anlegen");
+
+  // Und ein angefangener Anruf springt nicht in den Mail-Ablauf zurück:
+  // Nach dem Neuladen stünde man sonst wieder im Formular und liefe beim
+  // Absenden in die Sperre des Servers.
+  assert.match(tracker, /const MAIL_SCHRITTE = \["emailForm", "mailWeg", "mailForm", "nachfass"\];/);
+  assert.match(tracker, /if \(offen && !\(mailSchritt && !emailMarketingAktiv\(orgRow\)\)\)/);
+
   // In der Seitenleiste verschwindet der Punkt.
   assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| emailMarketingAktiv\(org\)/);
 
