@@ -1300,7 +1300,7 @@ export default function CallTracker() {
               punkte={[
                 { icon: "target", was: "Tagesziel:", text: "Setz dir, wie viele Anwahlen du heute machen willst. Der Ring füllt sich mit jedem Anruf und zeigt, wie viele noch fehlen." },
                 { icon: "flame", was: "Serie:", text: `Jeder Arbeitstag mit mindestens ${serie.mindestens} Anwahlen verlängert sie. Wochenenden brechen sie nicht.` },
-                { icon: "timer", was: "Telefonblock:", text: "Starte 15, 25 oder 45 Minuten am Stück. Am Ende siehst du, wie viele Anwahlen du geschafft hast — und ob dein Bestwert gefallen ist." },
+                { icon: "timer", was: "Telefonblock:", text: "Setz dir 15, 25, 45 oder deine eigene Zeit und leg los. Die Uhr zählt hoch, nicht runter — die Minuten sind ein Ziel, keine Frist. Ist die Zeit voll, regnet es für jede Anwahl einen Hörer, ein Wecker klingelt leise, und der Block läuft weiter, solange du willst." },
                 { icon: "users", was: "Heute im Team:", text: "Wer heute wie viel telefoniert hat. Nur Vornamen, nur der heutige Tag." },
               ]}
               schluss="Nichts davon geht an die Leitung, was nicht ohnehin in der Auswertung steht. Dein Bestwert im Block bleibt auf diesem Gerät."
@@ -1393,7 +1393,7 @@ export default function CallTracker() {
                   aufklappen muss, wird nicht gedrückt. */}
               <div className="pt-3 mt-3 border-t border-line">
                 <div className="label mb-2">Telefonblock</div>
-                <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} />
+                <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} darfTesten={darfOrgVerwalten} />
               </div>
 
               {(rangliste || []).length > 1 && (

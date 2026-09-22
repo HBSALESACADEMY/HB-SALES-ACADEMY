@@ -3640,7 +3640,8 @@ test("Zum Lob kommt ein Zitat, das zum Anlass passt", async () => {
   });
   const zeile = zitatZeile(zitatFuer("abschluss", "2026-09-11"));
   assert.match(zeile, /^💬 „.+“ — .+$/);
-  assert.ok(text.endsWith(zeile), text);
+  // Das Zitat schliesst das Lob ab; danach kommt nur noch der Impuls.
+  assert.ok(text.includes(`${zeile}\n\n🌱 Für den Kopf`), text);
 
   // Auch am ruhigen Tag kommt eins — unter dem stärksten Wert.
   const ruhig = auswertungsText({
@@ -3658,6 +3659,90 @@ test("Zum Lob kommt ein Zitat, das zum Anlass passt", async () => {
   assert.match(gemischt, /Follow-ups erledigt: 2 \(Mo: 0\) ↑/);
   assert.ok(!/: 0 \(Mo: 0\)/.test(gemischt), gemischt);
   assert.ok(!/Mails verschickt/.test(gemischt));
+});
+
+test("Der Morgen-Impuls: fest formuliert, passend zur Lage, ohne Zeigefinger", async () => {
+  const { IMPULSE, impulsFuer, impulsLage, impulsZeilen } = await import("../lib/impulse.js");
+  const { auswertungsText, leereZahlen, KENNZAHLEN } = await import("../lib/tagesauswertung.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const zahlen = (werte) => ({ ...leereZahlen(), ...werte });
+  const keys = KENNZAHLEN.map((k) => k.key);
+  const LAGEN = ["immer", "stark", "schwach", "montag", "freitag"];
+
+  // Jeder Impuls ist vollständig und bleibt lesbar auf dem Handy.
+  IMPULSE.forEach((i) => {
+    assert.ok(LAGEN.includes(i.lage), i.lage);
+    assert.ok(["Umfeld", "Körper", "Kopf", "Menschen", "Ordnung"].includes(i.thema), i.thema);
+    assert.ok(i.titel && i.gedanke && i.heute, JSON.stringify(i));
+    assert.ok(i.gedanke.length <= 320, i.gedanke);
+    assert.ok(i.heute.length <= 200, i.heute);
+    // Eine konkrete Sache für heute, kein zweiter Gedanke.
+    assert.match(i.titel, /[.!?]$/, i.titel);
+  });
+  // Jede Lage hat genug, dass sich nichts innerhalb einer Woche wiederholt.
+  LAGEN.forEach((l) => assert.ok(IMPULSE.filter((i) => i.lage === l).length >= 3, l));
+
+  // Kein Gesundheits- oder Seelenratschlag, nirgends.
+  const alleTexte = IMPULSE.map((i) => `${i.titel} ${i.gedanke} ${i.heute}`).join(" ").toLowerCase();
+  ["therapie", "depress", "diagnose", "burnout", "arzt", "medikament", "krank"].forEach((wort) =>
+    assert.ok(!alleTexte.includes(wort), wort));
+  // Und am zähen Tag kein Antreiber.
+  const zaeh = IMPULSE.filter((i) => i.lage === "schwach").map((i) => `${i.titel} ${i.gedanke} ${i.heute}`).join(" ").toLowerCase();
+  ["du musst", "streng", "reiß dich", "keine ausrede", "mehr geben"].forEach((wort) =>
+    assert.ok(!zaeh.includes(wort), wort));
+
+  // Fest formuliert: keine KI im Spiel. Ein schiefer Satz am Morgen geht an
+  // echte Menschen.
+  const quelle = lies("lib/impulse.js");
+  assert.ok(!/aiClient|callAI|gemini/i.test(quelle));
+
+  // Die Lage, das Wichtigste zuerst: ein Kunde oder Platz 1 schlägt den
+  // Wochentag, ein zäher Tag schlägt den Montags-Antreiber.
+  const montag = "2026-09-21";
+  const freitag = "2026-09-25";
+  const dienstag = "2026-09-22";
+  const lage = (heute, vorher, bestwerte, heuteTag) =>
+    impulsLage({ heute: zahlen(heute), vorher: zahlen(vorher), bestwerte, heuteTag, kennzahlen: keys });
+  assert.equal(lage({ kunden: 1, anwahlen: 3 }, { anwahlen: 40 }, [], montag), "stark");
+  assert.equal(lage({ anwahlen: 3 }, { anwahlen: 40 }, ["anwahlen"], montag), "stark");
+  assert.equal(lage({ anwahlen: 20 }, { anwahlen: 40 }, [], montag), "schwach");
+  assert.equal(lage({ anwahlen: 20 }, { anwahlen: 40 }, [], dienstag), "schwach");
+  assert.equal(lage({ anwahlen: 41 }, { anwahlen: 40 }, [], montag), "montag");
+  assert.equal(lage({ anwahlen: 41 }, { anwahlen: 40 }, [], freitag), "freitag");
+  assert.equal(lage({ anwahlen: 41 }, { anwahlen: 40 }, [], dienstag), "immer");
+
+  // Derselbe Tag: derselbe Impuls. Zwei Tage hintereinander: nie derselbe.
+  LAGEN.forEach((l) => {
+    assert.equal(impulsFuer(l, "2026-09-22").titel, impulsFuer(l, "2026-09-22").titel);
+    for (const [heute, morgen] of [["2026-09-22", "2026-09-23"], ["2026-09-30", "2026-10-01"], ["2026-12-31", "2027-01-01"]]) {
+      assert.notEqual(impulsFuer(l, heute).titel, impulsFuer(l, morgen).titel, `${l} ${heute}`);
+    }
+    assert.equal(impulsFuer(l, "2026-09-22").lage, l);
+  });
+  // Eine unbekannte Lage fällt auf den normalen Tag zurück statt auf nichts.
+  assert.equal(impulsFuer("quatsch", "2026-09-22").lage, "immer");
+  assert.deepEqual(impulsZeilen(null), []);
+
+  // In der Nachricht steht der Impuls zum Schluss — mit einer Sache für
+  // heute, und er gilt für HEUTE, nicht für den ausgewerteten Tag.
+  const text = auswertungsText({
+    name: "Anna", berichtTag: "2026-09-18", vergleichTag: "2026-09-17", heuteTag: montag,
+    heute: zahlen({ anwahlen: 60 }), vorher: zahlen({ anwahlen: 48 }),
+  });
+  const erwartet = impulsZeilen(impulsFuer("montag", montag));
+  assert.ok(text.endsWith(erwartet.join("\n")), text);
+  assert.match(text, /\n🌱 Für den Kopf\n/);
+  assert.match(text, /\n→ Heute: /);
+  // Ohne heuteTag (alter Aufruf) bricht nichts, dann zählt der Berichtstag.
+  assert.match(auswertungsText({
+    berichtTag: "2026-09-18", vergleichTag: "2026-09-17",
+    heute: zahlen({ anwahlen: 60 }), vorher: zahlen({ anwahlen: 48 }),
+  }), /🌱 Für den Kopf/);
+
+  // Der Versand gibt den heutigen Tag durch — sonst käme am Montag der
+  // Freitags-Impuls.
+  assert.match(lies("lib/tagesauswertungVersand.js"), /const \{ heute: heuteTag, berichtTag, vergleichTag \} = tage;/);
+  assert.match(lies("lib/tagesauswertungVersand.js"), /\n      heuteTag,\n/);
 });
 
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
@@ -4571,6 +4656,103 @@ test("Die Anwahl-Serie zählt Arbeitstage, nicht Kalendertage", async () => {
   assert.match(s.blockText({ anwahlen: 0 }), /neuer Anfang/);
   assert.match(s.blockText({ anwahlen: 20, minuten: 25, bestwert: 12 }), /neuer Bestwert/);
   assert.match(s.blockText({ anwahlen: 8, minuten: 25, bestwert: 12 }), /4 mehr/);
+});
+
+test("Der Telefonblock zählt hoch, und das Ziel ist keine Frist", async () => {
+  const s = await import("../lib/anwahlSpiel.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Die Uhr: mm:ss, über eine Stunde mit Stunden davor.
+  assert.equal(s.uhrZeit(0), "00:00");
+  assert.equal(s.uhrZeit(65), "01:05");
+  assert.equal(s.uhrZeit(1500), "25:00");
+  assert.equal(s.uhrZeit(3725), "1:02:05");
+  // Negative Zeit gibt es nicht (Uhr des Geräts zurückgestellt).
+  assert.equal(s.uhrZeit(-30), "00:00");
+
+  // Vor dem Ziel: die Uhr steigt, der Block läuft.
+  const mitten = s.blockStand({ minuten: 25, sekunden: 610 });
+  assert.equal(mitten.uhr, "10:10");
+  assert.equal(mitten.zielVoll, false);
+  assert.equal(mitten.vorbei, false);
+  // Die gelaufene Zeit zählt fürs Ergebnis, nicht die geplante.
+  assert.equal(mitten.minuten, 10);
+
+  // Am Ziel ist der Block NICHT vorbei — die Minuten sind ein Ziel, keine
+  // Frist. Wer weiter telefoniert, darf weiterlaufen lassen.
+  const voll = s.blockStand({ minuten: 15, sekunden: 900 });
+  assert.equal(voll.zielVoll, true);
+  assert.equal(voll.vorbei, false);
+  assert.equal(s.blockStand({ minuten: 15, sekunden: 1200 }).ueberMinuten, 5);
+
+  // Erst beim Doppelten hört er von selbst auf: ein vergessener Block soll
+  // kein Ergebnis über sechs Stunden liefern.
+  assert.equal(s.blockStand({ minuten: 15, sekunden: 1799 }).vorbei, false);
+  assert.equal(s.blockStand({ minuten: 15, sekunden: 1800 }).vorbei, true);
+  assert.equal(s.BLOCK_GRENZE_FAKTOR, 2);
+
+  // Und im Bauteil steht kein Countdown mehr: Gegenprobe zum Text in der
+  // Erklärung, der genau das verspricht.
+  const block = lies("components/Telefonblock.js");
+  assert.match(block, /Date\.now\(\) - laufend\.seit/);
+  assert.ok(!/restSekunden/.test(block));
+  assert.match(block, /Ziel: \$\{laufend\.minuten\} Minuten/);
+  assert.match(lies("pages/call-tracker.js"), /Die Uhr zählt hoch, nicht runter/);
+
+  // Eine eigene Länge ist möglich, aber geprüft: ein Vertipper soll nicht
+  // stillschweigend zu einem Block über Stunden werden.
+  assert.deepEqual(s.leseBlockEingabe("30"), { minuten: 30 });
+  assert.deepEqual(s.leseBlockEingabe(" 45 "), { minuten: 45 });
+  assert.equal(s.leseBlockEingabe("").minuten, null);
+  assert.ok(s.leseBlockEingabe("0").fehler);
+  assert.ok(s.leseBlockEingabe("181").fehler);
+  assert.ok(s.leseBlockEingabe("zwanzig").fehler);
+  assert.ok(s.leseBlockEingabe("12,5").fehler);
+  assert.match(block, /leseBlockEingabe\(eigene\)/);
+});
+
+test("Ist die Zeit voll, gibt es die Belohnung — einmal, leise und abschaltbar", async () => {
+  const f = await import("../lib/blockFeier.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Ein Hörer je Anwahl, aber irgendwann ist der Bildschirm voll.
+  assert.equal(f.hoererZahl(0), 0);
+  assert.equal(f.hoererZahl(1), 1);
+  assert.equal(f.hoererZahl(14), 14);
+  assert.equal(f.hoererZahl(500), f.HOERER_MAX);
+  // Keine Anwahl heisst keine Feier aus Hörern — aber auch kein Tadel.
+  assert.equal(f.hoererZahl(-3), 0);
+
+  // Ohne Browser passiert nichts, statt einen Fehler zu werfen (der
+  // Serverbau lädt die Datei mit).
+  assert.equal(typeof document, "undefined");
+  assert.equal(f.zeigeBlockFeier({ anwahlen: 10 }), 0);
+
+  const quelle = lies("lib/blockFeier.js");
+  // Nichts von fremden Servern: kein Tonfile, kein Bild, keine Bibliothek.
+  assert.ok(!/https?:\/\//.test(quelle), "Die Feier lädt nichts nach");
+  assert.ok(!/new Audio|\.mp3|\.wav/.test(quelle), "Der Gong wird erzeugt, nicht geladen");
+  // Leise: ein Wecker soll niemanden im Büro erschrecken.
+  assert.match(quelle, /const spitze = i === 0 \? 0\.06 : 0\.045;/);
+  // Wer weniger Bewegung eingestellt hat, bekommt keinen Regen.
+  assert.match(quelle, /prefers-reduced-motion/);
+  assert.match(quelle, /const anzahl = ruhig \? 0 : hoererZahl\(anwahlen\);/);
+  // Und alles räumt sich selbst weg.
+  assert.match(quelle, /setTimeout\(\(\) => buehne\.remove\(\), FEIER_DAUER\)/);
+
+  const block = lies("components/Telefonblock.js");
+  // Die Feier kommt, wenn die Zeit voll ist — und nur einmal je Block.
+  assert.match(block, /if \(stand\.zielVoll && !gefeiertRef\.current\) \{\n\s+gefeiertRef\.current = true;\n\s+zeigeBlockFeier\(/);
+  assert.match(block, /gefeiertRef\.current = false;/);
+  // Der Ton ist abschaltbar und bleibt im Gerät.
+  assert.match(block, /localStorage\.getItem\(`\$\{speicherSchluessel\}:ton`\) !== "aus"/);
+  assert.match(block, /ton: tonRef\.current/);
+  // Die Leitung kann sie sich ansehen, ohne 25 Minuten zu warten — und nur
+  // die Leitung sieht den Knopf.
+  assert.match(block, /darfTesten && \(/);
+  assert.match(lies("pages/call-tracker.js"), /darfTesten=\{darfOrgVerwalten\}/);
+  // Und es steht in der Erklärung, damit niemand vom Regen überrascht wird.
+  assert.match(lies("pages/call-tracker.js"), /regnet es für jede Anwahl einen Hörer/);
 });
 
 test("Das eigene Anwahl-Ziel: selbst setzbar, geprüft, und ein zugewiesenes hat Vorrang", async () => {

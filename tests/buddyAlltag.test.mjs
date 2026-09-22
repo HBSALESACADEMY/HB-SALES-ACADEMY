@@ -1242,8 +1242,9 @@ test("Ziel, Serie, Block und Tagesliste hängen an den erfassten Zahlen", async 
   const block = lies("components/Telefonblock.js");
   assert.match(block, /blockErgebnis\(\{ start: aktuell\.start, ende: anwahlenRef\.current/);
   // Die Uhr läuft nach echter Zeit — ein Tab im Hintergrund bekommt seltener
-  // einen Takt.
-  assert.match(block, /Math\.round\(\(laufend\.bis - Date\.now\(\)\) \/ 1000\)/);
+  // einen Takt. Und sie zählt HOCH: kein Countdown, der Druck macht.
+  assert.match(block, /Math\.round\(\(Date\.now\(\) - laufend\.seit\) \/ 1000\)/);
+  assert.ok(!/restSekunden|laufend\.bis/.test(block), "Kein Countdown mehr im Telefonblock");
   // Der Bestwert bleibt im Gerät und wird nie zur Kennzahl für die Leitung.
   assert.match(block, /localStorage\.setItem/);
   assert.ok(!/supabase|apiPost/.test(block), "Der Bestwert gehört nicht auf den Server");
