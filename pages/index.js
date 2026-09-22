@@ -630,7 +630,12 @@ export default function Dashboard() {
                     {meineFollowUps.slice(0, 3).map((n) => {
                       const ueberfaellig = new Date(n.faellig_am) < new Date();
                       return (
-                        <div key={n.id} onClick={() => router.push("/email-marketing")}
+                        // In den Kalender, nicht ins E-Mail-Marketing: Dort
+                        // lässt sich ein Follow-up abhaken, und dort steht es
+                        // auch dann noch, wenn die Leitung das E-Mail-Marketing
+                        // abgeschaltet hat (migration_179). Sonst führte die
+                        // Karte in eine Sackgasse.
+                        <div key={n.id} onClick={() => router.push("/kalender")}
                           className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 cursor-pointer ${ueberfaellig ? "border-coral/50 bg-coral/5" : "border-line"}`}>
                           <span className="text-sm text-textMain flex-1 truncate">{n.titel}</span>
                           <span className={`text-xs font-mono flex-shrink-0 ${ueberfaellig ? "text-coral" : "text-textMuted"}`}>

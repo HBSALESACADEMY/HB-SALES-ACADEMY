@@ -3989,6 +3989,19 @@ test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den C
   assert.match(editor, /email_marketing_aktiv: mailsAktiv,/);
   assert.match(editor, /E-Mail-Marketing eingeschaltet/);
 
+  // Kein toter Link: Das Dashboard schickt ein Follow-up in den Kalender,
+  // wo es sich abhaken lässt — nicht auf die Marketing-Seite, die
+  // abgeschaltet sein kann.
+  const dashboard = lies("pages/index.js");
+  assert.match(dashboard, /<div key=\{n\.id\} onClick=\{\(\) => router\.push\("\/kalender"\)\}/);
+  assert.ok(!/router\.push\("\/email-marketing"\)/.test(dashboard), "kein Weg vom Dashboard in die abgeschaltete Seite");
+
+  // Der Follow-up-Reiter bleibt: Er zeigt Termine ohne Ergebnis und
+  // Absagen, nicht Mails. Ihn auszublenden nähme genau die Arbeit weg,
+  // die das Mailen ersetzen soll.
+  assert.ok(!/email-marketing/.test(lies("pages/follow-up.js")), "der Follow-up-Reiter hängt nicht am E-Mail-Marketing");
+  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| emailMarketingAktiv\(org\)/);
+
   // Migration und Systemstatus.
   assert.match(lies("supabase/migration_179_email_marketing_schalter.sql"),
     /add column if not exists email_marketing_aktiv boolean not null default true/);
