@@ -4431,10 +4431,12 @@ test("Die Verlaufskurve rechnet richtig: Maßstab ab null, lückenlose Tage, kei
   assert.ok(tagesReihe(zeilen, "anwahlen", "2020-01-01", "2030-01-01").length <= 400);
 
   const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
-  // Mehrere Reihen teilen einen Maßstab — sonst ist der Vergleich gelogen.
+  // Mehrere KURVEN teilen einen Maßstab — sonst ist der Vergleich gelogen.
+  // Eine Reihe mit eigener Größenordnung wird stattdessen zu Balken mit
+  // eigener Achse (siehe unten).
   const kurve = lies("components/Kurve.js");
-  assert.match(kurve, /Ein Maßstab für alle Reihen/);
-  assert.match(kurve, /const faktor = eigenerHoechster \/ hoechsterWert;/);
+  assert.match(kurve, /Ein Maßstab für alle KURVEN/);
+  assert.match(kurve, /const faktor = eigenerHoechster \/ hoechster;/);
   // Startbildschirm und Auswertung nutzen sie.
   assert.match(lies("pages/index.js"), /<Kurve/);
   assert.match(lies("pages/auswertung.js"), /<Kurve/);
@@ -4676,14 +4678,19 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   // Gerechnet wird über den Anteil der Breite, nicht über Pixel: Die Kurve
   // wird gestreckt, ein Pixelvergleich träfe sonst die falsche Stelle.
   assert.match(kurve, /const anteil = x \/ kasten\.width;/);
-  assert.match(kurve, /punktBeiAnteil\(anzahl, anteil\)/);
+  assert.match(kurve, /punktBeiAnteil\(bild\.anzahl, anteil\)/);
   // Die Pfade entstehen EINMAL, nicht bei jeder Zeigerbewegung — sonst
   // wurden bei jedem Pixel alle Bézier-Pfade neu gebaut.
   assert.match(kurve, /linie: weicherPfad\(skaliert\)/);
   assert.match(kurve, /\}, \[mitWerten, hoehe\]\);/);
   // Höchstens eine Zeichnung je Bild, und nur bei echtem Wechsel.
   assert.match(kurve, /requestAnimationFrame\(\(\) => \{/);
-  assert.match(kurve, /setAktiv\(\(vorher\) => \(vorher === naechster \? vorher : naechster\)\)/);
+  assert.match(kurve, /if \(naechster !== aktivRef\.current\) zeige\(naechster\);/);
+  // Beim Abfahren wird DIREKT am Bild geändert, nicht über den Zustand:
+  // ein Zeiger meldet bis zu 120 Bewegungen pro Sekunde.
+  assert.ok(!/useState/.test(kurve), "Kein Zustand in der Kurve — sonst zeichnet React bei jeder Bewegung neu");
+  assert.match(kurve, /linieRef\.current\.setAttribute\("x1", x\)/);
+  assert.match(kurve, /feld\.textContent = sichtbar/);
   // Und die Kurve zeichnet sich nicht mit, wenn die Seite es tut.
   assert.match(kurve, /const Kurve = memo\(KurveInhalt\);/);
   // Zeiger, Finger und Tastatur.
@@ -4693,11 +4700,19 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   assert.match(kurve, /tabIndex=\{0\}/);
   // Beim Verlassen verschwindet die Hilfslinie wieder.
   assert.match(kurve, /onMouseLeave=\{verlassen\}/);
+  // Achsenmarken links, Balkenachse rechts, Punkte je Tag bei kurzen Reihen.
+  assert.match(kurve, /bild\.marken\.map/);
+  assert.match(kurve, /r\.art === "balken"/);
+  assert.match(kurve, /const mitPunkten = bild\.anzahl <= 14;/);
+  // Die Zahlen stehen NEBEN dem Bild: Das SVG wird gestreckt, Schrift
+  // darin wäre verzerrt.
+  assert.match(kurve, /Die Zahlen der Achse stehen NEBEN dem Bild/);
+  assert.ok(!/<text/.test(kurve), "Keine Schrift im gestreckten SVG");
   assert.match(kurve, /onBlur=\{verlassen\}/);
   // Beim Verlassen wird eine angeforderte Zeichnung verworfen, sonst
   // blitzt die Hilfslinie nach dem Wegfahren noch einmal auf.
   assert.match(kurve, /cancelAnimationFrame\(bildRef\.current\)/);
   // Die Werte stehen an der Legende, nicht in einer Sprechblase über der
   // Kurve — dort verdecken sie nichts.
-  assert.match(kurve, /r\.werte\[gewaehlt\]\?\.wert \?\? 0/);
+  assert.match(kurve, /r\.werte\[i\]\?\.wert \?\? 0/);
 });

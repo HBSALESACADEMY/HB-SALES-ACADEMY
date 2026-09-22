@@ -2105,7 +2105,7 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
   // für die Kurve, dass sie alle Pfade neu rechnen muss.
   const verlaufsReihen = useMemo(() => [
     { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen") },
-    { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin") },
+    { label: "Termine", art: "balken", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin") },
   ], [zeilen]);
 
   // Die Ausstiege stehen BEWUSST unter allen Hooks: Ein Hook hinter einem

@@ -239,7 +239,7 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
   // der Seite alle Pfade neu.
   const verlaufsReihen = useMemo(() => [
     { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen", daten.zeitraum?.von, daten.zeitraum?.bis) },
-    { label: "Termine", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin", daten.zeitraum?.von, daten.zeitraum?.bis) },
+    { label: "Termine", art: "balken", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin", daten.zeitraum?.von, daten.zeitraum?.bis) },
   ], [zeilen, daten.zeitraum?.von, daten.zeitraum?.bis]);
 
   const gruendeGesamt = summiereGruende(zeilen);
