@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import SeitenReiter from "../components/SeitenReiter";
+import FollowUpListe, { TON } from "../components/FollowUpListe";
 import Icon from "../components/Icon";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import { supabase } from "../lib/supabaseClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { aendereGeprueft } from "../lib/loeschen";
-import { FOLLOW_KATEGORIEN, kategorieVon, liegtSeit, sortiereNachDringlichkeit } from "../lib/followUp";
-import { deutscheZeit } from "../lib/terminzeit";
+import {
+  FOLLOW_KATEGORIEN, kategorieVon, liegtSeit, sortiereNachDringlichkeit,
+  gruppiereNachDringlichkeit, dringlichkeitVon, uebersicht,
+} from "../lib/followUp";
 import { downloadCsv } from "../lib/csv";
 import { feldFarbe } from "../lib/diagrammFarben";
-import Fortschrittsbalken from "../components/Fortschrittsbalken";
-import { artVon, kuerzelVon } from "../lib/terminArt";
-import { ERGEBNISSE } from "../lib/ergebnis";
+import { artVon, fortschritt } from "../lib/terminArt";
 
 // Follow-up: was nach dem Termin noch offen ist.
 //
@@ -22,7 +23,23 @@ import { ERGEBNISSE } from "../lib/ergebnis";
 // Zeitpunkt weg ist, nicht der Kontakt. Beides verschwand bisher in der
 // langen Terminliste zwischen den bevorstehenden Terminen — und damit aus
 // dem Kopf.
+//
+// Die Darstellung: EINE ZEILE je Eintrag, nach Dringlichkeit gebündelt.
+//
+// Vorher war jeder Eintrag eine Karte mit Balken, Notiz und fünf Knöpfen —
+// gut aussehend, aber bei zwanzig offenen Fällen eine Wand, durch die man
+// scrollt, bis man aufgibt. Wer nachfassen will, braucht zuerst den
+// Überblick: wie viele, wie alt, wer zuerst. Alles Weitere steht einen
+// Klick entfernt und dann vollständig da, statt halb in der Zeile.
 
+function Kennzahl({ label, wert, ton = "muted", hinweis }) {
+  return (
+    <div className="rounded-lg border border-line px-3 py-2" title={hinweis}>
+      <div className={`text-xl font-display font-semibold ${TON[ton].text}`}>{wert}</div>
+      <div className="text-[11px] text-textMuted leading-tight">{label}</div>
+    </div>
+  );
+}
 
 export default function FollowUp() {
   const [leads, setLeads] = useState([]);
@@ -32,6 +49,9 @@ export default function FollowUp() {
   const [reiter, setReiter] = useState("offen");
   const [wer, setWer] = useState([]);
   const [leitung, setLeitung] = useState(false);
+  // Immer nur ein Eintrag offen: Sind es mehrere, ist die Liste wieder so
+  // lang wie vorher.
+  const [offenId, setOffenId] = useState(null);
 
   async function laden() {
     setLaedt(true);
@@ -83,15 +103,18 @@ export default function FollowUp() {
   const gefiltert = sortiereNachDringlichkeit(
     leads.filter((l) => kategorieVon(l) === reiter && (!wer.length || wer.includes(l.created_by)))
   );
+  const gruppen = gruppiereNachDringlichkeit(gefiltert);
+  const lage = uebersicht(gefiltert);
 
   function exportiere() {
     downloadCsv(
       `follow-up-${reiter}-${new Date().toISOString().slice(0, 10)}.csv`,
-      ["Name", "Firma", "Telefon", "E-Mail", "Termin war", "Liegt seit (Tage)", "Von"],
+      ["Name", "Firma", "Telefon", "E-Mail", "Termin war", "Liegt seit (Tage)", "Dringlichkeit", "Stufe", "Fortschritt %", "Notiz", "Von"],
       gefiltert.map((l) => [
         l.name, l.company || "", l.phone || "", l.email || "",
         l.appointment_at ? new Date(l.appointment_at).toLocaleDateString("de-DE") : "",
-        liegtSeit(l) ?? "", nameVon(l.created_by),
+        liegtSeit(l) ?? "", dringlichkeitVon(l).label, artVon(l).label, fortschritt(l),
+        (l.notes || "").replace(/\s+/g, " "), nameVon(l.created_by),
       ])
     );
   }
@@ -108,17 +131,30 @@ export default function FollowUp() {
           anzahl: leads.filter((l) => kategorieVon(l) === k.key).length,
         }))}
         aktiv={reiter}
-        onWechsel={setReiter}
+        onWechsel={(k) => { setReiter(k); setOffenId(null); }}
       />
 
-      <div className="card mb-4">
+      {/* Die Lage in drei Zahlen, bevor die Liste anfängt. "Ältester Fall"
+          ist die Zahl, die weh tut — und genau deshalb steht sie da. */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <Kennzahl label="Liegen hier" wert={lage.gesamt} />
+        <Kennzahl label={`Über ${lage.schwelle} Tage`} wert={lage.ueberfaellig}
+          ton={lage.ueberfaellig ? "coral" : "muted"}
+          hinweis="Diese Fälle warten zwei Wochen oder länger" />
+        <Kennzahl label="Ältester Fall" wert={lage.aeltester === null ? "—" : `${lage.aeltester} T`}
+          ton={lage.aeltester >= lage.schwelle ? "coral" : "muted"}
+          hinweis="So lange liegt der älteste Eintrag dieser Liste" />
+      </div>
+
+      <div className="card mb-3">
         <p className="text-xs text-textMuted">
           {FOLLOW_KATEGORIEN.find((k) => k.key === reiter)?.hinweis}
           {" "}Das Älteste steht oben — was am längsten liegt, wird am ehesten vergessen.
+          {" "}Eine Zeile antippen zeigt Nummer, Notiz und die nächsten Schritte.
         </p>
       </div>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         {leitung && personen.length > 1 && (
           <>
             <span className="text-[11px] text-textMuted">Von:</span>
@@ -143,59 +179,16 @@ export default function FollowUp() {
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        {gefiltert.map((l) => {
-          const tage = liegtSeit(l);
-          const art = artVon(l);
-          return (
-            <div key={l.id} className="card !py-2.5">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="font-semibold text-textMain text-sm">
-                  {kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>}
-                  {l.name}
-                </span>
-                {l.company && <span className="text-xs text-textMuted">{l.company}</span>}
-                {/* Wie lange es liegt, in Tagen — ab zwei Wochen auffällig.
-                    Ein Termin von gestern drängt anders als einer von vor
-                    drei Wochen. */}
-                {tage !== null && (
-                  <span className={`text-[11px] ml-auto ${tage >= 14 ? "text-coral" : tage >= 7 ? "text-amber" : "text-textMuted"}`}>
-                    seit {tage} {tage === 1 ? "Tag" : "Tagen"}
-                  </span>
-                )}
-              </div>
+      <FollowUpListe
+        gruppen={gruppen}
+        reiter={reiter}
+        leitung={leitung}
+        nameVon={nameVon}
+        offenId={offenId}
+        onOeffnen={setOffenId}
+        onErgebnis={setzeErgebnis}
+      />
 
-              <div className="flex items-center gap-3 flex-wrap text-xs text-textMuted mb-2">
-                {l.phone && <a href={`tel:${l.phone}`} className="text-amber hover:underline">{l.phone}</a>}
-                {l.email && <a href={`mailto:${l.email}`} className="text-amber hover:underline">{l.email}</a>}
-                {l.appointment_at && <span>Termin war {deutscheZeit(l.appointment_at)} Uhr</span>}
-                {leitung && nameVon(l.created_by) && <span>· {nameVon(l.created_by)}</span>}
-              </div>
-
-              <div className="mb-2">
-                <Fortschrittsbalken lead={l} kompakt />
-              </div>
-              {l.notes && <p className="text-xs text-textMain bg-surfaceRaised rounded-lg px-3 py-2 mb-2">{l.notes}</p>}
-
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Beim abgesagten Termin ist das Ergebnis nicht die Frage —
-                    dort geht es um einen neuen Zeitpunkt. */}
-                {reiter !== "abgesagt" && ERGEBNISSE.map((e) => (
-                  <button key={e.wert} onClick={() => setzeErgebnis(l, e.wert)}
-                    title={l.outcome === e.wert ? "Nochmal tippen, um das Ergebnis zurückzunehmen" : e.hinweis}
-                    className={`btn-ghost text-xs ${l.outcome === e.wert ? "text-textMain" : ""}`}
-                    style={l.outcome === e.wert ? { borderColor: feldFarbe("termin") } : undefined}>
-                    {l.outcome === e.wert ? "✓ " : ""}{e.label}
-                  </button>
-                ))}
-                <a href={`/termine?leadId=${l.id}`} className="btn-ghost text-xs ml-auto">
-                  Zum Termin →
-                </a>
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </Layout>
   );
 }

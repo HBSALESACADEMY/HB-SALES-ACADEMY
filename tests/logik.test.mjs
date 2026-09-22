@@ -4022,6 +4022,65 @@ test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den C
   assert.ok(ERWARTUNGEN.some((e) => e.migration === 179 && e.spalte === "email_marketing_aktiv"));
 });
 
+test("Follow-up: eine Zeile je Fall, nach Dringlichkeit gebündelt", async () => {
+  const f = await import("../lib/followUp.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const jetzt = new Date("2026-09-22T12:00:00Z");
+  const vorTagen = (n, rest = {}) => ({
+    id: `l${n}`, name: `Fall ${n}`, status: "wahrgenommen",
+    appointment_at: new Date(jetzt.getTime() - n * 86400000).toISOString(), ...rest,
+  });
+
+  // Die Grenzen sind dieselben, mit denen die Zeile eingefärbt wird.
+  assert.deepEqual(f.DRINGLICHKEIT.map((d) => d.abTagen), [14, 7, 0]);
+  const gruppeVon = (n) => f.dringlichkeitVon(vorTagen(n), jetzt).key;
+  assert.equal(gruppeVon(0), "frisch");
+  assert.equal(gruppeVon(6), "frisch");
+  assert.equal(gruppeVon(7), "faellig");
+  assert.equal(gruppeVon(13), "faellig");
+  assert.equal(gruppeVon(14), "ueberfaellig");
+  assert.equal(gruppeVon(90), "ueberfaellig");
+  // Ohne Datum keine erfundene Dringlichkeit.
+  assert.equal(f.dringlichkeitVon({ name: "ohne" }, jetzt).key, "frisch");
+
+  // Gebündelt: dringendste Gruppe zuerst, innerhalb das Älteste oben.
+  // Die Eingabe ist innerhalb der Gruppen BEWUSST verkehrt sortiert —
+  // sonst prüft die Zusicherung unten die Sortierung nicht wirklich.
+  const gruppen = f.gruppiereNachDringlichkeit([vorTagen(1), vorTagen(15), vorTagen(9), vorTagen(31), vorTagen(3)], jetzt);
+  assert.deepEqual(gruppen.map((g) => g.key), ["ueberfaellig", "faellig", "frisch"]);
+  assert.deepEqual(gruppen[0].leads.map((l) => l.id), ["l31", "l15"]);
+  assert.deepEqual(gruppen[2].leads.map((l) => l.id), ["l3", "l1"]);
+  // Leere Gruppen fallen weg — eine Überschrift ohne Inhalt kostet Platz.
+  assert.deepEqual(f.gruppiereNachDringlichkeit([vorTagen(2)], jetzt).map((g) => g.key), ["frisch"]);
+  assert.deepEqual(f.gruppiereNachDringlichkeit([], jetzt), []);
+
+  // Die Lage in Zahlen, für den Kopf der Seite.
+  const lage = f.uebersicht([vorTagen(3), vorTagen(31), vorTagen(15)], jetzt);
+  assert.deepEqual(lage, { gesamt: 3, ueberfaellig: 2, aeltester: 31, schwelle: 14 });
+  assert.equal(f.uebersicht([], jetzt).aeltester, null, "ohne Einträge keine erfundene Zahl");
+
+  // Die Liste: EINE Zeile je Fall, nicht eine Karte. Sonst ist die Seite
+  // wieder eine Wand, durch die man scrollt.
+  const liste = lies("components/FollowUpListe.js");
+  assert.match(liste, /gruppen\.map\(\(gruppe\) =>/);
+  assert.match(liste, /gruppe\.leads\.map\(\(l, i\) =>/);
+  assert.ok(!/<div key=\{l\.id\} className="card/.test(liste), "kein Karten-Stapel mehr");
+  // Aufklappen: Details erst dann — und nur eine Zeile zugleich.
+  assert.match(liste, /\{offen && <div className="px-3 pb-3 pt-1">/);
+  assert.match(lies("pages/follow-up.js"), /const \[offenId, setOffenId\] = useState\(null\);/);
+  assert.match(lies("pages/follow-up.js"), /onWechsel=\{\(k\) => \{ setReiter\(k\); setOffenId\(null\); \}\}/);
+  // Die Zeile sagt Screenreadern, worum es geht.
+  assert.match(liste, /aria-label=\{`\$\{l\.name\}/);
+
+  // Der Kopf nennt die Lage, und die Liste ist ausführlicher geworden:
+  // Dringlichkeit, Stufe, Fortschritt und Notiz stehen jetzt im Export.
+  const seite = lies("pages/follow-up.js");
+  assert.match(seite, /label="Liegen hier"/);
+  assert.match(seite, /label="Ältester Fall"/);
+  ["Dringlichkeit", "Stufe", "Fortschritt %", "Notiz"].forEach((spalte) =>
+    assert.ok(seite.includes(`"${spalte}"`), spalte));
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));
