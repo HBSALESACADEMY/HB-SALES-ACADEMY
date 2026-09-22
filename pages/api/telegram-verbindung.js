@@ -49,6 +49,7 @@ export default async function handler(req, res) {
       buddy: zeile ? zeile.buddy !== false : true,
       teamlage: zeile ? zeile.teamlage !== false : true,
       briefing: zeile ? zeile.briefing !== false : true,
+      einwaende: zeile ? zeile.einwaende !== false : true,
       istLeitung: istFuehrungsrolle(ich),
       einwilligungAm: zeile?.einwilligung_am || null,
     });
@@ -139,6 +140,7 @@ export default async function handler(req, res) {
       if (typeof req.body.buddy === "boolean") felder.buddy = req.body.buddy;
       if (typeof req.body.teamlage === "boolean") felder.teamlage = req.body.teamlage;
       if (typeof req.body.briefing === "boolean") felder.briefing = req.body.briefing;
+      if (typeof req.body.einwaende === "boolean") felder.einwaende = req.body.einwaende;
       if (!Object.keys(felder).length) return res.status(400).json({ error: "Keine Einstellung angegeben." });
       await speichere(felder);
       return res.status(200).json({ ok: true, ...felder });

@@ -807,6 +807,14 @@ export default function CallTracker() {
       });
       if (error) throw error;
       showToast("Gezählt — dein Grund geht als Vorschlag an die Leitung");
+      // Und die Leitung erfährt es sofort, wenn dieser Wortlaut neu ist
+      // (pages/api/einwand-melden.js). Scheitert die Meldung, ist nichts
+      // verloren: Der Vorschlag steht in Verwaltung → Einwände. Deshalb
+      // hält es hier auch niemanden auf — nur gemeldet wird die Störung,
+      // damit es nicht still bleibt.
+      apiPost("/api/einwand-melden", { text }).catch((e) => {
+        meldeStoerung("Einwand-Meldung an die Leitung", e?.message || String(e));
+      });
     } catch (e) {
       // Der Anruf ist gezählt, nur der Vorschlag fehlt. Das darf den
       // nächsten Anruf nicht aufhalten — aber schweigen darf es auch nicht,

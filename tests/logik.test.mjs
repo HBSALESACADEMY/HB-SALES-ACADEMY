@@ -3853,6 +3853,92 @@ test("Eine verschickte Mail fliegt als Papierflieger davon", async () => {
   assert.ok(flug > echtZweig, "der Flieger steht im Zweig für echte Mails");
 });
 
+test("Ein neuer Einwandgrund meldet sich bei der Leitung — aber nur ein neuer", async () => {
+  const m = await import("../lib/einwandMeldung.js");
+  const { DEFAULT_OBJECTION_CATEGORIES } = await import("../lib/objectionCategories.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Neu heisst: Diesen Wortlaut gab es noch nicht. Die Liste enthält den
+  // gerade eingetragenen mit — einmal vorhanden ist also noch neu.
+  const eigener = [{ text: "Hat schon einen Bruder im Geschäft" }];
+  assert.equal(m.istNeuerGrund("Hat schon einen Bruder im Geschäft", eigener, DEFAULT_OBJECTION_CATEGORIES), true);
+  // Zum zweiten Mal: keine Meldung mehr.
+  assert.equal(m.istNeuerGrund("Hat schon einen Bruder im Geschäft", [...eigener, ...eigener], DEFAULT_OBJECTION_CATEGORIES), false);
+  // Andere Schreibweise ist derselbe Grund (vergleichsForm).
+  assert.equal(m.istNeuerGrund("hat schon einen bruder im geschäft!", [...eigener, { text: "Hat schon  einen Bruder im Geschaeft" }], []), true);
+  assert.equal(m.istNeuerGrund("Kein  INTERESSE!", [{ text: "kein interesse" }, { text: "Kein Interesse" }], []), false);
+  // Was schon eine Kategorie ist, ist keine Neuigkeit.
+  assert.equal(m.istNeuerGrund("Preis & Auslastung", [{ text: "Preis & Auslastung" }], DEFAULT_OBJECTION_CATEGORIES), false);
+  // Nichts Verwertbares: keine Meldung.
+  assert.equal(m.istNeuerGrund("???", [{ text: "???" }], []), false);
+  assert.equal(m.istNeuerGrund("", [], []), false);
+
+  // Die Nachricht: Wortlaut, Person, und was man damit tun kann. Keine
+  // Behauptung, es sei schon eine Kategorie angelegt.
+  const text = m.meldungText({ text: "Hat schon einen Bruder im Geschäft", von: "Anna Muster", offen: 3, appUrl: "https://hb.example/" });
+  assert.match(text, /^🗣 Neuer Einwandgrund aus dem Call Tracker/);
+  assert.match(text, /„Hat schon einen Bruder im Geschäft“/);
+  assert.match(text, /Eingetragen von Anna Muster\./);
+  assert.match(text, /Verwaltung → Einwände/);
+  assert.match(text, /Dort warten gerade 3 Vorschläge auf dich\./);
+  assert.match(text, /https:\/\/hb\.example\/admin\/objections$/);
+  assert.ok(!/angelegt|eingetragen als Kategorie|übernommen/.test(text), "die Kategorie legt die Leitung selbst an");
+  // Ohne Namen bleibt die Meldung verständlich.
+  assert.match(m.meldungText({ text: "Zu weit weg" }), /Eingetragen von einer Person aus deinem Team\./);
+  // Ein einzelner Vorschlag braucht keine Zahl dazu.
+  assert.ok(!/warten gerade/.test(m.meldungText({ text: "Zu weit weg", offen: 1 })));
+  assert.equal(m.meldungText({ text: "  " }), null);
+
+  const versand = lies("lib/einwandMeldungVersand.js");
+  // Nur die Leitung der EIGENEN Organisation.
+  assert.match(versand, /\.eq\("organization_id", orgId\)\.eq\("status", "approved"\)/);
+  assert.match(versand, /filter\(\(m\) => istFuehrungsrolle\(m\)\)/);
+  // Wer abgeschaltet hat, bekommt nichts.
+  assert.match(versand, /filter\(\(v\) => v\.einwaende !== false\)/);
+  // Fehlt migration_178, geht die Meldung trotzdem raus — mit Hinweis.
+  assert.match(versand, /migration_178/);
+  // Wer den Grund selbst eingetippt hat, bekommt keine Meldung darüber.
+  assert.match(versand, /if \(v\.user_id === userId\) continue;/);
+  // Und eine Lawine wird gebremst.
+  assert.match(versand, /heuteVonIhr\.length > TAGES_GRENZE/);
+  assert.equal(m.TAGES_GRENZE, 10);
+
+  // Die Route verschickt den GESPEICHERTEN Wortlaut, nicht den aus dem
+  // Aufruf — sonst wäre sie ein Weg, der Leitung beliebigen Text zu
+  // schicken.
+  const route = lies("pages/api/einwand-melden.js");
+  assert.match(route, /if \(req\.method !== "POST"\) return res\.status\(405\)/);
+  assert.match(route, /const orgId = await aktiveOrgId\(admin, profil, userId\);/);
+  assert.match(route, /\.eq\("user_id", userId\)/);
+  assert.match(route, /const treffer = \(eigene \|\| \[\]\)\.find\(\(v\) => vergleichsForm\(v\.text\) === gesucht\);/);
+  assert.match(route, /if \(!treffer\) return res\.status\(404\)/);
+  assert.match(route, /text: saeubere\(treffer\.text\)/);
+  assert.ok(!/text: req\.body/.test(route), "der Text aus dem Aufruf geht nicht raus");
+
+  // Der Call Tracker meldet es, aber der Eintrag bleibt das Wichtigere:
+  // eine gescheiterte Meldung hält niemanden auf.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /apiPost\("\/api\/einwand-melden", \{ text \}\)\.catch\(/);
+  assert.match(tracker, /meldeStoerung\("Einwand-Meldung an die Leitung"/);
+  const insertStelle = tracker.indexOf('from("grund_vorschlaege").insert');
+  const meldeStelle = tracker.indexOf('apiPost("/api/einwand-melden"');
+  assert.ok(insertStelle > 0 && meldeStelle > insertStelle, "erst eintragen, dann melden");
+
+  // Der Schalter: nur für die Leitung, und die Verbindung gibt ihn heraus.
+  const einstellungen = lies("pages/settings.js");
+  assert.match(einstellungen, /\["einwaende", "Neue Einwandgründe \(nur Leitung\)"/);
+  const leitungsZweig = einstellungen.indexOf("tg.istLeitung ? [[\"teamlage\"");
+  assert.ok(leitungsZweig > 0 && einstellungen.indexOf('"einwaende"') > leitungsZweig, "steht im Leitungs-Zweig");
+  const verbindung = lies("pages/api/telegram-verbindung.js");
+  assert.match(verbindung, /einwaende: zeile \? zeile\.einwaende !== false : true,/);
+  assert.match(verbindung, /if \(typeof req\.body\.einwaende === "boolean"\) felder\.einwaende = req\.body\.einwaende;/);
+
+  // Die Migration liegt bei und steht im Systemstatus.
+  assert.match(lies("supabase/migration_178_einwand_meldung.sql"), /add column if not exists einwaende boolean not null default true/);
+  const { ERWARTUNGEN } = await import("../lib/schemaErwartung.js");
+  assert.ok(ERWARTUNGEN.some((e) => e.migration === 178 && e.spalte === "einwaende"), "migration_178 im Systemstatus");
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));

@@ -434,7 +434,8 @@ export default function Settings() {
                 ["followups", "Follow-up-Erinnerungen", "Wenn dir jemand ein Follow-up zuweist, und morgens deine fälligen Follow-ups"],
                 ["briefing", "Morgen-Briefing", "Montag bis Freitag um 8 Uhr deine Termine des Tages mit dem, was du vorher wissen solltest — und Knöpfe für Termine ohne Ergebnis"],
                 ["buddy", "Vertriebsbuddy", "Freitags dein Wochenimpuls mit deinen Zahlen und einer Frage — du kannst direkt im Chat antworten"],
-                ...(tg.istLeitung ? [["teamlage", "Teamlage (nur Leitung)", "Freitags die Zahlen deines Teams, die häufigsten Themen und worauf du achten solltest"]] : []),
+                ...(tg.istLeitung ? [["teamlage", "Teamlage (nur Leitung)", "Freitags die Zahlen deines Teams, die häufigsten Themen und worauf du achten solltest"],
+                  ["einwaende", "Neue Einwandgründe (nur Leitung)", "Sobald jemand im Call Tracker einen Grund eintippt, den es noch nicht gibt — mit dem Wortlaut und wer ihn gehört hat. Bekannte Gründe melden sich nicht erneut"]] : []),
               ].map(([key, label, hinweis]) => (
                 <label key={key} className="flex items-start gap-2.5 cursor-pointer">
                   <input type="checkbox" className="mt-1" checked={tg[key] !== false} disabled={tgBusy}
