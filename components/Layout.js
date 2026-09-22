@@ -23,6 +23,7 @@ import ProfileModal from "./ProfileModal";
 import WelcomeModal from "./WelcomeModal";
 import TutorialModal from "./TutorialModal";
 import SeitenHinweis from "./SeitenHinweis";
+import { emailMarketingAktiv } from "../lib/emailMarketing";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -848,10 +849,15 @@ export default function Layout({ children, fullBleed }) {
     // - Wer ein eigenes Team gegründet hat, sieht "Team (Manager)" — dort
     //   verwaltet er ausschliesslich seine eigenen Teams.
     const visibleItems = sortedNav(navItems.filter((n) =>
-      !n.requires_manager || istFuehrungsrolle(profile) ||
-      (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key)) ||
-      (profile?.is_team_lead && n.key === "manager") ||
-      (isElevated && ELEVATED_NAV_IDS.includes(n.key))
+      (!n.requires_manager || istFuehrungsrolle(profile) ||
+       (profile?.role === "trainer" && TRAINER_NAV_IDS.includes(n.key)) ||
+       (profile?.is_team_lead && n.key === "manager") ||
+       (isElevated && ELEVATED_NAV_IDS.includes(n.key)))
+      // Hat die Leitung das E-Mail-Marketing abgeschaltet (migration_179),
+      // verschwindet auch der Punkt in der Seitenleiste. Der Server lehnt
+      // den Versand ohnehin ab — ein Link auf eine Seite, die nur noch
+      // erklärt, dass sie zu ist, gehört nicht ins Menü.
+      && (n.key !== "email-marketing" || emailMarketingAktiv(org))
     ));
     const byCategory = {};
     visibleItems.forEach((item) => {

@@ -7,6 +7,7 @@ import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emai
 import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss, markeAus } from "../../lib/marketingVorlage";
 import { istHtmlVorlage, fertigeHtmlMail } from "../../lib/htmlMail";
 import { buchungslink, nachverfolgbarerLink } from "../../lib/buchungslink";
+import { emailMarketingAktiv, AUS_TEXT } from "../../lib/emailMarketing";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -42,6 +43,15 @@ export default async function handler(req, res) {
   if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
   try {
+    // Der Schalter aus der Verwaltung (migration_179). Er steht VOR allem
+    // anderen: Ein versteckter Knopf ist keine Abschaltung — wer die Seite
+    // offen hat oder die Route direkt aufruft, käme sonst weiterhin durch.
+    // Auch die Probemail an sich selbst ist dann zu, sonst wäre sie das
+    // Schlupfloch.
+    const { data: orgSchalter } = await admin.from("organizations")
+      .select("email_marketing_aktiv").eq("id", orgId).maybeSingle();
+    if (!emailMarketingAktiv(orgSchalter)) return res.status(403).json({ error: AUS_TEXT });
+
     const { data: kontakt } = await admin.from("email_kontakte")
       .select("*").eq("id", kontaktId).eq("organization_id", orgId).maybeSingle();
     if (!kontakt) return res.status(404).json({ error: "Kontakt nicht gefunden." });

@@ -174,6 +174,8 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [gruppenCode, setGruppenCode] = useState(null);
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
+  // Der Schalter für das ganze E-Mail-Marketing (migration_179).
+  const [mailsAktiv, setMailsAktiv] = useState(org.email_marketing_aktiv !== false);
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
   // kann. Hochgeladen werden sie im E-Mail-Marketing — hier nur ausgewählt.
   const [orgAnhaenge, setOrgAnhaenge] = useState([]);
@@ -353,6 +355,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         // "entfernt" ist nur ein Hinweis für die Maske, kein Teil der Vorlage.
         .map(({ entfernt, ...v }) => v),
       email_absender: absender.trim() || null,
+      email_marketing_aktiv: mailsAktiv,
       // 0 heisst ausdrücklich "keine Frist" — deshalb wird die Null hier
       // nicht wie ein leeres Feld behandelt.
       aufnahme_frist_tage: Math.max(0, Math.min(3650, parseInt(aufnahmeFrist, 10) || 0)),
@@ -557,6 +560,30 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       </Abschnitt>
 
       <Abschnitt id="mailvorlagen" aktiv={bereich} titel="E-Mail" hinweis="Absender, Antwortadresse und Textbausteine für das E-Mail-Marketing.">
+
+      {/* Der Schalter steht ganz oben: Wer das E-Mail-Marketing abschalten
+          will, soll nicht erst an Vorlagen und Absenderadressen vorbei. */}
+      <div className="rounded-lg border border-line p-3 mb-5">
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" className="mt-1" checked={mailsAktiv}
+            onChange={(e) => setMailsAktiv(e.target.checked)} />
+          <span className="min-w-0">
+            <span className="text-sm text-textMain block">E-Mail-Marketing eingeschaltet</span>
+            <span className="text-[11px] text-textMuted">
+              Ausgeschaltet verschwindet der Punkt in der Seitenleiste, und über den Call Tracker
+              lässt sich keine Mail mehr verschicken — auch nicht von einer Seite, die noch offen
+              steht. Kontakte, Verlauf und Vorlagen bleiben erhalten und sind wieder da, sobald du
+              den Haken wieder setzt. Termin-Benachrichtigungen und Einladungen laufen weiter.
+            </span>
+          </span>
+        </label>
+        {!mailsAktiv && (
+          <p className="text-[11px] text-amber mt-2.5 pl-6">
+            Offene Follow-ups melden sich weiterhin — sie lassen sich auch am Telefon erledigen.
+          </p>
+        )}
+      </div>
+
       <label className="block text-xs text-textMuted mb-1.5">Antwortadresse (empfohlen)</label>
       <input className="input mb-1" value={antwortAn} onChange={(e) => setAntwortAn(e.target.value)}
         placeholder="z. B. vertrieb@deine-firma.de" />

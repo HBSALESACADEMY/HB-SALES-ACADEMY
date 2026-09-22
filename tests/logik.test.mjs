@@ -3939,6 +3939,63 @@ test("Ein neuer Einwandgrund meldet sich bei der Leitung — aber nur ein neuer"
   assert.ok(ERWARTUNGEN.some((e) => e.migration === 178 && e.spalte === "einwaende"), "migration_178 im Systemstatus");
 });
 
+test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den Call Tracker nichts raus", async () => {
+  const { emailMarketingAktiv, AUS_TEXT } = await import("../lib/emailMarketing.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Standard ist EIN — auch wenn die Spalte noch fehlt (migration_179).
+  assert.equal(emailMarketingAktiv({}), true);
+  assert.equal(emailMarketingAktiv(null), true);
+  assert.equal(emailMarketingAktiv({ email_marketing_aktiv: null }), true);
+  assert.equal(emailMarketingAktiv({ email_marketing_aktiv: true }), true);
+  // Aus ist nur, was ausdrücklich aus ist.
+  assert.equal(emailMarketingAktiv({ email_marketing_aktiv: false }), false);
+  assert.match(AUS_TEXT, /ausgeschaltet/);
+
+  // Der Server ist die eigentliche Sperre: Ein versteckter Knopf hält
+  // niemanden auf, der die Seite offen hat.
+  const route = lies("pages/api/marketing-mail.js");
+  const sperre = route.indexOf("if (!emailMarketingAktiv(orgSchalter))");
+  assert.ok(sperre > 0, "die Route prüft den Schalter");
+  assert.match(route.slice(sperre, sperre + 120), /res\.status\(403\)\.json\(\{ error: AUS_TEXT \}\)/);
+  // Und zwar VOR dem Versand und vor jeder Verzweigung — auch die
+  // Probemail an sich selbst ist damit zu.
+  assert.ok(sperre < route.indexOf("sendEmail("), "die Sperre steht vor dem Versand");
+  // Auch die Probemail an sich selbst ist zu: Sie wird erst NACH der Sperre
+  // zum Empfänger gemacht (das Feld selbst steht schon oben im Aufruf).
+  assert.ok(sperre < route.indexOf("const empfaenger = anMichSelbst"), "die Probemail ist kein Schlupfloch");
+
+  // Der Call Tracker zeigt keinen der drei Einstiege mehr.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /const mailsErlaubt = emailMarketingAktiv\(org\);/);
+  const einstiege = tracker.match(/\{mailsErlaubt && <button onClick=\{\(\) => starteEmailKontakt\(/g) || [];
+  assert.equal(einstiege.length, 3, "alle drei Wege in den Mail-Ablauf hängen am Schalter");
+  const ungesichert = tracker.match(/(?<!\{mailsErlaubt && )<button onClick=\{\(\) => starteEmailKontakt\(/g) || [];
+  assert.equal(ungesichert.length, 0, "kein Einstieg ohne Schalter");
+
+  // In der Seitenleiste verschwindet der Punkt.
+  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| emailMarketingAktiv\(org\)/);
+
+  // Die Seite selbst erklärt, statt eine Maske zu zeigen, die beim
+  // Absenden scheitert.
+  const seite = lies("pages/email-marketing.js");
+  assert.match(seite, /if \(org && !emailMarketingAktiv\(org\)\) \{/);
+  assert.match(seite, /\{AUS_TEXT\}/);
+  assert.match(seite, /bleiben erhalten/);
+
+  // Der Schalter steht in der Verwaltung und wird auch gespeichert.
+  const editor = lies("components/OrgEditor.js");
+  assert.match(editor, /const \[mailsAktiv, setMailsAktiv\] = useState\(org\.email_marketing_aktiv !== false\);/);
+  assert.match(editor, /email_marketing_aktiv: mailsAktiv,/);
+  assert.match(editor, /E-Mail-Marketing eingeschaltet/);
+
+  // Migration und Systemstatus.
+  assert.match(lies("supabase/migration_179_email_marketing_schalter.sql"),
+    /add column if not exists email_marketing_aktiv boolean not null default true/);
+  const { ERWARTUNGEN } = await import("../lib/schemaErwartung.js");
+  assert.ok(ERWARTUNGEN.some((e) => e.migration === 179 && e.spalte === "email_marketing_aktiv"));
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));

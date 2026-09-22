@@ -24,6 +24,7 @@ import Balkenliste from "../components/Balkenliste";
 import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
 import { zeigePapierflieger } from "../lib/papierflieger";
+import { emailMarketingAktiv } from "../lib/emailMarketing";
 import { anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX } from "../lib/anwahlSpiel";
 import { aendereGeprueft } from "../lib/loeschen";
 import Kurve from "../components/Kurve";
@@ -136,6 +137,12 @@ export default function CallTracker() {
   const [nachfassBusy, setNachfassBusy] = useState(false);
   const [mailEntwurf, setMailEntwurf] = useState({ vorlage: "", betreff: "", text: "" });
   const [mailBusy, setMailBusy] = useState(false);
+
+  // Der Schalter aus der Verwaltung (migration_179). Ist er aus, taucht der
+  // ganze Mail-Weg hier nicht auf — der Server lehnt ohnehin ab
+  // (pages/api/marketing-mail.js), und ein Knopf, der in eine Fehlermeldung
+  // führt, ist schlimmer als kein Knopf.
+  const mailsErlaubt = emailMarketingAktiv(org);
 
   // Ein Ort für den Einstieg ins Formular: der Wunsch nach einer E-Mail
   // kann an jeder Stelle des Gesprächs fallen — beim Vorzimmer, beim
@@ -1488,10 +1495,10 @@ export default function CallTracker() {
                     {/* Auch das Vorzimmer sagt oft "schicken Sie was per
                         Mail". Das ist derselbe offene Faden wie beim
                         Entscheider und kein Ablehnungsgrund. */}
-                    <button onClick={() => starteEmailKontakt("durchgestellt")}
+                    {mailsErlaubt && <button onClick={() => starteEmailKontakt("durchgestellt")}
                       className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
                       ✉️ E-Mail gewünscht
-                    </button>
+                    </button>}
                     <button onClick={() => { bump("weitergeleitet"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
                       className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("weitergeleitet"), color: feldFarbe("weitergeleitet") }}>
                       Ja, durchgestellt
@@ -1540,10 +1547,10 @@ export default function CallTracker() {
                         weder Termin noch Absage, sondern ein offener Faden.
                         Als Ablehnungsgrund gezählt gälte der Anruf als
                         verloren, dabei ist ein Kontakt entstanden. */}
-                    <button onClick={() => starteEmailKontakt("callResult")}
+                    {mailsErlaubt && <button onClick={() => starteEmailKontakt("callResult")}
                       className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
                       ✉️ E-Mail gewünscht
-                    </button>
+                    </button>}
                     {/* "Terminiert" wird erst gezählt, wenn der Termin unten
                         tatsächlich gespeichert oder bestätigt wird. */}
                     <button onClick={() => { resetLeadDraft(); setStep("booking"); }} className="btn-ghost text-sm px-4 py-2.5 border-teal/40 text-teal">Ja, Termin vereinbaren</button>
@@ -1781,10 +1788,10 @@ export default function CallTracker() {
                   {/* Der Ausweg aus dieser Frage: war es gar keine Absage,
                       sondern eine Bitte um Unterlagen, gehört der Anruf
                       nicht in die Ablehnungsgründe. */}
-                  <button onClick={() => starteEmailKontakt("reason")}
+                  {mailsErlaubt && <button onClick={() => starteEmailKontakt("reason")}
                     className="btn-ghost text-xs mb-4 border-amber/50 text-amber">
                     ✉️ Keine Absage — es wurde eine E-Mail gewünscht
-                  </button>
+                  </button>}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {reasons.map((r) => (
                       <button key={r.key} onClick={() => countReason(r.key)}

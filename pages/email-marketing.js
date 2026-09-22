@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { zeigePapierflieger } from "../lib/papierflieger";
+import { emailMarketingAktiv, AUS_TEXT } from "../lib/emailMarketing";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
 import MailVorschau from "../components/MailVorschau";
@@ -645,6 +646,28 @@ export default function EmailMarketing() {
     );
   }
 
+
+  // Abgeschaltet (migration_179): Die Seite bleibt erreichbar, wer den Link
+  // noch im Verlauf hat, landet aber bei der Erklärung statt bei einer
+  // Maske, die beim Absenden scheitert. Die Prüfung steht hier unten, NACH
+  // allen Hooks — ein Ausstieg weiter oben würde die Reihenfolge der Hooks
+  // zerstören.
+  if (org && !emailMarketingAktiv(org)) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">E-Mail Marketing</h1>
+        <div className="brand-stripe w-16 mb-4" />
+        <div className="card">
+          <p className="text-sm text-textMain mb-2">{AUS_TEXT}</p>
+          <p className="text-xs text-textMuted">
+            Eure Kontakte, der Versandverlauf und die Vorlagen bleiben erhalten und sind wieder da,
+            sobald der Schalter wieder an ist. Offene Follow-ups laufen weiter — sie lassen sich
+            auch am Telefon erledigen.
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
