@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { BLOCK_MINUTEN, blockErgebnis, blockStand, blockText, leseBlockEingabe } from "../lib/anwahlSpiel";
 import { zeigeBlockFeier } from "../lib/blockFeier";
 import { feldFarbe } from "../lib/diagrammFarben";
-import { blockBilanz } from "../lib/telefonblock";
 import Icon from "./Icon";
 
 // Der Telefonblock: Anfang, Uhr, Belohnung, Ergebnis.
@@ -21,24 +20,20 @@ import Icon from "./Icon";
 // Gezählt werden die Anwahlen als Differenz des Tageszählers: Kein zweiter
 // Zähler, der mit der Auswertung streiten könnte.
 //
+// Die gelaufenen Runden stehen NICHT hier, sondern im Reiter "Vergangene
+// Tage" (components/VerlaufPanel.js): Mitten im Telefonieren ist Rückschau
+// im Weg, und der Block soll zum Anfangen einladen, nicht zum Nachlesen.
+//
 // Bestwert, Ton und die eigene Blocklänge liegen im Gerät (localStorage).
 // Sie sind Anreiz und Einstellung für einen selbst, keine Kennzahl für die
 // Leitung — und sollen in keiner Auswertung auftauchen.
-
-// "14:05" — nur die Uhrzeit, der Tag steht schon über der Liste.
-function uhrzeit(zeitpunkt) {
-  const d = new Date(zeitpunkt);
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-}
 
 export default function Telefonblock({
   anwahlen = 0, speicherSchluessel = "hb-telefonblock", darfTesten = false,
   // Ein beendeter Block wird nach draussen gemeldet — dort weiss man, zu
   // welcher Person und Organisation er gehört (pages/call-tracker.js). Das
   // Bauteil selbst kennt nur Uhr und Zahlen.
-  onFertig = null, bloecke = [],
+  onFertig = null,
 }) {
   const [laufend, setLaufend] = useState(null);
   const [sekunden, setSekunden] = useState(0);
@@ -174,7 +169,6 @@ export default function Telefonblock({
   }
 
   laufendRef.current = laufend;
-  const bilanz = blockBilanz(bloecke);
 
   if (laufend) {
     const stand = blockStand({ minuten: laufend.minuten, sekunden });
@@ -229,41 +223,6 @@ export default function Telefonblock({
       </div>
       {eigeneFehler && <p className="text-coral text-xs mt-2">{eigeneFehler}</p>}
 
-      {/* Die Runden von heute. Vorher war der Block nach dem Beenden
-          vergessen — und damit auch die Antwort auf die Frage, die er
-          stellt: Wie viele Anwahlen schaffe ich in einer konzentrierten
-          Runde? */}
-      {bloecke.length > 0 && (
-        <div className="mt-2.5 pt-2.5 border-t border-line">
-          <div className="text-[11px] text-textMuted mb-1">
-            Heute: {bilanz.anzahl} {bilanz.anzahl === 1 ? "Block" : "Blöcke"} · {bilanz.minuten} Min ·{" "}
-            {bilanz.anwahlen} {bilanz.anwahlen === 1 ? "Anwahl" : "Anwahlen"}
-            {bilanz.proStunde !== null && <span className="zahl"> · {bilanz.proStunde}/Std</span>}
-          </div>
-          <div className="flex flex-col gap-0.5">
-            {bloecke.slice(0, 4).map((b) => (
-              <div key={b.id} className="flex items-center gap-2 text-[11px] text-textMuted">
-                <span className="zahl w-11 text-right">{uhrzeit(b.gestartet_at)}</span>
-                <span className="zahl">{b.minuten} Min</span>
-                <span className="flex-1 truncate">
-                  {b.anwahlen} {b.anwahlen === 1 ? "Anwahl" : "Anwahlen"}
-                  {!b.ziel_erreicht && b.ziel_minuten > b.minuten && (
-                    <span className="text-textMuted"> (von {b.ziel_minuten} geplant)</span>
-                  )}
-                </span>
-                {b.anwahlen > 0 && b.minuten > 0 && (
-                  <span className="zahl" style={{ color: feldFarbe("anwahlen") }}>
-                    {Math.round((b.anwahlen / b.minuten) * 60)}/Std
-                  </span>
-                )}
-              </div>
-            ))}
-            {bloecke.length > 4 && (
-              <span className="text-[11px] text-textMuted">+{bloecke.length - 4} weitere heute</span>
-            )}
-          </div>
-        </div>
-      )}
       {ergebnis && (
         <p className="text-xs text-textMain mt-2">
           {ergebnis.text}

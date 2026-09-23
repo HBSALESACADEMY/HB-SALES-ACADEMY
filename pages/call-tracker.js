@@ -24,9 +24,10 @@ import Balkenliste from "../components/Balkenliste";
 import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
 import ZaehlerKacheln from "../components/ZaehlerKacheln";
+import VerlaufPanel from "../components/VerlaufPanel";
 import { zeigePapierflieger } from "../lib/papierflieger";
 import { darfEmailMarketing } from "../lib/emailMarketing";
-import { blockZeile } from "../lib/telefonblock";
+import { blockZeile, tageMitBloecken } from "../lib/telefonblock";
 import { merkeBlock, ladeBloecke } from "../lib/telefonblockSpeicher";
 import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
 import {
@@ -66,7 +67,18 @@ import {
 // rechneten nur mit dem, was auf DIESEM Gerät lag, und boten weder Quartal
 // noch eigenen Zeitraum noch Diagramme. Die Statistiken können all das und
 // lesen vom Server, sind also auf jedem Gerät gleich.
-const VIEWS = [{ key: "today", label: "Heute", icon: "phone" }, { key: "statistik", label: "Statistiken", icon: "chart" }];
+const VIEWS = [
+  { key: "today", label: "Heute", icon: "phone" },
+  // Die vergangenen Tage mit ihren Telefonblöcken (migration_181). Eigener
+  // Reiter, weil es Rückschau ist: Unter dem Block, mitten im Telefonieren,
+  // stand es im Weg.
+  { key: "verlauf", label: "Vergangene Tage", icon: "history" },
+  { key: "statistik", label: "Statistiken", icon: "chart" },
+];
+
+// Wie weit die Rückschau zurückreicht. Genug, um eine Entwicklung zu
+// sehen, ohne die Seite zäh zu machen.
+const VERLAUF_TAGE = 30;
 
 const DEFAULT_BOOKING_STEPS = [
   "Terminoptionen im eigenen Buchungssystem raussuchen (idealerweise 2 Optionen)",
@@ -173,8 +185,9 @@ export default function CallTracker() {
   const [ruecklauf, setRuecklauf] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
-  // Die Telefonblöcke von heute (migration_181).
-  const [bloeckeHeute, setBloeckeHeute] = useState([]);
+  // Die vergangenen Tage mit ihren Telefonblöcken (migration_181).
+  const [verlauf, setVerlauf] = useState(null);
+  const [offenerTag, setOffenerTag] = useState(null);
 
   // Darf DIESE Person überhaupt mailen? Ist das E-Mail-Marketing aus oder
   // nur für bestimmte Personen freigegeben (migration_179, migration_180),
@@ -458,18 +471,25 @@ export default function CallTracker() {
   // Die Blöcke von heute holen — beim Öffnen und nach jedem beendeten
   // Block. Grenzen nach dem BERLINER Kalendertag, nicht nach UTC: Sonst
   // fehlt ein Block von 23:30 in der heutigen Liste und steht morgen darin.
-  const holeBloecke = useCallback(async () => {
+  const holeVerlauf = useCallback(async () => {
     if (!userId) return;
-    const tag = dateKeyOf(new Date());
+    const von = dateKeyOf(new Date(Date.now() - (VERLAUF_TAGE - 1) * 86400000));
     const morgen = dateKeyOf(new Date(Date.now() + 86400000));
-    setBloeckeHeute(await ladeBloecke({
-      userId,
-      tagVon: new Date(`${tag}T00:00:00`).toISOString(),
-      tagBis: new Date(`${morgen}T00:00:00`).toISOString(),
-    }));
+    // Grenzen nach dem BERLINER Kalendertag, nicht nach UTC: Sonst fehlt
+    // ein Block von 23:30 am richtigen Tag.
+    const [tage, bloecke] = await Promise.all([
+      supabase.from("call_log_days").select("log_date, counts")
+        .eq("user_id", userId).gte("log_date", von).order("log_date", { ascending: false }),
+      ladeBloecke({
+        userId,
+        tagVon: new Date(`${von}T00:00:00`).toISOString(),
+        tagBis: new Date(`${morgen}T00:00:00`).toISOString(),
+      }),
+    ]);
+    setVerlauf(tageMitBloecken(tage.data || [], bloecke));
   }, [userId]);
 
-  useEffect(() => { if (view === "today") holeBloecke(); }, [view, holeBloecke]);
+  useEffect(() => { if (view === "verlauf") holeVerlauf(); }, [view, holeVerlauf]);
 
   // Ein beendeter Block wird gespeichert. Die Anwahlen darin sind die
   // Differenz des Tageszählers — es gibt keine zweite Wahrheit darüber,
@@ -477,8 +497,10 @@ export default function CallTracker() {
   const speichereBlock = useCallback(async ({ laufend, ergebnis }) => {
     const zeile = blockZeile({ userId, orgId, laufend, ergebnis });
     if (!zeile) return;
-    if (await merkeBlock(zeile)) holeBloecke();
-  }, [userId, orgId, holeBloecke]);
+    // Die Rückschau wird beim Öffnen des Reiters geholt — hier reicht es,
+    // sie zu verwerfen, damit sie beim nächsten Blick frisch ist.
+    if (await merkeBlock(zeile)) setVerlauf(null);
+  }, [userId, orgId]);
 
   // Die Rangliste mit dem LAUFENDEN Zähler überschreiben.
   //
@@ -1355,7 +1377,15 @@ export default function CallTracker() {
 
       <SeitenReiter reiter={VIEWS} aktiv={view} onWechsel={switchView} />
 
-      {view === "statistik" ? (
+      {view === "verlauf" ? (
+        <VerlaufPanel
+          tage={verlauf || []}
+          laedt={verlauf === null}
+          tageZurueck={VERLAUF_TAGE}
+          offenerTag={offenerTag}
+          onOeffnen={setOffenerTag}
+        />
+      ) : view === "statistik" ? (
         <StatistikPanel
           state={teamState}
           zeitraum={teamZeitraum}
@@ -1439,7 +1469,6 @@ export default function CallTracker() {
                 speicherSchluessel={`hb-telefonblock:${userId || "gast"}`}
                 darfTesten={darfOrgVerwalten}
                 onFertig={speichereBlock}
-                bloecke={bloeckeHeute}
               />
             </div>
           )}

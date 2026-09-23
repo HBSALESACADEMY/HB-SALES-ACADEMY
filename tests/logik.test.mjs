@@ -4423,10 +4423,13 @@ test("Telefonblöcke werden aufbewahrt — mit Dauer, Anwahlen und dem, was gepl
   // nach dem Berliner Kalendertag — ein Block von 23:30 gehört zu heute.
   const tracker = lies("pages/call-tracker.js");
   assert.match(tracker, /onFertig=\{speichereBlock\}/);
-  assert.match(tracker, /bloecke=\{bloeckeHeute\}/);
   assert.match(tracker, /const zeile = blockZeile\(\{ userId, orgId, laufend, ergebnis \}\);/);
-  assert.match(tracker, /if \(await merkeBlock\(zeile\)\) holeBloecke\(\);/);
-  assert.match(tracker, /tagVon: new Date\(`\$\{tag\}T00:00:00`\)\.toISOString\(\)/);
+  // Die Rückschau steht im eigenen Reiter, nicht unter dem Block: Mitten im
+  // Telefonieren ist sie im Weg.
+  assert.ok(!/bloecke=\{/.test(tracker), "der Telefonblock zeigt keine Liste mehr");
+  assert.ok(!/bloecke = \[\]/.test(lies("components/Telefonblock.js")));
+  assert.match(tracker, /if \(await merkeBlock\(zeile\)\) setVerlauf\(null\);/);
+  assert.match(tracker, /tagVon: new Date\(`\$\{von\}T00:00:00`\)\.toISOString\(\)/);
 
   // Das Rechnen steht ohne Datenbank-Client da — sonst liesse es sich hier
   // nicht laden.
@@ -4457,6 +4460,73 @@ test("Telefonblöcke werden aufbewahrt — mit Dauer, Anwahlen und dem, was gepl
   assert.match(sql, /sieht_person\(user_id\)/);
   const { ERWARTUNGEN } = await import("../lib/schemaErwartung.js");
   assert.ok(ERWARTUNGEN.some((e) => e.migration === 181 && e.tabelle === "telefon_bloecke"));
+});
+
+test("Der Reiter Vergangene Tage führt Tageszahlen und Runden zusammen", async () => {
+  const { tageMitBloecken } = await import("../lib/telefonblock.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const jetzt = new Date("2026-09-23T15:00:00Z");
+
+  const tage = [
+    { log_date: "2026-09-23", counts: { anwahlen: 62, termin: 4 } },
+    // Ein Tag ohne alles fällt weg: Zwanzig Nullzeilen verdecken die drei
+    // Tage, um die es geht.
+    { log_date: "2026-09-22", counts: { anwahlen: 0, termin: 0 } },
+    { log_date: "2026-09-21", counts: { anwahlen: 31, termin: 1 } },
+  ];
+  const bloecke = [
+    { id: "a", gestartet_at: "2026-09-23T09:05:00Z", minuten: 27, anwahlen: 18, ziel_minuten: 25, ziel_erreicht: true },
+    { id: "b", gestartet_at: "2026-09-23T12:40:00Z", minuten: 15, anwahlen: 9, ziel_minuten: 15, ziel_erreicht: true },
+    // 22:45 UTC ist in Berlin schon der nächste Tag — der Block gehört zum
+    // 23., nicht zum 22.
+    { id: "c", gestartet_at: "2026-09-22T22:45:00Z", minuten: 20, anwahlen: 7, ziel_minuten: 25, ziel_erreicht: false },
+  ];
+
+  const liste = tageMitBloecken(tage, bloecke, jetzt);
+  assert.deepEqual(liste.map((t) => t.tag), ["2026-09-23", "2026-09-21"]);
+  const heute = liste[0];
+  assert.equal(heute.istHeute, true);
+  assert.equal(heute.anwahlen, 62);
+  assert.equal(heute.termin, 4);
+  // Alle drei Blöcke an diesem Tag, neuester zuerst.
+  assert.equal(heute.bloecke.length, 3);
+  assert.deepEqual(heute.bloecke.map((b) => b.id), ["b", "a", "c"]);
+  // Die Bilanz des Tages: Zeit und Anwahlen der Runden.
+  assert.equal(heute.bilanz.minuten, 62);
+  assert.equal(heute.bilanz.anwahlen, 34);
+  // Ein Tag mit Zahlen, aber ohne Runde erscheint trotzdem.
+  assert.equal(liste[1].bloecke.length, 0);
+  assert.equal(liste[1].anwahlen, 31);
+  assert.equal(liste[1].istHeute, false);
+  // Ein Tag NUR mit einer Runde erscheint auch — etwa wenn die Tageszeile
+  // noch nicht geschrieben ist.
+  const nurBlock = tageMitBloecken([], [{ id: "x", gestartet_at: "2026-09-20T08:00:00Z", minuten: 10, anwahlen: 4 }], jetzt);
+  assert.equal(nurBlock.length, 1);
+  assert.equal(nurBlock[0].tag, "2026-09-20");
+  assert.deepEqual(tageMitBloecken([], [], jetzt), []);
+  // Kaputte Zeitangaben werfen nichts um.
+  assert.deepEqual(tageMitBloecken(null, [{ id: "y", gestartet_at: "keine Zeit" }], jetzt), []);
+
+  // Der Reiter selbst, und wie weit er zurückreicht.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /\{ key: "verlauf", label: "Vergangene Tage", icon: "history" \}/);
+  assert.match(tracker, /const VERLAUF_TAGE = 30;/);
+  assert.match(tracker, /if \(view === "verlauf"\) holeVerlauf\(\);/);
+  assert.match(tracker, /setVerlauf\(tageMitBloecken\(tage\.data \|\| \[\], bloecke\)\);/);
+  // Solange nichts geladen ist, steht "lädt" — nicht "nichts vorhanden".
+  assert.match(tracker, /laedt=\{verlauf === null\}/);
+
+  // Eine Zeile je Tag, Runden erst beim Aufklappen — und auf dem Handy
+  // nicht der abgeschnittene Satz, sondern die Zahl.
+  const panel = lies("components/VerlaufPanel.js");
+  assert.match(panel, /tage\.map\(\(t, i\) =>/);
+  assert.match(panel, /\{offen && \(\n\s+<div className="px-3 pb-3 pt-1">/);
+  assert.match(panel, /hidden sm:inline/);
+  assert.match(panel, /\$\{t\.bloecke\.length\} Bl\./);
+  // Wie viel des Tages in Runden lief — der Rest sind Anrufe zwischendurch.
+  assert.match(panel, /% des Tages in Runden/);
+  // Ein Tag ohne Runde wird nicht getadelt.
+  assert.match(panel, /ein Block ist ein Rahmen, keine Pflicht/);
 });
 
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
