@@ -23,7 +23,11 @@ export default function Document() {
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#0F1117" />
-        <link rel="icon" href="/logo.svg" />
+        {/* Das Wappen als Tab-Symbol: Ein Wappen bleibt bei 16 Pixeln
+            erkennbar, ein Schriftzug wird dort zu einem grauen Fleck.
+            Bewusst die kleine Fassung — die grosse wären 194 KB für ein
+            Symbol von 16 Pixeln. */}
+        <link rel="icon" href="/logo-wappen-64.png" type="image/png" />
         <meta name="description" content={VORSCHAU_TEXT} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content={VORSCHAU_TITEL} />

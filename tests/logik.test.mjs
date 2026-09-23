@@ -4081,6 +4081,40 @@ test("Follow-up: eine Zeile je Fall, nach Dringlichkeit gebündelt", async () =>
     assert.ok(seite.includes(`"${spalte}"`), spalte));
 });
 
+test("Das Wappen steht auf dem Login — freigestellt, und im hellen Theme auf dunkler Fläche", async () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const { statSync } = await import("node:fs");
+  const groesse = (pfad) => statSync(new URL(`../${pfad}`, import.meta.url)).size;
+
+  // Die Dateien liegen bei — und die kleine Fassung ist wirklich klein.
+  assert.ok(groesse("public/logo-wappen.png") > 5000, "das Wappen liegt im Projekt");
+  assert.ok(groesse("public/logo-wappen-64.png") < 30000, "das Tab-Symbol bleibt leicht");
+
+  const login = lies("pages/login.js");
+  // Das Wappen als Standard, ein eigenes Logo der Organisation hat Vorrang.
+  assert.match(login, /src=\{resolvedOrg\?\.logo_url \|\| "\/logo-wappen\.png"\}/);
+  // Kein Umschalten nach Theme mehr: Das Wappen steht auf durchsichtigem
+  // Grund und braucht keine zweite Fassung.
+  assert.ok(!/defaultLogoSrc/.test(login), "die Theme-Umschaltung ist auf dem Login nicht mehr nötig");
+  // Hochkant, deshalb höher als der frühere Schriftzug.
+  assert.match(login, /"h-28 w-auto"/);
+
+  // Die dunkle Fläche trägt das Wappen NUR im hellen Theme — im dunklen
+  // steht es frei.
+  const css = lies("styles/globals.css");
+  assert.match(css, /:root\[data-theme="light"\] \.logo-platte \{/);
+  const platte = css.indexOf(".logo-platte {");
+  const hell = css.indexOf(':root[data-theme="light"] .logo-platte');
+  assert.ok(platte > 0 && hell > platte, "erst die Grundform, dann die helle Ausnahme");
+  assert.ok(!/\.logo-platte \{[^}]*background:/.test(css.slice(platte, hell)), "im dunklen Theme keine Fläche");
+  // Ein eigenes Logo der Organisation bekommt keine Fläche untergelegt:
+  // dessen Hintergrund kennen wir nicht.
+  assert.match(login, /resolvedOrg\?\.logo_url \? "mb-4" : "logo-platte mb-4"/);
+
+  // Das Tab-Symbol: ein Wappen bleibt bei 16 Pixeln erkennbar.
+  assert.match(lies("pages/_document.js"), /<link rel="icon" href="\/logo-wappen-64\.png" type="image\/png" \/>/);
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));

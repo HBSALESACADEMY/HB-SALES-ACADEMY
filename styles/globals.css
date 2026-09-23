@@ -520,3 +520,19 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 @media (prefers-reduced-motion: reduce) {
   .rakete { display: none; }
 }
+
+/* Das Wappen ist für dunklen Grund gezeichnet: silberne Schrift mit
+   dunklen Kanten. Auf der weissen Karte des hellen Themes verblasst es —
+   deshalb bekommt es dort eine dunkle Fläche untergelegt, so wie ein
+   Emblem auf einem Schild sitzt. Im dunklen Theme braucht es das nicht,
+   dort steht es frei. */
+.logo-platte {
+  display: inline-flex;
+  border-radius: 14px;
+  padding: 0;
+}
+:root[data-theme="light"] .logo-platte {
+  background: rgb(27 29 39);
+  padding: 12px 18px;
+  box-shadow: 0 6px 18px rgb(27 29 39 / .18);
+}

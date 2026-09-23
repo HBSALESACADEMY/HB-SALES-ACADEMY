@@ -7,17 +7,18 @@ import { apiGet, apiPost } from "../lib/apiClient";
 import { applyOrgBranding, resetOrgBranding } from "../lib/orgBranding";
 import { playLoginChime } from "../lib/sounds";
 import { quoteOfTheDay } from "../lib/quotes";
-import { getResolvedTheme, defaultLogoSrc } from "../lib/theme";
 import { merkeAktiveOrg } from "../lib/activeOrg";
 import { sicheresZiel } from "../lib/weiterleitung";
 
 export default function Login() {
-  // Das HB-Standard-Logo (vor Eingabe des Firmencodes bzw. ohne eigenes
-  // Organisations-Logo) ist hell eingefärbt — im hellen Theme sonst fast
-  // unsichtbar (siehe lib/theme.js). Start-Wert passend zum
-  // Server-Rendering (immer dunkel), direkt nach dem Mount korrigiert.
-  const [defaultLogo, setDefaultLogo] = useState("/logo.svg");
-  useEffect(() => { setDefaultLogo(defaultLogoSrc(getResolvedTheme())); }, []);
+  // Das Wappen als Standard-Logo, wenn keine Organisation feststeht oder
+  // sie kein eigenes Logo hinterlegt hat.
+  //
+  // Anders als der Schriftzug braucht es keine zweite Fassung für das
+  // helle Theme: Es steht auf durchsichtigem Grund und trägt seine
+  // dunklen Kanten selbst, ist also auf hellem wie dunklem Hintergrund
+  // erkennbar. Genau deshalb gibt es hier — anders als in der
+  // Seitenleiste — auch keine Umschaltung nach Theme mehr.
   const router = useRouter();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -175,7 +176,15 @@ export default function Login() {
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
         <div className="flex flex-col items-center text-center mb-5">
-          <img src={resolvedOrg?.logo_url || defaultLogo} alt={resolvedOrg?.name || "HB Sales Academy"} className="h-20 w-auto mb-4" />
+          {/* Höher als der frühere Schriftzug: Das Wappen ist hochkant, bei
+              gleicher Höhe wirkte es daneben verloren. Die Fläche darunter
+              trägt es nur im hellen Theme (siehe .logo-platte) — ein
+              eigenes Logo der Organisation bleibt unangetastet, dessen
+              Hintergrund kennen wir nicht. */}
+          <div className={resolvedOrg?.logo_url ? "mb-4" : "logo-platte mb-4"}>
+            <img src={resolvedOrg?.logo_url || "/logo-wappen.png"} alt={resolvedOrg?.name || "HB Sales Academy"}
+              className={resolvedOrg?.logo_url ? "h-20 w-auto" : "h-28 w-auto"} />
+          </div>
           <p className="text-[12.5px] italic text-textMuted leading-snug max-w-[260px]">„{quoteOfTheDay().text}"</p>
           {quoteOfTheDay().author && <p className="text-[10.5px] text-textMuted mt-1">— {quoteOfTheDay().author}</p>}
         </div>
