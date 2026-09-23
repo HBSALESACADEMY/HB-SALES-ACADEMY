@@ -4432,6 +4432,22 @@ test("Telefonblöcke werden aufbewahrt — mit Dauer, Anwahlen und dem, was gepl
   // nicht laden.
   assert.ok(!/supabaseClient/.test(lies("lib/telefonblock.js")));
 
+  // Fehlt die Tabelle noch, wird das NICHT als Störung gemeldet.
+  //
+  // Genau das ist passiert: Beim Öffnen des Call Trackers bekam das ganze
+  // Team "Could not find the table 'public.telefon_bloecke'" zu sehen —
+  // mehrmals am Tag, für etwas, das niemand von ihnen beheben kann. Eine
+  // offene Migration gehört in den Systemstatus, nicht auf den Bildschirm
+  // der Vertriebsperson.
+  const speicher = lies("lib/telefonblockSpeicher.js");
+  assert.match(speicher, /function tabelleFehlt\(fehler\)/);
+  assert.match(speicher, /could not find\|does not exist\|42P01\|schema cache/);
+  assert.match(speicher, /if \(!tabelleFehlt\(e\)\) meldeStoerung\("Telefonblock speichern"/);
+  assert.match(speicher, /if \(!tabelleFehlt\(e\)\) meldeStoerung\("Telefonblöcke laden"/);
+  // Aber jeder ANDERE Fehler wird weiterhin gemeldet — stumm scheitern ist
+  // schlimmer als eine Meldung.
+  assert.equal((speicher.match(/meldeStoerung\(/g) || []).length, 2);
+
   // Migration und Systemstatus.
   const sql = lies("supabase/migration_181_telefonbloecke.sql");
   assert.match(sql, /create table if not exists telefon_bloecke/);
