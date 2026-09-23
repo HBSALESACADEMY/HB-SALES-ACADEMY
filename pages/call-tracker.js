@@ -23,6 +23,7 @@ import Kreisdiagramm from "../components/Kreisdiagramm";
 import Balkenliste from "../components/Balkenliste";
 import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
+import ZaehlerKacheln from "../components/ZaehlerKacheln";
 import { zeigePapierflieger } from "../lib/papierflieger";
 import { emailMarketingAktiv } from "../lib/emailMarketing";
 import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
@@ -435,6 +436,15 @@ export default function CallTracker() {
     if (jetzt - ersteAenderung.current >= 5000) { sendeZahlen(); return; }
     syncTimer.current = setTimeout(sendeZahlen, 900);
   }
+
+  // "E-Mail gewünscht" fällt weg, wenn das E-Mail-Marketing abgeschaltet
+  // ist (migration_179) UND die Zahl auf null steht. Ein leerer Zähler für
+  // etwas, das niemand mehr auslösen kann, kostet nur Platz — eine Zahl,
+  // die schon dasteht, wird aber nicht versteckt.
+  const sichtbareFelder = useMemo(
+    () => FIELDS.filter((f) => f.key !== "email" || mailsErlaubt || (todayCounts.email || 0) > 0),
+    [mailsErlaubt, todayCounts.email],
+  );
 
   // Die Rangliste mit dem LAUFENDEN Zähler überschreiben.
   //
@@ -1381,6 +1391,564 @@ export default function CallTracker() {
             </div>
           )}
 
+          {/* Ganz oben die Uhr, direkt darunter der Anruf-Knopf.
+              In dieser Reihenfolge arbeitet man: Block starten, dann
+              telefonieren. Der Block stand vorher in der Anreiz-Karte
+              zwischen Ring und Teamliste — dort musste man ihn suchen,
+              obwohl er der Anfang der Runde ist. Er steht offen da: Ein
+              Knopf, den man erst aufklappen muss, wird nicht gedrückt. */}
+          {isToday && (
+            <div className="card !py-3 mb-3">
+              <div className="label mb-2">Telefonblock</div>
+              <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} darfTesten={darfOrgVerwalten} />
+            </div>
+          )}
+
+          {/* Der Anruf-Knopf steht GANZ OBEN.
+              Vorher lag er unter Ring, Serie, Telefonblock und neun
+              Zählerkacheln — auf dem Handy musste man scrollen, um
+              telefonieren zu können. Das Wichtigste dieser Seite ist der
+              nächste Anruf, also steht es zuerst. Ring und Serie stehen
+              darunter: Sie sind Rückmeldung, nicht Arbeit. */}
+          {/* Der Kasten für den laufenden Anruf: weniger Luft, kleinere
+              Überschrift, kleineres Symbol. Die KNÖPFE bleiben so gross, wie
+              sie sind — auf sie wird am Telefon getippt, oft im Stehen. */}
+          {isToday && (
+            <div className="card !py-4 mb-4 text-center">
+              {step === "lead" && (
+                <>
+                  <div className="text-xl mb-0.5">📇</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Bereit für den nächsten Anruf?</div>
+                  <p className="text-textMuted text-sm mb-4">Ein Klick startet die Anwahl.</p>
+                  <button onClick={() => { bump("anwahlen"); setStep("outcome"); }} className="btn">Anwahl starten</button>
+                </>
+              )}
+
+              {step === "outcome" && (
+                <>
+                  <div className="text-xl mb-0.5">📞</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-3">Wurde die Person erreicht?</div>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => { bump("nicht"); showToast("Erfasst: Nicht erreicht"); zurueckZumStart(); }} className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
+                    <button onClick={() => { bump("erreicht"); setStep("wen"); }} className="btn">Erreicht</button>
+                  </div>
+                </>
+              )}
+
+              {/* Wen hatte man am Telefon? Steht zwischen "erreicht" und der
+                  Termin-Frage: die Antwort ändert nichts am weiteren Ablauf,
+                  aber ohne sie fehlt in der Auswertung, wie oft man
+                  überhaupt bis zur Entscheidung durchkommt. */}
+              {step === "wen" && (
+                <>
+                  <div className="text-xl mb-0.5">🚪</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Wen hast du zuerst erreicht?</div>
+                  <p className="text-textMuted text-xs mb-4">Einmal antippen, zählt automatisch mit</p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => { bump("gatekeeper"); setStep("durchgestellt"); }}
+                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("gatekeeper"), color: feldFarbe("gatekeeper") }}>
+                      Vorzimmer / Gatekeeper
+                    </button>
+                    <button onClick={() => { bump("entscheider"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
+                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("entscheider"), color: feldFarbe("entscheider") }}>
+                      Geschäftsführer
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Nur nach einem Gatekeeper-Gespräch: kam man zur
+                  Entscheidung durch? Bei "nein" gibt es keinen Termin — dann
+                  direkt zur Grund-Auswahl statt eines überflüssigen Klicks. */}
+              {step === "durchgestellt" && (
+                <>
+                  <div className="text-xl mb-0.5">➡️</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-3">Wurdest du zum Entscheider durchgestellt?</div>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Nein</button>
+                    {/* Auch das Vorzimmer sagt oft "schicken Sie was per
+                        Mail". Das ist derselbe offene Faden wie beim
+                        Entscheider und kein Ablehnungsgrund. */}
+                    {mailsErlaubt && <button onClick={() => starteEmailKontakt("durchgestellt")}
+                      className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
+                      ✉️ E-Mail gewünscht
+                    </button>}
+                    <button onClick={() => { bump("weitergeleitet"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
+                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("weitergeleitet"), color: feldFarbe("weitergeleitet") }}>
+                      Ja, durchgestellt
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === "leitfaden" && (
+                <>
+                  <div className="text-xl mb-0.5">🎧</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">
+                    Du hast die Entscheidung am Telefon
+                  </div>
+                  <p className="text-textMuted text-xs mb-4">Dein Ablauf — nichts anklicken, einfach sprechen.</p>
+
+                  {/* Gross und kurz: wer im Gespräch einen Absatz lesen
+                      muss, liest ihn nicht, sondern redet einfach los. */}
+                  <div className="flex flex-col gap-2 mb-4 text-left">
+                    {resolveLeitfaden(org).map((schritt, i) => (
+                      <div key={schritt.titel} className="flex items-start gap-3 rounded-xl border border-line px-3 py-2.5">
+                        <span className="w-6 h-6 rounded-full bg-amber text-[var(--org-button-text,#fff)] text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold text-textMain">{schritt.titel}</div>
+                          {schritt.hinweis && <div className="text-xs text-textMuted">{schritt.hinweis}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button onClick={() => setStep("callResult")} className="btn text-sm">
+                    Gespräch beendet
+                  </button>
+                </>
+              )}
+
+              {step === "callResult" && (
+                <>
+                  <div className="text-xl mb-0.5">💬</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-3">Wie ist das Gespräch ausgegangen?</div>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Negativ</button>
+                    {/* Der dritte Weg: "schicken Sie mir was per Mail" ist
+                        weder Termin noch Absage, sondern ein offener Faden.
+                        Als Ablehnungsgrund gezählt gälte der Anruf als
+                        verloren, dabei ist ein Kontakt entstanden. */}
+                    {mailsErlaubt && <button onClick={() => starteEmailKontakt("callResult")}
+                      className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
+                      ✉️ E-Mail gewünscht
+                    </button>}
+                    {/* "Terminiert" wird erst gezählt, wenn der Termin unten
+                        tatsächlich gespeichert oder bestätigt wird. */}
+                    <button onClick={() => { resetLeadDraft(); setStep("booking"); }} className="btn-ghost text-sm px-4 py-2.5 border-teal/40 text-teal">Ja, Termin vereinbaren</button>
+                  </div>
+                </>
+              )}
+
+              {step === "emailForm" && (
+                <>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Wohin soll die E-Mail?</div>
+                  <p className="text-textMuted text-xs mb-4">
+                    Geht mit deinem Namen an die Organisation — dort wird sie verschickt und nachgehalten.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-left">
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Anrede</label>
+                      {/* "Hallo Frau Schmidt" statt "Hallo Maria Schmidt":
+                          eine Mail an einen Geschäftskontakt mit Vornamen
+                          wirkt wie Massenversand. Frei lassen ist erlaubt —
+                          wer im Gespräch nur einen Namen aufschnappt, soll
+                          nicht raten müssen. */}
+                      <div className="flex items-center gap-1.5">
+                        {[["", "—"], ["frau", "Frau"], ["herr", "Herr"]].map(([wert, label]) => (
+                          <button key={wert || "leer"} type="button"
+                            onClick={() => setEmailEntwurf((d) => ({ ...d, anrede: wert }))}
+                            className={`px-3 py-2 rounded-lg text-sm border flex-1 ${emailEntwurf.anrede === wert ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Getrennt, weil in der Mail nur der Nachname steht.
+                        Aus einem Feld das letzte Wort zu nehmen, ging bei
+                        "Anna von der Heide" schief. */}
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Vorname</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.vorname}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, vorname: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Nachname *</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.nachname}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, nachname: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
+                      <input className="input !py-2 text-sm" type="email" inputMode="email" value={emailEntwurf.email}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, email: e.target.value }))}
+                        onBlur={(e) => pruefeDublette(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Firma</label>
+                      <input className="input !py-2 text-sm" value={emailEntwurf.firma}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, firma: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Telefon</label>
+                      <input className="input !py-2 text-sm" type="tel" value={emailEntwurf.telefon}
+                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, telefon: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="text-left mb-3">
+                    <label className="block text-xs text-textMuted mb-1">Gesprächsnotiz</label>
+                    <textarea className="input !py-2 text-sm" rows={3}
+                      placeholder="Worum ging es? Was war das Interesse?"
+                      value={emailEntwurf.notiz}
+                      onChange={(e) => setEmailEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
+                    <p className="text-[11px] text-textMuted mt-1">
+                      Ohne Notiz wird die Mail ins Blaue geschrieben — das merkt der Kontakt sofort. Das gilt
+                      auch dann, wenn du sie gleich selbst schickst: bis dahin ist das Gespräch schon zwei
+                      Anrufe her.
+                    </p>
+                  </div>
+
+                  {/* Zwei Mails an denselben Kontakt sind der eine Fehler,
+                      den man im Marketing nie machen will. */}
+                  {dublette && (
+                    <div className="card mb-3 border-amber/50 text-left">
+                      <div className="text-sm text-textMain mb-1">Diese Adresse gibt es schon.</div>
+                      <p className="text-xs text-textMuted">
+                        Erfasst von {dublette.wer} am {new Date(dublette.created_at).toLocaleDateString("de-DE")}
+                        {dublette.status !== "offen" ? ` · Stand: ${EMAIL_STATUS[dublette.status] || dublette.status}` : ""}.
+                        Trotzdem erfassen geht — dann weiss die Organisation, dass zwei von euch dort waren.
+                      </p>
+                    </div>
+                  )}
+
+                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
+
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setStep(emailHerkunft)} className="btn-ghost text-sm">Zurück</button>
+                    {/* Der Knopf sagt, was als Nächstes passiert. Gibt es
+                        Vorlagen, folgt die Frage, wer die Mail schickt —
+                        dann wäre "An die Organisation übergeben" hier eine
+                        Behauptung, die nicht stimmt. */}
+                    <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
+                      {emailBusy ? "Wird gespeichert…" : vorlagen.length ? "Weiter" : "An die Organisation übergeben"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === "mailWeg" && (
+                <>
+                  <div className="text-xl mb-0.5">✉️</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Wer schickt die Mail?</div>
+                  {/* Die Angaben noch einmal, damit die Entscheidung nicht
+                      im Blindflug fällt. */}
+                  <p className="text-textMuted text-xs mb-4">
+                    {mailKontakt?.name}
+                    {mailKontakt?.firma ? ` · ${mailKontakt.firma}` : ""}
+                    {mailKontakt?.email ? ` · ${mailKontakt.email}` : ""}
+                  </p>
+
+                  <div className="flex flex-col gap-2 mb-3">
+                    <button
+                      onClick={() => { waehleVorlage(mailKontakt, vorlagen[0]); setStep("mailForm"); }}
+                      className="btn text-sm">
+                      ✉️ Ich schicke sie selbst
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMailKontakt(null);
+                        setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
+                        showToast("An die Organisation übergeben");
+                        zurueckZumStart();
+                      }}
+                      className="btn-ghost text-sm">
+                      📮 An die Organisation weitergeben
+                    </button>
+                  </div>
+                  <p className="text-textMuted text-[11px]">
+                    Der Kontakt ist gespeichert — beides geht, und die Organisation sieht ihn so oder so im
+                    E-Mail-Marketing.
+                  </p>
+                </>
+              )}
+
+              {step === "mailForm" && (
+                <>
+                  <div className="text-xl mb-0.5">✉️</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Mail jetzt rausschicken?</div>
+                  <p className="text-textMuted text-xs mb-4">
+                    Name, Firma und dein Name sind schon eingesetzt. Lies kurz drüber — abgeschickt wird erst,
+                    wenn du tippst.
+                  </p>
+
+                  {vorlagen.length > 1 && (
+                    <div className="text-left mb-3">
+                      {/* Eine Klappliste statt einer Knopfreihe: bei vielen
+                          Vorlagen brach die Reihe mitten im Gespräch über
+                          mehrere Zeilen um. */}
+                      <label className="block text-xs text-textMuted mb-1" htmlFor="call-vorlage">Vorlage</label>
+                      <select id="call-vorlage" className="input !py-2 text-sm"
+                        value={String(Math.max(0, vorlagen.findIndex((v) => v.name === mailEntwurf.vorlage)))}
+                        onChange={(e) => waehleVorlage(mailKontakt, vorlagen[Number(e.target.value)])}>
+                        {vorlagen.map((v, i) => (
+                          <option key={i} value={String(i)}>
+                            {i + 1}. {v.name}{v.format === "html" ? " · HTML" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="text-left mb-3">
+                    <label className="block text-xs text-textMuted mb-1">Betreff</label>
+                    <input className="input !py-2 text-sm mb-2" value={mailEntwurf.betreff}
+                      onChange={(e) => setMailEntwurf((d) => ({ ...d, betreff: e.target.value }))} />
+                    {mailEntwurf.format === "html" ? (
+                      <>
+                        <label className="block text-xs text-textMuted mb-1">So kommt die Mail an</label>
+                        <MailVorschau html={mailEntwurf.html} hoehe={360} />
+                      </>
+                    ) : (
+                      <>
+                        <label className="block text-xs text-textMuted mb-1">Text</label>
+                        <textarea className="input !py-2 text-sm" rows={9} value={mailEntwurf.text}
+                          onChange={(e) => setMailEntwurf((d) => ({ ...d, text: e.target.value }))} />
+                      </>
+                    )}
+                    <p className="text-[11px] text-textMuted mt-1">
+                      Geht an {mailKontakt?.email} im Namen von {org?.name || "eurer Organisation"}. Ändern
+                      darfst du; die Vorlage kommt von eurer Leitung.
+                    </p>
+                    {/* Ohne Namen im Profil fällt die Zeile mit dem
+                        Platzhalter ersatzlos weg — die Mail sieht dann
+                        vollständig aus und ist ohne Absender. Gesagt, bevor
+                        sie rausgeht. */}
+                    {!meinProfil?.full_name && (
+                      <p className="text-[11px] text-coral mt-1">
+                        In deinem Profil steht kein Name. Die Mail geht ohne deinen Namen raus — trag ihn
+                        unter Profil ein und öffne die Vorlage danach neu.
+                      </p>
+                    )}
+                  </div>
+
+                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
+
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setStep("mailWeg")} className="btn-ghost text-sm">
+                      Zurück
+                    </button>
+                    <button onClick={(e) => sendeEigeneMail(e)} disabled={mailBusy} className="btn text-sm disabled:opacity-40">
+                      {mailBusy ? "Wird verschickt…" : "Jetzt senden"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === "nachfass" && (
+                <>
+                  <div className="text-xl mb-0.5">📌</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Wann ist dein Follow-up?</div>
+                  <p className="text-textMuted text-xs mb-4">
+                    Kommt in deinen Kalender — auch in den abonnierten auf dem Handy — und meldet sich am
+                    Tag der Fälligkeit. Ohne Eintrag geht der Rückruf unter.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap mb-3">
+                    {NACHFASS_VORSCHLAEGE.map((v) => (
+                      <button key={v.tage} onClick={() => trageNachfassEin(v.tage)} disabled={nachfassBusy}
+                        className="btn text-sm disabled:opacity-40">{v.label}</button>
+                    ))}
+                  </div>
+                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
+                  <button onClick={() => { setMailKontakt(null); zurueckZumStart(); }}
+                    className="btn-ghost text-xs text-textMuted">Nicht nötig</button>
+                </>
+              )}
+
+              {step === "reason" && (
+                <>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Was war der Grund?</div>
+                  <p className="text-textMuted text-xs mb-3">Einmal antippen, zählt automatisch mit</p>
+                  {/* Der Ausweg aus dieser Frage: war es gar keine Absage,
+                      sondern eine Bitte um Unterlagen, gehört der Anruf
+                      nicht in die Ablehnungsgründe. */}
+                  {mailsErlaubt && <button onClick={() => starteEmailKontakt("reason")}
+                    className="btn-ghost text-xs mb-4 border-amber/50 text-amber">
+                    ✉️ Keine Absage — es wurde eine E-Mail gewünscht
+                  </button>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                    {reasons.map((r) => (
+                      <button key={r.key} onClick={() => countReason(r.key)}
+                        className="px-3 py-2.5 rounded-lg border border-line text-sm text-textMain hover:border-amber hover:text-amber transition">
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Was hier wirklich gesagt wurde. Zählt wie "Sonstiges",
+                      aber der Wortlaut geht als Vorschlag an die Leitung —
+                      sonst verschwindet genau die Information, die neu ist. */}
+                  {grundFeldOffen ? (
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
+                      <input autoFocus className="input !py-2 text-sm flex-1 min-w-[200px]"
+                        maxLength={MAX_LAENGE}
+                        placeholder="Was war der Grund? (z. B. „Vertrag läuft noch 2 Jahre“)"
+                        value={eigenerGrund}
+                        onChange={(e) => setEigenerGrund(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") zaehleEigenenGrund();
+                          if (e.key === "Escape") { setGrundFeldOffen(false); setEigenerGrund(""); }
+                        }} />
+                      <button onClick={zaehleEigenenGrund} disabled={!saeubere(eigenerGrund)}
+                        className="btn text-sm disabled:opacity-40">Zählen</button>
+                      <button onClick={() => { setGrundFeldOffen(false); setEigenerGrund(""); }}
+                        className="btn-ghost text-sm">Abbrechen</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setGrundFeldOffen(true)}
+                      className="w-full px-3 py-2.5 rounded-lg border border-dashed border-line text-sm text-textMuted hover:border-amber hover:text-amber transition mb-3">
+                      ✏️ Anderer Grund — eintippen
+                    </button>
+                  )}
+
+                  {/* Ohne Angabe: zählt auf die letzte Kategorie (Sammelpunkt). */}
+                  <button onClick={() => countReason(reasons[reasons.length - 1].key)} className="text-textMuted text-xs underline">Ohne Angabe zählen</button>
+                  {/* Der Weg zu eigenen Gründen gehört dorthin, wo die Gründe
+                      stehen — sonst weiss niemand, dass es ihn gibt. */}
+                  {darfOrgVerwalten && (
+                    <div className="mt-3">
+                      <a href="/admin/organization" className="text-[11px] text-textMuted underline">
+                        Eigene Ablehnungsgründe festlegen (z. B. „Kein Interesse")
+                      </a>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {step === "booking" && (
+                <>
+                  <div className="text-xl mb-0.5">📅</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-3">Termin vereinbaren</div>
+
+                  {/* Der Buchungslink steht VOR der Anleitung und vor dem
+                      Formular: mitten im Gespräch sucht man ihn sonst in
+                      einem anderen Tab, während die Kundin wartet. */}
+                  {(() => {
+                    const link = buchungslink(meinProfil, org);
+                    if (!link) {
+                      return darfOrgVerwalten ? (
+                        <p className="text-[11px] text-textMuted mb-4">
+                          Noch kein Buchungslink hinterlegt —{" "}
+                          <a href="/admin/organization" className="underline">unter Organisation → Call Tracker</a> eintragen,
+                          persönlich unter <a href="/profile" className="underline">Mein Profil</a>.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-textMuted mb-4">
+                          Eigenen Buchungslink hinterlegen: <a href="/profile" className="underline">Mein Profil</a>.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="card !py-3 mb-4 max-w-md mx-auto border-teal/40">
+                        <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-2">Dein Buchungslink</div>
+                        <div className="flex items-center gap-2 flex-wrap justify-center">
+                          <a href={link} target="_blank" rel="noopener noreferrer" className="btn text-sm">
+                            <Icon name="calendar" size={14} /> Kalender öffnen
+                          </a>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard?.writeText(link).then(
+                                () => { setLinkKopiert(true); setTimeout(() => setLinkKopiert(false), 2500); },
+                                () => showToast("Kopieren nicht möglich")
+                              );
+                            }}
+                            className="btn-ghost text-sm">
+                            <Icon name="copy" size={14} /> {linkKopiert ? "Kopiert ✓" : "Link kopieren"}
+                          </button>
+                        </div>
+                        <div className="text-[11px] text-textMuted mt-2 break-all">{kurzform(link)}</div>
+                        <p className="text-[11px] text-textMuted mt-1">Zum Vorlesen oder direkt in den Chat schicken.</p>
+                      </div>
+                    );
+                  })()}
+
+                  <ul className="text-left text-sm text-textMain list-disc pl-6 mb-4 flex flex-col gap-1.5 max-w-md mx-auto">
+                    {bookingSteps.map((line, i) => <li key={i}>{line}</li>)}
+                  </ul>
+                  <button onClick={() => setStep("leadForm")} className="btn">Erledigt, weiter</button>
+                </>
+              )}
+
+              {step === "leadForm" && (
+                <div className="text-left">
+                  <div className="font-display font-semibold text-textMain text-base mb-1 text-center">Termin erfasst 🎉</div>
+                  <p className="text-textMuted text-xs mb-4 text-center">Kundendaten erfassen (empfohlen) — landet direkt unter „Termine" in der App</p>
+                  {/* Jedes Feld bekommt eine eigene Beschriftung. Ein
+                      Datum-/Uhrzeit-Feld kann keinen Platzhaltertext anzeigen
+                      (dort steht immer "tt.mm.jjjj, --:--") — ohne Label war
+                      nicht erkennbar, dass es ein Pflichtfeld ist. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Name *</label>
+                      <input className="input !py-2 text-sm" placeholder="Vor- und Nachname" value={leadDraft.name} onChange={(e) => setLeadDraft((d) => ({ ...d, name: e.target.value }))} />
+                      {/* Der Buchungslink liegt hier daneben, und was in die
+                          Zwischenablage gehört, landet dann im Feld. In der
+                          Liste heisst der Kunde danach "https://meet.google…". */}
+                      {namensHinweis(leadDraft.name) && (
+                        <p className="text-[11px] text-amber mt-1 text-left">{namensHinweis(leadDraft.name)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Telefon{coreRequired.phone ? " *" : ""}</label>
+                      <input className="input !py-2 text-sm" type="tel" value={leadDraft.phone} onChange={(e) => setLeadDraft((d) => ({ ...d, phone: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">E-Mail{coreRequired.email ? " *" : ""}</label>
+                      <input className="input !py-2 text-sm" type="email" value={leadDraft.email} onChange={(e) => setLeadDraft((d) => ({ ...d, email: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-textMuted mb-1">Termin (Datum/Uhrzeit) *</label>
+                      <input className="input !py-2 text-sm" type="datetime-local" value={leadDraft.appointmentAt} onChange={(e) => setLeadDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
+                    </div>
+                    {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
+                      <div key={f.key}>
+                        <label className="block text-xs text-textMuted mb-1">{f.label}{f.required ? " *" : ""}</label>
+                        <input className="input !py-2 text-sm"
+                          value={leadDraft.fields[f.key] || ""}
+                          onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                      </div>
+                    ))}
+                    {leadFields.filter((f) => f.type === "checkbox").map((f) => (
+                      <label key={f.key} className="flex items-center gap-2 text-sm text-textMuted sm:self-end sm:pb-2">
+                        <input type="checkbox" checked={!!leadDraft.fields[f.key]}
+                          onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} /> {f.label}
+                      </label>
+                    ))}
+                  </div>
+                  {leadFields.filter((f) => f.multiline).map((f) => (
+                    <div key={f.key} className="mb-3">
+                      <label className="block text-xs text-textMuted mb-1">{f.label}</label>
+                      <textarea className="input !py-2 text-sm" rows={2}
+                        value={leadDraft.fields[f.key] || ""}
+                        onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
+                    </div>
+                  ))}
+                  <label className="block text-xs text-textMuted mb-1.5">Aufnahme hochladen (optional)</label>
+                  <input ref={leadFileRef} type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.amr,.3gp,.caf,.webm,.flac" onChange={(e) => setLeadFile(e.target.files[0] || null)}
+                    className="text-xs text-textMuted mb-4 block w-full" />
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button disabled={leadSaving} onClick={submitLead} className="btn disabled:opacity-40">{leadSaving ? "Speichert..." : "Speichern"}</button>
+                    {/* Als richtiger Knopf, nicht als kleiner Link: wer die
+                        Kundendaten nicht erfassen will, verliess bisher das
+                        Formular einfach — und dann fehlte der Termin in der
+                        Auswertung ("Abgebrochen"). */}
+                    <button onClick={() => { bump("termin"); resetLeadDraft(); starteRakete(); showToast("Termin gezählt"); setStep("breathe"); }} className="btn-ghost text-sm">
+                      Nur zählen, ohne Daten
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === "breathe" && (
+                <>
+                  <div className="text-xl mb-0.5">🌬️</div>
+                  <div className="font-display font-semibold text-textMain text-base mb-1">Kurz durchatmen</div>
+                  <p className="text-textMuted text-sm mb-4">Kurz Luft holen, dann geht's weiter.</p>
+                  <button onClick={zurueckZumStart} className="btn">Weiter zum nächsten Anruf</button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Jeden Tag von vorn: das steht sonst nirgends, und die Frage
               "wurden meine Calls zurückgesetzt?" kam schon mehrfach. */}
           {isToday && (counts.anwahlen || 0) === 0 && letzteTage.length > 0 && (
@@ -1497,13 +2065,6 @@ export default function CallTracker() {
                 </div>
               </Aufklapper>
 
-              {/* Der Block steht offen da: Ein Knopf, den man erst
-                  aufklappen muss, wird nicht gedrückt. */}
-              <div className="pt-3 mt-3 border-t border-line">
-                <div className="label mb-2">Telefonblock</div>
-                <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} darfTesten={darfOrgVerwalten} />
-              </div>
-
               {(ranglisteJetzt || []).length > 1 && (
                 <div className="pt-3 mt-3 border-t border-line">
                   <button onClick={() => setTeamOffen((o) => !o)} className="btn-ghost text-xs">
@@ -1526,541 +2087,6 @@ export default function CallTracker() {
             </div>
           )}
 
-          {isToday && (
-            <div className="card mb-5 text-center">
-              {step === "lead" && (
-                <>
-                  <div className="text-3xl mb-1">📇</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Bereit für den nächsten Anruf?</div>
-                  <p className="text-textMuted text-sm mb-4">Ein Klick startet die Anwahl.</p>
-                  <button onClick={() => { bump("anwahlen"); setStep("outcome"); }} className="btn">Anwahl starten</button>
-                </>
-              )}
-
-              {step === "outcome" && (
-                <>
-                  <div className="text-3xl mb-1">📞</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-4">Wurde die Person erreicht?</div>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => { bump("nicht"); showToast("Erfasst: Nicht erreicht"); zurueckZumStart(); }} className="btn-ghost text-sm px-4 py-2.5">Nicht erreicht</button>
-                    <button onClick={() => { bump("erreicht"); setStep("wen"); }} className="btn">Erreicht</button>
-                  </div>
-                </>
-              )}
-
-              {/* Wen hatte man am Telefon? Steht zwischen "erreicht" und der
-                  Termin-Frage: die Antwort ändert nichts am weiteren Ablauf,
-                  aber ohne sie fehlt in der Auswertung, wie oft man
-                  überhaupt bis zur Entscheidung durchkommt. */}
-              {step === "wen" && (
-                <>
-                  <div className="text-3xl mb-1">🚪</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wen hast du zuerst erreicht?</div>
-                  <p className="text-textMuted text-xs mb-4">Einmal antippen, zählt automatisch mit</p>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => { bump("gatekeeper"); setStep("durchgestellt"); }}
-                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("gatekeeper"), color: feldFarbe("gatekeeper") }}>
-                      Vorzimmer / Gatekeeper
-                    </button>
-                    <button onClick={() => { bump("entscheider"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
-                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("entscheider"), color: feldFarbe("entscheider") }}>
-                      Geschäftsführer
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* Nur nach einem Gatekeeper-Gespräch: kam man zur
-                  Entscheidung durch? Bei "nein" gibt es keinen Termin — dann
-                  direkt zur Grund-Auswahl statt eines überflüssigen Klicks. */}
-              {step === "durchgestellt" && (
-                <>
-                  <div className="text-3xl mb-1">➡️</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-4">Wurdest du zum Entscheider durchgestellt?</div>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Nein</button>
-                    {/* Auch das Vorzimmer sagt oft "schicken Sie was per
-                        Mail". Das ist derselbe offene Faden wie beim
-                        Entscheider und kein Ablehnungsgrund. */}
-                    {mailsErlaubt && <button onClick={() => starteEmailKontakt("durchgestellt")}
-                      className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
-                      ✉️ E-Mail gewünscht
-                    </button>}
-                    <button onClick={() => { bump("weitergeleitet"); setStep(hatLeitfaden(org) ? "leitfaden" : "callResult"); }}
-                      className="btn-ghost text-sm px-4 py-2.5" style={{ borderColor: feldFarbe("weitergeleitet"), color: feldFarbe("weitergeleitet") }}>
-                      Ja, durchgestellt
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {step === "leitfaden" && (
-                <>
-                  <div className="text-3xl mb-1">🎧</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">
-                    Du hast die Entscheidung am Telefon
-                  </div>
-                  <p className="text-textMuted text-xs mb-4">Dein Ablauf — nichts anklicken, einfach sprechen.</p>
-
-                  {/* Gross und kurz: wer im Gespräch einen Absatz lesen
-                      muss, liest ihn nicht, sondern redet einfach los. */}
-                  <div className="flex flex-col gap-2 mb-4 text-left">
-                    {resolveLeitfaden(org).map((schritt, i) => (
-                      <div key={schritt.titel} className="flex items-start gap-3 rounded-xl border border-line px-3 py-2.5">
-                        <span className="w-6 h-6 rounded-full bg-amber text-[var(--org-button-text,#fff)] text-xs font-bold flex items-center justify-center flex-shrink-0">
-                          {i + 1}
-                        </span>
-                        <div>
-                          <div className="text-sm font-semibold text-textMain">{schritt.titel}</div>
-                          {schritt.hinweis && <div className="text-xs text-textMuted">{schritt.hinweis}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button onClick={() => setStep("callResult")} className="btn text-sm">
-                    Gespräch beendet
-                  </button>
-                </>
-              )}
-
-              {step === "callResult" && (
-                <>
-                  <div className="text-3xl mb-1">💬</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-4">Wie ist das Gespräch ausgegangen?</div>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => setStep("reason")} className="btn-ghost text-sm px-4 py-2.5 border-coral/40 text-coral">Negativ</button>
-                    {/* Der dritte Weg: "schicken Sie mir was per Mail" ist
-                        weder Termin noch Absage, sondern ein offener Faden.
-                        Als Ablehnungsgrund gezählt gälte der Anruf als
-                        verloren, dabei ist ein Kontakt entstanden. */}
-                    {mailsErlaubt && <button onClick={() => starteEmailKontakt("callResult")}
-                      className="btn-ghost text-sm px-4 py-2.5 border-amber/50 text-amber">
-                      ✉️ E-Mail gewünscht
-                    </button>}
-                    {/* "Terminiert" wird erst gezählt, wenn der Termin unten
-                        tatsächlich gespeichert oder bestätigt wird. */}
-                    <button onClick={() => { resetLeadDraft(); setStep("booking"); }} className="btn-ghost text-sm px-4 py-2.5 border-teal/40 text-teal">Ja, Termin vereinbaren</button>
-                  </div>
-                </>
-              )}
-
-              {step === "emailForm" && (
-                <>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wohin soll die E-Mail?</div>
-                  <p className="text-textMuted text-xs mb-4">
-                    Geht mit deinem Namen an die Organisation — dort wird sie verschickt und nachgehalten.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-left">
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Anrede</label>
-                      {/* "Hallo Frau Schmidt" statt "Hallo Maria Schmidt":
-                          eine Mail an einen Geschäftskontakt mit Vornamen
-                          wirkt wie Massenversand. Frei lassen ist erlaubt —
-                          wer im Gespräch nur einen Namen aufschnappt, soll
-                          nicht raten müssen. */}
-                      <div className="flex items-center gap-1.5">
-                        {[["", "—"], ["frau", "Frau"], ["herr", "Herr"]].map(([wert, label]) => (
-                          <button key={wert || "leer"} type="button"
-                            onClick={() => setEmailEntwurf((d) => ({ ...d, anrede: wert }))}
-                            className={`px-3 py-2 rounded-lg text-sm border flex-1 ${emailEntwurf.anrede === wert ? "bg-amber text-[var(--org-button-text,#fff)] border-amber" : "border-line text-textMuted hover:text-textMain"}`}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Getrennt, weil in der Mail nur der Nachname steht.
-                        Aus einem Feld das letzte Wort zu nehmen, ging bei
-                        "Anna von der Heide" schief. */}
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Vorname</label>
-                      <input className="input !py-2 text-sm" value={emailEntwurf.vorname}
-                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, vorname: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Nachname *</label>
-                      <input className="input !py-2 text-sm" value={emailEntwurf.nachname}
-                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, nachname: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">E-Mail *</label>
-                      <input className="input !py-2 text-sm" type="email" inputMode="email" value={emailEntwurf.email}
-                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, email: e.target.value }))}
-                        onBlur={(e) => pruefeDublette(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Firma</label>
-                      <input className="input !py-2 text-sm" value={emailEntwurf.firma}
-                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, firma: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Telefon</label>
-                      <input className="input !py-2 text-sm" type="tel" value={emailEntwurf.telefon}
-                        onChange={(e) => setEmailEntwurf((d) => ({ ...d, telefon: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div className="text-left mb-3">
-                    <label className="block text-xs text-textMuted mb-1">Gesprächsnotiz</label>
-                    <textarea className="input !py-2 text-sm" rows={3}
-                      placeholder="Worum ging es? Was war das Interesse?"
-                      value={emailEntwurf.notiz}
-                      onChange={(e) => setEmailEntwurf((d) => ({ ...d, notiz: e.target.value }))} />
-                    <p className="text-[11px] text-textMuted mt-1">
-                      Ohne Notiz wird die Mail ins Blaue geschrieben — das merkt der Kontakt sofort. Das gilt
-                      auch dann, wenn du sie gleich selbst schickst: bis dahin ist das Gespräch schon zwei
-                      Anrufe her.
-                    </p>
-                  </div>
-
-                  {/* Zwei Mails an denselben Kontakt sind der eine Fehler,
-                      den man im Marketing nie machen will. */}
-                  {dublette && (
-                    <div className="card mb-3 border-amber/50 text-left">
-                      <div className="text-sm text-textMain mb-1">Diese Adresse gibt es schon.</div>
-                      <p className="text-xs text-textMuted">
-                        Erfasst von {dublette.wer} am {new Date(dublette.created_at).toLocaleDateString("de-DE")}
-                        {dublette.status !== "offen" ? ` · Stand: ${EMAIL_STATUS[dublette.status] || dublette.status}` : ""}.
-                        Trotzdem erfassen geht — dann weiss die Organisation, dass zwei von euch dort waren.
-                      </p>
-                    </div>
-                  )}
-
-                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
-
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => setStep(emailHerkunft)} className="btn-ghost text-sm">Zurück</button>
-                    {/* Der Knopf sagt, was als Nächstes passiert. Gibt es
-                        Vorlagen, folgt die Frage, wer die Mail schickt —
-                        dann wäre "An die Organisation übergeben" hier eine
-                        Behauptung, die nicht stimmt. */}
-                    <button onClick={speichereEmailKontakt} disabled={emailBusy} className="btn text-sm disabled:opacity-40">
-                      {emailBusy ? "Wird gespeichert…" : vorlagen.length ? "Weiter" : "An die Organisation übergeben"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {step === "mailWeg" && (
-                <>
-                  <div className="text-3xl mb-1">✉️</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wer schickt die Mail?</div>
-                  {/* Die Angaben noch einmal, damit die Entscheidung nicht
-                      im Blindflug fällt. */}
-                  <p className="text-textMuted text-xs mb-4">
-                    {mailKontakt?.name}
-                    {mailKontakt?.firma ? ` · ${mailKontakt.firma}` : ""}
-                    {mailKontakt?.email ? ` · ${mailKontakt.email}` : ""}
-                  </p>
-
-                  <div className="flex flex-col gap-2 mb-3">
-                    <button
-                      onClick={() => { waehleVorlage(mailKontakt, vorlagen[0]); setStep("mailForm"); }}
-                      className="btn text-sm">
-                      ✉️ Ich schicke sie selbst
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMailKontakt(null);
-                        setEmailEntwurf({ anrede: "", vorname: "", nachname: "", email: "", firma: "", telefon: "", notiz: "" });
-                        showToast("An die Organisation übergeben");
-                        zurueckZumStart();
-                      }}
-                      className="btn-ghost text-sm">
-                      📮 An die Organisation weitergeben
-                    </button>
-                  </div>
-                  <p className="text-textMuted text-[11px]">
-                    Der Kontakt ist gespeichert — beides geht, und die Organisation sieht ihn so oder so im
-                    E-Mail-Marketing.
-                  </p>
-                </>
-              )}
-
-              {step === "mailForm" && (
-                <>
-                  <div className="text-3xl mb-1">✉️</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Mail jetzt rausschicken?</div>
-                  <p className="text-textMuted text-xs mb-4">
-                    Name, Firma und dein Name sind schon eingesetzt. Lies kurz drüber — abgeschickt wird erst,
-                    wenn du tippst.
-                  </p>
-
-                  {vorlagen.length > 1 && (
-                    <div className="text-left mb-3">
-                      {/* Eine Klappliste statt einer Knopfreihe: bei vielen
-                          Vorlagen brach die Reihe mitten im Gespräch über
-                          mehrere Zeilen um. */}
-                      <label className="block text-xs text-textMuted mb-1" htmlFor="call-vorlage">Vorlage</label>
-                      <select id="call-vorlage" className="input !py-2 text-sm"
-                        value={String(Math.max(0, vorlagen.findIndex((v) => v.name === mailEntwurf.vorlage)))}
-                        onChange={(e) => waehleVorlage(mailKontakt, vorlagen[Number(e.target.value)])}>
-                        {vorlagen.map((v, i) => (
-                          <option key={i} value={String(i)}>
-                            {i + 1}. {v.name}{v.format === "html" ? " · HTML" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  <div className="text-left mb-3">
-                    <label className="block text-xs text-textMuted mb-1">Betreff</label>
-                    <input className="input !py-2 text-sm mb-2" value={mailEntwurf.betreff}
-                      onChange={(e) => setMailEntwurf((d) => ({ ...d, betreff: e.target.value }))} />
-                    {mailEntwurf.format === "html" ? (
-                      <>
-                        <label className="block text-xs text-textMuted mb-1">So kommt die Mail an</label>
-                        <MailVorschau html={mailEntwurf.html} hoehe={360} />
-                      </>
-                    ) : (
-                      <>
-                        <label className="block text-xs text-textMuted mb-1">Text</label>
-                        <textarea className="input !py-2 text-sm" rows={9} value={mailEntwurf.text}
-                          onChange={(e) => setMailEntwurf((d) => ({ ...d, text: e.target.value }))} />
-                      </>
-                    )}
-                    <p className="text-[11px] text-textMuted mt-1">
-                      Geht an {mailKontakt?.email} im Namen von {org?.name || "eurer Organisation"}. Ändern
-                      darfst du; die Vorlage kommt von eurer Leitung.
-                    </p>
-                    {/* Ohne Namen im Profil fällt die Zeile mit dem
-                        Platzhalter ersatzlos weg — die Mail sieht dann
-                        vollständig aus und ist ohne Absender. Gesagt, bevor
-                        sie rausgeht. */}
-                    {!meinProfil?.full_name && (
-                      <p className="text-[11px] text-coral mt-1">
-                        In deinem Profil steht kein Name. Die Mail geht ohne deinen Namen raus — trag ihn
-                        unter Profil ein und öffne die Vorlage danach neu.
-                      </p>
-                    )}
-                  </div>
-
-                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
-
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button onClick={() => setStep("mailWeg")} className="btn-ghost text-sm">
-                      Zurück
-                    </button>
-                    <button onClick={(e) => sendeEigeneMail(e)} disabled={mailBusy} className="btn text-sm disabled:opacity-40">
-                      {mailBusy ? "Wird verschickt…" : "Jetzt senden"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {step === "nachfass" && (
-                <>
-                  <div className="text-3xl mb-1">📌</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Wann ist dein Follow-up?</div>
-                  <p className="text-textMuted text-xs mb-4">
-                    Kommt in deinen Kalender — auch in den abonnierten auf dem Handy — und meldet sich am
-                    Tag der Fälligkeit. Ohne Eintrag geht der Rückruf unter.
-                  </p>
-                  <div className="flex items-center justify-center gap-2 flex-wrap mb-3">
-                    {NACHFASS_VORSCHLAEGE.map((v) => (
-                      <button key={v.tage} onClick={() => trageNachfassEin(v.tage)} disabled={nachfassBusy}
-                        className="btn text-sm disabled:opacity-40">{v.label}</button>
-                    ))}
-                  </div>
-                  {emailFehler && <p className="text-xs text-coral mb-2 whitespace-pre-line">{emailFehler}</p>}
-                  <button onClick={() => { setMailKontakt(null); zurueckZumStart(); }}
-                    className="btn-ghost text-xs text-textMuted">Nicht nötig</button>
-                </>
-              )}
-
-              {step === "reason" && (
-                <>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Was war der Grund?</div>
-                  <p className="text-textMuted text-xs mb-3">Einmal antippen, zählt automatisch mit</p>
-                  {/* Der Ausweg aus dieser Frage: war es gar keine Absage,
-                      sondern eine Bitte um Unterlagen, gehört der Anruf
-                      nicht in die Ablehnungsgründe. */}
-                  {mailsErlaubt && <button onClick={() => starteEmailKontakt("reason")}
-                    className="btn-ghost text-xs mb-4 border-amber/50 text-amber">
-                    ✉️ Keine Absage — es wurde eine E-Mail gewünscht
-                  </button>}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                    {reasons.map((r) => (
-                      <button key={r.key} onClick={() => countReason(r.key)}
-                        className="px-3 py-2.5 rounded-lg border border-line text-sm text-textMain hover:border-amber hover:text-amber transition">
-                        {r.label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Was hier wirklich gesagt wurde. Zählt wie "Sonstiges",
-                      aber der Wortlaut geht als Vorschlag an die Leitung —
-                      sonst verschwindet genau die Information, die neu ist. */}
-                  {grundFeldOffen ? (
-                    <div className="flex items-center gap-2 flex-wrap mb-3">
-                      <input autoFocus className="input !py-2 text-sm flex-1 min-w-[200px]"
-                        maxLength={MAX_LAENGE}
-                        placeholder="Was war der Grund? (z. B. „Vertrag läuft noch 2 Jahre“)"
-                        value={eigenerGrund}
-                        onChange={(e) => setEigenerGrund(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") zaehleEigenenGrund();
-                          if (e.key === "Escape") { setGrundFeldOffen(false); setEigenerGrund(""); }
-                        }} />
-                      <button onClick={zaehleEigenenGrund} disabled={!saeubere(eigenerGrund)}
-                        className="btn text-sm disabled:opacity-40">Zählen</button>
-                      <button onClick={() => { setGrundFeldOffen(false); setEigenerGrund(""); }}
-                        className="btn-ghost text-sm">Abbrechen</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setGrundFeldOffen(true)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-dashed border-line text-sm text-textMuted hover:border-amber hover:text-amber transition mb-3">
-                      ✏️ Anderer Grund — eintippen
-                    </button>
-                  )}
-
-                  {/* Ohne Angabe: zählt auf die letzte Kategorie (Sammelpunkt). */}
-                  <button onClick={() => countReason(reasons[reasons.length - 1].key)} className="text-textMuted text-xs underline">Ohne Angabe zählen</button>
-                  {/* Der Weg zu eigenen Gründen gehört dorthin, wo die Gründe
-                      stehen — sonst weiss niemand, dass es ihn gibt. */}
-                  {darfOrgVerwalten && (
-                    <div className="mt-3">
-                      <a href="/admin/organization" className="text-[11px] text-textMuted underline">
-                        Eigene Ablehnungsgründe festlegen (z. B. „Kein Interesse")
-                      </a>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {step === "booking" && (
-                <>
-                  <div className="text-3xl mb-1">📅</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-3">Termin vereinbaren</div>
-
-                  {/* Der Buchungslink steht VOR der Anleitung und vor dem
-                      Formular: mitten im Gespräch sucht man ihn sonst in
-                      einem anderen Tab, während die Kundin wartet. */}
-                  {(() => {
-                    const link = buchungslink(meinProfil, org);
-                    if (!link) {
-                      return darfOrgVerwalten ? (
-                        <p className="text-[11px] text-textMuted mb-4">
-                          Noch kein Buchungslink hinterlegt —{" "}
-                          <a href="/admin/organization" className="underline">unter Organisation → Call Tracker</a> eintragen,
-                          persönlich unter <a href="/profile" className="underline">Mein Profil</a>.
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-textMuted mb-4">
-                          Eigenen Buchungslink hinterlegen: <a href="/profile" className="underline">Mein Profil</a>.
-                        </p>
-                      );
-                    }
-                    return (
-                      <div className="card !py-3 mb-4 max-w-md mx-auto border-teal/40">
-                        <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-2">Dein Buchungslink</div>
-                        <div className="flex items-center gap-2 flex-wrap justify-center">
-                          <a href={link} target="_blank" rel="noopener noreferrer" className="btn text-sm">
-                            <Icon name="calendar" size={14} /> Kalender öffnen
-                          </a>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard?.writeText(link).then(
-                                () => { setLinkKopiert(true); setTimeout(() => setLinkKopiert(false), 2500); },
-                                () => showToast("Kopieren nicht möglich")
-                              );
-                            }}
-                            className="btn-ghost text-sm">
-                            <Icon name="copy" size={14} /> {linkKopiert ? "Kopiert ✓" : "Link kopieren"}
-                          </button>
-                        </div>
-                        <div className="text-[11px] text-textMuted mt-2 break-all">{kurzform(link)}</div>
-                        <p className="text-[11px] text-textMuted mt-1">Zum Vorlesen oder direkt in den Chat schicken.</p>
-                      </div>
-                    );
-                  })()}
-
-                  <ul className="text-left text-sm text-textMain list-disc pl-6 mb-4 flex flex-col gap-1.5 max-w-md mx-auto">
-                    {bookingSteps.map((line, i) => <li key={i}>{line}</li>)}
-                  </ul>
-                  <button onClick={() => setStep("leadForm")} className="btn">Erledigt, weiter</button>
-                </>
-              )}
-
-              {step === "leadForm" && (
-                <div className="text-left">
-                  <div className="font-display font-semibold text-textMain text-lg mb-1 text-center">Termin erfasst 🎉</div>
-                  <p className="text-textMuted text-xs mb-4 text-center">Kundendaten erfassen (empfohlen) — landet direkt unter „Termine" in der App</p>
-                  {/* Jedes Feld bekommt eine eigene Beschriftung. Ein
-                      Datum-/Uhrzeit-Feld kann keinen Platzhaltertext anzeigen
-                      (dort steht immer "tt.mm.jjjj, --:--") — ohne Label war
-                      nicht erkennbar, dass es ein Pflichtfeld ist. */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Name *</label>
-                      <input className="input !py-2 text-sm" placeholder="Vor- und Nachname" value={leadDraft.name} onChange={(e) => setLeadDraft((d) => ({ ...d, name: e.target.value }))} />
-                      {/* Der Buchungslink liegt hier daneben, und was in die
-                          Zwischenablage gehört, landet dann im Feld. In der
-                          Liste heisst der Kunde danach "https://meet.google…". */}
-                      {namensHinweis(leadDraft.name) && (
-                        <p className="text-[11px] text-amber mt-1 text-left">{namensHinweis(leadDraft.name)}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Telefon{coreRequired.phone ? " *" : ""}</label>
-                      <input className="input !py-2 text-sm" type="tel" value={leadDraft.phone} onChange={(e) => setLeadDraft((d) => ({ ...d, phone: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">E-Mail{coreRequired.email ? " *" : ""}</label>
-                      <input className="input !py-2 text-sm" type="email" value={leadDraft.email} onChange={(e) => setLeadDraft((d) => ({ ...d, email: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-textMuted mb-1">Termin (Datum/Uhrzeit) *</label>
-                      <input className="input !py-2 text-sm" type="datetime-local" value={leadDraft.appointmentAt} onChange={(e) => setLeadDraft((d) => ({ ...d, appointmentAt: e.target.value }))} />
-                    </div>
-                    {leadFields.filter((f) => f.type === "text" && !f.multiline).map((f) => (
-                      <div key={f.key}>
-                        <label className="block text-xs text-textMuted mb-1">{f.label}{f.required ? " *" : ""}</label>
-                        <input className="input !py-2 text-sm"
-                          value={leadDraft.fields[f.key] || ""}
-                          onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
-                      </div>
-                    ))}
-                    {leadFields.filter((f) => f.type === "checkbox").map((f) => (
-                      <label key={f.key} className="flex items-center gap-2 text-sm text-textMuted sm:self-end sm:pb-2">
-                        <input type="checkbox" checked={!!leadDraft.fields[f.key]}
-                          onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.checked } }))} /> {f.label}
-                      </label>
-                    ))}
-                  </div>
-                  {leadFields.filter((f) => f.multiline).map((f) => (
-                    <div key={f.key} className="mb-3">
-                      <label className="block text-xs text-textMuted mb-1">{f.label}</label>
-                      <textarea className="input !py-2 text-sm" rows={2}
-                        value={leadDraft.fields[f.key] || ""}
-                        onChange={(e) => setLeadDraft((d) => ({ ...d, fields: { ...d.fields, [f.key]: e.target.value } }))} />
-                    </div>
-                  ))}
-                  <label className="block text-xs text-textMuted mb-1.5">Aufnahme hochladen (optional)</label>
-                  <input ref={leadFileRef} type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.amr,.3gp,.caf,.webm,.flac" onChange={(e) => setLeadFile(e.target.files[0] || null)}
-                    className="text-xs text-textMuted mb-4 block w-full" />
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button disabled={leadSaving} onClick={submitLead} className="btn disabled:opacity-40">{leadSaving ? "Speichert..." : "Speichern"}</button>
-                    {/* Als richtiger Knopf, nicht als kleiner Link: wer die
-                        Kundendaten nicht erfassen will, verliess bisher das
-                        Formular einfach — und dann fehlte der Termin in der
-                        Auswertung ("Abgebrochen"). */}
-                    <button onClick={() => { bump("termin"); resetLeadDraft(); starteRakete(); showToast("Termin gezählt"); setStep("breathe"); }} className="btn-ghost text-sm">
-                      Nur zählen, ohne Daten
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {step === "breathe" && (
-                <>
-                  <div className="text-3xl mb-1">🌬️</div>
-                  <div className="font-display font-semibold text-textMain text-lg mb-1">Kurz durchatmen</div>
-                  <p className="text-textMuted text-sm mb-4">Kurz Luft holen, dann geht's weiter.</p>
-                  <button onClick={zurueckZumStart} className="btn">Weiter zum nächsten Anruf</button>
-                </>
-              )}
-            </div>
-          )}
 
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <span className="text-sm text-textMuted">{dateLabel}</span>
@@ -2069,53 +2095,17 @@ export default function CallTracker() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-            {FIELDS.map((f) => (
-              // Dieselbe Farbe wie im Diagramm: wer die Kachel gesehen hat,
-              // findet den Wert im Kreis ohne Legende wieder.
-              // Im Reiter "Heute" gibt es nichts aufzuschlüsseln — es IST ein
-              // einzelner Tag. Die Aufschlüsselung steht in den Statistiken.
-              <div key={f.key} className="card" style={{ borderColor: `color-mix(in srgb, ${feldFarbe(f.key)} 40%, transparent)` }}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: feldFarbe(f.key) }} />
-                  <span className="text-xs text-textMuted flex-1">{f.label}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  {setzeFeld === f.key ? (
-                    <input
-                      autoFocus type="number" inputMode="numeric" min="0"
-                      className="input !py-1 !px-2 text-2xl font-display font-semibold w-24"
-                      value={setzeWert}
-                      onChange={(e) => setSetzeWert(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") setzeZaehler(f.key, setzeWert);
-                        if (e.key === "Escape") setSetzeFeld(null);
-                      }}
-                      onBlur={() => setzeZaehler(f.key, setzeWert)} />
-                  ) : (
-                    <button
-                      onClick={() => { setSetzeFeld(f.key); setSetzeWert(String(counts[f.key] || 0)); }}
-                      title="Zahl anklicken, um sie zu setzen"
-                      className="text-3xl font-display font-semibold hover:opacity-70"
-                      style={{ color: feldFarbe(f.key) }}>
-                      {counts[f.key] || 0}
-                    </button>
-                  )}
-                  <button onClick={() => bump(f.key, -1)} title="Zähler um eins verringern"
-                    className="w-8 h-8 rounded-lg border border-line text-textMuted hover:text-textMain hover:border-amber flex items-center justify-center flex-shrink-0">
-                    –
-                  </button>
-                </div>
-                <div className="text-[10.5px] text-textMuted mt-1">
-                  {setzeFeld === f.key
-                    ? "Zahl eintippen, Enter — gilt für alle Geräte"
-                    : f.key === "anwahlen"
-                      ? "− nimmt den letzten Anruf ganz zurück · Zahl antippen zum Setzen"
-                      : "− korrigiert um eins · Zahl antippen zum Setzen"}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ZaehlerKacheln
+            felder={sichtbareFelder}
+            counts={counts}
+            setzeFeld={setzeFeld}
+            setzeWert={setzeWert}
+            onWert={setSetzeWert}
+            onOeffnen={(key) => { setSetzeFeld(key); setSetzeWert(String(counts[key] || 0)); }}
+            onAbbrechen={() => setSetzeFeld(null)}
+            onSetzen={setzeZaehler}
+            onRunter={(key) => bump(key, -1)}
+          />
 
           <div className="card mb-5">
             <div className="font-semibold text-textMain text-sm mb-3">Zusammenfassung</div>

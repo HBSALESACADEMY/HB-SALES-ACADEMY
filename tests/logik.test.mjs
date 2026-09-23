@@ -4255,6 +4255,51 @@ test("Zeiträume vergleichen: zwei Kurven Tag über Tag, ohne erfundene Tage", a
   assert.match(seite, /Tag 1 liegt auf Tag 1/);
 });
 
+test("Der Call Tracker ist kompakt: zwei Spalten auf dem Handy, Trefferflächen bleiben", async () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const kacheln = lies("components/ZaehlerKacheln.js");
+  const { FIELDS } = await import("../lib/callTracker.js");
+
+  // Neun Zähler in einer Spalte waren auf dem Handy eine Wand.
+  assert.equal(FIELDS.length, 9);
+  assert.match(kacheln, /grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2/);
+  assert.ok(!/grid-cols-1/.test(kacheln), "keine einspaltige Wand mehr");
+  // Weniger Luft in der Kachel, aber die Zahl bleibt gross und antippbar.
+  assert.match(kacheln, /className="card !p-2\.5"/);
+  assert.match(kacheln, /text-2xl font-display font-semibold hover:opacity-70/);
+  // Gespart wird an Luft, NICHT an Trefferflächen: Der Minus-Knopf bleibt
+  // ein eigenes Ziel. Hier wird im Stehen mit dem Daumen getippt.
+  assert.match(kacheln, /className="w-7 h-7 rounded-lg border border-line/);
+  // Der Hinweis zum Korrigieren stand neunmal untereinander — jetzt einmal.
+  assert.equal((kacheln.match(/korrigiert um eins/g) || []).length, 1);
+
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /<ZaehlerKacheln/);
+  // Der Kasten für den laufenden Anruf: kleineres Symbol, kleinere
+  // Überschrift, weniger Höhe — der Knopf darin bleibt unverändert.
+  assert.match(tracker, /<div className="card !py-4 mb-4 text-center">/);
+  assert.ok(!/text-3xl mb-1/.test(tracker), "keine grossen Symbole mehr");
+  assert.ok(!/text-textMain text-lg mb-/.test(tracker), "keine grossen Überschriften mehr");
+  assert.match(tracker, /<button onClick=\{\(\) => \{ bump\("anwahlen"\); setStep\("outcome"\); \}\} className="btn">Anwahl starten<\/button>/);
+
+  // Die Reihenfolge der Heute-Ansicht: erst die Uhr, dann der Anruf-Knopf,
+  // dann alles andere. Vorher lag der Knopf unter Ring, Serie, Telefonblock
+  // und neun Kacheln — auf dem Handy musste man scrollen, um telefonieren
+  // zu können.
+  const uhr = tracker.indexOf('<div className="label mb-2">Telefonblock</div>');
+  const knopf = tracker.indexOf('Anwahl starten</button>');
+  const ring = tracker.indexOf("<Zielring");
+  const kachelStelle = tracker.indexOf("<ZaehlerKacheln");
+  assert.ok(uhr > 0 && knopf > uhr, "die Uhr steht über dem Anruf-Knopf");
+  assert.ok(ring > knopf, "der Ring steht unter dem Anruf-Knopf");
+  assert.ok(kachelStelle > knopf, "die Zähler stehen unter dem Anruf-Knopf");
+
+  // "E-Mail gewünscht" fällt weg, wenn das Marketing aus ist — aber nur,
+  // solange die Zahl auf null steht. Eine vorhandene Zahl wird nicht
+  // versteckt.
+  assert.match(tracker, /f\.key !== "email" \|\| mailsErlaubt \|\| \(todayCounts\.email \|\| 0\) > 0/);
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));
