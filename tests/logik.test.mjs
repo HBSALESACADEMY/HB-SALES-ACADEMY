@@ -4115,6 +4115,46 @@ test("Das Wappen steht auf dem Login — freigestellt, und im hellen Theme auf d
   assert.match(lies("pages/_document.js"), /<link rel="icon" href="\/logo-wappen-64\.png" type="image\/png" \/>/);
 });
 
+test("Der Telefonblock übersteht ein Neuladen, und die Anwahlen holen sich nach", async () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const block = lies("components/Telefonblock.js");
+
+  // Gemerkt wird der ZEITPUNKT des Starts, nicht die abgelaufene Zeit.
+  // Nur so stimmt die Uhr auch dann, wenn der Tab zehn Minuten zu war.
+  assert.match(block, /merke\("laufend", JSON\.stringify\(\{ \.\.\.neuerBlock, gefeiert: false \}\)\)/);
+  assert.match(block, /localStorage\.getItem\(`\$\{speicherSchluessel\}:laufend`\)/);
+  assert.match(block, /const gelaufen = Math\.max\(0, Math\.round\(\(Date\.now\(\) - Number\(gemerkt\.seit\)\) \/ 1000\)\)/);
+  // Beim Beenden ist der Eintrag weg — sonst käme der Block morgen wieder.
+  assert.match(block, /function beende\(\) \{\n\s+try \{ localStorage\.removeItem\(`\$\{speicherSchluessel\}:laufend`\)/);
+  // Ein längst abgelaufener Block wird NICHT wieder geöffnet.
+  assert.match(block, /if \(stand\.vorbei\) \{\n\s+localStorage\.removeItem\(`\$\{speicherSchluessel\}:laufend`\);/);
+  // Und die Belohnung kommt auch über ein Neuladen hinweg nur einmal.
+  assert.match(block, /gefeiertRef\.current = !!gemerkt\.gefeiert;/);
+  assert.match(block, /merke\("laufend", JSON\.stringify\(\{ \.\.\.laufend, gefeiert: true \}\)\)/);
+
+  // Der Call Tracker holt sich den Tagesstand von selbst nach.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /const gleicheTagAb = useCallback\(async \(\) => \{/);
+  assert.match(tracker, /useAutoAktualisieren\(gleicheTagAb, \{/);
+  // Nicht mitten im Gespräch: Dann darf sich die Ansicht nicht ändern.
+  assert.match(tracker, /pausiert: step !== "lead" \|\| zielOffen \|\| !!setzeFeld,/);
+  // Zusammengeführt wird mit derselben Regel wie beim Öffnen der Seite —
+  // dadurch kann ein Abgleich im Hintergrund keine Zahl kleiner machen.
+  assert.match(tracker, /const gilt = wasGiltJetzt\(lokal, serverTag\);/);
+  // Und er schreibt nur, wenn sich wirklich etwas geändert hat.
+  assert.match(tracker, /if \(JSON\.stringify\(gilt\.counts\) === JSON\.stringify\(lokal\.counts\)/);
+  // Nicht über Mitternacht — dafür gibt es den Tageswechsel.
+  assert.match(tracker, /if \(tag !== angezeigterTag\.current\) return;/);
+
+  // Die Regel selbst: das Maximum je Zähler, eine jüngere Korrektur gewinnt.
+  const { wasGiltJetzt } = await import("../lib/callTracker.js");
+  const lokal = { counts: { anwahlen: 12, termin: 1 }, reasons: {}, gespeichert_at: "2026-09-23T10:00:00Z" };
+  const server = { counts: { anwahlen: 20, termin: 0 }, reasons: {}, korrigiert_at: null };
+  const zusammen = wasGiltJetzt(lokal, server);
+  assert.equal(zusammen.counts.anwahlen, 20, "was anderswo mehr gezählt wurde, kommt dazu");
+  assert.equal(zusammen.counts.termin, 1, "und was hier mehr ist, bleibt stehen");
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));
@@ -5112,7 +5152,10 @@ test("Ist die Zeit voll, gibt es die Belohnung — einmal, leise und abschaltbar
 
   const block = lies("components/Telefonblock.js");
   // Die Feier kommt, wenn die Zeit voll ist — und nur einmal je Block.
-  assert.match(block, /if \(stand\.zielVoll && !gefeiertRef\.current\) \{\n\s+gefeiertRef\.current = true;\n\s+zeigeBlockFeier\(/);
+  // Einmal je Block: Der Haken wird gesetzt, BEVOR gefeiert wird. Zwischen
+  // beidem darf stehen, dass der Haken auch gemerkt wird (damit die
+  // Belohnung ein Neuladen nicht wiederholt).
+  assert.match(block, /if \(stand\.zielVoll && !gefeiertRef\.current\) \{\n\s+gefeiertRef\.current = true;[\s\S]{0,220}zeigeBlockFeier\(/);
   assert.match(block, /gefeiertRef\.current = false;/);
   // Der Ton ist abschaltbar und bleibt im Gerät.
   assert.match(block, /localStorage\.getItem\(`\$\{speicherSchluessel\}:ton`\) !== "aus"/);

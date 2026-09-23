@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Layout, { getCachedOrg } from "../components/Layout";
 import Icon from "../components/Icon";
 import InfoCard from "../components/InfoCard";
@@ -25,6 +25,7 @@ import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
 import { zeigePapierflieger } from "../lib/papierflieger";
 import { emailMarketingAktiv } from "../lib/emailMarketing";
+import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
 import { anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX } from "../lib/anwahlSpiel";
 import { aendereGeprueft } from "../lib/loeschen";
 import Kurve from "../components/Kurve";
@@ -432,6 +433,53 @@ export default function CallTracker() {
     if (jetzt - ersteAenderung.current >= 5000) { sendeZahlen(); return; }
     syncTimer.current = setTimeout(sendeZahlen, 900);
   }
+
+  // Den heutigen Stand mit dem Server abgleichen — wiederholbar.
+  //
+  // Dasselbe Zusammenführen wie beim Öffnen der Seite (wasGiltJetzt): je
+  // Zähler das Maximum, eine JÜNGERE KORREKTUR schlägt alles. Dadurch kann
+  // ein Abgleich im Hintergrund eine Zahl nie kleiner machen und nie etwas
+  // überschreiben, was gerade hier getippt wurde — er holt nur dazu, was
+  // anderswo gezählt wurde. Wer auf dem Handy telefoniert und den Rechner
+  // offen hat, sieht es damit von selbst.
+  const gleicheTagAb = useCallback(async () => {
+    if (!userId) return;
+    const tag = dateKeyOf(new Date());
+    // Nicht über Mitternacht: Dafür gibt es den Tageswechsel weiter unten.
+    if (tag !== angezeigterTag.current) return;
+    try {
+      const { data: serverTag, error } = await supabase.from("call_log_days")
+        .select("counts, reasons, korrigiert_at").eq("user_id", userId)
+        .eq("log_date", tag).maybeSingle();
+      if (error) throw error;
+      if (!serverTag) return;
+      const lokal = loadDay(prefix, dayKey(), reasons);
+      const gilt = wasGiltJetzt(lokal, serverTag);
+      // Nur schreiben, wenn sich wirklich etwas geändert hat — sonst
+      // rendert die Seite jede Minute ohne Anlass neu.
+      if (JSON.stringify(gilt.counts) === JSON.stringify(lokal.counts)
+        && JSON.stringify(gilt.reasons) === JSON.stringify(lokal.reasons)) return;
+      saveDay(prefix, dayKey(), gilt.counts, gilt.reasons);
+      setTodayCounts(gilt.counts);
+      setTodayReasons(gilt.reasons);
+      setAbgleichFehler("");
+    } catch (e) {
+      // Ein stiller Abgleich darf nicht mit einer roten Meldung dazwischen
+      // platzen — aber stumm bleiben darf er auch nicht.
+      meldeStoerung("Call Tracker Abgleich im Hintergrund", e?.message || String(e));
+    }
+  }, [userId, prefix, reasons]);
+
+  // Von selbst nachladen, solange kein Anruf läuft.
+  //
+  // "pausiert" ist hier wichtig: Mitten in einem Gespräch soll sich die
+  // Ansicht nicht unter den Händen ändern. Was in der Pause ausfällt, holt
+  // der Haken danach nach (siehe lib/autoRefresh.js).
+  useAutoAktualisieren(gleicheTagAb, {
+    abstand: ABSTAND.LAUFEND,
+    aktiv: view === "today" && !!userId,
+    pausiert: step !== "lead" || zielOffen || !!setzeFeld,
+  });
 
   // Beim Verlassen oder Wegschalten der Seite alles Ausstehende noch
   // hinausschicken. Genau hier gingen Tage verloren: gezählt, Tab zu, weg.

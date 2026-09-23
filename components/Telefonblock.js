@@ -43,7 +43,31 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
       setBestwert(Number(localStorage.getItem(`${speicherSchluessel}:bestwert`)) || 0);
       setTon(localStorage.getItem(`${speicherSchluessel}:ton`) !== "aus");
       setEigene(localStorage.getItem(`${speicherSchluessel}:eigene`) || "");
-    } catch (e) { /* ohne Speicher eben ohne Bestwert und mit Ton */ }
+
+      // Einen laufenden Block wieder aufnehmen.
+      //
+      // Vorher war er nach einem Neuladen weg — mitten in einer Runde die
+      // Seite aktualisieren, und die Uhr fing wieder bei null an. Gespeichert
+      // sind nur drei Werte: gewählte Minuten, der Anwahlstand beim Start und
+      // der ZEITPUNKT des Starts. Die Uhr wird daraus neu gerechnet und
+      // stimmt deshalb auch dann, wenn der Tab zehn Minuten geschlossen war.
+      const roh = localStorage.getItem(`${speicherSchluessel}:laufend`);
+      if (roh) {
+        const gemerkt = JSON.parse(roh);
+        const gelaufen = Math.max(0, Math.round((Date.now() - Number(gemerkt.seit)) / 1000));
+        const stand = blockStand({ minuten: gemerkt.minuten, sekunden: gelaufen });
+        // Ein Block, der ohnehin vorbei wäre, wird nicht wieder geöffnet:
+        // Wer gestern vergessen hat zu beenden, soll heute keine Uhr mit
+        // vierzehn Stunden sehen.
+        if (stand.vorbei) {
+          localStorage.removeItem(`${speicherSchluessel}:laufend`);
+        } else {
+          gefeiertRef.current = !!gemerkt.gefeiert;
+          setLaufend({ minuten: gemerkt.minuten, start: Number(gemerkt.start) || 0, seit: Number(gemerkt.seit) });
+          setSekunden(gelaufen);
+        }
+      }
+    } catch (e) { /* ohne Speicher eben ohne Bestwert, ohne Ton, ohne Wiederaufnahme */ }
   }, [speicherSchluessel]);
 
   function merke(schluessel, wert) {
@@ -61,6 +85,8 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
       const stand = blockStand({ minuten: laufend.minuten, sekunden: gelaufen });
       if (stand.zielVoll && !gefeiertRef.current) {
         gefeiertRef.current = true;
+        // Auch merken: Sonst käme die Belohnung nach jedem Neuladen erneut.
+        merke("laufend", JSON.stringify({ ...laufend, gefeiert: true }));
         zeigeBlockFeier({ anwahlen: Math.max(0, anwahlenRef.current - laufend.start), ton: tonRef.current });
       }
       if (stand.vorbei) beendenRef.current?.();
@@ -72,7 +98,9 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
     setErgebnis(null);
     setEigeneFehler("");
     gefeiertRef.current = false;
-    setLaufend({ minuten, start: anwahlenRef.current, seit: Date.now() });
+    const neuerBlock = { minuten, start: anwahlenRef.current, seit: Date.now() };
+    merke("laufend", JSON.stringify({ ...neuerBlock, gefeiert: false }));
+    setLaufend(neuerBlock);
     setSekunden(0);
   }
 
@@ -88,6 +116,7 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
   // aufruft, ohne bei jedem Rendern neu zu starten.
   const beendenRef = useRef(null);
   function beende() {
+    try { localStorage.removeItem(`${speicherSchluessel}:laufend`); } catch (e) { /* egal */ }
     setLaufend((aktuell) => {
       if (!aktuell) return null;
       const stand = blockStand({ minuten: aktuell.minuten, sekunden: (Date.now() - aktuell.seit) / 1000 });
