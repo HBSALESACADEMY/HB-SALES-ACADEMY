@@ -4529,6 +4529,40 @@ test("Der Reiter Vergangene Tage führt Tageszahlen und Runden zusammen", async 
   assert.match(panel, /ein Block ist ein Rahmen, keine Pflicht/);
 });
 
+test("Eine falsch gehende Geräteuhr wird erklärt, nicht als Störung gemeldet", async () => {
+  const { istUhrProblem, istMeldenswert, UHR_HINWEIS } = await import("../lib/fehlerMeldung.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Der Fall, der im Betrieb aufgetreten ist: Der Hintergrund-Abgleich
+  // meldete "JWT issued at future" an den Betreiber — der kann die Uhr
+  // eines fremden Geräts nicht stellen, und die Person, die es könnte,
+  // erfuhr nichts davon.
+  ["JWT issued at future", "Token used before issued", "clock skew detected"].forEach((t) => {
+    assert.equal(istUhrProblem(t), true, t);
+    assert.equal(istMeldenswert(t), false, t);
+  });
+  // Andere Fehler bleiben meldenswert — sonst verschwindet mit der Uhr auch
+  // alles andere.
+  ["jwt expired", "Could not find the table", "permission denied"].forEach((t) => {
+    assert.equal(istUhrProblem(t), false, t);
+    assert.equal(istMeldenswert(t), true, t);
+  });
+  // Der Hinweis sagt, was zu tun ist, und beruhigt: Es gehen keine Zahlen
+  // verloren.
+  assert.match(UHR_HINWEIS, /automatisch/);
+  assert.match(UHR_HINWEIS, /gehen nicht verloren/);
+
+  // Im Call Tracker: erklären statt melden, und die Karte sagt das Richtige.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /if \(istUhrProblem\(text\)\) \{ setAbgleichFehler\(UHR_HINWEIS\); return; \}/);
+  assert.match(tracker, /abgleichFehler === UHR_HINWEIS \?/);
+  assert.match(tracker, /Die Uhr dieses Geräts geht falsch\./);
+  // Die Prüfung steht VOR der Meldung an den Betreiber.
+  const stelle = tracker.indexOf("istUhrProblem(text)");
+  const melden = tracker.indexOf('meldeStoerung("Call Tracker Abgleich im Hintergrund"');
+  assert.ok(stelle > 0 && melden > stelle, "erst prüfen, dann melden");
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));

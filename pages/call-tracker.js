@@ -30,6 +30,7 @@ import { darfEmailMarketing } from "../lib/emailMarketing";
 import { blockZeile, tageMitBloecken } from "../lib/telefonblock";
 import { merkeBlock, ladeBloecke } from "../lib/telefonblockSpeicher";
 import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
+import { istUhrProblem, UHR_HINWEIS } from "../lib/fehlerMeldung";
 import {
   anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX, ranglisteMitEigenem,
 } from "../lib/anwahlSpiel";
@@ -547,9 +548,15 @@ export default function CallTracker() {
       setTodayReasons(gilt.reasons);
       setAbgleichFehler("");
     } catch (e) {
-      // Ein stiller Abgleich darf nicht mit einer roten Meldung dazwischen
-      // platzen — aber stumm bleiben darf er auch nicht.
-      meldeStoerung("Call Tracker Abgleich im Hintergrund", e?.message || String(e));
+      const text = e?.message || String(e);
+      // Geht die Uhr des Geräts vor, lehnt der Server das Token ab ("JWT
+      // issued at future"). Das kann nur die betroffene Person beheben —
+      // sie bekommt deshalb eine Erklärung, und der Betreiber keine Meldung
+      // über eine Uhr, die er nicht stellen kann.
+      if (istUhrProblem(text)) { setAbgleichFehler(UHR_HINWEIS); return; }
+      // Sonst: Ein stiller Abgleich darf nicht mit einer roten Meldung
+      // dazwischen platzen — aber stumm bleiben darf er auch nicht.
+      meldeStoerung("Call Tracker Abgleich im Hintergrund", text);
     }
 
     // Und die Zahlen der anderen: Die eigene Zeile ist durch den Zähler
@@ -1445,13 +1452,22 @@ export default function CallTracker() {
 
           {isToday && abgleichFehler && (
             <div className="card mb-3 border-coral/50">
-              <div className="text-sm text-coral mb-1">
-                Der heutige Stand konnte nicht vom Server geholt werden.
-              </div>
-              <p className="text-xs text-textMuted">
-                Die Kacheln unten zeigen deshalb nur, was auf diesem Gerät gezählt wurde — möglicherweise zu
-                wenig. Unter „Statistiken“ stehen die richtigen Zahlen. Meldung: {abgleichFehler}
-              </p>
+              {abgleichFehler === UHR_HINWEIS ? (
+                <>
+                  <div className="text-sm text-coral mb-1">Die Uhr dieses Geräts geht falsch.</div>
+                  <p className="text-xs text-textMuted">{UHR_HINWEIS}</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-coral mb-1">
+                    Der heutige Stand konnte nicht vom Server geholt werden.
+                  </div>
+                  <p className="text-xs text-textMuted">
+                    Die Kacheln unten zeigen deshalb nur, was auf diesem Gerät gezählt wurde — möglicherweise zu
+                    wenig. Unter „Statistiken“ stehen die richtigen Zahlen. Meldung: {abgleichFehler}
+                  </p>
+                </>
+              )}
             </div>
           )}
 
