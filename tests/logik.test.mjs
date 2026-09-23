@@ -3967,7 +3967,9 @@ test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den C
 
   // Der Call Tracker zeigt keinen der drei Einstiege mehr.
   const tracker = lies("pages/call-tracker.js");
-  assert.match(tracker, /const mailsErlaubt = emailMarketingAktiv\(org\);/);
+  // Die Regel hängt inzwischen an der Person (migration_180) — die
+  // Zusicherung dazu steht weiter unten.
+  assert.match(tracker, /const mailsErlaubt = darfEmailMarketing\(/);
   const einstiege = tracker.match(/\{mailsErlaubt && <button onClick=\{\(\) => starteEmailKontakt\(/g) || [];
   assert.equal(einstiege.length, 3, "alle drei Wege in den Mail-Ablauf hängen am Schalter");
   const ungesichert = tracker.match(/(?<!\{mailsErlaubt && )<button onClick=\{\(\) => starteEmailKontakt\(/g) || [];
@@ -3984,16 +3986,19 @@ test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den C
   // Nach dem Neuladen stünde man sonst wieder im Formular und liefe beim
   // Absenden in die Sperre des Servers.
   assert.match(tracker, /const MAIL_SCHRITTE = \["emailForm", "mailWeg", "mailForm", "nachfass"\];/);
-  assert.match(tracker, /if \(offen && !\(mailSchritt && !emailMarketingAktiv\(orgRow\)\)\)/);
+  assert.match(tracker, /if \(offen && !\(mailSchritt && !darfEmailMarketing\(orgRow, meineRolle\)\)\)/);
 
   // In der Seitenleiste verschwindet der Punkt.
-  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| emailMarketingAktiv\(org\)/);
+  // Die Navigation hängt an derselben Regel wie alles andere; die
+  // Zusicherung mit der Person steht weiter unten (migration_180).
+  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| darfEmailMarketing\(/);
 
   // Die Seite selbst erklärt, statt eine Maske zu zeigen, die beim
   // Absenden scheitert.
   const seite = lies("pages/email-marketing.js");
-  assert.match(seite, /if \(org && !emailMarketingAktiv\(org\)\) \{/);
-  assert.match(seite, /\{AUS_TEXT\}/);
+  assert.match(seite, /if \(org && !darfEmailMarketing\(org, \{ id: ich/);
+  // Zwei Fälle, zwei Sätze — abgeschaltet oder nicht freigegeben.
+  assert.match(seite, /\{aus \? AUS_TEXT : NICHT_FUER_DICH\}/);
   assert.match(seite, /bleiben erhalten/);
 
   // Der Schalter steht in der Verwaltung und wird auch gespeichert.
@@ -4013,13 +4018,65 @@ test("E-Mail-Marketing lässt sich abschalten — und dann geht auch über den C
   // Absagen, nicht Mails. Ihn auszublenden nähme genau die Arbeit weg,
   // die das Mailen ersetzen soll.
   assert.ok(!/email-marketing/.test(lies("pages/follow-up.js")), "der Follow-up-Reiter hängt nicht am E-Mail-Marketing");
-  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| emailMarketingAktiv\(org\)/);
+  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| darfEmailMarketing\(/);
 
   // Migration und Systemstatus.
   assert.match(lies("supabase/migration_179_email_marketing_schalter.sql"),
     /add column if not exists email_marketing_aktiv boolean not null default true/);
   const { ERWARTUNGEN } = await import("../lib/schemaErwartung.js");
   assert.ok(ERWARTUNGEN.some((e) => e.migration === 179 && e.spalte === "email_marketing_aktiv"));
+
+  // Und wer es sehen darf (migration_180).
+  const { darfEmailMarketing, zugangVon, zugangsPersonen, ZUGANG_ARTEN, NICHT_FUER_DICH } = await import("../lib/emailMarketing.js");
+  const chef = { id: "u1", role: "manager" };
+  const anna = { id: "u2", role: "user" };
+  const ben = { id: "u3", role: "user" };
+  const an = { email_marketing_aktiv: true };
+  assert.deepEqual(ZUGANG_ARTEN.map((z) => z.key), ["alle", "leitung", "auswahl"]);
+  // Standard bleibt "alle" — auch ohne die Spalte.
+  assert.equal(zugangVon({}), "alle");
+  assert.equal(zugangVon({ email_marketing_zugang: "quatsch" }), "alle");
+  assert.equal(darfEmailMarketing(an, anna), true);
+  // Nur die Leitung.
+  const nurLeitung = { ...an, email_marketing_zugang: "leitung" };
+  assert.equal(darfEmailMarketing(nurLeitung, chef), true);
+  assert.equal(darfEmailMarketing(nurLeitung, anna), false);
+  // Ausgewählte Personen — und die Leitung immer, sie legt die Vorlagen an.
+  const auswahl = { ...an, email_marketing_zugang: "auswahl", email_marketing_personen: ["u2"] };
+  assert.equal(darfEmailMarketing(auswahl, anna), true);
+  assert.equal(darfEmailMarketing(auswahl, ben), false);
+  assert.equal(darfEmailMarketing(auswahl, chef), true);
+  // Ist es ganz aus, hilft auch eine Freigabe nicht.
+  assert.equal(darfEmailMarketing({ ...auswahl, email_marketing_aktiv: false }, anna), false);
+  assert.equal(darfEmailMarketing({ email_marketing_aktiv: false }, chef), false);
+  // Eine kaputte Liste ist keine Freigabe.
+  assert.deepEqual(zugangsPersonen({ email_marketing_personen: "u2" }), []);
+  assert.deepEqual(zugangsPersonen({ email_marketing_personen: [null, "u2", 7] }), ["u2"]);
+  // Zwei Fälle, zwei Sätze: "ausgeschaltet" wäre bei einer fehlenden
+  // Freigabe falsch.
+  assert.notEqual(NICHT_FUER_DICH, AUS_TEXT);
+  assert.match(NICHT_FUER_DICH, /nur für bestimmte Personen/);
+
+  // Beide Routen prüfen die PERSON, nicht nur die Organisation — und laden
+  // dafür die Rolle mit. Ohne "role" gälte eine Vertriebsleitung als
+  // normale Person und käme nicht mehr an ihre eigenen Kontakte.
+  const kontaktRoute2 = lies("pages/api/email-kontakt.js");
+  assert.match(kontaktRoute2, /darfEmailMarketing\(orgSchalter, profil\)/);
+  assert.match(kontaktRoute2, /\.select\("id, full_name, role, is_admin, organization_id, is_platform_admin"\)/);
+  assert.match(route, /darfEmailMarketing\(orgSchalter, profil, leitung\)/);
+  assert.match(route, /email_marketing_aktiv, email_marketing_zugang, email_marketing_personen/);
+  // Die Oberfläche hängt an derselben Regel.
+  assert.match(tracker, /const mailsErlaubt = darfEmailMarketing\(org, meinProfil\);/);
+  assert.match(lies("components/Layout.js"), /n\.key !== "email-marketing" \|\| darfEmailMarketing\(org, profile\)/);
+  // Und die Auswahl steht in der Verwaltung.
+  const editor2 = lies("components/OrgEditor.js");
+  assert.match(editor2, /email_marketing_zugang: mailZugang,/);
+  assert.match(editor2, /email_marketing_personen: mailZugang === "auswahl" \? mailPersonen : \[\],/);
+  assert.match(editor2, /Sichtbar für/);
+  // Migration und Systemstatus.
+  assert.match(lies("supabase/migration_180_email_marketing_zugang.sql"),
+    /check \(email_marketing_zugang in \('alle', 'leitung', 'auswahl'\)\)/);
+  assert.ok(ERWARTUNGEN.some((e) => e.migration === 180 && e.spalte === "email_marketing_zugang"));
 });
 
 test("Follow-up: eine Zeile je Fall, nach Dringlichkeit gebündelt", async () => {

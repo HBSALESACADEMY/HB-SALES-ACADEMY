@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import Icon from "../components/Icon";
 import { zeigePapierflieger } from "../lib/papierflieger";
-import { emailMarketingAktiv, AUS_TEXT } from "../lib/emailMarketing";
+import { emailMarketingAktiv, darfEmailMarketing, AUS_TEXT, NICHT_FUER_DICH } from "../lib/emailMarketing";
 import MehrfachAuswahl from "../components/MehrfachAuswahl";
 import MailVorlagen from "../components/MailVorlagen";
 import MailVorschau from "../components/MailVorschau";
@@ -652,17 +652,22 @@ export default function EmailMarketing() {
   // Maske, die beim Absenden scheitert. Die Prüfung steht hier unten, NACH
   // allen Hooks — ein Ausstieg weiter oben würde die Reihenfolge der Hooks
   // zerstören.
-  if (org && !emailMarketingAktiv(org)) {
+  // Zwei verschiedene Fälle, zwei verschiedene Sätze: ganz abgeschaltet
+  // (migration_179) oder eingeschaltet, aber nicht für diese Person
+  // (migration_180). "Ist ausgeschaltet" wäre im zweiten Fall falsch — und
+  // wer es bei Kolleg:innen sieht, hielte die Academy für kaputt.
+  if (org && !darfEmailMarketing(org, { id: ich, role: leitung ? "manager" : "user" }, leitung)) {
+    const aus = !emailMarketingAktiv(org);
     return (
       <Layout>
         <h1 className="text-2xl font-display font-medium brand-text-gradient mb-1">E-Mail Marketing</h1>
         <div className="brand-stripe w-16 mb-4" />
         <div className="card">
-          <p className="text-sm text-textMain mb-2">{AUS_TEXT}</p>
+          <p className="text-sm text-textMain mb-2">{aus ? AUS_TEXT : NICHT_FUER_DICH}</p>
           <p className="text-xs text-textMuted">
-            Eure Kontakte, der Versandverlauf und die Vorlagen bleiben erhalten und sind wieder da,
-            sobald der Schalter wieder an ist. Offene Follow-ups laufen weiter — sie lassen sich
-            auch am Telefon erledigen.
+            {aus
+              ? "Eure Kontakte, der Versandverlauf und die Vorlagen bleiben erhalten und sind wieder da, sobald der Schalter wieder an ist. Offene Follow-ups laufen weiter — sie lassen sich auch am Telefon erledigen."
+              : "Deine offenen Follow-ups stehen weiterhin im Kalender und auf dem Dashboard. Anrufen kannst du die Kontakte jederzeit."}
           </p>
         </div>
       </Layout>

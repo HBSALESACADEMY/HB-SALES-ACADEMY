@@ -1,7 +1,7 @@
 import { requireUser } from "../../lib/supabaseServer";
 import { getAdminSupabase } from "../../lib/supabaseAdmin";
 import { aktiveOrgId } from "../../lib/aktiveOrgServer";
-import { emailMarketingAktiv, AUS_TEXT } from "../../lib/emailMarketing";
+import { emailMarketingAktiv, darfEmailMarketing, AUS_TEXT, NICHT_FUER_DICH } from "../../lib/emailMarketing";
 import { sendeAlarm } from "../../lib/alarm";
 import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emailKontakt";
 import { ganzerName } from "../../lib/marketingVorlage";
@@ -23,7 +23,11 @@ export default async function handler(req, res) {
 
   const admin = getAdminSupabase();
   const { data: profil } = await admin.from("profiles")
-    .select("id, full_name, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
+    // "role" und "is_admin" gehören dazu, seit der Zugang an der
+    // Führungsrolle hängt (migration_180) — ohne sie gälte eine
+    // Vertriebsleitung hier als normale Person und käme nicht mehr an ihre
+    // eigenen Kontakte.
+    .select("id, full_name, role, is_admin, organization_id, is_platform_admin").eq("id", user.id).maybeSingle();
   const orgId = await aktiveOrgId(admin, profil, user.id);
   if (!orgId) return res.status(400).json({ error: "Keine Organisation gefunden." });
 
@@ -34,8 +38,10 @@ export default async function handler(req, res) {
   // weiter finden können.
   if (req.method !== "GET") {
     const { data: orgSchalter } = await admin.from("organizations")
-      .select("email_marketing_aktiv").eq("id", orgId).maybeSingle();
+      .select("email_marketing_aktiv, email_marketing_zugang, email_marketing_personen")
+      .eq("id", orgId).maybeSingle();
     if (!emailMarketingAktiv(orgSchalter)) return res.status(403).json({ error: AUS_TEXT });
+    if (!darfEmailMarketing(orgSchalter, profil)) return res.status(403).json({ error: NICHT_FUER_DICH });
   }
 
   // --- Dublettenprüfung ---

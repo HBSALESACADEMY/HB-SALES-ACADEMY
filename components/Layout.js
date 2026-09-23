@@ -23,7 +23,7 @@ import ProfileModal from "./ProfileModal";
 import WelcomeModal from "./WelcomeModal";
 import TutorialModal from "./TutorialModal";
 import SeitenHinweis from "./SeitenHinweis";
-import { emailMarketingAktiv } from "../lib/emailMarketing";
+import { darfEmailMarketing } from "../lib/emailMarketing";
 
 // Fallback, nur falls migration_4_custom_nav.sql noch nicht ausgeführt wurde.
 const FALLBACK_NAV = [
@@ -857,7 +857,10 @@ export default function Layout({ children, fullBleed }) {
       // verschwindet auch der Punkt in der Seitenleiste. Der Server lehnt
       // den Versand ohnehin ab — ein Link auf eine Seite, die nur noch
       // erklärt, dass sie zu ist, gehört nicht ins Menü.
-      && (n.key !== "email-marketing" || emailMarketingAktiv(org))
+      // Der Punkt verschwindet, wenn das E-Mail-Marketing aus ist — oder
+      // wenn es nur für bestimmte Personen freigegeben ist und diese nicht
+      // dazugehört (migration_180).
+      && (n.key !== "email-marketing" || darfEmailMarketing(org, profile))
     ));
     const byCategory = {};
     visibleItems.forEach((item) => {

@@ -25,7 +25,7 @@ import Zielring from "../components/Zielring";
 import Telefonblock from "../components/Telefonblock";
 import ZaehlerKacheln from "../components/ZaehlerKacheln";
 import { zeigePapierflieger } from "../lib/papierflieger";
-import { emailMarketingAktiv } from "../lib/emailMarketing";
+import { darfEmailMarketing } from "../lib/emailMarketing";
 import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
 import {
   anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX, ranglisteMitEigenem,
@@ -147,12 +147,6 @@ export default function CallTracker() {
   const [mailEntwurf, setMailEntwurf] = useState({ vorlage: "", betreff: "", text: "" });
   const [mailBusy, setMailBusy] = useState(false);
 
-  // Der Schalter aus der Verwaltung (migration_179). Ist er aus, taucht der
-  // ganze Mail-Weg hier nicht auf — der Server lehnt ohnehin ab
-  // (pages/api/marketing-mail.js), und ein Knopf, der in eine Fehlermeldung
-  // führt, ist schlimmer als kein Knopf.
-  const mailsErlaubt = emailMarketingAktiv(org);
-
   // Ein Ort für den Einstieg ins Formular: der Wunsch nach einer E-Mail
   // kann an jeder Stelle des Gesprächs fallen — beim Vorzimmer, beim
   // Entscheider, oder erst wenn man schon nach dem Ablehnungsgrund gefragt
@@ -177,6 +171,16 @@ export default function CallTracker() {
   const [ruecklauf, setRuecklauf] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
+
+  // Darf DIESE Person überhaupt mailen? Ist das E-Mail-Marketing aus oder
+  // nur für bestimmte Personen freigegeben (migration_179, migration_180),
+  // taucht der ganze Mail-Weg hier nicht auf — der Server lehnt ohnehin ab
+  // (pages/api/marketing-mail.js), und ein Knopf, der in eine Fehlermeldung
+  // führt, ist schlimmer als kein Knopf.
+  //
+  // Steht bewusst HIER, unter "meinProfil": Weiter oben wäre es ein Zugriff
+  // auf eine Variable, die es in dieser Zeile noch nicht gibt.
+  const mailsErlaubt = darfEmailMarketing(org, meinProfil);
   // In WELCHER Organisation gerade telefoniert wird — die Ereignisse hängen
   // an der aktiven Organisation, nicht an der Heimat des Kontos.
   const [orgId, setOrgId] = useState(null);
@@ -217,7 +221,7 @@ export default function CallTracker() {
       // Absendernamen raus. Nicht mit einer Lücke, sondern ohne die Zeile —
       // deshalb sah der Text im Vorschaufeld vollständig aus.
       const { data: meineRolle } = await supabase.from("profiles")
-        .select("role, is_admin, is_platform_admin, booking_url, full_name").eq("id", session.user.id).maybeSingle();
+        .select("id, role, is_admin, is_platform_admin, booking_url, full_name").eq("id", session.user.id).maybeSingle();
       setDarfOrgVerwalten(istFuehrungsrolle(meineRolle));
       setMeinProfil(meineRolle);
 
@@ -308,11 +312,12 @@ export default function CallTracker() {
       // Auswertung (siehe lib/callTracker.js).
       const offen = offenerSchritt(prefixJetzt);
       // Ein Schritt aus dem Mail-Ablauf wird nicht wieder aufgenommen, wenn
-      // die Leitung das E-Mail-Marketing inzwischen abgeschaltet hat
-      // (migration_179) — sonst steht man nach dem Neuladen wieder im
-      // Formular und läuft beim Absenden in die Sperre des Servers.
+      // das E-Mail-Marketing inzwischen abgeschaltet ist oder für diese
+      // Person nicht mehr freigegeben (migration_179, migration_180) —
+      // sonst steht man nach dem Neuladen wieder im Formular und läuft beim
+      // Absenden in die Sperre des Servers.
       const mailSchritt = MAIL_SCHRITTE.includes(offen);
-      if (offen && !(mailSchritt && !emailMarketingAktiv(orgRow))) {
+      if (offen && !(mailSchritt && !darfEmailMarketing(orgRow, meineRolle))) {
         setStep(offen);
         setWiederaufgenommen(true);
       }

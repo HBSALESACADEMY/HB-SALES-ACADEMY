@@ -7,7 +7,7 @@ import { gueltigeAdresse, bereinigeAdresse, fremdeZeichen } from "../../lib/emai
 import { alsHtml, fuelleVorlage, werteFuerKontakt, mitSchluss, markeAus } from "../../lib/marketingVorlage";
 import { istHtmlVorlage, fertigeHtmlMail } from "../../lib/htmlMail";
 import { buchungslink, nachverfolgbarerLink } from "../../lib/buchungslink";
-import { emailMarketingAktiv, AUS_TEXT } from "../../lib/emailMarketing";
+import { emailMarketingAktiv, darfEmailMarketing, AUS_TEXT, NICHT_FUER_DICH } from "../../lib/emailMarketing";
 
 // Die Marketing-Mail wirklich verschicken.
 //
@@ -49,8 +49,11 @@ export default async function handler(req, res) {
     // Auch die Probemail an sich selbst ist dann zu, sonst wäre sie das
     // Schlupfloch.
     const { data: orgSchalter } = await admin.from("organizations")
-      .select("email_marketing_aktiv").eq("id", orgId).maybeSingle();
+      .select("email_marketing_aktiv, email_marketing_zugang, email_marketing_personen")
+      .eq("id", orgId).maybeSingle();
     if (!emailMarketingAktiv(orgSchalter)) return res.status(403).json({ error: AUS_TEXT });
+    // Eingeschaltet, aber nicht für jede Person (migration_180).
+    if (!darfEmailMarketing(orgSchalter, profil, leitung)) return res.status(403).json({ error: NICHT_FUER_DICH });
 
     const { data: kontakt } = await admin.from("email_kontakte")
       .select("*").eq("id", kontaktId).eq("organization_id", orgId).maybeSingle();

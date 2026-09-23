@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import MailVorlagen from "./MailVorlagen";
+import MehrfachAuswahl from "./MehrfachAuswahl";
+import { ZUGANG_ARTEN, zugangVon, zugangsPersonen } from "../lib/emailMarketing";
 import { resolveLeitfaden } from "../lib/leitfaden";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
@@ -174,8 +176,28 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [gruppenCode, setGruppenCode] = useState(null);
   const [vorlagen, setVorlagen] = useState(Array.isArray(org.email_vorlagen) ? org.email_vorlagen : []);
   const [absender, setAbsender] = useState(org.email_absender || "");
-  // Der Schalter für das ganze E-Mail-Marketing (migration_179).
+  // Der Schalter für das ganze E-Mail-Marketing (migration_179) und die
+  // Frage, wer es sehen darf (migration_180).
   const [mailsAktiv, setMailsAktiv] = useState(org.email_marketing_aktiv !== false);
+  const [mailZugang, setMailZugang] = useState(zugangVon(org));
+  const [mailPersonen, setMailPersonen] = useState(zugangsPersonen(org));
+  // Die Personen der Organisation — erst laden, wenn sie gebraucht werden.
+  const [mitglieder, setMitglieder] = useState([]);
+
+  useEffect(() => {
+    if (mailZugang !== "auswahl" || mitglieder.length || !org.id) return;
+    let aktiv = true;
+    (async () => {
+      const { data } = await supabase.from("profiles")
+        .select("id, full_name").eq("organization_id", org.id).eq("status", "approved");
+      if (aktiv) {
+        setMitglieder((data || [])
+          .map((m) => ({ id: m.id, name: m.full_name || "Unbenannt" }))
+          .sort((a, b) => a.name.localeCompare(b.name, "de")));
+      }
+    })();
+    return () => { aktiv = false; };
+  }, [mailZugang, mitglieder.length, org.id]);
   // Die Dateien der Organisation, damit eine Vorlage feste Anhänge tragen
   // kann. Hochgeladen werden sie im E-Mail-Marketing — hier nur ausgewählt.
   const [orgAnhaenge, setOrgAnhaenge] = useState([]);
@@ -356,6 +378,10 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
         .map(({ entfernt, ...v }) => v),
       email_absender: absender.trim() || null,
       email_marketing_aktiv: mailsAktiv,
+      email_marketing_zugang: mailZugang,
+      // Nur bei "auswahl" eine Liste — sonst bliebe eine alte Auswahl
+      // stehen und würde beim nächsten Umstellen überraschen.
+      email_marketing_personen: mailZugang === "auswahl" ? mailPersonen : [],
       // 0 heisst ausdrücklich "keine Frist" — deshalb wird die Null hier
       // nicht wie ein leeres Feld behandelt.
       aufnahme_frist_tage: Math.max(0, Math.min(3650, parseInt(aufnahmeFrist, 10) || 0)),
@@ -581,6 +607,48 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           <p className="text-[11px] text-amber mt-2.5 pl-6">
             Offene Follow-ups melden sich weiterhin — sie lassen sich auch am Telefon erledigen.
           </p>
+        )}
+
+        {/* Wer es sehen darf. Ganz abschalten ist oft zu grob: Für manche im
+            Team ist Mailschreiben genau richtig, für andere die Ausrede,
+            nicht zum Telefon zu greifen. */}
+        {mailsAktiv && (
+          <div className="mt-3 pt-3 border-t border-line pl-6">
+            <div className="text-xs text-textMuted mb-1.5">Sichtbar für</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {ZUGANG_ARTEN.map((z) => (
+                <button key={z.key} type="button" onClick={() => setMailZugang(z.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                    mailZugang === z.key
+                      ? "bg-amber text-[var(--org-button-text,#fff)] border-amber"
+                      : "border-line text-textMuted hover:text-textMain"}`}>
+                  {z.label}
+                </button>
+              ))}
+            </div>
+
+            {mailZugang === "auswahl" && (
+              <div className="mt-2.5">
+                <MehrfachAuswahl
+                  eintraege={mitglieder}
+                  ausgewaehlt={mailPersonen}
+                  onChange={setMailPersonen}
+                  alleText="Niemand ausgewählt"
+                />
+                <p className="text-[11px] text-textMuted mt-1.5">
+                  {mailPersonen.length
+                    ? `${mailPersonen.length} ${mailPersonen.length === 1 ? "Person" : "Personen"} freigegeben.`
+                    : "Noch niemand freigegeben — dann sieht es nur die Leitung."}
+                </p>
+              </div>
+            )}
+
+            <p className="text-[11px] text-textMuted mt-2">
+              Die Leitung sieht es immer, solange es eingeschaltet ist: Sie legt die Vorlagen an und
+              trägt die Verantwortung für das, was nach draussen geht. Wer es nicht sehen darf, kann auch
+              über den Call Tracker keine Mail verschicken — geprüft wird auf dem Server, nicht nur am Knopf.
+            </p>
+          </div>
         )}
       </div>
 
