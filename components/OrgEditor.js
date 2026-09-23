@@ -18,6 +18,7 @@ import { DEFAULT_LEAD_FIELDS, RESERVED_FIELD_COLUMNS, resolveCoreRequired } from
 import { DEFAULT_OBJECTION_CATEGORIES } from "../lib/objectionCategories";
 import { getActiveOrgId } from "../lib/activeOrg";
 import { goalMetricGroups } from "../lib/goalMetrics";
+import { schreibeOhneFehlendeSpalten, fehlendeSpaltenText } from "../lib/spaltenFehler";
 
 function rgbToHue(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -183,6 +184,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
   const [mailPersonen, setMailPersonen] = useState(zugangsPersonen(org));
   // Die Personen der Organisation — erst laden, wenn sie gebraucht werden.
   const [mitglieder, setMitglieder] = useState([]);
+  // Spalten, die beim Speichern weggelassen wurden, weil die Datenbank sie
+  // noch nicht kennt.
+  const [fehlendeSpalten, setFehlendeSpalten] = useState([]);
 
   useEffect(() => {
     if (mailZugang !== "auswahl" || mitglieder.length || !org.id) return;
@@ -354,7 +358,9 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       ...(f.type === "text" && f.multiline ? { multiline: true } : {}),
       ...(f.required ? { required: true } : {}),
     }));
-    const { error: err } = await supabase.from("organizations").update({
+    // Was die Datenbank noch nicht kennt, wird weggelassen — sonst legt
+    // eine fehlende Migration die ganze Maske lahm (lib/spaltenFehler.js).
+    const daten = {
       name: name.trim(),
       slug: slugify(slug.trim()),
       logo_url: logoUrl.trim() || null,
@@ -396,12 +402,19 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
       objection_categories: useCustomCategories && cleanCategories.length ? cleanCategories : null,
       lead_field_config: useCustomLeadFields && cleanLeadFields.length ? cleanLeadFields : null,
       lead_core_required: coreRequired,
-    }).eq("id", org.id);
+    };
+    const { error: err, weggelassen } = await schreibeOhneFehlendeSpalten(
+      daten,
+      (werte) => supabase.from("organizations").update(werte).eq("id", org.id),
+    );
     setSaving(false);
     if (err) {
       setError(err.code === "23505" ? "Dieser Firmencode ist schon vergeben." : err.message);
       return;
     }
+    // Gespeichert, aber nicht vollständig: Das muss dastehen, sonst hält
+    // die Leitung eine Einstellung für gesetzt, die nie ankam.
+    setFehlendeSpalten(weggelassen);
     setSaved(true);
     if (isOwnOrg) { setTimeout(() => window.location.reload(), 900); }
     else { onSaved?.(); setTimeout(() => setSaved(false), 1500); }
@@ -1037,6 +1050,13 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           wird immer das ganze Formular, nicht nur der sichtbare Bereich. */}
       <div className="mt-5 pt-5 border-t border-line">
         {error && <p className="text-coral text-xs mb-3">{error}</p>}
+        {/* Gespeichert, aber nicht vollständig: Ohne diesen Hinweis hielte
+            die Leitung eine Einstellung für gesetzt, die nie angekommen
+            ist. Mit der Nummer der Migration, denn "eine Spalte fehlt"
+            kann niemand beheben. */}
+        {fehlendeSpalten.length > 0 && (
+          <p className="text-amber text-xs mb-3">{fehlendeSpaltenText("organizations", fehlendeSpalten)}</p>
+        )}
         <p className="text-[11px] text-textMuted mb-2">Speichern übernimmt die Änderungen aus allen Bereichen.</p>
       <div className="flex items-center gap-2">
         <button disabled={saving || uploadingLogo} onClick={save} className="btn disabled:opacity-40">

@@ -4563,6 +4563,66 @@ test("Eine falsch gehende Geräteuhr wird erklärt, nicht als Störung gemeldet"
   assert.ok(stelle > 0 && melden > stelle, "erst prüfen, dann melden");
 });
 
+test("Eine fehlende Spalte legt nicht die ganze Maske lahm", async () => {
+  const m = await import("../lib/spaltenFehler.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  // Der Fall aus dem Betrieb: Nach der neuen Einstellung liess sich die
+  // Organisation überhaupt nicht mehr speichern — nicht nur die neue
+  // Einstellung, sondern auch Firmenname, Farben und Vorlagen.
+  assert.equal(
+    m.fehlendeSpalte({ message: "Could not find the 'email_marketing_personen' column of 'organizations' in the schema cache" }),
+    "email_marketing_personen",
+  );
+  assert.equal(m.fehlendeSpalte({ code: "42703", message: "column email_marketing_zugang does not exist" }), "email_marketing_zugang");
+  // Ein anderer Fehler ist keine fehlende Spalte und muss oben ankommen.
+  assert.equal(m.fehlendeSpalte({ code: "23505", message: "duplicate key value" }), null);
+  assert.equal(m.fehlendeSpalte(null), null);
+
+  // Mehrere fehlende Spalten hintereinander: jede wird weggelassen, der
+  // Rest wird gespeichert.
+  let versuche = 0;
+  const ergebnis = await m.schreibeOhneFehlendeSpalten(
+    { name: "Firma", email_marketing_personen: [], email_marketing_zugang: "alle" },
+    async (daten) => {
+      versuche += 1;
+      if ("email_marketing_personen" in daten) {
+        return { error: { message: "Could not find the 'email_marketing_personen' column of 'organizations' in the schema cache" } };
+      }
+      if ("email_marketing_zugang" in daten) {
+        return { error: { message: "Could not find the 'email_marketing_zugang' column of 'organizations' in the schema cache" } };
+      }
+      return { error: null };
+    },
+  );
+  assert.equal(versuche, 3);
+  assert.deepEqual(ergebnis.weggelassen, ["email_marketing_personen", "email_marketing_zugang"]);
+  assert.equal(ergebnis.error, null);
+
+  // Ein echter Fehler wird NICHT verschluckt.
+  const echt = await m.schreibeOhneFehlendeSpalten({ slug: "x" }, async () => ({ error: { code: "23505", message: "duplicate key value" } }));
+  assert.equal(echt.error.code, "23505");
+  assert.deepEqual(echt.weggelassen, []);
+  // Und eine Endlosschleife gibt es nicht, wenn immer dieselbe Spalte
+  // gemeldet wird, die gar nicht mehr in den Daten steht.
+  const komisch = await m.schreibeOhneFehlendeSpalten({ a: 1 }, async () => ({ error: { message: "Could not find the 'b' column of 'organizations' in the schema cache" } }));
+  assert.ok(komisch.error, "eine Meldung über eine Spalte, die nicht geschickt wurde, bleibt ein Fehler");
+
+  // Der Hinweis nennt die Migration — "eine Spalte fehlt" kann niemand
+  // beheben, "migration_180 fehlt" schon.
+  const text = m.fehlendeSpaltenText("organizations", ["email_marketing_zugang"]);
+  assert.match(text, /migration_180/);
+  assert.match(text, /^Gespeichert — bis auf/);
+  assert.equal(m.fehlendeSpaltenText("organizations", []), null);
+  assert.equal(m.migrationFuer("organizations", "email_marketing_personen"), 180);
+
+  // Die Maske benutzt den Rückfall und sagt, was nicht ankam.
+  const editor = lies("components/OrgEditor.js");
+  assert.match(editor, /const \{ error: err, weggelassen \} = await schreibeOhneFehlendeSpalten\(/);
+  assert.match(editor, /\{fehlendeSpaltenText\("organizations", fehlendeSpalten\)\}/);
+  assert.match(editor, /setFehlendeSpalten\(weggelassen\);/);
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));
