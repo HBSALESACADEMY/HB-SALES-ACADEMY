@@ -4208,6 +4208,53 @@ test("Der Aufklapper misst nur beim Wechsel — sonst zuckt er endlos", async ()
   assert.match(auf, /requestAnimationFrame\(\(\) => setHoehe\(0\)\)/);
 });
 
+test("Zeiträume vergleichen: zwei Kurven Tag über Tag, ohne erfundene Tage", async () => {
+  const { vergleichsKurven } = await import("../lib/vergleich.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const reihe = (werte, ab = 1) => werte.map((wert, i) => ({ tag: `2026-09-${String(ab + i).padStart(2, "0")}`, wert }));
+
+  // Gleich lange Zeiträume: zwei Reihen, jede vollständig.
+  const gleich = vergleichsKurven(reihe([10, 20, 30], 8), reihe([5, 6, 7], 1), { name: "Woche davor" });
+  assert.deepEqual(gleich.reihen.map((r) => r.label), ["Dieser Zeitraum", "Woche davor"]);
+  assert.deepEqual(gleich.reihen[0].werte.map((p) => p.wert), [10, 20, 30]);
+  assert.deepEqual(gleich.reihen[1].werte.map((p) => p.wert), [5, 6, 7]);
+  assert.equal(gleich.tage, 3);
+  assert.equal(gleich.gekuerzt, false);
+  // Tag über Tag: Die Daten der beiden Reihen sind verschieden, der Platz
+  // in der Reihe ist derselbe.
+  assert.equal(gleich.reihen[0].werte[0].tag, "2026-09-08");
+  assert.equal(gleich.reihen[1].werte[0].tag, "2026-09-01");
+
+  // Unterschiedlich lang: nur die gemeinsamen Tage, und das wird gesagt.
+  // Aufgefüllt wird NICHT — Nullen sähen aus wie "nicht telefoniert".
+  const schief = vergleichsKurven(reihe([10, 20, 30, 40], 8), reihe([5, 6], 1));
+  assert.equal(schief.tage, 2);
+  assert.equal(schief.gekuerzt, true);
+  assert.deepEqual(schief.reihen.map((r) => r.werte.length), [2, 2]);
+
+  // Ohne Vergleichszeitraum bleibt die eigene Kurve — nicht plötzlich leer.
+  const allein = vergleichsKurven(reihe([1, 2, 3], 8), []);
+  assert.equal(allein.reihen.length, 1);
+  assert.equal(allein.gekuerzt, false);
+  // Ohne alles gibt es nichts zu zeichnen.
+  assert.deepEqual(vergleichsKurven([], []), { reihen: [], tage: 0, gekuerzt: false });
+  assert.deepEqual(vergleichsKurven(null, null).reihen, []);
+
+  // Die Karte in der Auswertung: eine Kennzahl zur Zeit, sonst wären es
+  // zehn Linien in einem Bild.
+  const seite = lies("pages/auswertung.js");
+  assert.match(seite, /const \[kurvenFeld, setKurvenFeld\] = useState\("anwahlen"\);/);
+  assert.match(seite, /titel="Zeiträume im Verlauf"/);
+  assert.match(seite, /vergleichsKurven\(/);
+  // Erst zeigen, wenn es wirklich zwei Kurven sind.
+  assert.match(seite, /\{vorZeitraum && vergleichsBild\.reihen\.length > 1 && \(/);
+  // Balken und Kurve zeigen dieselben Kennzahlen — eine Liste für beide.
+  assert.match(seite, /const VERGLEICHS_FELDER = \[/);
+  assert.match(seite, /felder=\{VERGLEICHS_FELDER\}/);
+  // Und es steht dabei, wessen Datum auf der Achse steht.
+  assert.match(seite, /Tag 1 liegt auf Tag 1/);
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));

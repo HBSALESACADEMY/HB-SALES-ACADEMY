@@ -20,7 +20,7 @@ import { supabase } from "../lib/supabaseClient";
 import { apiGet } from "../lib/apiClient";
 import { istFuehrungsrolle } from "../lib/rollen";
 import { ZEITRAEUME, zeitraumGrenzen, quartalsName } from "../lib/zeitraum";
-import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidung, differenz } from "../lib/vergleich";
+import { VERGLEICHS_ARTEN, vergleichsZeitraum, vergleichsArtName, ueberschneidung, differenz, vergleichsKurven } from "../lib/vergleich";
 import { berlinHeute } from "../lib/woche";
 import { berechneQuoten, quotenText, QUOTEN_SPALTEN } from "../lib/quoten";
 import {
@@ -199,6 +199,17 @@ export default function AuswertungSeite() {
   );
 }
 
+// Die Kennzahlen, die sich zwischen zwei Zeiträumen vergleichen lassen —
+// einmal als Balkenpaare (Summe) und einmal als Kurven (Verlauf). An einer
+// Stelle, damit beide Darstellungen dasselbe zeigen.
+const VERGLEICHS_FELDER = [
+  { key: "anwahlen", label: "Anwahlen" },
+  { key: "erreicht", label: "Ans Telefon gegangen" },
+  { key: "nicht", label: "Nicht erreicht", wenigerIstBesser: true },
+  { key: "termin", label: "Termine" },
+  { key: "negativ", label: "Negativ verlaufen", wenigerIstBesser: true },
+];
+
 function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
   const { personen = [], teams = [], zeilen = [], kategorien = [], ereignisse = [], termineRoh = [] } = daten;
 
@@ -237,10 +248,24 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
 
   // Einmal je Datenstand — die Kurve rechnet sonst bei jedem Neuzeichnen
   // der Seite alle Pfade neu.
+  // Welche Kennzahl die Vergleichskurve zeigt. Alle fünf gleichzeitig wären
+  // zehn Linien in einem Bild — das liest niemand.
+  const [kurvenFeld, setKurvenFeld] = useState("anwahlen");
+
   const verlaufsReihen = useMemo(() => [
     { label: "Anwahlen", farbe: feldFarbe("anwahlen"), werte: tagesReihe(zeilen, "anwahlen", daten.zeitraum?.von, daten.zeitraum?.bis) },
     { label: "Termine", art: "balken", farbe: feldFarbe("termin"), werte: tagesReihe(zeilen, "termin", daten.zeitraum?.von, daten.zeitraum?.bis) },
   ], [zeilen, daten.zeitraum?.von, daten.zeitraum?.bis]);
+
+  // Zwei Zeiträume als Kurven übereinander, Tag über Tag.
+  const vergleichsBild = useMemo(() => {
+    const feld = VERGLEICHS_FELDER.find((f) => f.key === kurvenFeld) || VERGLEICHS_FELDER[0];
+    return vergleichsKurven(
+      tagesReihe(zeilen, feld.key, daten.zeitraum?.von, daten.zeitraum?.bis),
+      tagesReihe(vorZeitraum?.zeilen || [], feld.key, vorZeitraum?.zeitraum?.von, vorZeitraum?.zeitraum?.bis),
+      { name: "Davor", farbeJetzt: feldFarbe(feld.key), farbeDavor: "#7C869C" },
+    );
+  }, [zeilen, vorZeitraum, kurvenFeld, daten.zeitraum?.von, daten.zeitraum?.bis]);
 
   const gruendeGesamt = summiereGruende(zeilen);
   const gruende = kategorien.map((k) => ({
@@ -524,13 +549,7 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
 
       {vorZeitraum && (
         <VergleichsDiagramm
-          felder={[
-            { key: "anwahlen", label: "Anwahlen" },
-            { key: "erreicht", label: "Ans Telefon gegangen" },
-            { key: "nicht", label: "Nicht erreicht", wenigerIstBesser: true },
-            { key: "termin", label: "Termine" },
-            { key: "negativ", label: "Negativ verlaufen", wenigerIstBesser: true },
-          ]}
+          felder={VERGLEICHS_FELDER}
           jetzt={gesamt}
           davor={gesamtVorher}
           farbe={feldFarbe}
@@ -540,6 +559,34 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
             ? `Achtung: ${ueberlappung} ${ueberlappung === 1 ? "Tag steckt" : "Tage stecken"} in beiden Zeiträumen — die Veränderung fällt dadurch kleiner aus.`
             : null}
         />
+      )}
+
+      {/* Dieselben zwei Zeiträume, aber als Verlauf statt als Summe.
+          Zwei Wochen mit derselben Summe können völlig verschieden
+          gelaufen sein — und das ist die Frage, bei der man etwas ändern
+          kann. */}
+      {vorZeitraum && vergleichsBild.reihen.length > 1 && (
+        <div className="card mb-4">
+          <KartenKopf
+            titel="Zeiträume im Verlauf"
+            zeitraum={`Tag für Tag, gegenüber ${vergleichName}`}
+          >
+            <FilterAuswahl
+              optionen={VERGLEICHS_FELDER.map((f) => ({ wert: f.key, label: f.label }))}
+              wert={kurvenFeld}
+              onChange={setKurvenFeld}
+              breite="w-52"
+            />
+          </KartenKopf>
+          <Kurve
+            reihen={vergleichsBild.reihen}
+            leerText="In beiden Zeiträumen wurde nichts erfasst."
+            erklaerung={`Tag 1 liegt auf Tag 1: Die frühere Linie ist über die jetzige gelegt, das Datum auf der Achse gehört zum jetzigen Zeitraum.${
+              vergleichsBild.gekuerzt
+                ? ` Die Zeiträume sind unterschiedlich lang — gezeichnet sind die ersten ${vergleichsBild.tage} Tage beider.`
+                : ""}`}
+          />
+        </div>
       )}
 
       <WochentagAnalyse zeilen={zeilen} titel="Wochentage: wann ist die Entscheidung erreichbar?" />
