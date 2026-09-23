@@ -4146,6 +4146,37 @@ test("Der Telefonblock übersteht ein Neuladen, und die Anwahlen holen sich nach
   // Nicht über Mitternacht — dafür gibt es den Tageswechsel.
   assert.match(tracker, /if \(tag !== angezeigterTag\.current\) return;/);
 
+  // Die Tagesrangliste: die eigene Zeile kommt aus dem LAUFENDEN Zähler.
+  const { ranglisteMitEigenem } = await import("../lib/anwahlSpiel.js");
+  const vomServer = [
+    { id: "a", name: "Hussein", ich: false, anwahlen: 16, termin: 0 },
+    { id: "b", name: "Du", ich: true, anwahlen: 13, termin: 0 },
+    { id: "c", name: "Ernestine", ich: false, anwahlen: 13, termin: 1 },
+  ];
+  const jetzt = ranglisteMitEigenem(vomServer, { anwahlen: 21, termin: 2 });
+  // Der eigene Wert ist der aus dem Zähler …
+  assert.equal(jetzt.find((p) => p.ich).anwahlen, 21);
+  assert.equal(jetzt.find((p) => p.ich).termin, 2);
+  // … und damit steht man vorne, nicht mehr auf Platz drei.
+  assert.deepEqual(jetzt.map((p) => p.name), ["Du", "Hussein", "Ernestine"]);
+  // Die Zahlen der anderen bleiben unangetastet.
+  assert.equal(jetzt.find((p) => p.name === "Hussein").anwahlen, 16);
+  // Ein Abgleich, der gerade unterwegs ist, lässt die Zahl nicht
+  // zurückspringen: es gilt das Maximum.
+  assert.equal(ranglisteMitEigenem(
+    [{ id: "b", ich: true, anwahlen: 30, termin: 0 }], { anwahlen: 25 },
+  )[0].anwahlen, 30);
+  // Noch nicht geladen bleibt noch nicht geladen — keine leere Liste, die
+  // aussieht wie "niemand da".
+  assert.equal(ranglisteMitEigenem(null, { anwahlen: 5 }), null);
+
+  // Die Ansicht nimmt die überschriebene Liste, nicht die vom Server.
+  assert.match(tracker, /const ranglisteJetzt = useMemo\(\n\s+\(\) => ranglisteMitEigenem\(rangliste, todayCounts\),/);
+  assert.match(tracker, /\{\(ranglisteJetzt \|\| \[\]\)\.slice\(0, 5\)\.map/);
+  assert.ok(!/\{\(rangliste \|\| \[\]\)\./.test(tracker), "keine Stelle zeigt mehr den Stand von vorhin");
+  // Und die Zahlen der anderen holt der Abgleich mit nach.
+  assert.match(tracker, /const antwort = await apiGet\("\/api\/tagesrangliste"\);\n\s+setRangliste\(antwort\.liste \|\| \[\]\);/);
+
   // Die Regel selbst: das Maximum je Zähler, eine jüngere Korrektur gewinnt.
   const { wasGiltJetzt } = await import("../lib/callTracker.js");
   const lokal = { counts: { anwahlen: 12, termin: 1 }, reasons: {}, gespeichert_at: "2026-09-23T10:00:00Z" };

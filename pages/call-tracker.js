@@ -26,7 +26,9 @@ import Telefonblock from "../components/Telefonblock";
 import { zeigePapierflieger } from "../lib/papierflieger";
 import { emailMarketingAktiv } from "../lib/emailMarketing";
 import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
-import { anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX } from "../lib/anwahlSpiel";
+import {
+  anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX, ranglisteMitEigenem,
+} from "../lib/anwahlSpiel";
 import { aendereGeprueft } from "../lib/loeschen";
 import Kurve from "../components/Kurve";
 import { tagesReihe } from "../lib/kurve";
@@ -434,6 +436,21 @@ export default function CallTracker() {
     syncTimer.current = setTimeout(sendeZahlen, 900);
   }
 
+  // Die Rangliste mit dem LAUFENDEN Zähler überschreiben.
+  //
+  // Vom Server kommt der Stand, der dort gespeichert ist — der ist schon
+  // beim nächsten Klick veraltet. Vorher stand "Du 21", während der Zähler
+  // oben längst 25 zeigte; genau das sah nach einem Fehler aus. Die eigene
+  // Zeile kommt deshalb aus dem Zähler, und die Liste wird danach neu
+  // sortiert, sonst stimmt die Reihenfolge nicht mehr zum eigenen Wert.
+  //
+  // Das Maximum aus beidem: Ein Abgleich, der gerade unterwegs ist, soll
+  // die Zahl nicht kurz zurückspringen lassen.
+  const ranglisteJetzt = useMemo(
+    () => ranglisteMitEigenem(rangliste, todayCounts),
+    [rangliste, todayCounts],
+  );
+
   // Den heutigen Stand mit dem Server abgleichen — wiederholbar.
   //
   // Dasselbe Zusammenführen wie beim Öffnen der Seite (wasGiltJetzt): je
@@ -467,6 +484,15 @@ export default function CallTracker() {
       // Ein stiller Abgleich darf nicht mit einer roten Meldung dazwischen
       // platzen — aber stumm bleiben darf er auch nicht.
       meldeStoerung("Call Tracker Abgleich im Hintergrund", e?.message || String(e));
+    }
+
+    // Und die Zahlen der anderen: Die eigene Zeile ist durch den Zähler
+    // ohnehin aktuell, für die Kolleg:innen braucht es den Server.
+    try {
+      const antwort = await apiGet("/api/tagesrangliste");
+      setRangliste(antwort.liste || []);
+    } catch (e) {
+      meldeStoerung("Call Tracker Tagesrangliste", e?.message || String(e));
     }
   }, [userId, prefix, reasons]);
 
@@ -1478,14 +1504,14 @@ export default function CallTracker() {
                 <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} darfTesten={darfOrgVerwalten} />
               </div>
 
-              {(rangliste || []).length > 1 && (
+              {(ranglisteJetzt || []).length > 1 && (
                 <div className="pt-3 mt-3 border-t border-line">
                   <button onClick={() => setTeamOffen((o) => !o)} className="btn-ghost text-xs">
                     <Icon name="users" size={12} /> Heute im Team {teamOffen ? "ausblenden" : "anzeigen"}
                   </button>
                   <Aufklapper offen={teamOffen}>
                     <div className="flex flex-col gap-1 mt-3">
-                      {(rangliste || []).slice(0, 5).map((p, i) => (
+                      {(ranglisteJetzt || []).slice(0, 5).map((p, i) => (
                         <div key={p.id} className={`flex items-center gap-2 text-xs ${p.ich ? "text-textMain" : "text-textMuted"}`}>
                           <span className="w-4 text-right zahl">{i + 1}.</span>
                           <span className="flex-1 truncate">{p.ich ? "Du" : p.name}</span>
