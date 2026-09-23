@@ -22,7 +22,18 @@ einfach ignorieren.
 
 Der Ordner `archive/` enthält `schema.sql` und `migration_2` bis
 `migration_11` — die einzigen SQL-Dateien, die je im Git-Verlauf dieses
-Repos existierten. Sie decken nur einen Bruchteil der echten Datenbank ab:
+Repos existierten — sowie `migration_12` bis `migration_37` aus der ALTEN
+Nummernreihe, nachgetragen am 23.09.2026.
+
+Achtung bei diesen nachgetragenen Dateien: Ihre Nummern kollidieren mit den
+aktuellen. `migration_20_call_stats.sql` im Archiv hat nichts mit
+`migration_20_global_friend_search.sql` im Hauptordner zu tun — es sind zwei
+verschiedene Reihen. Sie lagen nur in einer Kopie des Projekts auf dem
+Rechner (`hb-academy 4`, Stand 28.07.2026), nirgends im Git-Verlauf, und
+wären mit dem Löschen dieser Kopie verschwunden. Ihr Ergebnis steckt
+ohnehin in `schema_v2.sql`, das am selben Tag aus der echten Datenbank
+gelesen wurde; erhalten bleiben sie für die Frage, WARUM etwas so gebaut
+wurde. Sie decken nur einen Bruchteil der echten Datenbank ab:
 **13 Tabellen** (`blocks`, `call_log_days`, `chat_group_members`,
 `chat_groups`, `conversation_reads`, `login_attempts`, `login_events`,
 `mentor_pairs`, `page_views`, `scripts`, `team_goals`, `team_requests`,
