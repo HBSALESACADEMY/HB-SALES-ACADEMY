@@ -4170,6 +4170,18 @@ test("Das Wappen steht auf dem Login — freigestellt, und im hellen Theme auf d
 
   // Das Tab-Symbol: ein Wappen bleibt bei 16 Pixeln erkennbar.
   assert.match(lies("pages/_document.js"), /<link rel="icon" href="\/logo-wappen-64\.png" type="image\/png" \/>/);
+
+  // Das Vorschaubild beim Teilen zeigt ebenfalls das Wappen.
+  const dokument = lies("pages/_document.js");
+  assert.match(dokument, /const VORSCHAU_BILD = `\$\{APP_URL\}\/og-bild-2\.jpg`;/);
+  assert.match(dokument, /<meta property="og:image:type" content="image\/jpeg" \/>/);
+  // Der Dateiname trägt die Nummer, nicht ein Anhängsel: WhatsApp merkt
+  // sich Vorschaubilder lange und zählt "?v=2" nicht als neues Bild.
+  assert.ok(!/og-bild\.png\?v=/.test(dokument), "kein Anhängsel zur Versionierung");
+  assert.ok(groesse("public/og-bild-2.jpg") > 20000, "das Vorschaubild liegt bei");
+  // Und es bleibt leicht: Eine zu schwere Vorschau zeigen manche Dienste
+  // gar nicht.
+  assert.ok(groesse("public/og-bild-2.jpg") < 300000, "unter 300 KB");
 });
 
 test("Der Telefonblock übersteht ein Neuladen, und die Anwahlen holen sich nach", async () => {

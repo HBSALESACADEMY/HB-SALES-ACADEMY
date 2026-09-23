@@ -377,15 +377,31 @@ test("Ein geteilter Link zeigt das Logo der Academy", () => {
   assert.match(dokument, /property="og:title" content=\{VORSCHAU_TITEL\}/);
   assert.match(dokument, /VORSCHAU_TITEL = "HB Sales Academy"/);
   // WhatsApp lädt nur vollständige Adressen.
-  assert.match(dokument, /const VORSCHAU_BILD = `\$\{APP_URL\}\/og-bild\.png/);
+  assert.match(dokument, /const VORSCHAU_BILD = `\$\{APP_URL\}\/og-bild-2\.jpg`/);
   assert.match(dokument, /NEXT_PUBLIC_APP_URL/);
 
-  // Das Bild selbst: PNG in 1200 × 630, klein genug für WhatsApp (< 300 KB).
-  const bild = readFileSync(new URL("../public/og-bild.png", import.meta.url));
-  assert.equal(bild.toString("ascii", 1, 4), "PNG");
-  assert.equal(bild.readUInt32BE(16), 1200);
-  assert.equal(bild.readUInt32BE(20), 630);
-  assert.ok(bild.length < 300 * 1024);
+  // Das Bild selbst: JPEG in 1200 × 630, klein genug für WhatsApp
+  // (< 300 KB). Als JPEG, weil dasselbe Bild als PNG 450 KB wog — die
+  // weichen Farbverläufe im Hintergrund sind für PNG das Schlechteste,
+  // was man ihm geben kann.
+  const bild = readFileSync(new URL("../public/og-bild-2.jpg", import.meta.url));
+  assert.equal(bild.readUInt16BE(0), 0xFFD8, "JPEG beginnt mit FFD8");
+  assert.ok(bild.length < 300 * 1024, "unter 300 KB");
+  // Die Grösse steht im ersten SOF-Block. Sie zu prüfen ist wichtiger als
+  // sie zu behaupten: Ein Vorschaubild im falschen Format schneidet
+  // WhatsApp einfach zu.
+  let i = 2;
+  let masse = null;
+  while (i < bild.length - 9 && !masse) {
+    if (bild[i] !== 0xFF) { i += 1; continue; }
+    const art = bild[i + 1];
+    if (art >= 0xC0 && art <= 0xCF && art !== 0xC4 && art !== 0xC8 && art !== 0xCC) {
+      masse = { hoehe: bild.readUInt16BE(i + 5), breite: bild.readUInt16BE(i + 7) };
+      break;
+    }
+    i += 2 + bild.readUInt16BE(i + 2);
+  }
+  assert.deepEqual(masse, { breite: 1200, hoehe: 630 });
 });
 
 test("Ein liegen gebliebenes Rollenspiel wird im Morgenlauf gelöscht", () => {

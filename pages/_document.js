@@ -14,8 +14,15 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL
 const VORSCHAU_TITEL = "HB Sales Academy";
 const VORSCHAU_TEXT = "Die Trainings- und Vertriebsplattform für dein Team: telefonieren, Termine führen, nachfassen, besser werden.";
 // Der Dateiname trägt eine Nummer: WhatsApp merkt sich Vorschaubilder
-// lange. Ein neues Bild braucht einen neuen Namen, sonst sieht es niemand.
-const VORSCHAU_BILD = `${APP_URL}/og-bild.png?v=1`;
+// lange — bei manchen Diensten wochenlang, und ein Anhängsel wie "?v=2"
+// zählt dabei nicht als neues Bild. Ein neues Bild braucht deshalb einen
+// neuen Dateinamen.
+//
+// Als JPEG statt PNG: Derselbe Inhalt wiegt 88 KB statt 450 KB. Die
+// weichen Farbverläufe im Hintergrund sind für PNG das Schlechteste, was
+// man ihm geben kann — und eine Vorschau, die zu schwer ist, zeigen
+// manche Dienste gar nicht.
+const VORSCHAU_BILD = `${APP_URL}/og-bild-2.jpg`;
 
 export default function Document() {
   return (
@@ -36,10 +43,10 @@ export default function Document() {
         {APP_URL && <meta property="og:url" content={APP_URL} />}
         {APP_URL && <meta property="og:image" content={VORSCHAU_BILD} />}
         {APP_URL && <meta property="og:image:secure_url" content={VORSCHAU_BILD} />}
-        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:type" content="image/jpeg" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="Logo der HB Sales Academy" />
+        <meta property="og:image:alt" content="Das Wappen der HB Sales Academy mit dem Untertitel: die Trainings- und Vertriebsplattform für B2B-Vertriebsteams" />
         <meta property="og:locale" content="de_DE" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={VORSCHAU_TITEL} />
