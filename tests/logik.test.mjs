@@ -4186,6 +4186,28 @@ test("Der Telefonblock übersteht ein Neuladen, und die Anwahlen holen sich nach
   assert.equal(zusammen.counts.termin, 1, "und was hier mehr ist, bleibt stehen");
 });
 
+test("Der Aufklapper misst nur beim Wechsel — sonst zuckt er endlos", async () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const auf = lies("components/Aufklapper.js");
+
+  // Der Fehler, der hier steckte: Der Effekt hängt an "children", und die
+  // sind bei jedem Rendern ein neues Element. Messen setzte die Höhe, das
+  // Setzen löste ein Rendern aus, das Rendern wieder das Messen — im
+  // Viertelsekundentakt, endlos. Im Call Tracker sah man es, sobald sich
+  // eine Zahl in der offenen Teamliste änderte: Die Höhe sprang zwischen
+  // Pixelwert und "auto", der Inhalt wurde abwechselnd abgeschnitten.
+  assert.match(auf, /const warOffen = useRef\(offen\);/);
+  assert.match(auf, /const wechsel = warOffen\.current !== offen;\n\s+warOffen\.current = offen;/);
+  // Schon offen und nur der Inhalt hat sich geändert: nichts messen.
+  assert.match(auf, /if \(!wechsel\) return undefined;\n\s+setHoehe\(el\.scrollHeight\);/);
+  // Und zu bleibt zu, ohne erneutes Messen.
+  assert.match(auf, /if \(!wechsel && hoehe === 0\) return undefined;/);
+  // Die Bewegung selbst bleibt: von der gemessenen Höhe nach "auto"
+  // beziehungsweise nach 0.
+  assert.match(auf, /const t = setTimeout\(\(\) => setHoehe\("auto"\), 260\);/);
+  assert.match(auf, /requestAnimationFrame\(\(\) => setHoehe\(0\)\)/);
+});
+
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {
   const { alleZeilen } = await import("../lib/alleZeilen.js");
   const bestand = Array.from({ length: 2345 }, (_, i) => ({ id: i }));
