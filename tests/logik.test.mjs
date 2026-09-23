@@ -4182,7 +4182,8 @@ test("Der Telefonblock übersteht ein Neuladen, und die Anwahlen holen sich nach
   assert.match(block, /localStorage\.getItem\(`\$\{speicherSchluessel\}:laufend`\)/);
   assert.match(block, /const gelaufen = Math\.max\(0, Math\.round\(\(Date\.now\(\) - Number\(gemerkt\.seit\)\) \/ 1000\)\)/);
   // Beim Beenden ist der Eintrag weg — sonst käme der Block morgen wieder.
-  assert.match(block, /function beende\(\) \{\n\s+try \{ localStorage\.removeItem\(`\$\{speicherSchluessel\}:laufend`\)/);
+  // Beim Beenden ist der gemerkte Block weg — sonst käme er morgen wieder.
+  assert.match(block, /function beende\(\) \{[\s\S]{0,200}localStorage\.removeItem\(`\$\{speicherSchluessel\}:laufend`\)/);
   // Ein längst abgelaufener Block wird NICHT wieder geöffnet.
   assert.match(block, /if \(stand\.vorbei\) \{\n\s+localStorage\.removeItem\(`\$\{speicherSchluessel\}:laufend`\);/);
   // Und die Belohnung kommt auch über ein Neuladen hinweg nur einmal.
@@ -4355,6 +4356,91 @@ test("Der Call Tracker ist kompakt: zwei Spalten auf dem Handy, Trefferflächen 
   // solange die Zahl auf null steht. Eine vorhandene Zahl wird nicht
   // versteckt.
   assert.match(tracker, /f\.key !== "email" \|\| mailsErlaubt \|\| \(todayCounts\.email \|\| 0\) > 0/);
+});
+
+test("Telefonblöcke werden aufbewahrt — mit Dauer, Anwahlen und dem, was geplant war", async () => {
+  const { blockZeile, blockBilanz } = await import("../lib/telefonblock.js");
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+
+  const zeile = blockZeile({
+    userId: "u1", orgId: "o1",
+    laufend: { minuten: 25, seit: Date.parse("2026-09-23T10:00:00Z"), start: 12 },
+    ergebnis: { anwahlen: 18, minuten: 27 },
+    jetzt: new Date("2026-09-23T10:27:00Z"),
+  });
+  assert.equal(zeile.user_id, "u1");
+  assert.equal(zeile.organization_id, "o1");
+  assert.equal(zeile.gestartet_at, "2026-09-23T10:00:00.000Z");
+  assert.equal(zeile.beendet_at, "2026-09-23T10:27:00.000Z");
+  assert.equal(zeile.anwahlen, 18);
+  // Geplant UND gelaufen: Der Unterschied ist die interessante Zahl.
+  assert.equal(zeile.ziel_minuten, 25);
+  assert.equal(zeile.minuten, 27);
+  assert.equal(zeile.ziel_erreicht, true);
+  // Vorzeitig beendet: dieselbe Zeile, nur ohne erreichtes Ziel.
+  const kurz = blockZeile({
+    userId: "u1", laufend: { minuten: 25, seit: Date.parse("2026-09-23T12:00:00Z") },
+    ergebnis: { anwahlen: 3, minuten: 6 }, jetzt: new Date("2026-09-23T12:06:00Z"),
+  });
+  assert.equal(kurz.ziel_erreicht, false);
+  assert.equal(kurz.organization_id, null);
+  // Ohne Person oder ohne Start gibt es nichts zu speichern.
+  assert.equal(blockZeile({ laufend: { minuten: 5, seit: 1 }, ergebnis: { anwahlen: 1 } }), null);
+  assert.equal(blockZeile({ userId: "u1", ergebnis: { anwahlen: 1 } }), null);
+  assert.equal(blockZeile({ userId: "u1", laufend: { minuten: 5, seit: 1 } }), null);
+  // Eine Runde unter einer Minute zählt als eine — 0 wäre in der Datenbank
+  // verboten und würde die Zeile verschlucken.
+  assert.equal(blockZeile({
+    userId: "u1", laufend: { minuten: 15, seit: Date.now() }, ergebnis: { anwahlen: 0, minuten: 0 },
+  }).minuten, 1);
+
+  // Die Bilanz des Tages: über die GESAMTE Blockzeit gerechnet, nicht als
+  // Mittelwert der einzelnen Werte. Ein Zwei-Minuten-Block mit drei
+  // Anwahlen ergibt 90/Std und würde einen Mittelwert verzerren.
+  const bilanz = blockBilanz([{ minuten: 25, anwahlen: 18 }, { minuten: 15, anwahlen: 9 }]);
+  assert.equal(bilanz.anzahl, 2);
+  assert.equal(bilanz.minuten, 40);
+  assert.equal(bilanz.anwahlen, 27);
+  assert.equal(bilanz.proStunde, 41);
+  assert.equal(bilanz.bester.anwahlen, 18);
+  assert.deepEqual(blockBilanz([]), { anzahl: 0, minuten: 0, anwahlen: 0, proStunde: null, bester: null });
+  // Ein Block ohne Anwahlen ist kein Fehler, sondern eine Information.
+  assert.equal(blockBilanz([{ minuten: 6, anwahlen: 0 }]).proStunde, 0);
+
+  const block = lies("components/Telefonblock.js");
+  // Das Speichern läuft AUSSERHALB der Zustands-Aktualisierung.
+  //
+  // Hier steckte ein Fehler: React ruft die Funktion beim Setzen eines
+  // Zustands in der Entwicklung absichtlich zweimal auf, um zu prüfen, ob
+  // sie frei von Nebenwirkungen ist. Der Block landete dadurch doppelt in
+  // der Datenbank — zwei Zeilen mit derselben Uhrzeit.
+  assert.match(block, /const aktuell = laufendRef\.current;\n\s+if \(!aktuell\) return;/);
+  assert.ok(!/setLaufend\(\(aktuell\) => \{/.test(block), "kein Aktualisierer mit Nebenwirkungen mehr");
+  assert.match(block, /setLaufend\(null\);/);
+  assert.match(block, /onFertigRef\.current\?\.\(\{ laufend: aktuell, ergebnis: roh \}\)/);
+
+  // Der Call Tracker gibt Person und Organisation dazu und lädt die Liste
+  // nach dem Berliner Kalendertag — ein Block von 23:30 gehört zu heute.
+  const tracker = lies("pages/call-tracker.js");
+  assert.match(tracker, /onFertig=\{speichereBlock\}/);
+  assert.match(tracker, /bloecke=\{bloeckeHeute\}/);
+  assert.match(tracker, /const zeile = blockZeile\(\{ userId, orgId, laufend, ergebnis \}\);/);
+  assert.match(tracker, /if \(await merkeBlock\(zeile\)\) holeBloecke\(\);/);
+  assert.match(tracker, /tagVon: new Date\(`\$\{tag\}T00:00:00`\)\.toISOString\(\)/);
+
+  // Das Rechnen steht ohne Datenbank-Client da — sonst liesse es sich hier
+  // nicht laden.
+  assert.ok(!/supabaseClient/.test(lies("lib/telefonblock.js")));
+
+  // Migration und Systemstatus.
+  const sql = lies("supabase/migration_181_telefonbloecke.sql");
+  assert.match(sql, /create table if not exists telefon_bloecke/);
+  // Eigene Zeilen ohne Zusatzbedingung — die Regel, die schon zweimal Leute
+  // aus ihren eigenen Daten ausgesperrt hat.
+  assert.match(sql, /telefon_bloecke_select_own" on telefon_bloecke for select using \(auth\.uid\(\) = user_id\);/);
+  assert.match(sql, /sieht_person\(user_id\)/);
+  const { ERWARTUNGEN } = await import("../lib/schemaErwartung.js");
+  assert.ok(ERWARTUNGEN.some((e) => e.migration === 181 && e.tabelle === "telefon_bloecke"));
 });
 
 test("alleZeilen holt alle Seiten statt nach tausend aufzuhören", async () => {

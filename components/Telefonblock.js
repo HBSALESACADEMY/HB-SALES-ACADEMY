@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { BLOCK_MINUTEN, blockErgebnis, blockStand, blockText, leseBlockEingabe } from "../lib/anwahlSpiel";
 import { zeigeBlockFeier } from "../lib/blockFeier";
 import { feldFarbe } from "../lib/diagrammFarben";
+import { blockBilanz } from "../lib/telefonblock";
 import Icon from "./Icon";
 
 // Der Telefonblock: Anfang, Uhr, Belohnung, Ergebnis.
@@ -23,7 +24,22 @@ import Icon from "./Icon";
 // Bestwert, Ton und die eigene Blocklänge liegen im Gerät (localStorage).
 // Sie sind Anreiz und Einstellung für einen selbst, keine Kennzahl für die
 // Leitung — und sollen in keiner Auswertung auftauchen.
-export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-telefonblock", darfTesten = false }) {
+
+// "14:05" — nur die Uhrzeit, der Tag steht schon über der Liste.
+function uhrzeit(zeitpunkt) {
+  const d = new Date(zeitpunkt);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function Telefonblock({
+  anwahlen = 0, speicherSchluessel = "hb-telefonblock", darfTesten = false,
+  // Ein beendeter Block wird nach draussen gemeldet — dort weiss man, zu
+  // welcher Person und Organisation er gehört (pages/call-tracker.js). Das
+  // Bauteil selbst kennt nur Uhr und Zahlen.
+  onFertig = null, bloecke = [],
+}) {
   const [laufend, setLaufend] = useState(null);
   const [sekunden, setSekunden] = useState(0);
   const [ergebnis, setErgebnis] = useState(null);
@@ -35,6 +51,12 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
   anwahlenRef.current = anwahlen;
   const tonRef = useRef(ton);
   tonRef.current = ton;
+  const onFertigRef = useRef(onFertig);
+  onFertigRef.current = onFertig;
+  // Der laufende Block als Referenz: "beende" wird auch vom Zeitgeber
+  // aufgerufen und braucht den aktuellen Stand, ohne ihn über einen
+  // Zustands-Aktualisierer zu holen.
+  const laufendRef = useRef(null);
   // Die Belohnung kommt einmal je Block, nicht bei jedem Takt danach.
   const gefeiertRef = useRef(false);
 
@@ -115,19 +137,29 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
   // Über eine Referenz, damit der Zeitgeber immer die aktuelle Fassung
   // aufruft, ohne bei jedem Rendern neu zu starten.
   const beendenRef = useRef(null);
+  // Beenden, ausrechnen, melden.
+  //
+  // Alles ausserhalb der Zustands-Aktualisierung: Eine Funktion, die React
+  // beim Setzen eines Zustands aufruft, muss frei von Nebenwirkungen sein —
+  // React ruft sie in der Entwicklung absichtlich ZWEIMAL auf, um genau das
+  // zu prüfen. Hier stand das Speichern des Blocks darin, und er landete
+  // doppelt in der Datenbank (zwei Zeilen mit derselben Uhrzeit).
   function beende() {
+    const aktuell = laufendRef.current;
+    if (!aktuell) return;
     try { localStorage.removeItem(`${speicherSchluessel}:laufend`); } catch (e) { /* egal */ }
-    setLaufend((aktuell) => {
-      if (!aktuell) return null;
-      const stand = blockStand({ minuten: aktuell.minuten, sekunden: (Date.now() - aktuell.seit) / 1000 });
-      const roh = blockErgebnis({ start: aktuell.start, ende: anwahlenRef.current, minuten: stand.minuten });
-      setErgebnis({ ...roh, text: blockText({ ...roh, bestwert }), ziel: aktuell.minuten, zielVoll: stand.zielVoll });
-      if (roh.anwahlen > bestwert) {
-        setBestwert(roh.anwahlen);
-        merke("bestwert", String(roh.anwahlen));
-      }
-      return null;
-    });
+    const stand = blockStand({ minuten: aktuell.minuten, sekunden: (Date.now() - aktuell.seit) / 1000 });
+    const roh = blockErgebnis({ start: aktuell.start, ende: anwahlenRef.current, minuten: stand.minuten });
+    setLaufend(null);
+    setErgebnis({ ...roh, text: blockText({ ...roh, bestwert }), ziel: aktuell.minuten, zielVoll: stand.zielVoll });
+    if (roh.anwahlen > bestwert) {
+      setBestwert(roh.anwahlen);
+      merke("bestwert", String(roh.anwahlen));
+    }
+    // Nach draussen: dort wird er gespeichert (migration_181). Auch ein
+    // Block ohne eine einzige Anwahl — dass eine Runde nichts gebracht hat,
+    // ist eine Information und keine Lücke.
+    onFertigRef.current?.({ laufend: aktuell, ergebnis: roh });
   }
 
   beendenRef.current = beende;
@@ -140,6 +172,9 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
       return !an;
     });
   }
+
+  laufendRef.current = laufend;
+  const bilanz = blockBilanz(bloecke);
 
   if (laufend) {
     const stand = blockStand({ minuten: laufend.minuten, sekunden });
@@ -193,6 +228,42 @@ export default function Telefonblock({ anwahlen = 0, speicherSchluessel = "hb-te
         {bestwert > 0 && <span className="text-[11px] text-textMuted ml-auto zahl">Bestwert: {bestwert} Anwahlen</span>}
       </div>
       {eigeneFehler && <p className="text-coral text-xs mt-2">{eigeneFehler}</p>}
+
+      {/* Die Runden von heute. Vorher war der Block nach dem Beenden
+          vergessen — und damit auch die Antwort auf die Frage, die er
+          stellt: Wie viele Anwahlen schaffe ich in einer konzentrierten
+          Runde? */}
+      {bloecke.length > 0 && (
+        <div className="mt-2.5 pt-2.5 border-t border-line">
+          <div className="text-[11px] text-textMuted mb-1">
+            Heute: {bilanz.anzahl} {bilanz.anzahl === 1 ? "Block" : "Blöcke"} · {bilanz.minuten} Min ·{" "}
+            {bilanz.anwahlen} {bilanz.anwahlen === 1 ? "Anwahl" : "Anwahlen"}
+            {bilanz.proStunde !== null && <span className="zahl"> · {bilanz.proStunde}/Std</span>}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {bloecke.slice(0, 4).map((b) => (
+              <div key={b.id} className="flex items-center gap-2 text-[11px] text-textMuted">
+                <span className="zahl w-11 text-right">{uhrzeit(b.gestartet_at)}</span>
+                <span className="zahl">{b.minuten} Min</span>
+                <span className="flex-1 truncate">
+                  {b.anwahlen} {b.anwahlen === 1 ? "Anwahl" : "Anwahlen"}
+                  {!b.ziel_erreicht && b.ziel_minuten > b.minuten && (
+                    <span className="text-textMuted"> (von {b.ziel_minuten} geplant)</span>
+                  )}
+                </span>
+                {b.anwahlen > 0 && b.minuten > 0 && (
+                  <span className="zahl" style={{ color: feldFarbe("anwahlen") }}>
+                    {Math.round((b.anwahlen / b.minuten) * 60)}/Std
+                  </span>
+                )}
+              </div>
+            ))}
+            {bloecke.length > 4 && (
+              <span className="text-[11px] text-textMuted">+{bloecke.length - 4} weitere heute</span>
+            )}
+          </div>
+        </div>
+      )}
       {ergebnis && (
         <p className="text-xs text-textMain mt-2">
           {ergebnis.text}

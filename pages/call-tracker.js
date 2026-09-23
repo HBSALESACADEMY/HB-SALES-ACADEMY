@@ -26,6 +26,8 @@ import Telefonblock from "../components/Telefonblock";
 import ZaehlerKacheln from "../components/ZaehlerKacheln";
 import { zeigePapierflieger } from "../lib/papierflieger";
 import { darfEmailMarketing } from "../lib/emailMarketing";
+import { blockZeile } from "../lib/telefonblock";
+import { merkeBlock, ladeBloecke } from "../lib/telefonblockSpeicher";
 import { ABSTAND, useAutoAktualisieren } from "../lib/autoRefresh";
 import {
   anwahlSerie, pensumFuerHeute, zielStand, naechsterMeilenstein, leseZielEingabe, ZIEL_MAX, ranglisteMitEigenem,
@@ -171,6 +173,8 @@ export default function CallTracker() {
   const [ruecklauf, setRuecklauf] = useState(null);
   // Buchungslink: der eigene, sonst der der Organisation (migration_123).
   const [meinProfil, setMeinProfil] = useState(null);
+  // Die Telefonblöcke von heute (migration_181).
+  const [bloeckeHeute, setBloeckeHeute] = useState([]);
 
   // Darf DIESE Person überhaupt mailen? Ist das E-Mail-Marketing aus oder
   // nur für bestimmte Personen freigegeben (migration_179, migration_180),
@@ -450,6 +454,31 @@ export default function CallTracker() {
     () => FIELDS.filter((f) => f.key !== "email" || mailsErlaubt || (todayCounts.email || 0) > 0),
     [mailsErlaubt, todayCounts.email],
   );
+
+  // Die Blöcke von heute holen — beim Öffnen und nach jedem beendeten
+  // Block. Grenzen nach dem BERLINER Kalendertag, nicht nach UTC: Sonst
+  // fehlt ein Block von 23:30 in der heutigen Liste und steht morgen darin.
+  const holeBloecke = useCallback(async () => {
+    if (!userId) return;
+    const tag = dateKeyOf(new Date());
+    const morgen = dateKeyOf(new Date(Date.now() + 86400000));
+    setBloeckeHeute(await ladeBloecke({
+      userId,
+      tagVon: new Date(`${tag}T00:00:00`).toISOString(),
+      tagBis: new Date(`${morgen}T00:00:00`).toISOString(),
+    }));
+  }, [userId]);
+
+  useEffect(() => { if (view === "today") holeBloecke(); }, [view, holeBloecke]);
+
+  // Ein beendeter Block wird gespeichert. Die Anwahlen darin sind die
+  // Differenz des Tageszählers — es gibt keine zweite Wahrheit darüber,
+  // wie viel telefoniert wurde.
+  const speichereBlock = useCallback(async ({ laufend, ergebnis }) => {
+    const zeile = blockZeile({ userId, orgId, laufend, ergebnis });
+    if (!zeile) return;
+    if (await merkeBlock(zeile)) holeBloecke();
+  }, [userId, orgId, holeBloecke]);
 
   // Die Rangliste mit dem LAUFENDEN Zähler überschreiben.
   //
@@ -1405,7 +1434,13 @@ export default function CallTracker() {
           {isToday && (
             <div className="card !py-3 mb-3">
               <div className="label mb-2">Telefonblock</div>
-              <Telefonblock anwahlen={todayCounts.anwahlen || 0} speicherSchluessel={`hb-telefonblock:${userId || "gast"}`} darfTesten={darfOrgVerwalten} />
+              <Telefonblock
+                anwahlen={todayCounts.anwahlen || 0}
+                speicherSchluessel={`hb-telefonblock:${userId || "gast"}`}
+                darfTesten={darfOrgVerwalten}
+                onFertig={speichereBlock}
+                bloecke={bloeckeHeute}
+              />
             </div>
           )}
 
