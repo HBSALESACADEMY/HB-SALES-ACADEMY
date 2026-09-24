@@ -5,6 +5,7 @@ import AdminTabs from "../components/AdminTabs";
 import { supabase } from "../lib/supabaseClient";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { describeRole } from "../lib/roles";
+import { terminSicht } from "../lib/rollen";
 import { ABSTAND } from "../lib/autoRefresh";
 
 export default function Admin() {
@@ -180,6 +181,17 @@ export default function Admin() {
                   {u.status === "rejected" && <span className="text-[10px] text-coral border border-coral/40 rounded px-1.5 py-0.5">Abgelehnt</span>}
                 </div>
                 <div className="text-xs text-textMuted mt-1">{u.email || "–"}{isPlatformAdmin && u.organization_name ? ` · ${u.organization_name}` : ""}</div>
+                {/* Was diese Rolle sehen darf — an der Person, nicht in einer
+                    Zugriffsregel in der Datenbank. Eine Führungskraft sah die
+                    Termine seiner Setterin nicht, und niemand konnte sagen
+                    warum: Die Rolle "Trainer" klingt nach Leitung, sieht aber
+                    keine fremden Termine. */}
+                <div className={`text-[11px] mt-0.5 ${terminSicht(u).umfang === "alle" ? "text-teal" : "text-textMuted"}`}>
+                  {terminSicht(u).text}
+                  {terminSicht(u).umfang !== "alle" && (isAdmin || isPlatformAdmin) && (
+                    <span> · für alle Termine: „Zum Manager machen"</span>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">

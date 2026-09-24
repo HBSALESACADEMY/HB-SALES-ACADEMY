@@ -6318,3 +6318,49 @@ test("Eine Bestätigung über den Buddy rückt den Termin nicht weiter und melde
   assert.match(quelle, /if \(vorschlag\.naechster\?\.zeitpunkt && !istNurBestaetigung\(vorschlag\)\) \{/);
   assert.match(quelle, /grund: "verschoben"/);
 });
+
+test("Die Nutzerliste sagt, wer welche Termine sieht", async () => {
+  const { terminSicht, FUEHRUNGSROLLEN } = await import("../lib/rollen.js");
+
+  // Der Fall, aus dem das entstanden ist: Eine Führungskraft sah die Setting
+  // Calls seiner Setterin nicht. Die Ursache stand in einer Zugriffsregel in
+  // der Datenbank — also dort, wo niemand nachsieht. Jetzt steht sie an der
+  // Person.
+  assert.equal(terminSicht({ role: "manager" }).umfang, "alle");
+  assert.equal(terminSicht({ role: "backend" }).umfang, "alle");
+  assert.equal(terminSicht({ is_admin: true }).umfang, "alle");
+  assert.equal(terminSicht({ is_platform_admin: true }).umfang, "alle");
+
+  // "Trainer" klingt nach Leitung und ist es nicht: Die Rolle sieht keine
+  // fremden Termine. Genau diese Verwechslung war das Problem.
+  assert.equal(terminSicht({ role: "trainer" }).umfang, "eigene");
+  assert.match(terminSicht({ role: "trainer" }).text, /nur eigene/);
+  assert.equal(terminSicht({}).umfang, "eigene");
+  assert.equal(terminSicht(null).umfang, "eigene");
+
+  // Teamleitung reicht für das eigene Team — und nur dafür.
+  assert.equal(terminSicht({ role: "trainer", is_team_lead: true }).umfang, "team");
+  assert.match(terminSicht({ is_team_lead: true }).text, /eigenen Teams/);
+  // Eine Führungsrolle schlägt die Teamleitung: Wer alles sieht, sieht auch
+  // sein Team.
+  assert.equal(terminSicht({ role: "manager", is_team_lead: true }).umfang, "alle");
+
+  // Der Text muss zur Zugriffsregel passen (leads_select, migration_114).
+  // Ändert sich die eine Seite, muss die andere mitgehen — ein Text, der
+  // etwas anderes verspricht als die Datenbank tut, ist schlimmer als keiner.
+  const regel = readFileSync(new URL("../supabase/migration_114_termine_organisation.sql", import.meta.url), "utf8");
+  assert.match(regel, /ist_fuehrungsrolle\(auth\.uid\(\)\) and sieht_person\(created_by\)/);
+  assert.match(regel, /is_team_lead_of\(created_by, auth\.uid\(\)\)/);
+  assert.match(regel, /ist_zu_termin_eingeladen\(leads\.id\)/);
+  // Und die Rollenliste im Code deckt sich mit der in der Datenbank.
+  const schema = readFileSync(new URL("../supabase/schema_v2.sql", import.meta.url), "utf8");
+  const funktion = schema.slice(schema.indexOf("function public.ist_fuehrungsrolle"));
+  FUEHRUNGSROLLEN.forEach((rolle) => {
+    assert.match(funktion.slice(0, 400), new RegExp(`role = '${rolle}'`), `${rolle} fehlt in der Datenbank-Funktion`);
+  });
+
+  // Die Verwaltung zeigt es an.
+  const seite = readFileSync(new URL("../pages/admin.js", import.meta.url), "utf8");
+  assert.match(seite, /terminSicht\(u\)\.text/);
+  assert.match(seite, /Zum Manager machen/);
+});
