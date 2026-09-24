@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { laufUeberfaellig } from "../../lib/tagesLauf";
 import Layout from "../../components/Layout";
 import AdminTabs from "../../components/AdminTabs";
 import { supabase } from "../../lib/supabaseClient";
@@ -20,6 +21,8 @@ export default function SystemStatus() {
   const [version, setVersion] = useState(null);
   // Zeitpunkt vom SERVER, nicht vom Gerät — siehe Kommentar bei der Anzeige.
   const [serverJetzt, setServerJetzt] = useState(null);
+  // Wann der Morgenbericht zuletzt lief (migration_182).
+  const [morgenlauf, setMorgenlauf] = useState(null);
 
   async function laden() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -31,6 +34,12 @@ export default function SystemStatus() {
     try { setVersion(await (await fetch("/api/version")).json()); } catch { setVersion(null); }
     const { data } = await supabase.from("system_health").select("*").eq("id", true).maybeSingle();
     setStand(data || null);
+    // Der Morgenbericht laeuft nur einmal am Tag. Fiel er aus, merkt es
+    // sonst niemand — es fehlt ja nur eine Nachricht, die keiner erwartet.
+    // Fehlt die Tabelle noch (migration_182), bleibt die Zeile einfach weg.
+    const { data: lauf } = await supabase
+      .from("cron_laeufe").select("tag, gelaufen_at").eq("name", "tagesbericht").maybeSingle();
+    setMorgenlauf(lauf || null);
     setLaedt(false);
   }
 
@@ -97,6 +106,7 @@ export default function SystemStatus() {
   }
 
   const alt = stand && (Date.now() - new Date(stand.geprueft_at).getTime()) > 3 * 60 * 60 * 1000;
+  const ueberfaellig = laufUeberfaellig(morgenlauf?.gelaufen_at, serverJetzt ? new Date(serverJetzt) : new Date());
   const gestoert = (stand?.pruefungen || []).filter((p) => !p.ok);
   // Der gespeicherte Stand kann von einer älteren Fassung stammen, die Folge
   // und Behebung noch nicht mitgeschrieben hat. Dann fehlen die Details nicht
@@ -171,6 +181,17 @@ export default function SystemStatus() {
           {busy === "senden" ? "Sendet..." : "📤 Bericht an Telegram senden"}
         </button>
         {meldung && <span className="text-xs text-textMuted">{meldung}</span>}
+        {/* Wann der Morgengruss zuletzt raus ist. Vercel garantiert im
+            Hobby-Tarif nur die Stunde, nicht die Minute — deshalb kann ein
+            Wecker von aussen dieselbe Adresse punkt 9:00 aufrufen, und die
+            Sperre in cron_laeufe verhindert den zweiten Versand. Fiel der
+            Lauf ganz aus, steht es hier: eine Nachricht, die nicht kommt,
+            merkt sonst niemand. */}
+        {ueberfaellig.stunden !== null && (
+          <span className={`text-[11px] ${ueberfaellig.ueberfaellig ? "text-coral" : "text-textMuted"}`}>
+            Morgenbericht: {ueberfaellig.grund}
+          </span>
+        )}
         {version && (
           <span className="text-[11px] text-textMuted ml-auto zahl">
             Stand: {version.commit}

@@ -5856,3 +5856,105 @@ test("Kurven lassen sich abfahren: jede Stelle nennt Tag und Werte", async () =>
   // Kurve — dort verdecken sie nichts.
   assert.match(kurve, /r\.werte\[i\]\?\.wert \?\? 0/);
 });
+
+test("Der Morgenbericht geht um 9 Uhr raus — und nur einmal am Tag", async () => {
+  const { darfSenden, laufUeberfaellig, FRUEHESTENS, SPAETESTENS } = await import("../lib/tagesLauf.js");
+
+  // Vercel garantiert im Hobby-Tarif die Stunde, nicht die Minute: Der
+  // Auftrag "0 7 * * *" lief um 7:49 UTC, die Nachricht kam also um 9:49.
+  // Wer 9:00 will, ruft die Adresse von aussen auf — dann gibt es zwei
+  // Auslöser, und genau das prüfen diese Zusicherungen.
+  const heute = "2026-09-24";
+
+  // Ab 9 Uhr ja.
+  assert.equal(darfSenden({ stunde: 9, heute }).senden, true);
+  assert.equal(darfSenden({ stunde: 10, heute }).senden, true);
+  assert.equal(darfSenden({ stunde: SPAETESTENS, heute }).senden, true);
+
+  // Vorher nein: Eine Nachricht um 8:05 weckt Leute, die noch nicht
+  // arbeiten. Das war der Fall im Winter, als der Lauf um 8 Uhr lag.
+  assert.equal(darfSenden({ stunde: 8, heute }).senden, false);
+  assert.equal(darfSenden({ stunde: FRUEHESTENS - 1, heute }).senden, false);
+  assert.match(darfSenden({ stunde: 6, heute }).grund, /erst ab 9 Uhr/);
+
+  // Und nach 11 nein: "Guten Morgen" um 14 Uhr ist eine Störung, kein Gruss.
+  assert.equal(darfSenden({ stunde: 12, heute }).senden, false);
+  assert.equal(darfSenden({ stunde: 17, heute }).senden, false);
+
+  // Der zweite Auslöser desselben Tages hält still — sonst liest das Team
+  // den Bericht zweimal.
+  assert.equal(darfSenden({ stunde: 9, heute, letzterTag: heute }).senden, false);
+  assert.match(darfSenden({ stunde: 10, heute, letzterTag: heute }).grund, /heute schon raus/);
+  // Der Tag davor sperrt nicht.
+  assert.equal(darfSenden({ stunde: 9, heute, letzterTag: "2026-09-23" }).senden, true);
+
+  // Der Testlauf von der Statusseite darf immer, auch nachts und auch wenn
+  // der Bericht heute schon raus ist.
+  assert.equal(darfSenden({ stunde: 3, heute, letzterTag: heute, force: true }).senden, true);
+
+  // Ausgefallener Lauf: 26 Stunden und nicht 24, sonst löst jeder frühere
+  // Lauf am Folgetag einen Fehlalarm aus.
+  const jetzt = new Date("2026-09-24T09:05:00Z");
+  assert.equal(laufUeberfaellig("2026-09-23T09:50:00Z", jetzt).ueberfaellig, false);
+  // 25 Stunden sind noch keine Lücke: Läuft er heute um 10:05 und morgen um
+  // 9:05, liegen 23 Stunden dazwischen — bei einer Grenze von 24 wäre das
+  // schon ein Fehlalarm.
+  assert.equal(laufUeberfaellig("2026-09-23T08:00:00Z", jetzt).stunden, 25);
+  assert.equal(laufUeberfaellig("2026-09-23T08:00:00Z", jetzt).ueberfaellig, false);
+  // 26 und mehr heisst: ein Tag ist übersprungen.
+  assert.equal(laufUeberfaellig("2026-09-23T07:00:00Z", jetzt).ueberfaellig, true);
+  assert.equal(laufUeberfaellig("2026-09-23T06:00:00Z", jetzt).stunden, 27);
+  assert.equal(laufUeberfaellig("2026-09-22T09:00:00Z", jetzt).ueberfaellig, true);
+  // Ohne Zeitstempel ist nichts überfällig — nur unbekannt.
+  assert.equal(laufUeberfaellig(null, jetzt).ueberfaellig, false);
+  assert.equal(laufUeberfaellig(null, jetzt).stunden, null);
+  assert.equal(laufUeberfaellig("kein Datum", jetzt).stunden, null);
+});
+
+test("Eine fehlende Sperr-Tabelle hält den Morgenbericht nicht auf", async () => {
+  const { letzterLauf, merkeLauf } = await import("../lib/tagesLaufSpeicher.js");
+
+  // Ohne migration_182 verhält sich alles wie vorher: Der Bericht geht raus,
+  // es wird nur nicht gesperrt. Eine offene Migration darf den Morgengruss
+  // nicht verschlucken — sie darf ihn höchstens zweimal zulassen.
+  const fehlt = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "Could not find the table 'public.cron_laeufe' in the schema cache", code: "42P01" } }) }) }),
+      upsert: async () => ({ error: { message: "relation \"cron_laeufe\" does not exist", code: "42P01" } }),
+    }),
+  };
+  const ohne = await letzterLauf(fehlt, "tagesbericht");
+  assert.equal(ohne.tag, null);
+  assert.equal(ohne.tabelleFehlt, true);
+  assert.equal(await merkeLauf(fehlt, "tagesbericht", "2026-09-24"), false);
+
+  // Mit Tabelle kommt der Tag des letzten Versands zurück.
+  const da = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { tag: "2026-09-24", gelaufen_at: "2026-09-24T07:00:00Z" }, error: null }) }) }),
+      upsert: async () => ({ error: null }),
+    }),
+  };
+  const mit = await letzterLauf(da, "tagesbericht");
+  assert.equal(mit.tag, "2026-09-24");
+  assert.equal(mit.tabelleFehlt, false);
+  assert.equal(await merkeLauf(da, "tagesbericht", "2026-09-24"), true);
+  // Ohne Namen oder Tag wird nichts geschrieben.
+  assert.equal(await merkeLauf(da, "tagesbericht", null), false);
+  assert.equal(await merkeLauf(null, "tagesbericht", "2026-09-24"), false);
+});
+
+test("Der Cron-Lauf fragt die Sperre, bevor er sendet", () => {
+  const quelle = readFileSync(new URL("../pages/api/cron/tagesbericht.js", import.meta.url), "utf8");
+  // Der Vermerk kommt VOR dem Versand: Bricht der Lauf in der Mitte ab, ist
+  // ein Teil schon raus, und ein zweiter Lauf würde diesen Teil wiederholen.
+  const beiMerken = quelle.indexOf("merkeLauf(admin");
+  const beiSenden = quelle.indexOf("await sendeAlarm(text)");
+  assert.ok(beiMerken > -1 && beiSenden > -1, "Sperre oder Versand fehlt");
+  assert.ok(beiMerken < beiSenden, "Der Lauf sendet, bevor er sich vermerkt");
+  // Und die alte, feste Stundenprüfung ist weg — sie stand der 9 Uhr im Weg.
+  assert.ok(!/stunde !== 8 && stunde !== 9/.test(quelle), "Die alte Stundenprüfung ist noch drin");
+  assert.match(quelle, /darfSenden\(\{ stunde, heute, letzterTag: vorher\.tag, force \}\)/);
+  // Ein Testlauf vermerkt nichts, sonst bleibt der echte Morgengruss aus.
+  assert.match(quelle, /if \(!force\) await merkeLauf/);
+});

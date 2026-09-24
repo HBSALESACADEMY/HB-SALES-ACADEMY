@@ -12,7 +12,9 @@ import { istImpulsTag } from "../../../lib/wochenimpuls";
 import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
 import { sendeTeamlage } from "../../../lib/teamlageVersand";
 import { briefingUmAcht } from "../../../lib/buddyBriefing";
-import { berlinStunde } from "../../../lib/woche";
+import { berlinStunde, berlinHeute } from "../../../lib/woche";
+import { darfSenden } from "../../../lib/tagesLauf";
+import { letzterLauf, merkeLauf } from "../../../lib/tagesLaufSpeicher";
 import { setzeBefehle } from "../../../lib/telegramApi";
 import { sendeErklaerungen } from "../../../lib/buddyErklaerungVersand";
 import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
@@ -24,24 +26,40 @@ import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
 // Vercel-Hobby-Tarif sind nur zwei Cron-Aufträge erlaubt, die je einmal
 // täglich laufen. Deshalb beides in einem Lauf statt getrennt.
 //
-// Zur Uhrzeit: Vercel arbeitet in UTC, Deutschland wechselt zwischen Sommer-
-// und Winterzeit. Der Lauf um 7 Uhr UTC trifft im Sommer 9 Uhr, im Winter
-// 8 Uhr deutscher Zeit — beides wird akzeptiert. Ein Lauf zu einer ganz
-// anderen Stunde (versehentlicher Aufruf) sendet dagegen nicht.
+// Zur Uhrzeit: Vercel garantiert im Hobby-Tarif die Stunde, nicht die
+// Minute. Der Auftrag "0 7 * * *" lief am 24.09.2026 um 7:49 UTC, die
+// Nachricht kam also um 9:49 statt um 9:00. Wer die Minute will, ruft diese
+// Adresse von aussen auf — ein Wecker mit Zeitzone Europe/Berlin trifft
+// punkt 9:00, im Sommer wie im Winter.
+//
+// Damit gibt es zwei Auslöser für denselben Bericht, und darum die Sperre in
+// cron_laeufe: Wer zuerst kommt, sendet; der zweite Lauf des Tages hält
+// still. Welche Stunde überhaupt passt, steht in lib/tagesLauf.js.
 export const config = { maxDuration: 60 };
+
+const AUFTRAG = "tagesbericht";
 
 export default async function handler(req, res) {
   const erwartet = `Bearer ${process.env.CRON_SECRET || ""}`;
   if (!process.env.CRON_SECRET || req.headers.authorization !== erwartet) {
     return res.status(401).json({ error: "Nicht autorisiert." });
   }
-  // "force" erlaubt einen Testlauf ausserhalb der 9 Uhr.
-  const stunde = berlinStunde();
-  if (stunde !== 8 && stunde !== 9 && req.query.force !== "1") {
-    return res.status(200).json({ uebersprungen: true, grund: `Lauf um ${stunde} Uhr — Bericht geht nur morgens raus` });
-  }
 
   const admin = getAdminSupabase();
+
+  // "force" erlaubt einen Testlauf ausserhalb der Morgenstunden.
+  const force = req.query.force === "1";
+  const stunde = berlinStunde();
+  const heute = berlinHeute();
+  const vorher = await letzterLauf(admin, AUFTRAG);
+  const { senden, grund } = darfSenden({ stunde, heute, letzterTag: vorher.tag, force });
+  if (!senden) return res.status(200).json({ uebersprungen: true, grund });
+
+  // Der Vermerk kommt VOR dem Versand: Bricht der Lauf in der Mitte ab, ist
+  // ein Teil der Nachrichten schon raus — ein zweiter Lauf würde diesen Teil
+  // wiederholen. Ein Testlauf vermerkt nichts, sonst bliebe der echte
+  // Morgengruss aus.
+  if (!force) await merkeLauf(admin, AUFTRAG, heute);
   try {
     // Der Bericht selbst liegt in lib/tagesbericht.js — derselbe Text lässt
     // sich damit auch von Hand auf der Statusseite auslösen.
