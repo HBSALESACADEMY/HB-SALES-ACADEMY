@@ -28,13 +28,13 @@ import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
 //
 // Zur Uhrzeit: Vercel garantiert im Hobby-Tarif die Stunde, nicht die
 // Minute. Der Auftrag "0 7 * * *" lief am 24.09.2026 um 7:49 UTC, die
-// Nachricht kam also um 9:49 statt um 9:00. Wer die Minute will, ruft diese
-// Adresse von aussen auf — ein Wecker mit Zeitzone Europe/Berlin trifft
-// punkt 9:00, im Sommer wie im Winter.
+// Nachricht kam also um 9:49. Gesendet wird deshalb im Fenster zwischen 8
+// und 9 Uhr deutscher Zeit (lib/tagesLauf.js) — im Sommer trifft der Lauf
+// die 9, im Winter die 8, und ausserhalb dieses Fensters geht nichts raus.
 //
-// Damit gibt es zwei Auslöser für denselben Bericht, und darum die Sperre in
-// cron_laeufe: Wer zuerst kommt, sendet; der zweite Lauf des Tages hält
-// still. Welche Stunde überhaupt passt, steht in lib/tagesLauf.js.
+// Die Sperre in cron_laeufe sorgt dafür, dass der Bericht auch bei einem
+// zweiten Aufruf nur einmal am Tag kommt — und sie macht im Systemstatus
+// sichtbar, wenn ein Lauf ganz ausgefallen ist.
 export const config = { maxDuration: 60 };
 
 const AUFTRAG = "tagesbericht";

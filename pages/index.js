@@ -8,6 +8,7 @@ import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabaseClient";
 import { getUnreadMessageInfo } from "../lib/unreadMessages";
 import { COURSES } from "../lib/curriculum";
+import { letzteVersuche } from "../lib/kursAuswertung";
 import { taskUrgency, URGENCY_STYLES } from "../lib/taskUrgency";
 import { ABSTAND } from "../lib/autoRefresh";
 import { apiGet, apiPost } from "../lib/apiClient";
@@ -227,7 +228,7 @@ export default function Dashboard() {
       if (!session) return;
       const uid = session.user.id;
       const [{ data: qr }, { data: er }, { data: rp }] = await Promise.all([
-        supabase.from("quiz_results").select("module_id, mc_score, mc_total").eq("user_id", uid),
+        supabase.from("quiz_results").select("course_id, module_id, mc_score, mc_total, open_score, open_total, created_at").eq("user_id", uid),
         supabase.from("exam_results").select("course_id, passed").eq("user_id", uid),
         supabase.from("roleplay_sessions").select("id").eq("user_id", uid),
       ]);
@@ -443,9 +444,24 @@ export default function Dashboard() {
   }, []);
 
   const totalModules = COURSES.reduce((s, c) => s + c.modules.length, 0);
-  const doneModuleIds = new Set(quizResults.map((r) => r.module_id));
+  // Der Schlüssel trägt den Kurs mit, und es zählt nur der jüngste Versuch.
+  //
+  // Zwei Fehler steckten hier: Erstens sind Modul-Kennungen NICHT eindeutig —
+  // "Beziehungsaufbau" und "Bestandskunden" haben beide b1, b2, b3. Wer b1
+  // im einen Kurs gemacht hatte, galt im anderen automatisch als fertig.
+  // Zweitens zählte jeder Versuch mit: Drei Wiederholungen eines Moduls
+  // erschienen als drei Module, und die schwachen ersten Anläufe zogen den
+  // eigenen Schnitt nach unten.
+  const letzte = letzteVersuche(quizResults);
+  const doneModuleKeys = new Set(letzte.map((r) => `${r.course_id}|${r.module_id}`));
   const certCount = examResults.filter((r) => r.passed).length;
-  const avgMc = quizResults.length ? Math.round(quizResults.reduce((s, r) => s + (r.mc_total ? r.mc_score / r.mc_total : 0), 0) / quizResults.length * 100) : null;
+  // Gerechnet auf die erreichbaren Punkte statt als Mittel der Einzelquoten:
+  // 8 von 10 und 8 von 20 sind nicht dasselbe, und ein Mittel aus Quoten
+  // gewichtet ein kurzes Modul so stark wie ein langes.
+  const mcPunkte = letzte.reduce((s, r) => ({
+    erreicht: s.erreicht + (r.mc_score || 0), moeglich: s.moeglich + (r.mc_total || 0),
+  }), { erreicht: 0, moeglich: 0 });
+  const avgMc = mcPunkte.moeglich > 0 ? Math.round((mcPunkte.erreicht / mcPunkte.moeglich) * 100) : null;
   const nextCourse = COURSES.find((c) => !examResults.some((r) => r.course_id === c.id && r.passed));
 
   return (
@@ -751,7 +767,7 @@ export default function Dashboard() {
 
               <div className="text-[11px] text-textMuted mb-2">Mein Fortschritt</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
-                <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-textMain zahl">{doneModuleIds.size}/{totalModules}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-textMain zahl">{doneModuleKeys.size}/{totalModules}</div></div>
                 <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-textMain zahl">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
                 <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Zertifikate</div><div className="text-2xl font-display font-bold text-textMain zahl">{certCount}/{COURSES.length}</div></div>
                 <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Rollenspiele</div><div className="text-2xl font-display font-bold text-textMain zahl">{rpSessions.length}</div></div>
@@ -766,7 +782,7 @@ export default function Dashboard() {
                 {showCourseList && (
                   <div className="flex flex-col gap-2 mt-3">
                     {COURSES.map((c) => {
-                      const doneCount = c.modules.filter((m) => doneModuleIds.has(m.id)).length;
+                      const doneCount = c.modules.filter((m) => doneModuleKeys.has(`${c.id}|${m.id}`)).length;
                       const passed = examResults.some((r) => r.course_id === c.id && r.passed);
                       return (
                         <div key={c.id} className="flex items-center gap-3 text-sm">

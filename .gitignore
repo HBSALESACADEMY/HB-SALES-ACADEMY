@@ -1,6 +1,12 @@
 node_modules
 .next
-.env.local
+# Jede .env-Datei bleibt draussen, nicht nur .env.local: "vercel env pull"
+# schreibt in einen frei gewaehlten Dateinamen, und genau so eine Datei lag
+# am 24.09.2026 ungeschuetzt im Projekt. Ein Schluessel, der einmal in der
+# Versionsgeschichte steht, ist auch nach dem Loeschen noch da.
+.env
+.env.*
+!.env.example
 .vercel
 *.log
 .DS_Store

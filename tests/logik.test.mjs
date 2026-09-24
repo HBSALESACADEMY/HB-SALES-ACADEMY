@@ -5875,31 +5875,34 @@ test("Der Morgenbericht geht um 9 Uhr raus — und nur einmal am Tag", async () 
 
   // Vercel garantiert im Hobby-Tarif die Stunde, nicht die Minute: Der
   // Auftrag "0 7 * * *" lief um 7:49 UTC, die Nachricht kam also um 9:49.
-  // Wer 9:00 will, ruft die Adresse von aussen auf — dann gibt es zwei
-  // Auslöser, und genau das prüfen diese Zusicherungen.
+  // Weil Vercel in UTC rechnet und Deutschland die Uhr umstellt, trifft
+  // dieselbe Einstellung im Sommer die 9 und im Winter die 8 — beide
+  // Stunden müssen deshalb durchgehen, sonst fällt der Bericht ein halbes
+  // Jahr lang aus.
   const heute = "2026-09-24";
 
-  // Ab 9 Uhr ja.
-  assert.equal(darfSenden({ stunde: 9, heute }).senden, true);
-  assert.equal(darfSenden({ stunde: 10, heute }).senden, true);
+  assert.equal(darfSenden({ stunde: 8, heute }).senden, true, "Winterlauf");
+  assert.equal(darfSenden({ stunde: 9, heute }).senden, true, "Sommerlauf");
+  assert.equal(darfSenden({ stunde: FRUEHESTENS, heute }).senden, true);
   assert.equal(darfSenden({ stunde: SPAETESTENS, heute }).senden, true);
 
-  // Vorher nein: Eine Nachricht um 8:05 weckt Leute, die noch nicht
-  // arbeiten. Das war der Fall im Winter, als der Lauf um 8 Uhr lag.
-  assert.equal(darfSenden({ stunde: 8, heute }).senden, false);
+  // Vorher nein: Eine Nachricht um 6:30 weckt Leute, die noch nicht
+  // arbeiten.
+  assert.equal(darfSenden({ stunde: 7, heute }).senden, false);
   assert.equal(darfSenden({ stunde: FRUEHESTENS - 1, heute }).senden, false);
-  assert.match(darfSenden({ stunde: 6, heute }).grund, /erst ab 9 Uhr/);
+  assert.match(darfSenden({ stunde: 6, heute }).grund, /erst ab 8 Uhr/);
 
-  // Und nach 11 nein: "Guten Morgen" um 14 Uhr ist eine Störung, kein Gruss.
+  // Und danach nein: "Guten Morgen" um 14 Uhr ist eine Störung, kein Gruss.
+  assert.equal(darfSenden({ stunde: 10, heute }).senden, false);
   assert.equal(darfSenden({ stunde: 12, heute }).senden, false);
   assert.equal(darfSenden({ stunde: 17, heute }).senden, false);
 
   // Der zweite Auslöser desselben Tages hält still — sonst liest das Team
   // den Bericht zweimal.
   assert.equal(darfSenden({ stunde: 9, heute, letzterTag: heute }).senden, false);
-  assert.match(darfSenden({ stunde: 10, heute, letzterTag: heute }).grund, /heute schon raus/);
+  assert.match(darfSenden({ stunde: 8, heute, letzterTag: heute }).grund, /heute schon raus/);
   // Der Tag davor sperrt nicht.
-  assert.equal(darfSenden({ stunde: 9, heute, letzterTag: "2026-09-23" }).senden, true);
+  assert.equal(darfSenden({ stunde: 8, heute, letzterTag: "2026-09-23" }).senden, true);
 
   // Der Testlauf von der Statusseite darf immer, auch nachts und auch wenn
   // der Bericht heute schon raus ist.
@@ -5970,4 +5973,348 @@ test("Der Cron-Lauf fragt die Sperre, bevor er sendet", () => {
   assert.match(quelle, /darfSenden\(\{ stunde, heute, letzterTag: vorher\.tag, force \}\)/);
   // Ein Testlauf vermerkt nichts, sonst bleibt der echte Morgengruss aus.
   assert.match(quelle, /if \(!force\) await merkeLauf/);
+});
+
+test("Kursauswertung: nur der jüngste Versuch je Modul, und der Kurs gehört zum Schlüssel", async () => {
+  const { letzteVersuche } = await import("../lib/kursAuswertung.js");
+  const { COURSES } = await import("../lib/curriculum.js");
+
+  // Die Voraussetzung, aus der der Fehler entstand: Modul-Kennungen sind
+  // NICHT eindeutig. "Beziehungsaufbau" und "Bestandskunden" haben beide
+  // b1, b2, b3 — 24 Module, aber nur 21 verschiedene Kennungen. Wer nur
+  // module_id vergleicht, hält drei Module für erledigt, die es nicht sind.
+  const alle = COURSES.flatMap((k) => (k.modules || []).map((m) => m.id));
+  assert.ok(alle.length > new Set(alle).size,
+    "Keine kollidierenden Modul-Kennungen mehr — dann darf dieser Test angepasst werden");
+
+  const v = (courseId, moduleId, am, mc) => ({
+    course_id: courseId, module_id: moduleId, created_at: am,
+    mc_score: mc, mc_total: 10, open_score: 0, open_total: 0,
+  });
+
+  // Absichtlich unsortiert: Wer sich auf die Reihenfolge aus der Datenbank
+  // verlässt, bekommt bei einer Abfrage ohne "order" einen zufälligen
+  // Versuch.
+  const quiz = [
+    v("beziehung", "b1", "2026-09-10T10:00:00Z", 5),
+    v("bestandskunden", "b1", "2026-09-12T10:00:00Z", 9),
+    v("beziehung", "b1", "2026-09-20T10:00:00Z", 8),
+    v("beziehung", "b1", "2026-09-15T10:00:00Z", 6),
+  ];
+  const letzte = letzteVersuche(quiz);
+  assert.equal(letzte.length, 2, "b1 in zwei Kursen sind zwei Module");
+  const beziehung = letzte.find((q) => q.course_id === "beziehung");
+  assert.equal(beziehung.mc_score, 8, "Der jüngste Versuch gewinnt, nicht der erste der Liste");
+  assert.equal(letzte.find((q) => q.course_id === "bestandskunden").mc_score, 9);
+
+  // Ohne Modul-Kennung ist eine Zeile nichts wert.
+  assert.equal(letzteVersuche([{ course_id: "x" }, null]).length, 0);
+  assert.equal(letzteVersuche([]).length, 0);
+});
+
+test("Kursauswertung: Verlauf je Modul zeigt Versuche und Verbesserung", async () => {
+  const { modulVerlauf, schwachstellen, SCHWACH_UNTER } = await import("../lib/kursAuswertung.js");
+
+  const v = (moduleId, am, erreicht, moeglich = 10) => ({
+    course_id: "grundlagen", module_id: moduleId, created_at: am,
+    mc_score: erreicht, mc_total: moeglich, open_score: 0, open_total: 0,
+  });
+  const verlauf = modulVerlauf([
+    v("g1", "2026-09-01T10:00:00Z", 5),
+    v("g1", "2026-09-08T10:00:00Z", 9),
+    v("g2", "2026-09-20T10:00:00Z", 6),
+  ]);
+
+  // Neueste zuerst: Wer die Liste öffnet, sucht das, was er zuletzt gemacht hat.
+  assert.equal(verlauf[0].moduleId, "g2");
+  const g1 = verlauf.find((m) => m.moduleId === "g1");
+  assert.equal(g1.versuche, 2);
+  assert.equal(g1.erstesErgebnis, 50);
+  assert.equal(g1.letztesErgebnis, 90);
+  // Von 50 auf 90 ist die eigentliche Leistung — eine Zahl allein ("90 %")
+  // würde sie verschweigen.
+  assert.equal(g1.verbesserung, 40);
+  // Der Titel kommt aus dem Lehrplan, nicht die Kennung.
+  assert.equal(g1.titel, "Verkaufspsychologie Basics");
+  assert.equal(g1.kurs, "Grundlagen");
+  // Bei einem einzigen Versuch gibt es keine Verbesserung — und nicht 0.
+  assert.equal(verlauf.find((m) => m.moduleId === "g2").verbesserung, null);
+
+  // Schwachstellen: das schlechteste zuerst, nur unterhalb der Grenze.
+  const schwach = schwachstellen(verlauf);
+  assert.equal(schwach.length, 1);
+  assert.equal(schwach[0].moduleId, "g2");
+  assert.ok(schwach[0].letztesErgebnis < SCHWACH_UNTER);
+  assert.equal(schwachstellen(verlauf, 100).length, 2, "Bei einer Grenze von 100 ist alles schwach");
+  assert.equal(schwachstellen(verlauf, 100, 1).length, 1, "Die Obergrenze greift");
+  // Ein Modul ohne auswertbare Punkte taucht nicht als Schwachstelle auf —
+  // "0 von 0" ist kein schlechtes Ergebnis, sondern gar keines.
+  const ohnePunkte = modulVerlauf([v("g3", "2026-09-21T10:00:00Z", 0, 0)]);
+  assert.equal(ohnePunkte[0].letztesErgebnis, null);
+  assert.equal(schwachstellen(ohnePunkte).length, 0);
+});
+
+test("Kursauswertung: Multiple Choice gegen offene Antwort trennt Wissen von Formulierung", async () => {
+  const { wissenGegenFormulierung, ABSTAND_DEUTLICH } = await import("../lib/kursAuswertung.js");
+
+  const v = (moduleId, mc, mcT, offen, offenT) => ({
+    course_id: "grundlagen", module_id: moduleId, created_at: "2026-09-10T10:00:00Z",
+    mc_score: mc, mc_total: mcT, open_score: offen, open_total: offenT,
+  });
+
+  // Erkennt die Antwort, kann sie aber nicht selbst sagen: Das ist der Fall,
+  // der ein Rollenspiel braucht und kein weiteres Kapitel zum Lesen.
+  const erkennt = wissenGegenFormulierung([v("g1", 9, 10, 4, 10)]);
+  assert.equal(erkennt.mcQuote, 90);
+  assert.equal(erkennt.offenQuote, 40);
+  assert.equal(erkennt.abstand, 50);
+  assert.match(erkennt.deutung, /erkennst/);
+  assert.match(erkennt.rat, /Rollenspiel/);
+
+  // Umgekehrt: formuliert frei gut, verliert Punkte in den Feinheiten.
+  const formuliert = wissenGegenFormulierung([v("g1", 4, 10, 9, 10)]);
+  assert.equal(formuliert.abstand, -50);
+  assert.match(formuliert.deutung, /formulierst/);
+  assert.match(formuliert.rat, /Details/);
+
+  // Gleich auf: kein Rat, denn es gibt nichts zu raten.
+  const gleich = wissenGegenFormulierung([v("g1", 8, 10, 8, 10)]);
+  assert.equal(gleich.abstand, 0);
+  assert.equal(gleich.rat, null);
+  assert.ok(Math.abs(gleich.abstand) < ABSTAND_DEUTLICH);
+
+  // Gerechnet auf Punkte, nicht auf Quoten: Ein Modul mit 20 Fragen wiegt
+  // mehr als eines mit 2.
+  const gewichtet = wissenGegenFormulierung([v("g1", 2, 2, 0, 0), v("g2", 10, 20, 0, 0)]);
+  assert.equal(gewichtet.mcQuote, 55, "12 von 22, nicht das Mittel aus 100 % und 50 %");
+
+  // Ohne offene Fragen gibt es keinen Abstand — und keine erfundene Deutung.
+  const nurMc = wissenGegenFormulierung([v("g1", 8, 10, 0, 0)]);
+  assert.equal(nurMc.offenQuote, null);
+  assert.equal(nurMc.deutung, null);
+  assert.equal(wissenGegenFormulierung([]).mcQuote, null);
+});
+
+test("Kursauswertung: Lerntempo zählt Tage, nicht Klicks", async () => {
+  const { lernTempo } = await import("../lib/kursAuswertung.js");
+  const v = (moduleId, am) => ({ course_id: "grundlagen", module_id: moduleId, created_at: am, mc_score: 8, mc_total: 10 });
+  const jetzt = new Date("2026-09-24T12:00:00Z");
+
+  // Drei Module an EINEM Nachmittag sind durchgeklickt, nicht gelernt —
+  // deshalb zählen aktive Tage und nicht Versuche.
+  const einTag = lernTempo([
+    v("g1", "2026-09-24T09:00:00Z"), v("g2", "2026-09-24T09:20:00Z"), v("g3", "2026-09-24T09:40:00Z"),
+  ], jetzt);
+  assert.equal(einTag.aktiveTage, 1);
+  assert.equal(einTag.tageSeitLetztem, 0);
+  // Bei drei Stunden Spanne wäre "21 Module pro Woche" eine Hochrechnung
+  // aus einem Nachmittag.
+  assert.equal(einTag.proWoche, null);
+
+  const ueberWochen = lernTempo([
+    v("g1", "2026-09-01T09:00:00Z"), v("g2", "2026-09-08T09:00:00Z"),
+    v("g3", "2026-09-15T09:00:00Z"), v("v1", "2026-09-22T09:00:00Z"),
+  ], jetzt);
+  assert.equal(ueberWochen.aktiveTage, 4);
+  assert.equal(ueberWochen.spanne, 21);
+  assert.equal(ueberWochen.proWoche, 1.3, "4 Module in 3 Wochen");
+  assert.equal(ueberWochen.tageSeitLetztem, 2);
+
+  const leer = lernTempo([], jetzt);
+  assert.equal(leer.aktiveTage, 0);
+  assert.equal(leer.tageSeitLetztem, null);
+  assert.equal(leer.proWoche, null);
+});
+
+test("Kursauswertung: eine bestandene Prüfung bleibt bestanden", async () => {
+  const { pruefungsBild } = await import("../lib/kursAuswertung.js");
+  const kurse = [{ id: "grundlagen", title: "Grundlagen", modules: [{ id: "g1", title: "Eins" }] }];
+  const p = (score, passed, am) => ({ course_id: "grundlagen", score, total: 100, passed, created_at: am });
+
+  // Erst zweimal durchgefallen, dann bestanden, danach ein Übungsversuch
+  // mit schlechterem Ergebnis: Das Zertifikat bleibt.
+  const bild = pruefungsBild([
+    p(45, false, "2026-09-01T10:00:00Z"),
+    p(58, false, "2026-09-05T10:00:00Z"),
+    p(82, true, "2026-09-10T10:00:00Z"),
+    p(61, false, "2026-09-20T10:00:00Z"),
+  ], kurse)[0];
+  assert.equal(bild.versuche, 4);
+  assert.equal(bild.bestanden, true);
+  assert.equal(bild.bestes, 82);
+  assert.equal(bild.letztes, 61);
+  // Wie viele Anläufe es brauchte — nicht zum Vorhalten, sondern weil eine
+  // Prüfung, die alle erst im dritten Versuch schaffen, zu schwer sein kann.
+  assert.equal(bild.versucheBisBestanden, 3);
+  assert.equal(bild.bestandenAm, "2026-09-10T10:00:00Z");
+
+  // Ohne Versuch: keine Zahlen, aber der Kurs steht in der Liste.
+  const ohne = pruefungsBild([], kurse)[0];
+  assert.equal(ohne.versuche, 0);
+  assert.equal(ohne.bestanden, false);
+  assert.equal(ohne.bestes, null);
+  assert.equal(ohne.versucheBisBestanden, null);
+  assert.equal(ohne.titel, "Grundlagen");
+});
+
+test("Kursauswertung: der nächste Schritt begründet sich", async () => {
+  const { naechsterSchritt } = await import("../lib/kursAuswertung.js");
+  const kurse = [
+    { id: "a", title: "Kurs A", modules: [{ id: "a1", title: "A1" }, { id: "a2", title: "A2" }] },
+    { id: "b", title: "Kurs B", modules: [{ id: "b1", title: "B1" }] },
+  ];
+  const v = (courseId, moduleId, erreicht) => ({
+    course_id: courseId, module_id: moduleId, created_at: "2026-09-10T10:00:00Z",
+    mc_score: erreicht, mc_total: 10, open_score: 0, open_total: 0,
+  });
+
+  // Angefangenes zuerst beenden — nicht einen neuen Kurs anfangen.
+  const weiter = naechsterSchritt({ quiz: [v("a", "a1", 9)], kurse });
+  assert.equal(weiter.art, "weiter");
+  assert.equal(weiter.moduleId, "a2");
+  assert.match(weiter.grund, /Noch 1 Modul/);
+
+  // Alles gemacht, aber ein Modul sitzt nicht: wiederholen schlägt neu.
+  const wiederholen = naechsterSchritt({ quiz: [v("a", "a1", 9), v("a", "a2", 9), v("b", "b1", 4)], kurse });
+  assert.equal(wiederholen.art, "wiederholen");
+  assert.equal(wiederholen.moduleId, "b1");
+  assert.match(wiederholen.grund, /40 %/);
+
+  // Module stehen, Prüfung fehlt.
+  const pruefung = naechsterSchritt({ quiz: [v("a", "a1", 9), v("a", "a2", 9), v("b", "b1", 9)], kurse });
+  assert.equal(pruefung.art, "pruefung");
+  assert.match(pruefung.titel, /Prüfung/);
+
+  // Alles bestanden: kein Vorschlag, statt einen zu erfinden.
+  const fertig = naechsterSchritt({
+    quiz: [v("a", "a1", 9), v("a", "a2", 9), v("b", "b1", 9)],
+    pruefungen: [
+      { course_id: "a", score: 90, total: 100, passed: true, created_at: "2026-09-11T10:00:00Z" },
+      { course_id: "b", score: 90, total: 100, passed: true, created_at: "2026-09-12T10:00:00Z" },
+    ],
+    kurse,
+  });
+  assert.equal(fertig, null);
+
+  // Ohne einen einzigen Versuch: das erste Modul des ersten Kurses.
+  const anfang = naechsterSchritt({ kurse });
+  assert.equal(anfang.art, "neu");
+  assert.equal(anfang.moduleId, "a1");
+});
+
+test("Der Startbildschirm zählt Module mit Kurs und nur den jüngsten Versuch", () => {
+  const quelle = readFileSync(new URL("../pages/index.js", import.meta.url), "utf8");
+  // Der Schlüssel MUSS den Kurs tragen: Modul-Kennungen kollidieren (b1, b2,
+  // b3 gibt es zweimal), und ohne Kurs galten bis zu drei Module je Person
+  // als erledigt, die niemand gemacht hatte.
+  assert.match(quelle, /new Set\(letzte\.map\(\(r\) => `\$\{r\.course_id\}\|\$\{r\.module_id\}`\)\)/);
+  assert.ok(!/new Set\(quizResults\.map\(\(r\) => r\.module_id\)\)/.test(quelle),
+    "Der Fortschritt zählt wieder ohne Kurs");
+  assert.match(quelle, /doneModuleKeys\.has\(`\$\{c\.id\}\|\$\{m\.id\}`\)/);
+  // Und der Schnitt rechnet auf erreichbare Punkte, nicht als Mittel aus
+  // Einzelquoten — sonst wiegt ein Modul mit 2 Fragen wie eines mit 20.
+  assert.match(quelle, /mcPunkte\.moeglich > 0 \? Math\.round\(\(mcPunkte\.erreicht \/ mcPunkte\.moeglich\) \* 100\)/);
+  assert.ok(!/r\.mc_total \? r\.mc_score \/ r\.mc_total : 0/.test(quelle), "Das Mittel aus Quoten ist zurück");
+  // Die Abfrage muss die Felder holen, aus denen sich das rechnen lässt.
+  assert.match(quelle, /select\("course_id, module_id, mc_score, mc_total, open_score, open_total, created_at"\)/);
+});
+
+test("Ein Termin gilt nur als verschoben, wenn sich der Zeitpunkt wirklich ändert", async () => {
+  const { zeitpunktGeaendert } = await import("../lib/terminMeldung.js");
+
+  // Der Fehler, um den es geht: Postgres gibt "+00:00" zurück, toISOString()
+  // schreibt ".000Z". Derselbe Zeitpunkt, zwei Texte — und der Vergleich mit
+  // "!==" war deshalb immer wahr. Wer im Bearbeiten-Dialog eine
+  // Telefonnummer nachtrug, löste "🕐 Termin verschoben" an die ganze
+  // Gruppe aus.
+  const ausDatenbank = "2026-09-26T12:00:00+00:00";
+  const ausFormular = new Date(ausDatenbank).toISOString();
+  assert.notEqual(ausDatenbank, ausFormular, "Die Texte unterscheiden sich — darum ging es");
+  assert.equal(zeitpunktGeaendert(ausDatenbank, ausFormular), false);
+
+  // Eine echte Verschiebung wird erkannt.
+  assert.equal(zeitpunktGeaendert(ausDatenbank, "2026-09-26T14:00:00+00:00"), true);
+  assert.equal(zeitpunktGeaendert(ausDatenbank, "2026-09-27T12:00:00+00:00"), true);
+
+  // Sekunden und Millisekunden sind keine Verschiebung: Ein Formularfeld hat
+  // keine Sekunden.
+  assert.equal(zeitpunktGeaendert(ausDatenbank, "2026-09-26T12:00:59+00:00"), false);
+
+  // Zeitzonen-Schreibweisen desselben Augenblicks.
+  assert.equal(zeitpunktGeaendert("2026-09-26T14:00:00+02:00", "2026-09-26T12:00:00.000Z"), false);
+
+  // Einen Zeitpunkt löschen oder erstmals setzen ist eine Änderung.
+  assert.equal(zeitpunktGeaendert(ausDatenbank, null), true);
+  assert.equal(zeitpunktGeaendert(null, ausDatenbank), true);
+  assert.equal(zeitpunktGeaendert(null, null), false);
+  assert.equal(zeitpunktGeaendert(undefined, ""), false);
+
+  // Unlesbar: dann bleibt der Textvergleich, und im Zweifel wird gemeldet.
+  assert.equal(zeitpunktGeaendert("kaputt", "anders kaputt"), true);
+  assert.equal(zeitpunktGeaendert("kaputt", "kaputt"), false);
+
+  const termine = readFileSync(new URL("../pages/termine.js", import.meta.url), "utf8");
+  assert.ok(!/original\.appointment_at !== patch\.appointment_at/.test(termine),
+    "Der Zeichenketten-Vergleich ist zurück");
+  assert.match(termine, /zeitpunktGeaendert\(original\.appointment_at, patch\.appointment_at\)/);
+});
+
+test("Eine Bestätigung über den Buddy rückt den Termin nicht weiter und meldet keine Verschiebung", async () => {
+  const { eintragPatch, istNurBestaetigung, vorschlagText } = await import("../lib/buddyEintrag.js");
+
+  const lead = {
+    id: "1", name: "Müller", company: "Volk Work", created_by: "u1",
+    appointment_at: "2026-09-26T12:00:00+00:00", status: "geplant",
+    // Die Stufe heisst "erstgespraech" (lib/terminArt.js), und der Haken
+    // dazu ist setting_bestaetigt. Die Haken stehen in lead.schritte.
+    termin_art: "erstgespraech", schritte: {},
+  };
+
+  assert.equal(istNurBestaetigung({ ergebnis: "bestaetigt" }), true);
+  assert.equal(istNurBestaetigung({ ergebnis: "kunde" }), false);
+  assert.equal(istNurBestaetigung({}), false);
+
+  // "Setting Call mit Müller bestätigt, Freitag 14 Uhr": Die KI liefert die
+  // Uhrzeit als naechster.zeitpunkt, weil sie im Satz steht. Sie ist aber
+  // DIESER Termin — kein Folgetermin. Vorher wurde daraus rueckeVor: Der
+  // Termin wanderte eine Stufe weiter, und die Gruppe las "Termin
+  // verschoben".
+  const gleich = eintragPatch(lead, {
+    ergebnis: "bestaetigt",
+    naechster: { art: "closing", zeitpunkt: "2026-09-26T12:00:00.000Z" },
+  }, "u1", "2026-09-24");
+  assert.equal(gleich.termin_art, undefined, "Die Stufe bleibt, wo sie ist");
+  assert.equal(gleich.appointment_at, undefined, "Derselbe Zeitpunkt wird nicht neu geschrieben");
+  assert.ok(gleich.schritte?.setting_bestaetigt?.am, "Der Bestätigungs-Haken fehlt");
+
+  // Bestätigung zu einer ANDEREN Uhrzeit: Der Kunde hat zugesagt, aber
+  // verschoben. Dann bekommt derselbe Termin die neue Zeit — und nicht eine
+  // neue Stufe.
+  const anders = eintragPatch(lead, {
+    ergebnis: "bestaetigt",
+    naechster: { art: "closing", zeitpunkt: "2026-09-26T15:00:00.000Z" },
+  }, "u1", "2026-09-24");
+  assert.equal(anders.appointment_at, "2026-09-26T15:00:00.000Z");
+  assert.equal(anders.termin_art, undefined, "Auch dann bleibt die Stufe");
+
+  // Ein echter Folgetermin rückt weiter — das war und bleibt richtig.
+  const folge = eintragPatch(lead, {
+    ergebnis: "kunde",
+    naechster: { art: "closing", zeitpunkt: "2026-10-01T09:00:00.000Z" },
+  }, "u1", "2026-09-24");
+  assert.equal(folge.termin_art, "closing");
+  assert.equal(folge.appointment_at, "2026-10-01T09:00:00.000Z");
+
+  // Der Vorschlagstext nennt es nicht "Nächster Termin" — das wäre eine
+  // Zusage, die niemand gegeben hat.
+  const text = vorschlagText(lead, {
+    ergebnis: "bestaetigt", naechster: { art: "closing", zeitpunkt: "2026-09-26T12:00:00.000Z" },
+  });
+  assert.match(text, /Findet statt am/);
+  assert.ok(!/Nächster Termin/.test(text));
+
+  // Und der Versand: keine verschoben-Meldung, wenn es eine Bestätigung ist.
+  const quelle = readFileSync(new URL("../lib/buddyEintrag.js", import.meta.url), "utf8");
+  assert.match(quelle, /if \(vorschlag\.naechster\?\.zeitpunkt && !istNurBestaetigung\(vorschlag\)\) \{/);
+  assert.match(quelle, /grund: "verschoben"/);
 });

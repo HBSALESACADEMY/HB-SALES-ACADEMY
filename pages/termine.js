@@ -5,6 +5,7 @@ import FilterAuswahl from "../components/FilterAuswahl";
 import SeitenReiter from "../components/SeitenReiter";
 import { artVon, CHECKIN_NACH_TAGEN, TERMIN_ARTEN, SCHRITTE, ROLLEN_NAMEN, kuerzelVon, rueckeVor, verlaufVon, schrittErledigt, darfSchritt, schrittPatch } from "../lib/terminArt";
 import { namensHinweis } from "../lib/kundenname";
+import { zeitpunktGeaendert } from "../lib/terminMeldung";
 import { ERGEBNIS_LABELS, ERGEBNISSE } from "../lib/ergebnis";
 import { istKundentermin } from "../lib/terminArt";
 import { gruppiereNachTag, gruppiereNachMonat } from "../lib/terminGruppen";
@@ -493,7 +494,7 @@ export default function Termine() {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     // Nur den Zeitpunkt eigens benennen — eine Verschiebung ist die Änderung,
     // auf die das Team wirklich reagieren muss.
-    const verschoben = original && original.appointment_at !== patch.appointment_at;
+    const verschoben = !!original && zeitpunktGeaendert(original.appointment_at, patch.appointment_at);
     meldeTerminAenderung(id, "bearbeitet", verschoben
       ? `Der Termin wurde verschoben auf ${patch.appointment_at ? `${deutscheZeit(patch.appointment_at)} Uhr` : "keinen Zeitpunkt"}.`
       : "Die Termindaten wurden bearbeitet.", { zeitpunktGeaendert: verschoben });
