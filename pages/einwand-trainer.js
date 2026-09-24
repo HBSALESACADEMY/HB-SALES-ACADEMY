@@ -173,7 +173,7 @@ export default function EinwandTrainer() {
         ].map((s) => (
           <div key={s.label} className="card text-center">
             <div className={`text-2xl font-display font-semibold ${s.cls}`}>{s.value}</div>
-            <div className="text-[10.5px] uppercase tracking-wide text-textMuted mt-0.5">{s.label}</div>
+            <div className="text-[10.5px] text-textMuted mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
@@ -192,14 +192,14 @@ export default function EinwandTrainer() {
       ) : (
         <>
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-[10.5px] uppercase tracking-wide text-textMuted">Kunde sagt</span>
-            <span className="text-[10.5px] uppercase tracking-wide text-amber border border-amber/40 rounded-full px-2 py-0.5">
+            <span className="text-[10.5px] text-textMuted">Kunde sagt</span>
+            <span className="text-[10.5px] text-amber border border-amber/40 rounded-full px-2 py-0.5">
               {catLabel[current.cat] || current.cat}
             </span>
           </div>
 
           <div className="card mb-3 border-l-[3px] border-l-amber">
-            <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1.5">Einwand</div>
+            <div className="text-[10.5px] text-textMuted mb-1.5">Einwand</div>
             <p className="text-lg font-display font-semibold text-textMain leading-snug">{question}</p>
           </div>
 
@@ -211,7 +211,7 @@ export default function EinwandTrainer() {
           ) : (
             <>
               <div className="card mb-3 border-l-[3px] border-l-teal">
-                <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1.5">Musterantwort</div>
+                <div className="text-[10.5px] text-textMuted mb-1.5">Musterantwort</div>
                 <p className="text-sm text-textMain leading-relaxed">{answer}</p>
                 {current.tip && (
                   <p className="text-xs text-amber mt-3 pt-3 border-t border-line">

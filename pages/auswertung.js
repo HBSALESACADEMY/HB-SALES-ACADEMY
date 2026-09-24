@@ -376,11 +376,11 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
                 <tr key={zeile.key} className="border-t border-line">
                   <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{zeile.label}</td>
                   {teamsMitZahlen.map((t) => (
-                    <td key={t.id} className="py-1.5 px-2 text-right font-mono text-textMain">
+                    <td key={t.id} className="py-1.5 px-2 text-right zahl text-textMain">
                       {wert(t.counts, berechneQuoten(t.counts), zeile)}
                     </td>
                   ))}
-                  <td className="py-1.5 px-2 text-right font-mono font-semibold text-textMain border-l border-line">
+                  <td className="py-1.5 px-2 text-right zahl font-semibold text-textMain border-l border-line">
                     {wert(gesamt, gesamtQuoten, zeile)}
                   </td>
                   {/* Die Veränderung nur bei den Zählwerten. Bei einer Quote
@@ -388,7 +388,7 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
                       "+4 %" hiesse dort mal Prozentpunkte, mal Prozent vom
                       Vorwert, je nachdem wie man es liest. */}
                   {vorZeitraum && (
-                    <td className="py-1.5 px-2 text-right font-mono text-[11px] whitespace-nowrap">
+                    <td className="py-1.5 px-2 text-right zahl text-[11px] whitespace-nowrap">
                       {zeile.art !== "zahl" ? <span className="text-textMuted">—</span> : (() => {
                         const d = differenz(gesamt[zeile.key] || 0, gesamtVorher[zeile.key] || 0);
                         if (d.richtung === "gleich") return <span className="text-textMuted">±0</span>;
@@ -512,10 +512,10 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
                   {[["Trainingsaktive Hälfte", impact.aktiv], ["Weniger aktive Hälfte", impact.wenig]].map(([label, g]) => (
                     <tr key={label} className="border-t border-line">
                       <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{label}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{g.anzahl}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{g.training}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{g.counts.anwahlen || 0}</td>
-                      <td className="py-1.5 px-2 text-right font-mono text-textMain">
+                      <td className="py-1.5 px-2 text-right zahl">{g.anzahl}</td>
+                      <td className="py-1.5 px-2 text-right zahl">{g.training}</td>
+                      <td className="py-1.5 px-2 text-right zahl">{g.counts.anwahlen || 0}</td>
+                      <td className="py-1.5 px-2 text-right zahl text-textMain">
                         {g.quoten.terminJeGespraech === null ? "—" : `${g.quoten.terminJeGespraech} %`}
                       </td>
                     </tr>
@@ -622,10 +622,10 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
                 {stufenAuswertung(termineRoh).map((st) => (
                   <tr key={st.key} className="border-t border-line">
                     <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{st.label}</td>
-                    <td className="py-1.5 px-2 text-right font-mono">{st.gesamt}</td>
-                    <td className="py-1.5 px-2 text-right font-mono">{st.wahrgenommen}</td>
-                    <td className="py-1.5 px-2 text-right font-mono">{st.kunden}</td>
-                    <td className="py-1.5 px-2 text-right font-mono text-textMain">
+                    <td className="py-1.5 px-2 text-right zahl">{st.gesamt}</td>
+                    <td className="py-1.5 px-2 text-right zahl">{st.wahrgenommen}</td>
+                    <td className="py-1.5 px-2 text-right zahl">{st.kunden}</td>
+                    <td className="py-1.5 px-2 text-right zahl text-textMain">
                       {st.abschlussquote === null ? "—" : `${st.abschlussquote} %`}
                     </td>
                   </tr>
@@ -673,17 +673,17 @@ function Bericht({ daten, vorZeitraum, vergleichName, offen, setOffen }) {
                   return (
                     <tr key={p.id} className="border-t border-line">
                       <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{p.name}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{p.counts.anwahlen || 0}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{p.counts.erreicht || 0}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{p.counts.termin || 0}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">
+                      <td className="py-1.5 px-2 text-right zahl">{p.counts.anwahlen || 0}</td>
+                      <td className="py-1.5 px-2 text-right zahl">{p.counts.erreicht || 0}</td>
+                      <td className="py-1.5 px-2 text-right zahl">{p.counts.termin || 0}</td>
+                      <td className="py-1.5 px-2 text-right zahl">
                         {q.terminJeGespraech === null ? "—" : `${q.terminJeGespraech} %`}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono"
+                      <td className="py-1.5 px-2 text-right zahl"
                         style={{ color: ab === null ? undefined : ab >= 0 ? feldFarbe("termin") : feldFarbe("negativ") }}>
                         {ab === null ? "—" : `${ab > 0 ? "+" : ""}${ab} Pp.`}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono text-textMuted">{p.training}</td>
+                      <td className="py-1.5 px-2 text-right zahl text-textMuted">{p.training}</td>
                     </tr>
                   );
                 })}
@@ -771,17 +771,17 @@ function KursKarte({ personen = [], offen, setOffen }) {
                     <tr key={p.id} className="border-t border-line cursor-pointer"
                       onClick={() => setOffen(auf ? null : `kurs-${p.id}`)}>
                       <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{p.name}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{p.stand.module}/{p.stand.moduleGesamt}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{p.stand.fortschritt}%</td>
-                      <td className="py-1.5 px-2 text-right font-mono text-textMain">
+                      <td className="py-1.5 px-2 text-right zahl">{p.stand.module}/{p.stand.moduleGesamt}</td>
+                      <td className="py-1.5 px-2 text-right zahl">{p.stand.fortschritt}%</td>
+                      <td className="py-1.5 px-2 text-right zahl text-textMain">
                         {p.stand.schnitt === null ? "—" : `${p.stand.schnitt}%`}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono">
+                      <td className="py-1.5 px-2 text-right zahl">
                         {p.stand.pruefungenVersucht === 0
                           ? "—"
                           : `${p.stand.pruefungenBestanden}/${p.stand.pruefungenVersucht}`}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono text-textMuted">
+                      <td className="py-1.5 px-2 text-right zahl text-textMuted">
                         {p.stand.zuletzt ? new Date(p.stand.zuletzt).toLocaleDateString("de-DE") : "—"}
                       </td>
                       <td className="py-1.5 pl-2 text-right text-textMuted">

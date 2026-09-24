@@ -181,7 +181,7 @@ export default function Profile() {
           </div>
 
           <div className="border-t border-line pt-3 mt-1">
-            <div className="text-[11px] text-textMuted uppercase tracking-wide mb-3">Kontaktdaten — für alle im Team sichtbar</div>
+            <div className="text-[11px] text-textMuted mb-3">Kontaktdaten — für alle im Team sichtbar</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-textMuted mb-1 block">Unternehmen</label>
@@ -235,7 +235,7 @@ export default function Profile() {
       </div>
 
       <div className="card max-w-md mt-4">
-        <div className="text-[11px] text-textMuted uppercase tracking-wide mb-3">Passwort ändern</div>
+        <div className="text-[11px] text-textMuted mb-3">Passwort ändern</div>
         <div className="flex flex-col gap-3">
           <div>
             <label className="text-xs text-textMuted mb-1 block">Neues Passwort</label>

@@ -29,7 +29,7 @@ export default function Fortschrittsbalken({ lead, kompakt = false }) {
           <div className={`h-full rounded-full transition-all duration-500 ${verloren ? "opacity-50" : ""}`}
             style={{ width: `${wert}%`, background: farbe }} />
         </div>
-        <span className={`text-[11px] flex-shrink-0 font-mono ${verloren ? "text-coral" : "text-textMuted"}`}
+        <span className={`text-[11px] flex-shrink-0 zahl ${verloren ? "text-coral" : "text-textMuted"}`}
           title={verloren && wert === 0
             ? "Es ist kein Schritt als erledigt eingetragen — steht der Termin auf „Wahrgenommen“?"
             : undefined}>

@@ -158,7 +158,7 @@ export default function HerausforderungenSeite() {
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${an ? "border-amber text-textMain" : "border-transparent text-textMuted hover:text-textMain"}`}
                 style={an ? { background: "color-mix(in srgb, var(--org-accent, #E9B44C) 14%, transparent)" } : undefined}>
                 {r.label}
-                {zahl !== null && <span className="ml-1.5 text-[10px] font-mono text-textMuted">{zahl}</span>}
+                {zahl !== null && <span className="ml-1.5 text-[10px] zahl text-textMuted">{zahl}</span>}
               </button>
             );
           })}
@@ -183,7 +183,7 @@ export default function HerausforderungenSeite() {
                       <div key={h.text}>
                         <div className="flex items-baseline gap-2 mb-1">
                           <span className="text-sm text-textMain flex-1 min-w-0">{h.text}</span>
-                          <span className="text-[11px] font-mono text-textMuted flex-shrink-0">{h.personen}</span>
+                          <span className="text-[11px] zahl text-textMuted flex-shrink-0">{h.personen}</span>
                         </div>
                         <Mengenbalken anteil={h.personen / maxPersonen} />
                       </div>
@@ -203,7 +203,7 @@ export default function HerausforderungenSeite() {
                       <div key={t.thema}>
                         <div className="flex items-baseline gap-2 mb-1">
                           <span className="text-sm text-textMain flex-1 min-w-0">{schulungVon(t.thema)?.titel || t.thema}</span>
-                          <span className="text-[11px] font-mono text-textMuted flex-shrink-0">{t.erledigt} / {t.anzahl} gemacht</span>
+                          <span className="text-[11px] zahl text-textMuted flex-shrink-0">{t.erledigt} / {t.anzahl} gemacht</span>
                         </div>
                         <Mengenbalken anteil={t.anzahl ? t.erledigt / t.anzahl : 0} farbe="#5FCF6B" />
                       </div>
@@ -263,7 +263,7 @@ export default function HerausforderungenSeite() {
           <div className="grid gap-5 md:grid-cols-2 items-start">
             <div className="card !p-0 overflow-hidden">
               <div className="px-3 py-2.5 border-b border-line text-sm font-semibold text-textMain">
-                Verbunden <span className="text-[11px] font-mono text-textMuted">{verbindungen.verbunden.length}</span>
+                Verbunden <span className="text-[11px] zahl text-textMuted">{verbindungen.verbunden.length}</span>
               </div>
               {verbindungen.verbunden.length ? (
                 <div className="divide-y divide-line">
@@ -288,7 +288,7 @@ export default function HerausforderungenSeite() {
 
             <div className="card">
               <div className="text-sm font-semibold text-textMain mb-1">
-                Noch nicht verbunden <span className="text-[11px] font-mono text-textMuted">{verbindungen.offen.length}</span>
+                Noch nicht verbunden <span className="text-[11px] zahl text-textMuted">{verbindungen.offen.length}</span>
               </div>
               <p className="text-[11px] text-textMuted mb-3">
                 Verbinden kann sich jede Person selbst: Einstellungen → Telegram. Ohne Verbindung gibt es weder

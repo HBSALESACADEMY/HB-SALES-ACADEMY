@@ -131,13 +131,13 @@ export default function MailVorlagen({ vorlagen = [], onChange, anhaenge = [], s
               {/* Die Zeile: alles, was man zum Wiederfinden braucht, und die
                   Frage "ist mit dieser Vorlage etwas?" als eine Zahl. */}
               <div className="flex items-center gap-2 px-2.5 py-2">
-                <span className="text-[11px] text-textMuted font-mono w-5 flex-shrink-0">{i + 1}.</span>
+                <span className="text-[11px] text-textMuted zahl w-5 flex-shrink-0">{i + 1}.</span>
                 <button type="button" onClick={() => oeffne(i)} className="flex-1 min-w-0 text-left">
                   <span className="flex items-center gap-2">
                     <span className={`text-sm truncate ${v.name?.trim() ? "text-textMain" : "text-textMuted italic"}`}>
                       {v.name?.trim() || "Ohne Namen"}
                     </span>
-                    <span className="text-[9px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
+                    <span className="text-[9px] rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
                       {html ? "HTML" : "Text"}
                     </span>
                     {ernst > 0 && (

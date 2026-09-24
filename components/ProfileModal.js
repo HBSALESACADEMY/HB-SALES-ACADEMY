@@ -137,7 +137,7 @@ export default function ProfileModal({ userId, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onClick={onClose}>
-      <div className="card max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+      <div className="card schwebt max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
         {loading || !target ? (
           <p className="text-textMuted text-sm py-6 text-center">Lädt...</p>
         ) : (

@@ -138,7 +138,7 @@ export default function GuideGenerator() {
       )}
 
       <div className="mb-6">
-        <div className="text-xs text-textMuted uppercase tracking-wide mb-2.5">Meine Leitfäden</div>
+        <div className="text-xs text-textMuted mb-2.5">Meine Leitfäden</div>
         <div className="flex flex-col gap-3">
           {myGuides.map((g) => {
             const isOpen = expandedId === g.id;
@@ -174,7 +174,7 @@ export default function GuideGenerator() {
 
       {teamGuides.length > 0 && (
         <div>
-          <div className="text-xs text-textMuted uppercase tracking-wide mb-2.5">Team-Leitfäden</div>
+          <div className="text-xs text-textMuted mb-2.5">Team-Leitfäden</div>
           <div className="flex flex-col gap-3">
             {teamGuides.map((g) => {
               const isOpen = expandedId === g.id;

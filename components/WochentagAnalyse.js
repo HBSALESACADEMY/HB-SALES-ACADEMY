@@ -46,7 +46,7 @@ export default function WochentagAnalyse({ zeilen = [], titel = "Wochentage: wan
       <div className="flex flex-col gap-1.5">
         {sichtbar.map((z) => (
           <div key={z.index} className="flex items-center gap-2 text-xs">
-            <span className="w-8 flex-shrink-0 text-textMuted font-mono">{z.kurz}</span>
+            <span className="w-8 flex-shrink-0 text-textMuted">{z.kurz}</span>
             <div className="flex-1 h-4 rounded bg-surfaceRaised overflow-hidden flex">
               {/* Der Balken zeigt die Anwahlen, der gefüllte Teil davon,
                   wie viele bei der Entscheidung landeten. Zwei Balken
@@ -56,8 +56,8 @@ export default function WochentagAnalyse({ zeilen = [], titel = "Wochentage: wan
               <div className="h-full -ml-[100%]" style={{ width: `${(z.beiEntscheidung / groesste) * 100}%`, background: feldFarbe("entscheider") }}
                 title={`${z.beiEntscheidung} bei der Entscheidung`} />
             </div>
-            <span className="w-16 text-right font-mono text-textMuted flex-shrink-0">{z.anwahlen} Anw.</span>
-            <span className={`w-14 text-right font-mono flex-shrink-0 ${z.entscheiderQuote === null ? "text-textMuted" : "text-textMain"}`}>
+            <span className="w-16 text-right zahl text-textMuted flex-shrink-0">{z.anwahlen} Anw.</span>
+            <span className={`w-14 text-right zahl flex-shrink-0 ${z.entscheiderQuote === null ? "text-textMuted" : "text-textMain"}`}>
               {z.entscheiderQuote === null ? "—" : `${z.entscheiderQuote} %`}
             </span>
           </div>

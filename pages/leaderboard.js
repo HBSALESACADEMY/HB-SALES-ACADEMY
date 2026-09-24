@@ -134,7 +134,7 @@ export default function Leaderboard() {
             const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
             return (
               <div key={t.id} className="card flex items-center gap-3.5">
-                <span className="w-7 text-center font-mono text-sm text-textMuted flex-shrink-0">{medal || i + 1}</span>
+                <span className="w-7 text-center zahl text-sm text-textMuted flex-shrink-0">{medal || i + 1}</span>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-surfaceRaised text-violet">
                   <Icon name="users" size={16} />
                 </div>
@@ -142,7 +142,7 @@ export default function Leaderboard() {
                   <div className="font-semibold text-textMain text-sm truncate">{t.name}</div>
                   <div className="text-[11px] text-textMuted">{t.memberCount} Mitglied{t.memberCount === 1 ? "" : "er"}</div>
                 </div>
-                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #CE3A5C)" /> {t.xp} XP</span>
+                <span className="flex items-center gap-1 zahl text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #CE3A5C)" /> {t.xp} XP</span>
               </div>
             );
           })}
@@ -157,7 +157,7 @@ export default function Leaderboard() {
             const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
             return (
               <div key={r.id} className={`card flex items-center gap-3.5 ${isSelf ? "border border-amber/40" : isFriend ? "border border-violet/30" : ""}`}>
-                <span className="w-7 text-center font-mono text-sm text-textMuted flex-shrink-0">{medal || i + 1}</span>
+                <span className="w-7 text-center zahl text-sm text-textMuted flex-shrink-0">{medal || i + 1}</span>
                 <button onClick={() => openProfile(r.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80">
                   <Avatar name={r.full_name || "?"} src={r.avatar_url} size={32} />
                   <div className="flex-1 min-w-0">
@@ -168,7 +168,7 @@ export default function Leaderboard() {
                     {range === "all" && <div className="text-[11px] text-textMuted">Level {level}</div>}
                   </div>
                 </button>
-                <span className="flex items-center gap-1 font-mono text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #CE3A5C)" /> {r.xp || 0} XP</span>
+                <span className="flex items-center gap-1 zahl text-sm text-textMain flex-shrink-0"><Icon name="flame" size={13} color="var(--org-accent, #CE3A5C)" /> {r.xp || 0} XP</span>
               </div>
             );
           })}

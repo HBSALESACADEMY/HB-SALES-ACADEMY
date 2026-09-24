@@ -81,7 +81,7 @@ export default function CoursesIndex() {
         <p className="text-textMuted text-sm">Lädt...</p>
       ) : (
         <>
-          <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Grundausbildung</div>
+          <div className="text-[11px] text-textMuted mb-2">Grundausbildung</div>
           {allPassed && (
             <div className="card mb-5 border border-teal/40 flex items-center gap-4">
               <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(63,191,166,.15)" }}>
@@ -115,7 +115,7 @@ export default function CoursesIndex() {
                 <div className="w-28 h-1.5 bg-line rounded-full overflow-hidden flex-shrink-0">
                   <div className="h-full bg-teal" style={{ width: `${pct}%` }} />
                 </div>
-                <span className="font-mono text-xs text-textMuted w-16 text-right">{doneCount}/{c.modules.length}</span>
+                <span className="zahl text-xs text-textMuted w-16 text-right">{doneCount}/{c.modules.length}</span>
               </div>
             );
           })}
@@ -125,7 +125,7 @@ export default function CoursesIndex() {
             automatisch erzeugten Kurse sind deren Fortsetzung und sollen wie
             eine gehören, nicht wie ein Anhang wirken. Die Kurse der
             Organisation stehen deshalb darunter. */}
-        <div className="text-[11px] uppercase tracking-wide text-textMuted mt-6 mb-2 flex items-center gap-2">
+        <div className="text-[11px] text-textMuted mt-6 mb-2 flex items-center gap-2">
           Dein persönlicher Lernpfad <AIBadge title="Diese Kurse werden automatisch von einer KI erstellt." />
         </div>
         {!(allPassed || isAdmin) ? (
@@ -153,14 +153,14 @@ export default function CoursesIndex() {
                         <Icon name={bestanden ? "check" : "book"} />
                       </div>
                       <div className="flex-1">
-                        <div className="text-[10.5px] text-amber uppercase tracking-wide mb-0.5">{c.focus_area}</div>
+                        <div className="text-[10.5px] text-amber mb-0.5">{c.focus_area}</div>
                         <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
                         <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
                       </div>
                       <div className="w-28 h-1.5 bg-line rounded-full overflow-hidden flex-shrink-0">
                         <div className="h-full bg-teal" style={{ width: `${Math.round((fertig / c.modules.length) * 100)}%` }} />
                       </div>
-                      <span className="font-mono text-xs text-textMuted w-16 text-right">{fertig}/{c.modules.length}</span>
+                      <span className="zahl text-xs text-textMuted w-16 text-right">{fertig}/{c.modules.length}</span>
                     </div>
                   );
                 })}
@@ -171,7 +171,7 @@ export default function CoursesIndex() {
 
         {eigene.length > 0 && (
           <>
-            <div className="text-[11px] uppercase tracking-wide text-textMuted mt-8 mb-2">Kurse deiner Organisation</div>
+            <div className="text-[11px] text-textMuted mt-8 mb-2">Kurse deiner Organisation</div>
             <div className="flex flex-col gap-3.5">
               {eigene.map((c) => (
                 <div key={c.id} className="card flex items-center gap-4 cursor-pointer hover:-translate-y-0.5 hover:shadow-xl transition"
@@ -183,7 +183,7 @@ export default function CoursesIndex() {
                     <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
                     <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
                   </div>
-                  <span className="font-mono text-xs text-textMuted flex-shrink-0">{modulZahl[c.id] || 0} Module</span>
+                  <span className="zahl text-xs text-textMuted flex-shrink-0">{modulZahl[c.id] || 0} Module</span>
                 </div>
               ))}
             </div>

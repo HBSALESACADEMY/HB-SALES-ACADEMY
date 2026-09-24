@@ -835,11 +835,11 @@ export default function EmailMarketing() {
                   {/* Dieselbe Zeile wie in der Bearbeitung: Nummer, Name,
                       Format, Betreff — und ein Warnzeichen, wenn etwas
                       auffällt. So findet man eine Vorlage, ohne aufzuklappen. */}
-                  <span className="text-[11px] text-textMuted font-mono flex-shrink-0 w-5">{i + 1}.</span>
+                  <span className="text-[11px] text-textMuted zahl flex-shrink-0 w-5">{i + 1}.</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-textMain truncate">{v.name}</span>
-                      <span className="text-[9px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
+                      <span className="text-[9px] rounded px-1.5 py-0.5 border border-line text-textMuted flex-shrink-0">
                         {istHtmlVorlage(v) ? "HTML" : "Text"}
                       </span>
                       {(() => {
@@ -1058,12 +1058,12 @@ export default function EmailMarketing() {
                   vorher aus wie eine erfolgreiche — und landete in der
                   Nachfass-Liste. */}
               {istGescheitert(k.zustellung) ? (
-                <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border border-coral/50 text-coral flex-shrink-0"
+                <span className="text-[10px] rounded px-1.5 py-0.5 border border-coral/50 text-coral flex-shrink-0"
                   title={k.zustellung_grund || ""}>
                   {ZUSTELLUNG_LABELS[k.zustellung]}
                 </span>
               ) : (
-                <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border text-textMuted border-line flex-shrink-0">
+                <span className="text-[10px] rounded px-1.5 py-0.5 border text-textMuted border-line flex-shrink-0">
                   {EMAIL_STATUS[k.status] || k.status}
                 </span>
               )}
@@ -1096,7 +1096,7 @@ export default function EmailMarketing() {
                 sucht man ihn in der Terminliste zusammen. */}
             {k.lead_id && (
               <a href={`/termine?leadId=${k.lead_id}`} className="inline-block text-[11px] text-amber hover:underline mb-2">
-                → zum Termin
+                Zum Termin
               </a>
             )}
             {/* Die Mail selbst — mit Vorlage vorbefüllt, aber änderbar:

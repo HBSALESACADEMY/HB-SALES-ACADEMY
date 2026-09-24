@@ -107,7 +107,7 @@ export default function AdminLogins() {
                     <span className="text-sm text-textMain truncate">{p.name}</span>
                   </button>
                   {p.status && p.status !== "approved" && (
-                    <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">
+                    <span className="text-[10px] text-amber border border-amber/40 rounded px-1.5 py-0.5">
                       {p.status === "pending" ? "wartet auf Freigabe" : p.status}
                     </span>
                   )}
@@ -149,7 +149,7 @@ export default function AdminLogins() {
             <div key={e.id} className="card flex items-center gap-3 !py-2.5">
               <button onClick={() => openProfile(p?.id)}><Avatar name={p?.full_name || "?"} src={p?.avatar_url} size={30} /></button>
               <span className="text-sm text-textMain flex-1">{p?.full_name || "Unbekannt"}</span>
-              <span className="text-xs text-textMuted font-mono">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="text-xs text-textMuted zahl">{d.toLocaleDateString("de-DE")} · {d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>
             </div>
           );
         })}

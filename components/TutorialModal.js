@@ -11,7 +11,7 @@
 export default function TutorialModal({ onClose }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[220] p-4">
-      <div className="card max-w-sm w-full overflow-hidden !p-0">
+      <div className="card schwebt max-w-sm w-full overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
           <div className="text-3xl mb-3">🚀</div>

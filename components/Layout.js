@@ -891,7 +891,7 @@ export default function Layout({ children, fullBleed }) {
             className={`relative overflow-hidden group flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg select-none transition-colors ${mobile ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} ${draggedCategory === category ? "opacity-40 bg-surfaceRaised" : "hover:bg-surfaceRaised/70"}`}
           >
             {shineId === `cat:${category}` && <span className="hb-shine" />}
-            <span className="text-[10.5px] font-bold uppercase tracking-widest text-textMuted flex-1">{category}</span>
+            <span className="text-[10.5px] font-bold text-textMuted flex-1">{category}</span>
             {mobile ? (
               <span className={`text-textMuted text-[10px] leading-none transition-transform ${isCollapsed ? "" : "rotate-90"}`}>▶</span>
             ) : (
@@ -1023,7 +1023,7 @@ export default function Layout({ children, fullBleed }) {
               <div className="w-full h-1.5 bg-line rounded-full overflow-hidden">
                 <div className="h-full bg-amber" style={{ width: `${(into / 150) * 100}%` }} />
               </div>
-              <span className="font-mono text-textMuted">{into}/150 bis Level {level + 1}</span>
+              <span className="zahl text-textMuted">{into}/150 bis Level {level + 1}</span>
             </div>
             <button onClick={() => { setMobileAccountOpen(false); router.push("/settings"); }} className="flex items-center gap-2.5 px-1 py-2 rounded-lg text-[13px] text-textMuted hover:text-textMain text-left">
               <Icon name="lock" size={15} /> Einstellungen
@@ -1098,7 +1098,7 @@ export default function Layout({ children, fullBleed }) {
           <div className="w-full h-1.5 bg-line rounded-full overflow-hidden">
             <div className="h-full bg-amber" style={{ width: `${(into / 150) * 100}%` }} />
           </div>
-          <span className="font-mono text-textMuted">{into}/150 bis Level {level + 1}</span>
+          <span className="zahl text-textMuted">{into}/150 bis Level {level + 1}</span>
         </div>
         {/* Am Rechner gab es keinen Weg zu den Einstellungen — nur im
             Handy-Menü. Wer am Schreibtisch arbeitet, fand damit weder die

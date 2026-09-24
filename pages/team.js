@@ -349,7 +349,7 @@ export default function Team() {
                                 <div className="w-20 h-1 bg-line rounded-full overflow-hidden flex-shrink-0">
                                   <div className="h-full brand-gradient" style={{ width: `${z.fortschritt ? Math.round((m.wert / z.fortschritt) * 100) : 0}%` }} />
                                 </div>
-                                <span className="text-[11px] font-mono text-textMuted w-10 text-right flex-shrink-0">{m.wert}</span>
+                                <span className="text-[11px] zahl text-textMuted w-10 text-right flex-shrink-0">{m.wert}</span>
                               </div>
                             ))}
                         </div>
@@ -467,12 +467,12 @@ export default function Team() {
                   </div>
                   {t.leistung.slice(0, 5).map((l, i) => (
                     <div key={l.id} className="flex items-center gap-2.5 py-1 cursor-pointer" onClick={() => openProfile(l.id)}>
-                      <span className="w-5 text-center text-xs text-textMuted font-mono flex-shrink-0">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
+                      <span className="w-5 text-center text-xs text-textMuted flex-shrink-0">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
                       <Avatar name={l.name} src={l.avatar_url} size={22} />
                       <span className="text-xs text-textMain flex-1 min-w-0 truncate">
                         {l.name}{l.id === selfId && <span className="text-textMuted"> (du)</span>}
                       </span>
-                      <span className="text-xs font-mono text-textMain flex-shrink-0">{l.wert}</span>
+                      <span className="text-xs zahl text-textMain flex-shrink-0">{l.wert}</span>
                     </div>
                   ))}
                 </div>
@@ -516,7 +516,7 @@ export default function Team() {
                       {/* Der Beitrag je Person ist bewusst nicht für alle sichtbar —
                           er zeigt die Leistung einzelner Kolleg:innen. */}
                       {t.ziele.map((z) => z.beitraege && (
-                        <span key={z.id} className="text-xs text-textMuted font-mono flex-shrink-0" title={z.title}>
+                        <span key={z.id} className="text-xs text-textMuted zahl flex-shrink-0" title={z.title}>
                           {z.beitraege[m.id] || 0} {goalMetricLabel(z.metric)}
                         </span>
                       ))}
@@ -544,9 +544,9 @@ export default function Team() {
             const isMyTeam = myTeamIdSet.has(t.teamId);
             return (
               <div key={t.teamId} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isMyTeam ? "bg-surfaceRaised border border-amber/30" : ""}`}>
-                <span className="w-6 text-center text-sm text-textMuted font-mono">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
+                <span className="w-6 text-center text-sm text-textMuted">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
                 <span className="flex-1 text-sm text-textMain min-w-0">{t.name}{isMyTeam && <span className="text-amber"> (dein Team)</span>} <span className="text-textMuted text-xs">· {t.mitglieder} Mitglieder</span></span>
-                <span className="font-mono text-sm text-textMain flex-shrink-0">{t.wert}</span>
+                <span className="zahl text-sm text-textMain flex-shrink-0">{t.wert}</span>
               </div>
             );
           })}
@@ -635,7 +635,7 @@ export default function Team() {
           <div className="font-semibold text-textMain text-sm">Rangliste der Organisation</div>
           <div className="text-xs text-textMuted">Alle Mitglieder nach XP, nicht nur dein Team.</div>
         </div>
-        <span className="text-xs text-textMuted flex-shrink-0">öffnen →</span>
+        <span className="text-xs text-textMuted flex-shrink-0">öffnen</span>
       </div>
 
     </Layout>

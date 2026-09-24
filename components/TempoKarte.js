@@ -72,18 +72,18 @@ export default function TempoKarte({ ereignisse = [], personen = [] }) {
                   {jePerson.map((p) => (
                     <tr key={p.id} className="border-t border-line">
                       <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{p.name}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">{p.tempo.anrufe}</td>
-                      <td className="py-1.5 px-2 text-right font-mono text-textMain">
+                      <td className="py-1.5 px-2 text-right zahl">{p.tempo.anrufe}</td>
+                      <td className="py-1.5 px-2 text-right zahl text-textMain">
                         {p.tempo.proStunde === null ? "—" : String(p.tempo.proStunde).replace(".", ",")}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono">{dauerText(p.tempo.aktiveMinuten)}</td>
-                      <td className="py-1.5 px-2 text-right font-mono">
+                      <td className="py-1.5 px-2 text-right zahl">{dauerText(p.tempo.aktiveMinuten)}</td>
+                      <td className="py-1.5 px-2 text-right zahl">
                         {p.tempo.medianAbstand === null ? "—" : `${p.tempo.medianAbstand} min`}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono">
+                      <td className="py-1.5 px-2 text-right zahl">
                         {p.tempo.pausen === 0 ? "—" : `${p.tempo.pausen} · ${dauerText(p.tempo.pausenMinuten)}`}
                       </td>
-                      <td className="py-1.5 px-2 text-right font-mono text-textMuted">
+                      <td className="py-1.5 px-2 text-right zahl text-textMuted">
                         {p.tempo.fruehesterStart ? `${p.tempo.fruehesterStart}–${p.tempo.spaetestesEnde}` : "—"}
                       </td>
                     </tr>

@@ -405,7 +405,7 @@ export default function ContentAdmin() {
                   <div>
                     <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
                     <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-teal mt-1">{folders.find((f) => f.id === c.nav_item_id)?.label || "Ohne Ordner"}</div>
+                    <div className="text-[10px] text-teal mt-1">{folders.find((f) => f.id === c.nav_item_id)?.label || "Ohne Ordner"}</div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => startEditCourse(c)} className="btn-ghost text-xs">Bearbeiten</button>
@@ -458,7 +458,7 @@ export default function ContentAdmin() {
                     <div key={m.id} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2">
                       <Icon name="book" size={14} />
                       <span className="text-sm flex-1">{m.title}</span>
-                      {m.video_url && <span className="text-[10px] uppercase text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
+                      {m.video_url && <span className="text-[10px] text-teal border border-teal/40 rounded px-1.5 py-0.5">Video</span>}
                       {m.file_url && (
                         <DateiKnopf url={m.file_url} className="btn-ghost text-xs inline-flex items-center gap-1">
                           <Icon name="download" size={11} /> {m.file_name || "Anhang"}

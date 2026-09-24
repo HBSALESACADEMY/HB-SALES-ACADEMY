@@ -424,7 +424,7 @@ export default function Roleplay() {
       {feedback && (
         <div className="card mt-4">
           <div className="flex items-center gap-3 mb-3">
-            <span className="font-mono text-xl font-bold text-textMain">{feedback.score !== null ? feedback.score + "%" : "–"}</span>
+            <span className="zahl text-xl font-bold text-textMain">{feedback.score !== null ? feedback.score + "%" : "–"}</span>
             <AIBadge title="Diese Auswertung wurde automatisch von einer KI erstellt." />
           </div>
           <p className="text-sm text-textMuted mb-3">{feedback.zusammenfassung}</p>

@@ -160,7 +160,7 @@ export default function FlashcardsAdmin() {
         {Object.keys(grouped).length === 0 && <p className="text-textMuted text-sm">Noch keine Flashcards angelegt.</p>}
         {Object.entries(grouped).map(([tag, list]) => (
           <div key={tag} className="card">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-amber mb-3">{tag} · {list.length} Karte{list.length === 1 ? "" : "n"}</div>
+            <div className="text-[10.5px] font-semibold text-amber mb-3">{tag} · {list.length} Karte{list.length === 1 ? "" : "n"}</div>
             <div className="flex flex-col gap-2">
               {list.map((c) => (
                 <div key={c.id} className="flex items-start gap-3 border border-line rounded-lg px-3 py-2">

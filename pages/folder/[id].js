@@ -51,7 +51,7 @@ export default function FolderView() {
                 <div className="font-display text-base font-semibold text-textMain">{c.title}</div>
                 <div className="text-xs text-textMuted mt-0.5">{c.description}</div>
               </div>
-              <span className="font-mono text-xs text-textMuted">{counts[c.id] || 0} Module</span>
+              <span className="zahl text-xs text-textMuted">{counts[c.id] || 0} Module</span>
             </div>
           ))}
         </div>

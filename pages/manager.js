@@ -620,7 +620,7 @@ export default function Manager() {
                   {laufend.length > 0 && <div className="mb-3">{laufend.map((g) => zeile(g, false))}</div>}
                   {vorbei.length > 0 && (
                     <div className="mb-3">
-                      <div className="text-[11px] uppercase tracking-wide text-textMuted mt-2 mb-1">Vergangene Ziele</div>
+                      <div className="text-[11px] text-textMuted mt-2 mb-1">Vergangene Ziele</div>
                       {vorbei.slice(0, 10).map((g) => zeile(g, true))}
                     </div>
                   )}
@@ -717,7 +717,7 @@ export default function Manager() {
                       <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
                         <div className="h-full bg-teal" style={{ width: `${(count / max) * 100}%` }} />
                       </div>
-                      <span className="font-mono text-xs text-textMuted w-6 text-right">{count}</span>
+                      <span className="zahl text-xs text-textMuted w-6 text-right">{count}</span>
                     </div>
                   );
                 })}

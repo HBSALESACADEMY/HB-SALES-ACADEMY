@@ -307,7 +307,7 @@ export default function Recordings() {
             ))}
           </select>
           <div>
-            <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1.5">Ergebnis — in welchen Ordner soll die Aufnahme?</div>
+            <div className="text-[10.5px] text-textMuted mb-1.5">Ergebnis — in welchen Ordner soll die Aufnahme?</div>
             <div className="flex items-center gap-2">
               {[["positiv", "Positiv"], ["negativ", "Negativ"]].map(([key, l]) => (
                 <button key={key} onClick={() => setOutcome(key)}
@@ -475,16 +475,16 @@ export default function Recordings() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     {r.label || "Ohne Kontext"}
-                    {r.visibility === "org" && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Ganzes Unternehmen</span>}
-                    {r.visibility === "team_lead" && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Teamlead/Manager</span>}
+                    {r.visibility === "org" && <span className="text-[10px] text-violet border border-violet/40 rounded px-1.5 py-0.5">Ganzes Unternehmen</span>}
+                    {r.visibility === "team_lead" && <span className="text-[10px] text-amber border border-amber/40 rounded px-1.5 py-0.5">Teamlead/Manager</span>}
                     {r.status === "evaluated" && r.evaluation_score != null && (
-                      <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Score {r.evaluation_score}</span>
+                      <span className="text-[10px] text-teal border border-teal/40 rounded px-1.5 py-0.5">Score {r.evaluation_score}</span>
                     )}
                     {r.outcome === "positiv" && (
-                      <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Positiv</span>
+                      <span className="text-[10px] text-teal border border-teal/40 rounded px-1.5 py-0.5">Positiv</span>
                     )}
                     {r.outcome === "negativ" && (
-                      <span className="text-[10px] uppercase tracking-wide text-coral border border-coral/40 rounded px-1.5 py-0.5">Negativ</span>
+                      <span className="text-[10px] text-coral border border-coral/40 rounded px-1.5 py-0.5">Negativ</span>
                     )}
                   </div>
                   {assignedLead && (
@@ -564,13 +564,13 @@ export default function Recordings() {
                 <div className="mt-3 pt-3 border-t border-line flex flex-col gap-3">
                   {r.evaluation_detail.gespraechsstruktur && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Gesprächsaufbau</div>
+                      <div className="text-[10.5px] text-textMuted mb-1">Gesprächsaufbau</div>
                       <p className="text-xs text-textMuted">{r.evaluation_detail.gespraechsstruktur}</p>
                     </div>
                   )}
                   {r.evaluation_detail.phasen?.length > 0 && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Gesprächsphasen</div>
+                      <div className="text-[10.5px] text-textMuted mb-1">Gesprächsphasen</div>
                       <div className="flex flex-col gap-2">
                         {r.evaluation_detail.phasen.map((p, i) => (
                           <div key={i} className="text-xs">
@@ -592,13 +592,13 @@ export default function Recordings() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {r.evaluation_detail.tonalitaet && (
                         <div>
-                          <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Tonalität</div>
+                          <div className="text-[10.5px] text-textMuted mb-1">Tonalität</div>
                           <p className="text-xs text-textMuted">{r.evaluation_detail.tonalitaet}</p>
                         </div>
                       )}
                       {r.evaluation_detail.anrede && (
                         <div>
-                          <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Anrede (Sie/Du)</div>
+                          <div className="text-[10.5px] text-textMuted mb-1">Anrede (Sie/Du)</div>
                           <p className="text-xs text-textMuted">{r.evaluation_detail.anrede}</p>
                         </div>
                       )}
@@ -606,7 +606,7 @@ export default function Recordings() {
                   )}
                   {r.evaluation_detail.staerken?.length > 0 && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-teal mb-1">Stärken</div>
+                      <div className="text-[10.5px] text-teal mb-1">Stärken</div>
                       <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
                         {r.evaluation_detail.staerken.map((s, i) => <li key={i}>{s}</li>)}
                       </ul>
@@ -614,7 +614,7 @@ export default function Recordings() {
                   )}
                   {r.evaluation_detail.verbesserung?.length > 0 && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-amber mb-1">Verbesserung</div>
+                      <div className="text-[10.5px] text-amber mb-1">Verbesserung</div>
                       <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
                         {r.evaluation_detail.verbesserung.map((s, i) => <li key={i}>{s}</li>)}
                       </ul>
@@ -622,7 +622,7 @@ export default function Recordings() {
                   )}
                   {r.evaluation_detail.einwaende?.length > 0 && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-coral mb-1">Einwände</div>
+                      <div className="text-[10.5px] text-coral mb-1">Einwände</div>
                       <div className="flex flex-col gap-2">
                         {r.evaluation_detail.einwaende.map((e, i) => (
                           <div key={i} className="text-xs">
@@ -636,7 +636,7 @@ export default function Recordings() {
                   )}
                   {r.evaluation_detail.beispielsaetze?.length > 0 && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-violet mb-1">Beispielsätze</div>
+                      <div className="text-[10.5px] text-violet mb-1">Beispielsätze</div>
                       <div className="flex flex-col gap-1.5">
                         {r.evaluation_detail.beispielsaetze.map((b, i) => (
                           <div key={i} className="text-xs">
@@ -649,7 +649,7 @@ export default function Recordings() {
                   )}
                   {r.evaluation_detail.phrasenKorrektur?.length > 0 && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-amber mb-1">Gesagte Sätze — korrigiert</div>
+                      <div className="text-[10.5px] text-amber mb-1">Gesagte Sätze — korrigiert</div>
                       <div className="flex flex-col gap-2">
                         {r.evaluation_detail.phrasenKorrektur.map((p, i) => (
                           <div key={i} className="text-xs">
@@ -662,7 +662,7 @@ export default function Recordings() {
                   )}
                   {r.evaluation_detail.naechsteSchritte && (
                     <div>
-                      <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-1">Nächste Schritte</div>
+                      <div className="text-[10.5px] text-textMuted mb-1">Nächste Schritte</div>
                       <p className="text-xs text-textMain">{r.evaluation_detail.naechsteSchritte}</p>
                     </div>
                   )}

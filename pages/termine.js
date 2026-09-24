@@ -1187,10 +1187,10 @@ export default function Termine() {
                 onClick={() => setExpandedLeadId(lead.id)}
                 className={`sm:col-span-2 lg:col-span-3 text-left w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-line bg-surface hover:bg-surfaceRaised transition ${isHighlighted ? "ring-2 ring-amber" : ""}`}
               >
-                <span className="text-[11px] font-mono text-textMuted flex-shrink-0 w-[8.5rem] hidden sm:block">{tagUndZeit(lead.appointment_at)}</span>
-                <span className="text-[11px] font-mono text-textMuted flex-shrink-0 sm:hidden">{nurUhrzeit(lead.appointment_at, DEUTSCHE_ZONE)}</span>
+                <span className="text-[11px] zahl text-textMuted flex-shrink-0 w-[8.5rem] hidden sm:block">{tagUndZeit(lead.appointment_at)}</span>
+                <span className="text-[11px] zahl text-textMuted flex-shrink-0 sm:hidden">{nurUhrzeit(lead.appointment_at, DEUTSCHE_ZONE)}</span>
                 {kundentermin && kuerzelVon(art) && (
-                  <span className="font-mono text-[11px] flex-shrink-0" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}</span>
+                  <span className="text-[11px] flex-shrink-0" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}</span>
                 )}
                 {!kundentermin && <span className="flex-shrink-0 text-textMuted" title="Persönlicher Termin"><Icon name="pin" size={12} /></span>}
                 <span className="text-sm text-textMain truncate flex-1 min-w-0">
@@ -1204,11 +1204,11 @@ export default function Termine() {
                 {/* Das Ergebnis ist in der Vergangenheit die eigentliche
                     Auskunft — der Status sagt dort nur noch wenig. */}
                 {kundentermin && lead.outcome ? (
-                  <span className={`text-[10px] uppercase tracking-wide flex-shrink-0 text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
+                  <span className={`text-[10px] flex-shrink-0 text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
                     {OUTCOME_LABELS[lead.outcome]}
                   </span>
                 ) : (
-                  <span className={`text-[10px] uppercase tracking-wide flex-shrink-0 text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>
+                  <span className={`text-[10px] flex-shrink-0 text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>
                     {STATUS_LABELS[lead.status]}
                   </span>
                 )}
@@ -1226,16 +1226,16 @@ export default function Termine() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold text-textMain text-sm truncate">
-                    {kundentermin && kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>}
+                    {kundentermin && kuerzelVon(art) && <span className="mr-1" style={{ color: art.farbe }} title={art.label}>{kuerzelVon(art)}:</span>}
                     {!kundentermin && <span className="mr-1 inline-flex align-[-2px] text-textMuted" title="Persönlicher Termin"><Icon name="pin" size={12} /></span>}
                     {lead.name}
                   </span>
-                  <span className={`text-[9px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
+                  <span className={`text-[9px] text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5 flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
                 </div>
                 {companyField && getLeadFieldValue(lead, companyField) && (
                   <div className="text-xs text-textMuted truncate">{getLeadFieldValue(lead, companyField)}</div>
                 )}
-                <div className="text-xs font-mono text-textMain">{nurZeit(lead.appointment_at)}</div>
+                <div className="text-xs zahl text-textMain">{nurZeit(lead.appointment_at)}</div>
                 {kundentermin && <Fortschrittsbalken lead={lead} kompakt />}
                 {viewMode === "team" && owner && (
                   <div className="flex items-center gap-1.5 text-xs text-textMuted mt-0.5">
@@ -1268,21 +1268,21 @@ export default function Termine() {
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-textMain flex items-center gap-2 flex-wrap">
                     <span>
-                      {kundentermin && kuerzelVon(art) && <span className="font-mono mr-1" style={{ color: art.farbe }} title={art.hinweis}>{kuerzelVon(art)}:</span>}
+                      {kundentermin && kuerzelVon(art) && <span className="mr-1" style={{ color: art.farbe }} title={art.hinweis}>{kuerzelVon(art)}:</span>}
                       {!kundentermin && <span className="mr-1 inline-flex align-[-2px] text-textMuted" title="Persönlicher Termin"><Icon name="pin" size={12} /></span>}
                       {lead.name}
                     </span>
                     {lead.follow_up_of && (
-                      <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">
+                      <span className="text-[10px] text-violet border border-violet/40 rounded px-1.5 py-0.5">
                         Folgetermin
                       </span>
                     )}
                     {checkboxFields.map((f) => getLeadFieldValue(lead, f) ? (
-                      <span key={f.key} className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">{f.label}</span>
+                      <span key={f.key} className="text-[10px] text-violet border border-violet/40 rounded px-1.5 py-0.5">{f.label}</span>
                     ) : null)}
-                    <span className={`text-[10px] uppercase tracking-wide text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>{STATUS_LABELS[lead.status]}</span>
+                    <span className={`text-[10px] text-${statusColor} border border-${statusColor}/40 rounded px-1.5 py-0.5`}>{STATUS_LABELS[lead.status]}</span>
                     {lead.outcome && (
-                      <span className={`text-[10px] uppercase tracking-wide text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
+                      <span className={`text-[10px] text-${OUTCOME_COLORS[lead.outcome]} border border-${OUTCOME_COLORS[lead.outcome]}/40 rounded px-1.5 py-0.5`}>
                         {OUTCOME_LABELS[lead.outcome]}
                       </span>
                     )}
@@ -1291,7 +1291,7 @@ export default function Termine() {
                     <div className="text-xs text-textMuted mt-0.5">{getLeadFieldValue(lead, companyField)}</div>
                   )}
                 </div>
-                <div className="text-xs font-mono text-textMain flex-shrink-0">{formatAppointment(lead.appointment_at)}</div>
+                <div className="text-xs zahl text-textMain flex-shrink-0">{formatAppointment(lead.appointment_at)}</div>
               </div>
 
               {/* Persönlicher Termin: nur der Schalter, sonst nichts von
@@ -1414,7 +1414,7 @@ export default function Termine() {
 
               {(lead.call_notes_status || lead.call_notes) && (
                 <div className="card !py-3 !px-3.5 mb-2 border border-violet/30">
-                  <div className="text-[10.5px] uppercase tracking-wide text-violet mb-1.5">Notizen aus der Aufnahme</div>
+                  <div className="text-[10.5px] text-violet mb-1.5">Notizen aus der Aufnahme</div>
                   {lead.call_notes_status === "pending" && <p className="text-xs text-textMuted">Wird erstellt — das dauert einen Moment.</p>}
                   {lead.call_notes_status === "failed" && <p className="text-xs text-coral">Konnte nicht erstellt werden.</p>}
                   {lead.call_notes && (
@@ -1448,7 +1448,7 @@ export default function Termine() {
                     nahm das zurück und warf den Balken von 85 % zurück. */}
                 {kundentermin && art.key !== "checkin" && (
                 <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Ergebnis</span>
+                  <span className="text-[10px] text-textMuted w-28 flex-shrink-0 pt-1.5">Ergebnis</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
                     {/* Das gewählte Ergebnis ist hervorgehoben, nicht
                         gesperrt: ein zweites Tippen nimmt es zurück. */}
@@ -1470,7 +1470,7 @@ export default function Termine() {
                 )}
 
                 <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
-                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Nächster Schritt</span>
+                  <span className="text-[10px] text-textMuted w-28 flex-shrink-0 pt-1.5">Nächster Schritt</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
                     {/* Der Closing Call ist kein Ergebnis, sondern die nächste
                         Stufe: das Gespräch, in dem abgeschlossen wird. */}
@@ -1506,7 +1506,7 @@ export default function Termine() {
                 </div>
 
                 <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
-                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Status</span>
+                  <span className="text-[10px] text-textMuted w-28 flex-shrink-0 pt-1.5">Status</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
                     {Object.keys(STATUS_LABELS).map((s) => (
                       <button key={s} disabled={lead.status === s} onClick={() => updateStatus(lead.id, s)} className="btn-ghost text-xs disabled:opacity-30">
@@ -1517,7 +1517,7 @@ export default function Termine() {
                 </div>
 
                 <div className="flex items-start gap-2 flex-wrap border-t border-line pt-2">
-                  <span className="text-[10px] uppercase tracking-wide text-textMuted w-28 flex-shrink-0 pt-1.5">Weiteres</span>
+                  <span className="text-[10px] text-textMuted w-28 flex-shrink-0 pt-1.5">Weiteres</span>
                   <div className="flex items-center gap-2 flex-wrap flex-1">
                     {/* In den eigenen Kalender: eine .ics-Datei, die Apple,
                         Google und Outlook gleichermassen lesen — ohne Anbindung
@@ -1652,7 +1652,7 @@ export default function Termine() {
                   <div className="pt-2 mt-2 border-t border-line">
                     {tasks.length > 0 && (
                       <div className="flex flex-col gap-2 mb-3">
-                        <span className="text-[10px] text-textMuted font-semibold uppercase tracking-wide">Aufgaben</span>
+                        <span className="text-[10px] text-textMuted font-semibold">Aufgaben</span>
                         {tasks.map((t) => {
                           const urgency = taskUrgency(t.due_date, t.done);
                           const style = urgency ? URGENCY_STYLES[urgency.level] : null;
@@ -1845,7 +1845,7 @@ function Monatskalender({ monat, gewaehlterTag, leads, onMonatWechseln, onTagWae
 
       <div className="grid grid-cols-7 gap-1 mb-1">
         {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((t) => (
-          <div key={t} className="text-[10.5px] uppercase tracking-wide text-textMuted text-center py-1">{t}</div>
+          <div key={t} className="text-[10.5px] text-textMuted text-center py-1">{t}</div>
         ))}
       </div>
 

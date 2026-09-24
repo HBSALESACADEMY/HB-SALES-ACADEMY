@@ -136,7 +136,7 @@ export default function Admin() {
                   <div className="flex-1 min-w-[180px]">
                     <div className="font-semibold text-textMain text-sm flex items-center gap-2">
                       {u.full_name || "Unbenannt"}
-                      <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Ausstehend</span>
+                      <span className="text-[10px] text-amber border border-amber/40 rounded px-1.5 py-0.5">Ausstehend</span>
                     </div>
                     <div className="text-xs text-textMuted mt-1">{u.email || "–"}{isPlatformAdmin && u.organization_name ? ` · ${u.organization_name}` : ""}</div>
                   </div>
@@ -165,19 +165,19 @@ export default function Admin() {
               <div className="flex-1 min-w-[180px]">
                 <div className="font-semibold text-textMain text-sm flex items-center gap-2">
                   {u.full_name || "Unbenannt"}
-                  {isSelf && <span className="text-[10px] uppercase tracking-wide text-textMuted border border-line rounded px-1.5 py-0.5">Du</span>}
+                  {isSelf && <span className="text-[10px] text-textMuted border border-line rounded px-1.5 py-0.5">Du</span>}
                   <span
-                    className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5 cursor-help"
+                    className="text-[10px] text-amber border border-amber/40 rounded px-1.5 py-0.5 cursor-help"
                     title={describeRole(u).description}
                   >
                     {describeRole(u).label}
                   </span>
                   {u.is_team_lead && (
-                    <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5 cursor-help" title="Hat mindestens ein Team gegründet und leitet es.">
+                    <span className="text-[10px] text-teal border border-teal/40 rounded px-1.5 py-0.5 cursor-help" title="Hat mindestens ein Team gegründet und leitet es.">
                       Teamleiter
                     </span>
                   )}
-                  {u.status === "rejected" && <span className="text-[10px] uppercase tracking-wide text-coral border border-coral/40 rounded px-1.5 py-0.5">Abgelehnt</span>}
+                  {u.status === "rejected" && <span className="text-[10px] text-coral border border-coral/40 rounded px-1.5 py-0.5">Abgelehnt</span>}
                 </div>
                 <div className="text-xs text-textMuted mt-1">{u.email || "–"}{isPlatformAdmin && u.organization_name ? ` · ${u.organization_name}` : ""}</div>
               </div>

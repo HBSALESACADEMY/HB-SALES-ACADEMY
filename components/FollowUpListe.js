@@ -33,7 +33,7 @@ export default function FollowUpListe({
       {gruppen.map((gruppe) => (
         <div key={gruppe.key} className="mb-4">
           <div className="flex items-baseline gap-2 mb-1.5">
-            <span className={`text-xs font-semibold uppercase tracking-wide ${TON[gruppe.ton].text}`}>{gruppe.label}</span>
+            <span className={`text-xs font-semibold ${TON[gruppe.ton].text}`}>{gruppe.label}</span>
             <span className="text-xs text-textMuted zahl">{gruppe.leads.length}</span>
             <span className="text-[11px] text-textMuted">· {gruppe.hinweis}</span>
           </div>
@@ -53,7 +53,7 @@ export default function FollowUpListe({
                     aria-expanded={offen}
                     aria-label={`${l.name}${l.company ? `, ${l.company}` : ""} — liegt ${tage} Tage`}>
                     {kuerzelVon(art) && (
-                      <span className="font-mono text-[11px] flex-shrink-0" style={{ color: art.farbe }} title={art.label}>
+                      <span className="text-[11px] flex-shrink-0" style={{ color: art.farbe }} title={art.label}>
                         {kuerzelVon(art)}
                       </span>
                     )}
@@ -100,7 +100,7 @@ export default function FollowUpListe({
                           </button>
                         ))}
                         <a href={`/termine?leadId=${l.id}`} className="btn-ghost text-xs ml-auto">
-                          Zum Termin →
+                          Zum Termin
                         </a>
                       </div>
                     </div>}

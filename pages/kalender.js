@@ -815,7 +815,7 @@ export default function Kalender() {
           <textarea className="input" rows={2} placeholder="Ergänzung (optional)" value={entwurf.beschreibung} maxLength={500}
             onChange={(e) => setEntwurf((z) => ({ ...z, beschreibung: e.target.value }))} />
           <div>
-            <div className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Einladen (optional)</div>
+            <div className="text-[11px] text-textMuted mb-1">Einladen (optional)</div>
             <PersonenAuswahl
               personen={(daten?.personen || []).filter((p) => p.id !== daten?.selbst)}
               ausgewaehlt={neueGaeste}
@@ -843,7 +843,7 @@ export default function Kalender() {
               <LogoHintergrund />
               <div className="relative grid grid-cols-7 gap-1 mb-1">
                 {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((t) => (
-                  <div key={t} className="text-[10px] uppercase tracking-wide text-textMuted text-center">{t}</div>
+                  <div key={t} className="text-[10px] text-textMuted text-center">{t}</div>
                 ))}
               </div>
               <div className="relative grid grid-cols-7 gap-1">
@@ -1252,7 +1252,7 @@ function TagesInhalt({ inhalt, kompakt, einladungenZu, meinStatus, personen, sel
               {!kompakt && a.autor ? ` · ${a.autor}` : ""}
             </div>
             {!kompakt && a.lead_id && (
-              <a href={`/termine?leadId=${a.lead_id}`} className="text-[11px] text-amber hover:underline">→ zum Termin</a>
+              <a href={`/termine?leadId=${a.lead_id}`} className="text-[11px] text-amber hover:underline">Zum Termin</a>
             )}
           </div>
         </div>

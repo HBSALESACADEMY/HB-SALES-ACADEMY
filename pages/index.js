@@ -472,14 +472,14 @@ export default function Dashboard() {
               <span className="text-sm text-textMuted flex-1">
                 Noch keine Anwahlen erfasst. Im Call Tracker zählst du sie mit einem Tipp — dann steht deine Leistung hier.
               </span>
-              <span className="text-[11px] text-textMuted">Öffnen →</span>
+              <span className="text-[11px] text-textMuted">Öffnen</span>
             </div>
           )}
 
           {leistung && (leistung.woche > 0 || leistung.heute > 0) && (
             <div className="card mb-5 cursor-pointer" onClick={() => router.push("/call-tracker")}>
               <KartenKopf titel="Deine Anwahlen" zeitraum="letzte 7 Tage">
-                <span className="text-[11px] text-textMuted">Zum Call Tracker →</span>
+                <span className="text-[11px] text-textMuted">Zum Call Tracker</span>
               </KartenKopf>
               {/* Vier Kennzahlen im gleichen Raster statt vier verschieden
                   grosser Zahlen in einer Reihe (components/Kennzahl.js). */}
@@ -515,11 +515,11 @@ export default function Dashboard() {
               <div className="card mb-5">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-semibold text-textMain text-sm flex-1">🚀 Dein Onboarding</span>
-                  <span className="text-[11px] font-mono text-textMuted">{plan.erledigt} von {plan.gesamt}</span>
+                  <span className="text-[11px] zahl text-textMuted">{plan.erledigt} von {plan.gesamt}</span>
                 </div>
                 <div className="flex items-center gap-2 mb-3">
                   <OnboardingBalken prozent={plan.prozent} warnung={plan.ueberfaellig > 0} />
-                  <span className="text-[11px] font-mono text-textMuted">{plan.prozent} %</span>
+                  <span className="text-[11px] zahl text-textMuted">{plan.prozent} %</span>
                 </div>
                 {onboardingFehler && <p className="text-xs text-coral mb-2">{onboardingFehler}</p>}
                 <div className="flex flex-col">
@@ -594,7 +594,7 @@ export default function Dashboard() {
 
           {(myOpenTasks.length > 0 || upcomingLeads.length > 0 || meineFollowUps.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
-              <div className="text-[11px] uppercase tracking-wide text-textMuted">Heute</div>
+              <div className="text-[11px] text-textMuted">Heute</div>
               {myOpenTasks.length > 0 && (
                 <div className="">
                   <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/termine")}>✅ Offene Aufgaben</div>
@@ -638,7 +638,7 @@ export default function Dashboard() {
                         <div key={n.id} onClick={() => router.push("/kalender")}
                           className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 cursor-pointer ${ueberfaellig ? "border-coral/50 bg-coral/5" : "border-line"}`}>
                           <span className="text-sm text-textMain flex-1 truncate">{n.titel}</span>
-                          <span className={`text-xs font-mono flex-shrink-0 ${ueberfaellig ? "text-coral" : "text-textMuted"}`}>
+                          <span className={`text-xs zahl flex-shrink-0 ${ueberfaellig ? "text-coral" : "text-textMuted"}`}>
                             {new Date(n.faellig_am).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(n.faellig_am).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
@@ -656,7 +656,7 @@ export default function Dashboard() {
                     {upcomingLeads.slice(0, 3).map((l) => (
                       <div key={l.id} onClick={() => router.push("/termine")} className="flex items-center gap-3 cursor-pointer">
                         <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
-                        <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                        <span className="text-xs zahl text-textMuted flex-shrink-0">
                           {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
@@ -671,7 +671,7 @@ export default function Dashboard() {
 
           {(teamZiele.length > 0 || teamUpcomingLeads.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
-              <div className="text-[11px] uppercase tracking-wide text-textMuted">Mein Team</div>
+              <div className="text-[11px] text-textMuted">Mein Team</div>
               {teamZiele.length > 0 && (
                 <div className="">
                   <div className="font-semibold text-textMain text-sm mb-2.5 cursor-pointer" onClick={() => router.push("/team")}>🎯 Team-Ziele</div>
@@ -688,7 +688,7 @@ export default function Dashboard() {
                             {z.title}
                             {z.von && z.bis && <span className="text-textMuted"> · {zeitraumLabel(z.von, z.bis)}</span>}
                           </span>
-                          <span className="text-xs text-textMuted flex-shrink-0 font-mono">{z.fortschritt}/{z.target_count} {goalMetricLabel(z.metric)}</span>
+                          <span className="text-xs text-textMuted flex-shrink-0 zahl">{z.fortschritt}/{z.target_count} {goalMetricLabel(z.metric)}</span>
                         </div>
                         <div className="h-2 bg-line rounded-full overflow-hidden">
                           <div className="h-full brand-gradient transition-all" style={{ width: `${Math.min(100, (z.fortschritt / z.target_count) * 100)}%` }} />
@@ -707,7 +707,7 @@ export default function Dashboard() {
                       <div key={l.id} onClick={() => router.push("/termine")} className="flex items-center gap-3 cursor-pointer">
                         <span className="text-sm text-textMain flex-1 truncate">{l.name}{l.company ? ` · ${l.company}` : ""}</span>
                         <span className="text-xs text-textMuted flex-shrink-0">{l.creatorName || "Unbenannt"}</span>
-                        <span className="text-xs font-mono text-textMuted flex-shrink-0">
+                        <span className="text-xs zahl text-textMuted flex-shrink-0">
                           {new Date(l.appointment_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} · {new Date(l.appointment_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
@@ -725,7 +725,7 @@ export default function Dashboard() {
             <div className="card mb-5 cursor-pointer" onClick={() => router.push("/admin/insights")}>
               <div className="flex items-center justify-between mb-3">
                 <span className="font-semibold text-textMain text-sm">📊 Insights (Admin)</span>
-                <span className="text-xs text-amber">Alle Details →</span>
+                <span className="text-xs text-amber">Alle Details</span>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -749,12 +749,12 @@ export default function Dashboard() {
           ) : (
             <>
 
-              <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Mein Fortschritt</div>
+              <div className="text-[11px] text-textMuted mb-2">Mein Fortschritt</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-textMain font-mono">{doneModuleIds.size}/{totalModules}</div></div>
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-textMain font-mono">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Zertifikate</div><div className="text-2xl font-display font-bold text-textMain font-mono">{certCount}/{COURSES.length}</div></div>
-                <div className="card"><div className="text-[11px] text-textMuted uppercase mb-1.5">Rollenspiele</div><div className="text-2xl font-display font-bold text-textMain font-mono">{rpSessions.length}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Module abgeschlossen</div><div className="text-2xl font-display font-bold text-textMain zahl">{doneModuleIds.size}/{totalModules}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Ø MC-Ergebnis</div><div className="text-2xl font-display font-bold text-textMain zahl">{avgMc !== null ? avgMc + "%" : "–"}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Zertifikate</div><div className="text-2xl font-display font-bold text-textMain zahl">{certCount}/{COURSES.length}</div></div>
+                <div className="card"><div className="text-[11px] text-textMuted mb-1.5">Rollenspiele</div><div className="text-2xl font-display font-bold text-textMain zahl">{rpSessions.length}</div></div>
               </div>
 
               <div className="card mb-5">
@@ -772,7 +772,7 @@ export default function Dashboard() {
                         <div key={c.id} className="flex items-center gap-3 text-sm">
                           <span style={{ color: c.accent }}>{passed ? <Icon name="check" size={14} /> : <Icon name="book" size={14} />}</span>
                           <span className="flex-1 text-textMain">{c.title}</span>
-                          <span className="text-textMuted font-mono text-xs">{doneCount}/{c.modules.length} Module</span>
+                          <span className="text-textMuted zahl text-xs">{doneCount}/{c.modules.length} Module</span>
                         </div>
                       );
                     })}
@@ -798,7 +798,7 @@ export default function Dashboard() {
               {/* Schnellzugriff und Austausch stehen bewusst unten: sie sind
                   Absprünge, keine Aufgaben. Oben gehört hin, was heute zu tun ist. */}
               <div className="flex items-center gap-2 mt-5 mb-2">
-                <span className="text-[11px] uppercase tracking-wide text-textMuted">Schnellzugriff</span>
+                <span className="text-[11px] text-textMuted">Schnellzugriff</span>
                 <button onClick={() => setKachelnBearbeiten((v) => !v)} className="btn-ghost text-[11px] ml-auto">
                   {kachelnBearbeiten ? "Fertig" : "Bearbeiten"}
                 </button>
@@ -847,7 +847,7 @@ export default function Dashboard() {
                 const rest = DASHBOARD_KACHELN.filter((k) => !sichtbar.has(k.key) && (!k.nurFuehrung || hub.isManager));
                 return (
                   <div className="card mb-5">
-                    <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Hinzufügen</div>
+                    <div className="text-[11px] text-textMuted mb-2">Hinzufügen</div>
                     {rest.length === 0 ? (
                       <p className="text-xs text-textMuted">Alle Kacheln sind schon auf dem Dashboard.</p>
                     ) : (
@@ -872,7 +872,7 @@ export default function Dashboard() {
 
           {(pendingFriendReqs.length > 0 || myMentions.length > 0) && (
             <div className="card mb-5 flex flex-col gap-4">
-              <div className="text-[11px] uppercase tracking-wide text-textMuted">Austausch</div>
+              <div className="text-[11px] text-textMuted">Austausch</div>
               {pendingFriendReqs.length > 0 && (
                 <div>
                   <div className="font-semibold text-textMain text-sm mb-2.5">🤝 Freundschaftsanfragen</div>

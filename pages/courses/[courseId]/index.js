@@ -27,7 +27,7 @@ function FeedbackDetail({ feedback, keyPoints }) {
       {feedback.feedback && <p className="text-xs text-textMuted leading-relaxed mb-2">{feedback.feedback}</p>}
       {feedback.erfuellteKriterien?.length > 0 && (
         <div className="mb-2">
-          <div className="text-[10px] uppercase tracking-wide text-teal mb-1">Erfüllt</div>
+          <div className="text-[10px] text-teal mb-1">Erfüllt</div>
           <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
             {feedback.erfuellteKriterien.map((k, i) => <li key={i}>{k}</li>)}
           </ul>
@@ -35,7 +35,7 @@ function FeedbackDetail({ feedback, keyPoints }) {
       )}
       {fehlend.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-wide text-amber mb-1">Für 100% fehlt noch</div>
+          <div className="text-[10px] text-amber mb-1">Für 100% fehlt noch</div>
           <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
             {fehlend.map((k, i) => <li key={i}>{k}</li>)}
           </ul>

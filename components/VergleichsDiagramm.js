@@ -57,8 +57,8 @@ export default function VergleichsDiagramm({
             <div key={f.key}>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-xs text-textMain flex-1 truncate">{f.label}</span>
-                <span className="text-xs font-mono text-textMain">{d.wert}</span>
-                <span className={`text-[11px] font-mono w-24 text-right ${d.richtung === "gleich" ? "text-textMuted" : gut ? "text-teal" : "text-coral"}`}>
+                <span className="text-xs zahl text-textMain">{d.wert}</span>
+                <span className={`text-[11px] zahl w-24 text-right ${d.richtung === "gleich" ? "text-textMuted" : gut ? "text-teal" : "text-coral"}`}>
                   {d.richtung === "gleich" ? "±0"
                     : d.davor === 0 ? "neu"
                     : `${d.delta > 0 ? "+" : "−"}${Math.abs(d.delta)}${d.prozent === null ? "" : ` · ${d.delta > 0 ? "+" : "−"}${Math.abs(d.prozent)} %`}`}

@@ -151,11 +151,11 @@ export default function SidebarStruktur() {
                 <button onClick={() => toggleVisible(item)} className="btn-ghost text-xs">{item.visible ? "Ausblenden" : "Einblenden"}</button>
                 <button onClick={() => deleteItem(item)} className="btn-ghost text-xs text-coral">Entfernen</button>
               {item.is_builtin ? (
-                <span className="text-[10px] uppercase tracking-wide text-textMuted border border-line rounded px-1.5 py-0.5">Fest</span>
+                <span className="text-[10px] text-textMuted border border-line rounded px-1.5 py-0.5">Fest</span>
               ) : (
-                <span className="text-[10px] uppercase tracking-wide text-teal border border-teal/40 rounded px-1.5 py-0.5">Ordner</span>
+                <span className="text-[10px] text-teal border border-teal/40 rounded px-1.5 py-0.5">Ordner</span>
               )}
-              {item.requires_manager && <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">Nur Manager</span>}
+              {item.requires_manager && <span className="text-[10px] text-amber border border-amber/40 rounded px-1.5 py-0.5">Nur Manager</span>}
               </div>
               <IconPicker value={draft.icon} onChange={(icon) => setDraft(item.id, { icon })} />
             </div>

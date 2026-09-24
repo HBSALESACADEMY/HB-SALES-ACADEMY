@@ -172,7 +172,7 @@ export default function SystemStatus() {
         </button>
         {meldung && <span className="text-xs text-textMuted">{meldung}</span>}
         {version && (
-          <span className="text-[11px] text-textMuted ml-auto font-mono">
+          <span className="text-[11px] text-textMuted ml-auto zahl">
             Stand: {version.commit}
             {version.nachricht ? ` — ${version.nachricht.split("\n")[0].slice(0, 60)}` : ""}
           </span>

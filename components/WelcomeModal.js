@@ -25,7 +25,7 @@ export default function WelcomeModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[220] p-4">
-      <div className="card max-w-sm w-full">
+      <div className="card schwebt max-w-sm w-full">
         <div className="brand-stripe w-16 mb-4" />
         <div className="flex items-center gap-3 mb-4">
           <Avatar name={adminName || "?"} src={adminAvatar} size={48} />

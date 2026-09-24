@@ -307,7 +307,7 @@ export default function Kunden() {
                       <span className={`text-textMuted text-xs transition-transform ${offen ? "rotate-90" : ""}`}>›</span>
                       <span className="font-display font-semibold text-textMain">{c.name}</span>
                     </div>
-                    <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 flex-shrink-0 border ${outcomeTab === "kunde" ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
+                    <span className={`text-[10px] rounded px-1.5 py-0.5 flex-shrink-0 border ${outcomeTab === "kunde" ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
                       {outcomeTab === "kunde" ? "Kunde" : ergebnisLabel("absage")}
                     </span>
                   </button>
@@ -356,7 +356,7 @@ export default function Kunden() {
 
                   {(c.call_notes_status || c.call_notes) && (
                     <div className="card !py-3 !px-3.5 mt-3 border border-violet/30">
-                      <div className="text-[10.5px] uppercase tracking-wide text-violet mb-1.5">Notizen aus der Aufnahme</div>
+                      <div className="text-[10.5px] text-violet mb-1.5">Notizen aus der Aufnahme</div>
                       {c.call_notes_status === "pending" && <p className="text-xs text-textMuted">Wird erstellt — das dauert einen Moment.</p>}
                       {c.call_notes_status === "failed" && <p className="text-xs text-coral">Konnte nicht erstellt werden.</p>}
                       {c.call_notes && (
@@ -382,7 +382,7 @@ export default function Kunden() {
                   <div className="flex items-center gap-2 mt-3 pt-2 border-t border-line flex-wrap">
                     {/* Kommentare und Aufgaben hängen am Termin selbst — dort
                         stehen sie schon, statt sie hier zu verdoppeln. */}
-                    <a href={`/termine?leadId=${c.id}`} className="btn-ghost text-xs">Im Termin öffnen →</a>
+                    <a href={`/termine?leadId=${c.id}`} className="btn-ghost text-xs">Im Termin öffnen</a>
                     <button onClick={() => startEdit(c)} className="btn-ghost text-xs">Bearbeiten</button>
                     {(c.created_by === selfId || canDeleteTeam) && (
                       confirmDelete === c.id ? (

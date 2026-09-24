@@ -57,7 +57,7 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                   transformOrigin: "left center",
                   transition: "opacity .18s ease, transform .18s ease",
                 }}>
-                <span className={`text-[11px] w-[68px] flex-shrink-0 font-mono ${aktiv === z.stunde ? "text-textMain font-semibold" : "text-textMuted"}`}>
+                <span className={`text-[11px] w-[68px] flex-shrink-0 zahl ${aktiv === z.stunde ? "text-textMain font-semibold" : "text-textMuted"}`}>
                   {stundenText(z.stunde)}
                 </span>
                 <div className="flex-1 h-4 rounded bg-surfaceRaised overflow-hidden flex"
@@ -273,9 +273,9 @@ export default function TageszeitAnalyse({ ereignisse = [], gruende = [], titel 
                           <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: grundFarbe(gruende, s.key) }} />
                           {s.label}
                         </td>
-                        <td className="py-1.5 px-2 text-right font-mono">{s.gesamt}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{s.stunde === null ? "—" : stundenText(s.stunde)}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{s.anteil === null ? "—" : `${s.anteil} %`}</td>
+                        <td className="py-1.5 px-2 text-right zahl">{s.gesamt}</td>
+                        <td className="py-1.5 px-2 text-right zahl">{s.stunde === null ? "—" : stundenText(s.stunde)}</td>
+                        <td className="py-1.5 px-2 text-right zahl">{s.anteil === null ? "—" : `${s.anteil} %`}</td>
                       </tr>
                     ))}
                   </tbody>

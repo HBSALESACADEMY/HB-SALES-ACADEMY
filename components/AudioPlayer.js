@@ -22,7 +22,7 @@ export default function AudioPlayer({ src }) {
         onPlay={() => { if (audioRef.current) audioRef.current.playbackRate = speed; }}
       />
       <div className="flex items-center gap-1.5 mt-1.5">
-        <span className="text-[10.5px] uppercase tracking-wide text-textMuted mr-0.5">Geschwindigkeit</span>
+        <span className="text-[10.5px] text-textMuted mr-0.5">Geschwindigkeit</span>
         {SPEEDS.map((s) => (
           <button
             key={s}

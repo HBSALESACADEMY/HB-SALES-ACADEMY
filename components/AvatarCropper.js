@@ -83,7 +83,7 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4" onMouseUp={endDrag} onMouseLeave={endDrag}>
-      <div className="card max-w-sm w-full">
+      <div className="card schwebt max-w-sm w-full">
         <div className="font-display font-semibold text-textMain mb-1">Profilbild zuschneiden</div>
         <p className="text-xs text-textMuted mb-4">Ziehen zum Verschieben, Regler zum Zoomen.</p>
 

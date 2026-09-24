@@ -195,7 +195,7 @@ export default function AdminBetreiber() {
           )}
         </div>
 
-        <div className="text-xs text-textMuted uppercase tracking-wide mb-2.5">Alle Organisationen</div>
+        <div className="text-xs text-textMuted mb-2.5">Alle Organisationen</div>
         <div className="flex flex-col gap-2.5 mb-6">
           {allOrgs.map((o) => {
             const isOpen = expandedOrgId === o.id;
@@ -227,7 +227,7 @@ export default function AdminBetreiber() {
                     />
 
                     <div className="mt-4 pt-4 border-t border-line">
-                      <div className="text-xs text-textMuted uppercase tracking-wide mb-2">Organisations-Manager</div>
+                      <div className="text-xs text-textMuted mb-2">Organisations-Manager</div>
                       {(() => {
                         const orgMembers = members.filter((m) => m.organization_id === o.id && m.status === "approved");
                         // Eine Organisation kann mehrere Manager haben — früher

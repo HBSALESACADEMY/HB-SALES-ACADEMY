@@ -177,7 +177,7 @@ export default function Personenbaum({ personen, zusatz = [], onChef, onZusatz, 
               {/* Alle ohne Vorgesetzte gemeinsam in EINEM Kasten: zwei
                   Geschäftsführer sind eine Ebene, nicht zwei Stränge. */}
               <div className="org-kasten" style={{ maxWidth: "none" }}>
-                <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-2">Geschäftsführung</div>
+                <div className="text-[10.5px] text-textMuted mb-2">Geschäftsführung</div>
                 <div className="flex items-start justify-center gap-5 flex-wrap">
                   {wurzeln.map((p) => (
                     <div key={p.id} style={{ maxWidth: 200 }} ref={(el) => { if (el) kastenRefs.current[p.id] = el; }}>

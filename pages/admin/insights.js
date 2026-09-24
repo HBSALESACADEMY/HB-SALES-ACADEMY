@@ -231,12 +231,12 @@ export default function AdminInsights() {
             const max = stats.usageRanking[0]?.count || 1;
             return (
               <div key={r.path} className="flex items-center gap-3">
-                <span className="w-5 text-center text-xs text-textMuted font-mono flex-shrink-0">{i + 1}</span>
+                <span className="w-5 text-center text-xs text-textMuted zahl flex-shrink-0">{i + 1}</span>
                 <span className="text-sm text-textMain w-40 flex-shrink-0 truncate">{r.label}</span>
                 <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
                   <div className="h-full brand-gradient" style={{ width: `${(r.count / max) * 100}%` }} />
                 </div>
-                <span className="text-xs text-textMuted font-mono w-10 text-right flex-shrink-0">{r.count}</span>
+                <span className="text-xs text-textMuted zahl w-10 text-right flex-shrink-0">{r.count}</span>
               </div>
             );
           })}

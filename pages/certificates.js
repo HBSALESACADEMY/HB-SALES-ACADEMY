@@ -75,7 +75,7 @@ export default function Certificates() {
 
       {remaining.length > 0 && (
         <>
-          <div className="text-xs text-textMuted uppercase tracking-wide mb-2.5">Noch offen</div>
+          <div className="text-xs text-textMuted mb-2.5">Noch offen</div>
           <div className="flex flex-col gap-2">
             {remaining.map((c) => (
               <div key={c.id} className="card !py-3 flex items-center gap-3 opacity-50">

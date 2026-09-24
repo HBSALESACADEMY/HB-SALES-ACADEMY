@@ -136,7 +136,7 @@ export default function ExamRunner() {
           <div className="card max-w-xl">
             <div className="flex items-center gap-2.5 mb-3">
               <Icon name="award" size={22} color={result.passed ? "#00E5C7" : "#FF4D6D"} />
-              <span className="font-mono text-2xl font-bold">{result.combinedScore}%</span>
+              <span className="zahl text-2xl font-bold">{result.combinedScore}%</span>
             </div>
             <p className="text-sm text-textMuted mb-3">
               MC-Anteil: {result.mcPct}% · Fallstudie: {result.capstoneGrading.score}%<br />
@@ -150,7 +150,7 @@ export default function ExamRunner() {
               <p className="text-sm text-textMuted leading-relaxed mb-3">{result.capstoneGrading.feedback}</p>
               {result.capstoneGrading.erfuellteKriterien?.length > 0 && (
                 <div className="mb-2.5">
-                  <div className="text-[10.5px] uppercase tracking-wide text-teal mb-1">Erfüllt</div>
+                  <div className="text-[10.5px] text-teal mb-1">Erfüllt</div>
                   <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
                     {result.capstoneGrading.erfuellteKriterien.map((k, i) => <li key={i}>{k}</li>)}
                   </ul>
@@ -158,7 +158,7 @@ export default function ExamRunner() {
               )}
               {result.capstoneGrading.fehlendeKriterien?.length > 0 && (
                 <div>
-                  <div className="text-[10.5px] uppercase tracking-wide text-amber mb-1">Für 100% fehlt noch</div>
+                  <div className="text-[10.5px] text-amber mb-1">Für 100% fehlt noch</div>
                   <ul className="text-xs text-textMuted list-disc pl-4 space-y-0.5">
                     {result.capstoneGrading.fehlendeKriterien.map((k, i) => <li key={i}>{k}</li>)}
                   </ul>

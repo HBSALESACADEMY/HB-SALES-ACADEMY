@@ -54,8 +54,8 @@ export default function Knowledge() {
         {filtered.map((k, i) => (
           <div key={i} className="card">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber">{k.tag}</span>
-              {k.isNew && <span className="text-[9px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1 py-0.5">Community</span>}
+              <span className="text-[10.5px] font-semibold text-amber">{k.tag}</span>
+              {k.isNew && <span className="text-[9px] text-violet border border-violet/40 rounded px-1 py-0.5">Community</span>}
             </div>
             <div className="font-display font-semibold text-[15px] text-textMain my-1.5">{k.title}</div>
             <div className="text-[13px] text-textMuted leading-relaxed">{k.body}</div>

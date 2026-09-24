@@ -158,12 +158,12 @@ export default function ModuleRunner() {
           <div className="card max-w-xl">
             <div className="flex gap-6 mb-4">
               <div>
-                <div className="text-[11px] text-textMuted uppercase">Multiple Choice</div>
-                <div className="text-2xl font-mono font-bold text-textMain">{Math.round((mcScore / questions.length) * 100)}%</div>
+                <div className="text-[11px] text-textMuted">Multiple Choice</div>
+                <div className="text-2xl zahl font-bold text-textMain">{Math.round((mcScore / questions.length) * 100)}%</div>
               </div>
               <div>
-                <div className="text-[11px] text-textMuted uppercase">Fallstudie (KI-bewertet)</div>
-                <div className="text-2xl font-mono font-bold text-textMain">{grading.score}%</div>
+                <div className="text-[11px] text-textMuted">Fallstudie (KI-bewertet)</div>
+                <div className="text-2xl zahl font-bold text-textMain">{grading.score}%</div>
               </div>
             </div>
             <div className="border-t border-line pt-4">
@@ -181,7 +181,7 @@ export default function ModuleRunner() {
               )}
               {grading.fehlendeKriterien && grading.fehlendeKriterien.length > 0 && (
                 <>
-                  <div className="text-[10.5px] uppercase tracking-wide text-amber mt-3 mb-1.5">Für 100% fehlt noch</div>
+                  <div className="text-[10.5px] text-amber mt-3 mb-1.5">Für 100% fehlt noch</div>
                   <div className="flex flex-wrap gap-2">
                     {grading.fehlendeKriterien.map((k, i) => (
                       <span key={i} className="text-[11.5px] px-2.5 py-1 rounded-full border border-amber text-amber" style={{ background: "rgba(240,178,62,.1)" }}>{k}</span>

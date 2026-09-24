@@ -88,7 +88,7 @@ export default function Flashcards() {
         </div>
       ) : (
         <div className="card">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-amber mb-3">{card.tag} · Karte {index + 1}/{dueCards.length}</div>
+          <div className="text-[10.5px] font-semibold text-amber mb-3">{card.tag} · Karte {index + 1}/{dueCards.length}</div>
           <p className="text-textMain text-[16px] font-medium mb-6 min-h-[60px]">{card.front}</p>
           {revealed ? (
             <>

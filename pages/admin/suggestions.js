@@ -67,7 +67,7 @@ export default function Suggestions() {
       <div className="flex flex-col gap-3">
         {pending.map((p) => (
           <div key={p.id} className="card">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-amber mb-1">{p.tag}</div>
+            <div className="text-[10.5px] font-semibold text-amber mb-1">{p.tag}</div>
             <div className="font-display font-semibold text-textMain mb-1.5">{p.title}</div>
             <p className="text-[13px] text-textMuted mb-3">{p.body}</p>
             <div className="flex items-center gap-2">

@@ -1924,7 +1924,7 @@ export default function CallTracker() {
                     }
                     return (
                       <div className="card !py-3 mb-4 max-w-md mx-auto border-teal/40">
-                        <div className="text-[10.5px] uppercase tracking-wide text-textMuted mb-2">Dein Buchungslink</div>
+                        <div className="text-[10.5px] text-textMuted mb-2">Dein Buchungslink</div>
                         <div className="flex items-center gap-2 flex-wrap justify-center">
                           <a href={link} target="_blank" rel="noopener noreferrer" className="btn text-sm">
                             <Icon name="calendar" size={14} /> Kalender öffnen
@@ -2896,9 +2896,9 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
                 </span>
                 <span className="flex-shrink-0 flex items-center gap-2">
                   {k.lead_id && (
-                    <a href={`/termine?leadId=${k.lead_id}`} className="text-amber hover:underline">→ Termin</a>
+                    <a href={`/termine?leadId=${k.lead_id}`} className="text-amber hover:underline">Termin öffnen</a>
                   )}
-                  <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border"
+                  <span className="text-[10px] rounded px-1.5 py-0.5 border"
                     style={k.status === "termin"
                       ? { color: feldFarbe("termin"), borderColor: `color-mix(in srgb, ${feldFarbe("termin")} 45%, transparent)` }
                       : { color: "var(--theme-text-muted, #8A90A6)", borderColor: "var(--theme-line, #2A2F42)" }}>
@@ -3012,19 +3012,19 @@ function StatistikPanel({ state, zeitraum, eigener, onZeitraum, onEigener, lokal
                 <tr key={m.id} className="border-t border-line">
                   <td className="py-1.5 pr-3 text-textMain whitespace-nowrap">{zeigeName(m)}</td>
                   {FIELDS.map((f) => (
-                    <td key={f.key} className="py-1.5 px-2 text-right font-mono"
+                    <td key={f.key} className="py-1.5 px-2 text-right zahl"
                       style={{ color: (m.zahlen[f.key] || 0) > 0 ? feldFarbe(f.key) : undefined }}>
                       {m.zahlen[f.key] || 0}
                     </td>
                   ))}
                   {reasons.map((r) => (
-                    <td key={r.key} className="py-1.5 px-2 text-right font-mono text-textMuted">
+                    <td key={r.key} className="py-1.5 px-2 text-right zahl text-textMuted">
                       {m.gruende[r.key] || 0}
                     </td>
                   ))}
                   {QUOTEN_SPALTEN.map((spalte, i) => (
                     <td key={spalte.key}
-                      className={`py-1.5 px-2 text-right font-mono text-textMain ${i === 0 ? "border-l border-line" : ""}`}>
+                      className={`py-1.5 px-2 text-right zahl text-textMain ${i === 0 ? "border-l border-line" : ""}`}>
                       {quotenText(m.quoten, spalte)}
                     </td>
                   ))}

@@ -20,10 +20,16 @@
      Trennung zwischen Seite und Karte. Die Seite ist deshalb dunkler, die
      Karte heller und der Rand deutlicher als vorher — flach heisst nicht
      kontrastarm. */
-  --theme-bg-rgb: 15 16 22;
-  --theme-surface-rgb: 26 28 38;
-  --theme-surface-raised-rgb: 33 36 49;
-  --theme-line-rgb: 58 62 82;
+  /* Getöntes Fast-Schwarz (#0F1016) ist eines der Muster, an denen man
+     erzeugte Oberflächen erkennt: ein neutrales Grau, das Schwarz spielt.
+     Diese Flächen haben jetzt eine Richtung — die Seite zieht ins Blaue
+     (Schiefer), die Blätter darüber ein Grad wärmer. Dadurch liegt das
+     Blatt auf der Fläche statt darin zu verschwinden, ohne dass ein
+     Schatten es behaupten muss. */
+  --theme-bg-rgb: 19 22 32;
+  --theme-surface-rgb: 26 30 42;
+  --theme-surface-raised-rgb: 33 38 52;
+  --theme-line-rgb: 56 62 82;
   --theme-text-rgb: 240 241 248;
   /* Heller als zuvor (141/144/166): auf der Karte kam der gedämpfte Text
      sonst bei 4,6:1 heraus — lesbar, aber kraftlos. */
@@ -103,12 +109,21 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   /* Gemischte Rundungen statt überall derselben: Karten kantig (10),
      Bedienelemente knapp (6), Pillen rund. Ein einziger Radius auf allem
      lässt jede Oberfläche gleich aussehen. */
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 22px 24px;
-  /* Ein flacher, weicher Schatten statt des alten Schlagschattens: Er macht
-     keinen Gegenstand aus der Karte, hebt sie aber von der Fläche ab. */
-  box-shadow: 0 1px 2px rgba(0,0,0,.18);
+  /* KEIN Schatten.
+     Derselbe weiche Schatten unter jeder Fläche ist das vierte der
+     typischen Muster erzeugter Oberflächen — er behauptet Tiefe, wo keine
+     Aussage dahinter steckt. Getrennt wird hier durch Ton und Rand: Das
+     Blatt ist heller als die Seite und hat eine Kante. Einen Schatten
+     bekommt nur, was wirklich über allem liegt (.schwebt). */
   transition: border-color .18s ease, background .18s ease;
+}
+
+/* Was tatsächlich schwebt: Dialoge, Menüs, Meldungen. Hier ist der Schatten
+   eine Aussage — dieses Element liegt VOR der Seite und nimmt den Fokus. */
+.schwebt {
+  box-shadow: 0 18px 44px rgb(0 0 0 / .45);
 }
 /* Anklickbares zeigt sich am Rand, nicht durch Anheben. */
 .card.cursor-pointer:hover, .card[class*="hover:-translate"]:hover {
@@ -205,10 +220,14 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 /* Beschriftung über einem Wert: klein, ruhig, gesperrt. Bisher schrieb jede
    Seite das mit drei bis vier Tailwind-Klassen selbst — und jede etwas
    anders. */
+/* Beschriftung über einem Inhalt — in normaler Schreibweise.
+   Kapitälchen mit gesperrten Buchstaben über jeder Überschrift sind das
+   verbreitetste Muster erzeugter Seiten. Im Deutschen kommt dazu, dass sie
+   zusammengesetzte Wörter unleserlich machen: "TELEFONBLOCK" liest sich
+   schlechter als "Telefonblock". */
 .label {
-  font-size: 11px;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--org-text-muted, rgb(var(--theme-text-muted-rgb)));
 }
 
@@ -217,11 +236,18 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 .zahl { font-variant-numeric: tabular-nums; }
 
 /* Die grosse Zahl einer Kennzahl-Kachel. */
+/* Die Zahl ist der Held dieser Anwendung.
+   Nicht die Überschrift und nicht die Karte: Wer den Call Tracker öffnet,
+   will wissen, wie viele Anwahlen heute stehen. Deshalb bekommt die Zahl
+   das auffälligste Schriftbild der Academy — die Serifenschrift im
+   schwersten Schnitt, enger gesetzt, mit gleich breiten Ziffern, damit sie
+   beim Hochzählen nicht wandert. */
 .kennzahl {
   font-family: var(--font-fraunces), serif;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 28px;
-  line-height: 1.1;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--org-text, rgb(var(--theme-text-rgb)));
 }

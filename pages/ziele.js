@@ -106,7 +106,7 @@ export default function Ziele() {
 
       {eigene.length > 0 && (
         <>
-          <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Deine eigenen Ziele</div>
+          <div className="text-[11px] text-textMuted mb-2">Deine eigenen Ziele</div>
           <div className="flex flex-col gap-3 mb-6">
             {eigene.map((z) => <ZielKarte key={z.id} ziel={z} />)}
           </div>
@@ -116,7 +116,7 @@ export default function Ziele() {
 
       {laufende.length > 0 && (
         <>
-          <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2 mt-2">Laufende Team-Ziele</div>
+          <div className="text-[11px] text-textMuted mb-2 mt-2">Laufende Team-Ziele</div>
           <div className="flex flex-col gap-3 mb-6">
             {laufende.map((z) => <ZielKarte key={z.id} ziel={z} />)}
           </div>
@@ -125,7 +125,7 @@ export default function Ziele() {
 
       {gesamtBilanz.anzahl > 0 && (
         <>
-          <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Bilanz der abgelaufenen Ziele</div>
+          <div className="text-[11px] text-textMuted mb-2">Bilanz der abgelaufenen Ziele</div>
           <BilanzKarte titel="Team-Ziele insgesamt" b={gesamtBilanz} />
           <div className="flex flex-col gap-2 mb-6">
             {vergangene.map((z) => <VergangenesZiel key={z.id} ziel={z} />)}
@@ -161,7 +161,7 @@ function ZielKarte({ ziel }) {
           <span className="text-[11px] text-textMuted">
             {m?.label || ziel.metric} · {ziel.teamName}{ziel.personName ? ` · ${ziel.personName}` : ""}
           </span>
-          <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 border ml-auto ${a.aufKurs ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
+          <span className={`text-[10px] rounded px-1.5 py-0.5 border ml-auto ${a.aufKurs ? "text-teal border-teal/40" : "text-coral border-coral/40"}`}>
             {a.geschafft ? "geschafft" : a.aufKurs ? "auf Kurs" : "hinter Plan"}
           </span>
         </div>
@@ -197,7 +197,7 @@ function ZielKarte({ ziel }) {
 
         {beitraege && beitraege.length > 0 && (
           <div className="mt-3 pt-3 border-t border-line">
-            <div className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Wer trägt bei</div>
+            <div className="text-[11px] text-textMuted mb-2">Wer trägt bei</div>
             <Kreisdiagramm daten={beitraege} groesse={120} mitteText={m?.label || "gesamt"} leerText="Noch niemand."
               erklaerung="Zeigt, wer wie viel zum Teamziel beigetragen hat. Ein sehr ungleicher Ring heisst nicht automatisch, dass jemand zu wenig tut — Teilzeit, Urlaub und Einarbeitung sehen hier gleich aus." />
             {ohneBeitrag.length > 0 && (

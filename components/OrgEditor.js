@@ -1034,7 +1034,7 @@ export default function OrgEditor({ org, isOwnOrg, onSaved, onDeleted, canDelete
           >
             Beispiel-Button
           </button>
-          <span className="text-[11px] uppercase tracking-wide rounded px-1.5 py-0.5" style={{ color: primaryColor, borderWidth: 1, borderStyle: "solid", borderColor: primaryColor }}>
+          <span className="text-[11px] rounded px-1.5 py-0.5" style={{ color: primaryColor, borderWidth: 1, borderStyle: "solid", borderColor: primaryColor }}>
             Badge
           </span>
         </div>

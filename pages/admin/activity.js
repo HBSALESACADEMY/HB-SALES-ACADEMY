@@ -389,7 +389,7 @@ export default function AdminActivity() {
       {gruppen.map((gruppe) => (
         <div key={gruppe.tag} className="mb-4">
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[11px] uppercase tracking-wide text-textMuted">{tagUeberschrift(gruppe.tag)}</span>
+            <span className="text-[11px] text-textMuted">{tagUeberschrift(gruppe.tag)}</span>
             <span className="text-[11px] text-textMuted">· {gruppe.eintraege.length}</span>
             <span className="h-px bg-line flex-1" />
           </div>
@@ -410,7 +410,7 @@ export default function AdminActivity() {
                     </div>
                     {e.detail && <div className="text-xs text-textMuted break-words">{e.detail}</div>}
                   </div>
-                  <span className="text-xs text-textMuted font-mono flex-shrink-0">{nurUhrzeit(e.created_at, DEUTSCHE_ZONE)}</span>
+                  <span className="text-xs text-textMuted zahl flex-shrink-0">{nurUhrzeit(e.created_at, DEUTSCHE_ZONE)}</span>
                 </div>
               );
             })}

@@ -5441,7 +5441,7 @@ test("Das Design trägt eine eigene Handschrift: keine Regenbogen-Palette, gemis
     assert.ok(treffer, `${block} hat keinen Radius`);
     return Number(treffer[1]);
   };
-  assert.equal(radius(".card {"), 10);
+  assert.equal(radius(".card {"), 12);
   assert.equal(radius(".btn {"), 6);
   assert.equal(radius(".input {"), 6);
 
@@ -5455,6 +5455,67 @@ test("Das Design trägt eine eigene Handschrift: keine Regenbogen-Palette, gemis
   // In den Terminlisten stehen keine Emoji mehr.
   const termine = lies("pages/termine.js");
   assert.ok(!/📎|📝|💬 \{|✅ \{/.test(termine), "Emoji in der Terminliste");
+});
+
+test("Die Oberfläche trägt keine Vorlagen-Merkmale: keine Versalien-Etiketten, kein Schatten auf jeder Karte, keine Zierpfeile", () => {
+  const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
+  const css = lies("styles/globals.css");
+  const block = (name) => {
+    const stelle = css.indexOf(name);
+    assert.ok(stelle > -1, `${name} fehlt`);
+    return css.slice(stelle, css.indexOf("}", stelle));
+  };
+
+  // Der Schatten liegt nur auf dem, was wirklich schwebt. Derselbe weiche
+  // Schatten unter jeder Karte ist das Erkennungszeichen einer Vorlage —
+  // und er sagt nichts über die Rangfolge des Inhalts.
+  assert.ok(!/box-shadow/.test(block(".card {")), "Die Karte trägt wieder einen Schatten");
+  assert.match(block(".schwebt {"), /box-shadow/);
+  const schwebend = ["ProfileModal", "WelcomeModal", "TutorialModal", "AvatarCropper"];
+  schwebend.forEach((name) => assert.match(lies(`components/${name}.js`), /className="card schwebt/, `${name} schwebt ohne Schatten`));
+
+  // Das kleine Etikett steht in normaler Schreibweise. Gesperrte Versalien
+  // über jeder Überschrift sind die häufigste Vorlagen-Geste, und sie lesen
+  // sich schlechter als gewöhnlicher Text.
+  assert.ok(!/text-transform/.test(block(".label {")), "Das Etikett schreibt wieder in Versalien");
+
+  const dateien = [];
+  const sammle = (verzeichnis) => {
+    for (const eintrag of readdirSync(verzeichnis, { withFileTypes: true })) {
+      const pfad = `${verzeichnis}/${eintrag.name}`;
+      if (eintrag.isDirectory() && eintrag.name !== "api") sammle(pfad);
+      else if (eintrag.name.endsWith(".js")) dateien.push(pfad);
+    }
+  };
+  sammle(new URL("../pages", import.meta.url).pathname);
+  sammle(new URL("../components", import.meta.url).pathname);
+
+  const versalien = [];
+  const pfeile = [];
+  // Ein Pfeil am Ende eines Beschriftungstextes ist Zierde: Der Knopf sagt
+  // schon, was er tut. Ein Element, das NUR aus dem Pfeil besteht, ist etwas
+  // anderes — das ist die Monatsnavigation, und die darf bleiben.
+  const zierpfeil = /[^\s<>][^<>]{2,}?\s*→\s*<\/(span|a|button)>/;
+  for (const pfad of dateien) {
+    const quelle = readFileSync(pfad, "utf8");
+    const kurz = pfad.slice(pfad.indexOf("/hb-academy/") + 12);
+    if (/\buppercase\b|\btracking-(wide|wider|widest)\b/.test(quelle)) versalien.push(kurz);
+    const treffer = quelle.match(zierpfeil);
+    if (treffer) pfeile.push(`${kurz}: ${treffer[0].replace(/\s+/g, " ")}`);
+  }
+  assert.deepEqual(versalien, [], `Versalien/Sperrung in: ${versalien.join(", ")}`);
+  assert.deepEqual(pfeile, [], `Zierpfeile in: ${pfeile.join(" | ")}`);
+
+  // Schreibmaschinenschrift bleibt den Dingen, die man abtippt oder
+  // vergleicht: Firmencode, Farbwert, Adresse, Platzhalter, Bot-Befehl.
+  // Zahlen richten sich über font-variant-numeric aus (.zahl) — dafür
+  // braucht es keine zweite Schriftfamilie.
+  assert.match(block(".zahl {"), /tabular-nums/);
+  const mono = dateien.filter((p) => /font-mono/.test(readFileSync(p, "utf8")))
+    .map((p) => p.slice(p.lastIndexOf("/") + 1)).sort();
+  assert.deepEqual(mono, [
+    "MailVorlagen.js", "OrgEditor.js", "betreiber.js", "kalender.js", "settings.js", "status.js",
+  ], `Schreibmaschinenschrift an neuer Stelle: ${mono.join(", ")}`);
 });
 
 test("Die Statistiken mischen die Darstellung: Kurve, Balken, Ring und Raster", () => {

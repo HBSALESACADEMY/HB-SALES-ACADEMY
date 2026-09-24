@@ -6,7 +6,7 @@ export default function AIBadge({ label = "KI", title = "KI-generierter Inhalt",
   return (
     <span
       title={title}
-      className={`text-[9.5px] uppercase tracking-wide text-textMuted/70 border border-line rounded px-1 py-0.5 cursor-help ${className}`}
+      className={`text-[9.5px] text-textMuted/70 border border-line rounded px-1 py-0.5 cursor-help ${className}`}
     >
       🤖 {label}
     </span>

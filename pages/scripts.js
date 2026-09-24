@@ -224,7 +224,7 @@ export default function Scripts() {
 
       {Object.entries(byCategory).map(([category, items]) => (
         <div key={category} className="mb-6">
-          <div className="text-xs text-textMuted uppercase tracking-wide mb-2.5">{category}</div>
+          <div className="text-xs text-textMuted mb-2.5">{category}</div>
           <div className="flex flex-col gap-3">
             {items.map((s) => {
               if (editingId === s.id) {
@@ -258,7 +258,7 @@ export default function Scripts() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-display font-semibold text-textMain text-sm flex items-center gap-2">
                       {s.title}
-                      {s.visibility === "private" && <span className="text-[10px] uppercase tracking-wide text-violet border border-violet/40 rounded px-1.5 py-0.5">Nur für dich</span>}
+                      {s.visibility === "private" && <span className="text-[10px] text-violet border border-violet/40 rounded px-1.5 py-0.5">Nur für dich</span>}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button onClick={() => copy(s)} className="btn-ghost text-xs">
@@ -273,7 +273,7 @@ export default function Scripts() {
                         <button onClick={() => { setKommentarZu(kommentarZu === s.id ? null : s.id); setKommentarText(""); }} className="btn-ghost text-xs">💬 Kommentieren</button>
                       )}
                       {s.community_post_id && (
-                        <button onClick={() => router.push(`/community?postId=${s.community_post_id}`)} className="btn-ghost text-xs">Diskussion ansehen →</button>
+                        <button onClick={() => router.push(`/community?postId=${s.community_post_id}`)} className="btn-ghost text-xs">Diskussion ansehen</button>
                       )}
                     </div>
                   </div>

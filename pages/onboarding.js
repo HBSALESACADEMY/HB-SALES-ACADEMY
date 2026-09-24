@@ -107,7 +107,7 @@ export default function OnboardingSeite() {
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
             <span className="text-sm font-semibold text-textMain flex-1 min-w-0 truncate">{z.person.full_name}</span>
             {s.ueberfaellig > 0 && (
-              <span className="text-[10px] uppercase tracking-wide text-coral border border-coral/40 rounded px-1.5 py-0.5">
+              <span className="text-[10px] text-coral border border-coral/40 rounded px-1.5 py-0.5">
                 {s.ueberfaellig} überfällig
               </span>
             )}
@@ -115,7 +115,7 @@ export default function OnboardingSeite() {
           </div>
           <div className="flex items-center gap-2">
             <OnboardingBalken prozent={s.prozent} warnung={s.ueberfaellig > 0} />
-            <span className="text-[11px] font-mono text-textMuted flex-shrink-0">{s.erledigt} von {s.gesamt} · {s.prozent} %</span>
+            <span className="text-[11px] zahl text-textMuted flex-shrink-0">{s.erledigt} von {s.gesamt} · {s.prozent} %</span>
           </div>
           {s.naechster && <div className="text-[11px] text-textMuted mt-1">Als Nächstes: {s.naechster.titel}</div>}
         </button>
@@ -175,8 +175,8 @@ export default function OnboardingSeite() {
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${an ? "border-amber text-textMain" : "border-transparent text-textMuted hover:text-textMain"}`}
               style={an ? { background: "color-mix(in srgb, var(--org-accent, #E9B44C) 14%, transparent)" } : undefined}>
               {r.label}
-              {r.key === "personen" && laufend.length > 0 && <span className="ml-1.5 text-[10px] font-mono text-textMuted">{laufend.length}</span>}
-              {r.key === "plan" && <span className="ml-1.5 text-[10px] font-mono text-textMuted">{schritte.length}</span>}
+              {r.key === "personen" && laufend.length > 0 && <span className="ml-1.5 text-[10px] zahl text-textMuted">{laufend.length}</span>}
+              {r.key === "plan" && <span className="ml-1.5 text-[10px] zahl text-textMuted">{schritte.length}</span>}
             </button>
           );
         })}
@@ -209,8 +209,8 @@ export default function OnboardingSeite() {
                 {uebersicht.engpaesse.map((e) => (
                   <div key={e.id} className="flex items-center gap-2 py-1.5 border-b border-line last:border-b-0">
                     <span className="text-sm text-textMain flex-1 min-w-0 truncate">{e.titel}</span>
-                    <span className="text-[11px] font-mono text-textMuted">{e.offen} offen</span>
-                    {e.ueberfaellig > 0 && <span className="text-[11px] font-mono text-coral">{e.ueberfaellig} überfällig</span>}
+                    <span className="text-[11px] zahl text-textMuted">{e.offen} offen</span>
+                    {e.ueberfaellig > 0 && <span className="text-[11px] zahl text-coral">{e.ueberfaellig} überfällig</span>}
                   </div>
                 ))}
               </div>
@@ -228,7 +228,7 @@ export default function OnboardingSeite() {
                     onClick={() => { setReiter("personen"); setOffen(z.id); }}>
                     <span className="text-sm text-textMain w-36 flex-shrink-0 truncate">{z.person.full_name}</span>
                     <OnboardingBalken prozent={z.stand.prozent} warnung={z.stand.ueberfaellig > 0} />
-                    <span className="text-[11px] font-mono text-textMuted w-12 text-right flex-shrink-0">{z.stand.prozent} %</span>
+                    <span className="text-[11px] zahl text-textMuted w-12 text-right flex-shrink-0">{z.stand.prozent} %</span>
                   </button>
                 ))}
               </div>
@@ -351,7 +351,7 @@ export default function OnboardingSeite() {
               const signal = signalVon(s.automatisch);
               return (
                 <div key={s.id} className="flex items-start gap-2 py-2 border-b border-line last:border-b-0">
-                  <span className="text-[11px] font-mono text-textMuted w-5 pt-0.5">{i + 1}</span>
+                  <span className="text-[11px] zahl text-textMuted w-5 pt-0.5">{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm text-textMain">{s.titel}</div>
                     <div className="text-[11px] text-textMuted">

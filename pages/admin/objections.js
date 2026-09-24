@@ -291,7 +291,7 @@ export default function ObjectionsAdmin() {
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[10px] uppercase tracking-wide text-amber border border-amber/40 rounded px-1.5 py-0.5">{labelFor(row.cat)}</span>
+                  <span className="text-[10px] text-amber border border-amber/40 rounded px-1.5 py-0.5">{labelFor(row.cat)}</span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => startEdit(row)} className="btn-ghost text-xs">Bearbeiten</button>
                     <button onClick={() => deleteObjection(row.id)} className="btn-ghost text-xs text-coral">Entfernen</button>
