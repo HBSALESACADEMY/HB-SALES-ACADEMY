@@ -34,7 +34,7 @@ module.exports = {
       // Selbst gehostet über next/font (siehe pages/_app.js) statt live von
       // fonts.googleapis.com geladen — die CSS-Variablen werden dort gesetzt.
       fontFamily: {
-        display: ["var(--font-fraunces)", "serif"],
+        display: ["var(--font-archivo)", "sans-serif"],
         sans: ["var(--font-work-sans)", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "monospace"],
       },

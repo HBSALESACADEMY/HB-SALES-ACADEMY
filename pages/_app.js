@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { darfInDenIndex } from "../lib/oeffentlicheSeiten";
-import { Work_Sans, Fraunces, JetBrains_Mono } from "next/font/google";
+import { Work_Sans, Archivo, JetBrains_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { meldeStoerung } from "../lib/fehlerMelden";
 
@@ -10,7 +10,12 @@ import { meldeStoerung } from "../lib/fehlerMelden";
 // verhindert, dass die IP-Adresse jedes Besuchers ohne Einwilligung an
 // Google übertragen wird (in Deutschland ein bekannter DSGVO-Streitpunkt).
 const workSans = Work_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-work-sans", display: "swap" });
-const fraunces = Fraunces({ subsets: ["latin"], weight: ["500", "600", "700"], style: ["normal", "italic"], variable: "--font-fraunces", display: "swap" });
+// Archivo für Überschriften und Kennzahlen, seit 24.09.2026 anstelle von
+// Fraunces. Fraunces ist eine Serif mit absichtlich geschwungenen Formen —
+// auf einer Seite, auf der neben der Überschrift eine Anwahlzahl steht,
+// wirkte das wie eine Einladungskarte. Archivo kommt aus der Zeitungswelt:
+// enge, kräftige Grotesk, deren Ziffern fest stehen.
+const archivo = Archivo({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-archivo", display: "swap" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-jetbrains-mono", display: "swap" });
 
 export default function App({ Component, pageProps }) {
@@ -36,7 +41,7 @@ export default function App({ Component, pageProps }) {
   }, []);
 
   return (
-    <div className={`${workSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} font-sans`}>
+    <div className={`${workSans.variable} ${archivo.variable} ${jetbrainsMono.variable} font-sans`}>
       {/* Der Name im Browser-Reiter. Stand bisher nirgends — der Reiter
           zeigte nur die Adresse. */}
       <Head>

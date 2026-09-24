@@ -5506,6 +5506,19 @@ test("Die Oberfläche trägt keine Vorlagen-Merkmale: keine Versalien-Etiketten,
   assert.deepEqual(versalien, [], `Versalien/Sperrung in: ${versalien.join(", ")}`);
   assert.deepEqual(pfeile, [], `Zierpfeile in: ${pfeile.join(" | ")}`);
 
+  // Eine Schrift, zwei Rollen: Work Sans liest man, Archivo führt an.
+  // Fraunces stand hier bis zum 24.09.2026 — eine Serif mit absichtlich
+  // geschwungenen Formen, die neben einer Anwahlzahl wie eine
+  // Einladungskarte wirkte. Wer sie zurückholt, muss auch die Schnitte in
+  // _app.js mitbringen, sonst fällt die Überschrift auf die Systemschrift
+  // zurück und niemand merkt es.
+  assert.ok(!/fraunces/i.test(lies("pages/_app.js").split("\n").filter((z) => !z.trim().startsWith("//")).join("\n")),
+    "Fraunces wird wieder geladen");
+  assert.ok(!/--font-fraunces/.test(css), "Das Stilblatt greift noch auf Fraunces zu");
+  assert.match(lies("tailwind.config.js"), /display: \["var\(--font-archivo\)"/);
+  assert.match(lies("pages/_app.js"), /variable: "--font-archivo"/);
+  assert.match(block(".kennzahl {"), /--font-archivo/);
+
   // Schreibmaschinenschrift bleibt den Dingen, die man abtippt oder
   // vergleicht: Firmencode, Farbwert, Adresse, Platzhalter, Bot-Befehl.
   // Zahlen richten sich über font-variant-numeric aus (.zahl) — dafür

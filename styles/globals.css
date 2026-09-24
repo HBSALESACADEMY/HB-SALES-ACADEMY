@@ -194,7 +194,7 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-family: var(--font-fraunces), serif;
+  font-family: var(--font-archivo), sans-serif;
   font-weight: 600;
   color: #0B0D13;
   flex-shrink: 0;
@@ -239,11 +239,11 @@ textarea.input { resize: vertical; font-family: var(--font-work-sans), sans-seri
 /* Die Zahl ist der Held dieser Anwendung.
    Nicht die Überschrift und nicht die Karte: Wer den Call Tracker öffnet,
    will wissen, wie viele Anwahlen heute stehen. Deshalb bekommt die Zahl
-   das auffälligste Schriftbild der Academy — die Serifenschrift im
-   schwersten Schnitt, enger gesetzt, mit gleich breiten Ziffern, damit sie
-   beim Hochzählen nicht wandert. */
+   das auffälligste Schriftbild der Academy — Archivo im schwersten
+   Schnitt, enger gesetzt, mit gleich breiten Ziffern, damit sie beim
+   Hochzählen nicht wandert. */
 .kennzahl {
-  font-family: var(--font-fraunces), serif;
+  font-family: var(--font-archivo), sans-serif;
   font-weight: 700;
   font-size: 28px;
   line-height: 1.05;
