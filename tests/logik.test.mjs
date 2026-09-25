@@ -6483,3 +6483,36 @@ test("Ausgefallene Morgennachrichten lassen sich nachholen", () => {
   assert.match(seite, /Morgennachrichten nachschicken/);
   assert.match(seite, /bekommt sie nicht zweimal/);
 });
+
+test("Die Statusseite zeigt, wer seine Morgennachricht bekommen hat", () => {
+  const route = readFileSync(new URL("../pages/api/admin/morgenstand.js", import.meta.url), "utf8");
+  const seite = readFileSync(new URL("../pages/admin/status.js", import.meta.url), "utf8");
+
+  // Die Frage nach dem Timeout am 25.09.2026 war: "Haben die Vertriebler die
+  // Vergleiche zu gestern bekommen?" Sie liess sich nicht beantworten — die
+  // Antwort stand in zwei Spalten, die niemand sieht.
+  assert.match(route, /auswertung_fuer/);
+  assert.match(route, /briefing_fuer/);
+  assert.match(route, /auswertungBekommen: !!tage && v\?\.auswertung_fuer === tage\.berichtTag/);
+
+  // Alle Personen, nicht nur die verbundenen: Wer kein Telegram hat, ist der
+  // häufigste Grund für "hat nichts bekommen" — und fehlt in einer Liste der
+  // Verbindungen naturgemäss.
+  assert.match(route, /from\("profiles"\)/);
+  assert.match(route, /ohneTelegram: personen\.filter\(\(p\) => !p\.verbunden\)\.length/);
+
+  // Am Wochenende ist "0 bekommen" richtig und kein Ausfall.
+  assert.match(route, /wochenende: !tage/);
+
+  // Abbestellt ist kein Fehler, sondern eine Entscheidung — die Anzeige muss
+  // das unterscheiden, sonst jagt man einem Ausfall nach, den es nicht gibt.
+  assert.match(seite, /Auswertung abbestellt/);
+  assert.match(seite, /kein Telegram verbunden/);
+  assert.match(seite, /Zahlen fehlen/);
+  assert.match(seite, /Zahlen bekommen/);
+  // Und der Unterschied zum Betreiber-Bericht steht dabei.
+  assert.match(seite, /nicht dein Betreiber-Bericht/);
+
+  // Nur der Betreiber: Die Liste geht über Organisationen hinweg.
+  assert.match(route, /if \(!me\?\.is_platform_admin\) \{[\s\S]{0,120}return res\.status\(403\)/);
+});

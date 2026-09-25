@@ -23,6 +23,8 @@ export default function SystemStatus() {
   const [serverJetzt, setServerJetzt] = useState(null);
   // Wann der Morgenbericht zuletzt lief (migration_182).
   const [morgenlauf, setMorgenlauf] = useState(null);
+  // Wer seine Morgennachricht bekommen hat.
+  const [morgenstand, setMorgenstand] = useState(null);
 
   async function laden() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -40,6 +42,9 @@ export default function SystemStatus() {
     const { data: lauf } = await supabase
       .from("cron_laeufe").select("tag, gelaufen_at").eq("name", "tagesbericht").maybeSingle();
     setMorgenlauf(lauf || null);
+    // Wer hat heute seine Zahlen gesehen? Das ist die Frage, die morgens
+    // zählt — nicht, ob der Hintergrundlauf durchgelaufen ist.
+    try { setMorgenstand(await apiGet("/api/admin/morgenstand")); } catch { setMorgenstand(null); }
     setLaedt(false);
   }
 
@@ -226,6 +231,61 @@ export default function SystemStatus() {
           </span>
         )}
       </div>
+
+      {/* Wer hat heute seine Zahlen gesehen?
+          Das ist die Frage, die morgens zählt — nicht, ob der Cron gelaufen
+          ist. Am 25.09.2026 starb der Morgenlauf im Timeout, und die Frage
+          "haben die Vertriebler die Vergleiche zu gestern bekommen?" liess
+          sich nicht beantworten: Die Antwort stand in zwei Spalten der
+          Datenbank, die niemand sieht. */}
+      {morgenstand && (
+        <div className="card mb-4">
+          <div className="flex items-baseline gap-2 flex-wrap mb-1">
+            <span className="font-display font-semibold text-textMain text-sm">Morgennachricht</span>
+            {morgenstand.wochenende ? (
+              <span className="text-xs text-textMuted">Wochenende — heute geht keine raus.</span>
+            ) : (
+              <span className={`text-xs ${morgenstand.bekommen < morgenstand.erwartet ? "text-coral" : "text-teal"}`}>
+                {morgenstand.bekommen} von {morgenstand.erwartet} {morgenstand.erwartet === 1 ? "Person" : "Personen"} hat die Zahlen
+                {morgenstand.berichtTag ? ` vom ${morgenstand.berichtTag.split("-").reverse().slice(0, 2).join(".")}.` : ""} bekommen
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-textMuted mb-2.5">
+            Die persönliche Auswertung mit dem Vergleich zum Vortag — nicht dein Betreiber-Bericht.
+            Sie geht an jede Person mit verbundenem Telegram.
+            {morgenstand.ohneTelegram > 0 && ` ${morgenstand.ohneTelegram} ${morgenstand.ohneTelegram === 1 ? "Person hat" : "Personen haben"} Telegram noch nicht verbunden — sie bekommen nichts, egal was läuft.`}
+          </p>
+          <div className="flex flex-col gap-0.5">
+            {morgenstand.personen.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 text-[11px] py-0.5 border-t border-line first:border-t-0">
+                <span className="text-textMain w-40 flex-shrink-0 truncate">{p.name}</span>
+                <span className="text-textMuted w-28 flex-shrink-0 truncate hidden sm:block">{p.organisation || "—"}</span>
+                {!p.verbunden ? (
+                  <span className="text-textMuted">kein Telegram verbunden</span>
+                ) : !p.auswertungAn ? (
+                  <span className="text-textMuted">Auswertung abbestellt</span>
+                ) : p.auswertungBekommen ? (
+                  <span className="text-teal">Zahlen bekommen</span>
+                ) : (
+                  <span className="text-coral">Zahlen fehlen</span>
+                )}
+                {p.verbunden && p.briefingAn && (
+                  <span className={`ml-auto ${p.briefingBekommen ? "text-textMuted" : "text-amber"}`}>
+                    {p.briefingBekommen ? "Briefing da" : "Briefing offen"}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          {morgenstand.bekommen < morgenstand.erwartet && !morgenstand.wochenende && (
+            <p className="text-[11px] text-textMuted mt-2.5">
+              Mit „☀️ Morgennachrichten nachschicken" oben holen die Fehlenden ihre Nachricht —
+              wer sie hat, bekommt sie nicht zweimal.
+            </p>
+          )}
+        </div>
+      )}
 
       {!stand ? (
         <div className="card">
