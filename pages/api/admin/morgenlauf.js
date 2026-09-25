@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   const budget = neuesBudget();
   // Dieselbe Reihenfolge wie im Morgenlauf: Was zuerst gebraucht wird, geht
   // zuerst raus, falls die Zeit knapp wird.
-  const { ergebnisse, offen, fehler, dauerMs } = await laufeSchritte([
+  const { ergebnisse, offen, fehler, dauern, dauerMs } = await laufeSchritte([
     { name: "tagesauswertungen", braucht: 12000, lauf: () => sendeTagesauswertungen(admin) },
     { name: "briefings", braucht: 10000, lauf: () => briefingUmAcht(admin) },
     { name: "bestaetigungen", braucht: 6000, lauf: () => erinnereAnBestaetigungen(admin) },
@@ -52,6 +52,7 @@ export default async function handler(req, res) {
     // niemand Telegram verbunden hat. Das sind drei verschiedene Dinge.
     grund: ergebnisse.tagesauswertungen?.grund || null,
     dauerMs,
+    dauern,
     offen,
     fehler,
     ergebnisse,

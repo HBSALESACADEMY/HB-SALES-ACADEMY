@@ -6511,6 +6511,12 @@ test("Ausgefallene Morgennachrichten lassen sich nachholen", () => {
   assert.match(seite, /apiPost\("\/api\/admin\/morgenlauf", \{\}\)/);
   assert.match(seite, /Morgennachrichten nachschicken/);
   assert.match(seite, /bekommt sie nicht zweimal/);
+  // Die Dauer je Schritt gehört auf den Bildschirm: Der Morgenlauf hat 55
+  // Sekunden, und ob er sie reissen wird, soll man sehen können, BEVOR er
+  // es morgens tut. Am 25.09.2026 liess sich genau das nicht feststellen.
+  assert.match(route, /dauern,/);
+  assert.match(seite, /Object\.entries\(r\.dauern\)/);
+  assert.match(seite, /\.sort\(\(a, b\) => b\[1\] - a\[1\]\)/);
 });
 
 test("Die Statusseite zeigt, wer seine Morgennachricht bekommen hat", () => {

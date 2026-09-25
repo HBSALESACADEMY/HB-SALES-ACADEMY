@@ -105,6 +105,15 @@ export default function SystemStatus() {
       if (r.gesendet) teile.push(`${r.gesendet} ${r.gesendet === 1 ? "Nachricht" : "Nachrichten"} verschickt`);
       // "0 verschickt" hat drei verschiedene Bedeutungen — die gehört dazu.
       else teile.push(r.grund ? `Nichts verschickt: ${r.grund}` : "Nichts zu verschicken — alle haben ihre Nachricht schon");
+      // Die Dauer je Schritt gehört auf den Bildschirm, nicht nur in die
+      // Protokolle: Der Morgenlauf hat 55 Sekunden, und ob er sie reissen
+      // wird, sieht man hier — bevor er es morgens tut.
+      if (r.dauern) {
+        const zeiten = Object.entries(r.dauern)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, ms]) => `${name} ${(ms / 1000).toFixed(1)} s`);
+        if (zeiten.length) teile.push(zeiten.join(", "));
+      }
       if (r.offen?.length) teile.push(`offen geblieben: ${r.offen.join(", ")}`);
       setMeldung(teile.join(" · "));
     } catch (e) {
