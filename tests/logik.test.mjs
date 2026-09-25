@@ -5960,27 +5960,102 @@ test("Eine fehlende Sperr-Tabelle hält den Morgenbericht nicht auf", async () =
   assert.equal(await merkeLauf(null, "tagesbericht", "2026-09-24"), false);
 });
 
-test("Der Cron-Lauf fragt die Sperre, bevor er sendet", () => {
+test("Der Morgenlauf schickt die Nachrichten an Menschen zuerst", () => {
   const quelle = readFileSync(new URL("../pages/api/cron/tagesbericht.js", import.meta.url), "utf8");
-  // Der Vermerk kommt VOR dem Versand: Bricht der Lauf in der Mitte ab, ist
-  // ein Teil schon raus, und ein zweiter Lauf würde diesen Teil wiederholen.
-  const beiMerken = quelle.indexOf("merkeLauf(admin");
-  const beiSenden = quelle.indexOf("await sendeAlarm(text)");
-  assert.ok(beiMerken > -1 && beiSenden > -1, "Sperre oder Versand fehlt");
-  assert.ok(beiMerken < beiSenden, "Der Lauf sendet, bevor er sich vermerkt");
-  // Und die alte, feste Stundenprüfung ist weg — sie stand der 9 Uhr im Weg.
-  assert.ok(!/stunde !== 8 && stunde !== 9/.test(quelle), "Die alte Stundenprüfung ist noch drin");
-  assert.match(quelle, /darfSenden\(\{ stunde, heute, letzterTag, force \}\)/);
-  // Ein Testlauf vermerkt nichts, sonst bleibt der echte Morgengruss aus.
-  assert.match(quelle, /if \(!force\) \{\n\s+try \{\n\s+await merkeLauf/);
 
-  // Und die Sperre darf den Lauf nie aufhalten: Wirft der Zugriff auf
-  // cron_laeufe, stirbt sonst die ganze Funktion — mit ihr der Bericht, das
-  // Morgen-Briefing, die Nachfass-Erinnerungen und die Tagesauswertungen.
-  // Genau so stand es zuerst da, ungeschützt vor dem try-Block.
-  assert.match(quelle, /try \{\s*\n\s+letzterTag = \(await letzterLauf\(admin, AUFTRAG\)\)\.tag;/,
+  // Am 25.09.2026 starb dieser Lauf um 9:49 nach 60 Sekunden mit einem 504.
+  // Die Guten-Morgen-Nachricht war da noch nicht raus: Sie stand an fünfter
+  // Stelle, hinter dem Bericht an den Betreiber und drei Erinnerungen. Am
+  // Tag davor war sie um 9:49 gerade noch durchgekommen.
+  //
+  // Deshalb ist die Reihenfolge jetzt eine Zusicherung und keine Laune.
+  const platz = (name) => quelle.indexOf(`name: "${name}"`);
+  const reihenfolge = ["tagesauswertungen", "briefings", "bestaetigungen", "nachfassTermine", "wochenimpuls", "tagesbericht"];
+  reihenfolge.forEach((name) => assert.ok(platz(name) > -1, `Schritt ${name} fehlt`));
+  for (let i = 1; i < reihenfolge.length; i += 1) {
+    assert.ok(platz(reihenfolge[i - 1]) < platz(reihenfolge[i]),
+      `${reihenfolge[i - 1]} muss vor ${reihenfolge[i]} laufen`);
+  }
+  // Die Guten-Morgen-Nachricht ist der erste Schritt überhaupt.
+  assert.equal(platz("tagesauswertungen"), Math.min(...reihenfolge.map(platz)));
+
+  // Die Wartungsarbeit ist ganz aus diesem Lauf heraus.
+  ["setzeBefehle", "stelleWebhookSicher", "raeumeRollenspieleAuf", "sendeErklaerungen", "raeumeAufnahmenAuf"]
+    .forEach((was) => assert.ok(!quelle.includes(was), `${was} hängt wieder im Morgenlauf`));
+
+  // Der Lauf hört von selbst auf, bevor Vercel ihn abschneidet — und sagt,
+  // was liegen blieb. Ein 504 sagt nichts.
+  assert.match(quelle, /laufeSchritte\(schritte, budget\)/);
+  assert.match(quelle, /if \(offen\.length && !force\)/);
+  assert.match(quelle, /Die Zeit reichte nicht für/);
+
+  // Die Sperre gilt NUR für den Bericht an den Betreiber: Alles andere merkt
+  // sich je Person, was raus ist, und muss nach einem abgeschnittenen Lauf
+  // ein zweites Mal laufen können.
+  assert.match(quelle, /wenn: \(\) => force \|\| !berichtSchonRaus/);
+  // Und der Vermerk kommt NACH dem Versand: Stirbt der Lauf davor, soll ein
+  // zweiter Aufruf den Bericht nachholen.
+  assert.ok(quelle.indexOf("await sendeAlarm(text)") < quelle.indexOf("await merkeLauf(admin, AUFTRAG, heute)"),
+    "Der Lauf vermerkt sich, bevor er gesendet hat");
+  // Die Zeitprüfung kennt keine feste Stundenliste mehr.
+  assert.ok(!/stunde !== 8 && stunde !== 9/.test(quelle));
+  assert.match(quelle, /darfSenden\(\{ stunde, heute, force \}\)/);
+  // Der Zugriff auf die Sperre darf den Lauf nie aufhalten.
+  assert.match(quelle, /try \{\s*\n\s+berichtSchonRaus = \(await letzterLauf\(admin, AUFTRAG\)\)\.tag === heute;/,
     "Der Zugriff auf die Sperre steht ausserhalb eines try-Blocks");
-  assert.match(quelle, /Cron-Sperre nicht lesbar, es wird trotzdem gesendet/);
+});
+
+test("Das Zeitbudget bricht ab, bevor Vercel abschneidet", async () => {
+  const { neuesBudget, laufeSchritte, GRENZE_MS } = await import("../lib/zeitbudget.js");
+
+  // Vercel tötet im Hobby-Tarif bei 60 Sekunden. Fünf bleiben für die
+  // Antwort, sonst kommt auch die Meldung "das blieb liegen" nicht mehr an.
+  assert.ok(GRENZE_MS < 60000 && GRENZE_MS >= 50000, `Grenze unplausibel: ${GRENZE_MS}`);
+
+  // Ein Zeitgeber, der auf Kommando springt — sonst müsste der Test warten.
+  let uhr = 0;
+  const budget = neuesBudget(10000, () => uhr);
+  assert.equal(budget.hatZeit(3000), true);
+  uhr = 8000;
+  assert.equal(budget.rest(), 2000);
+  assert.equal(budget.hatZeit(3000), false, "Für 3 Sekunden ist keine Zeit mehr");
+  assert.equal(budget.hatZeit(2000), true, "Für 2 Sekunden schon");
+  uhr = 12000;
+  assert.equal(budget.rest(), 0, "Der Rest wird nie negativ");
+
+  // Die Schritte laufen der Reihe nach, und wenn die Zeit ausgeht, steht
+  // der Rest in "offen" — statt mitten im Versand abgeschnitten zu werden.
+  uhr = 0;
+  const gelaufen = [];
+  const ergebnis = await laufeSchritte([
+    { name: "eins", braucht: 3000, lauf: async () => { gelaufen.push("eins"); uhr += 4000; return { ok: 1 }; } },
+    { name: "zwei", braucht: 3000, lauf: async () => { gelaufen.push("zwei"); uhr += 4000; return { ok: 2 }; } },
+    { name: "drei", braucht: 3000, lauf: async () => { gelaufen.push("drei"); return { ok: 3 }; } },
+    { name: "vier", braucht: 3000, lauf: async () => { gelaufen.push("vier"); return { ok: 4 }; } },
+  ], neuesBudget(10000, () => uhr));
+  assert.deepEqual(gelaufen, ["eins", "zwei"]);
+  assert.deepEqual(ergebnis.offen, ["drei", "vier"]);
+  assert.deepEqual(ergebnis.ergebnisse, { eins: { ok: 1 }, zwei: { ok: 2 } });
+
+  // Ein Fehler in einem Schritt hält die anderen nicht auf: Eine gescheiterte
+  // Nachfass-Erinnerung darf den Wochenimpuls nicht verschlucken.
+  uhr = 0;
+  const mitFehler = await laufeSchritte([
+    { name: "kaputt", braucht: 1000, lauf: async () => { throw new Error("Telegram antwortet nicht"); } },
+    { name: "heil", braucht: 1000, lauf: async () => ({ gesendet: 3 }) },
+  ], neuesBudget(10000, () => uhr));
+  assert.equal(mitFehler.fehler.kaputt, "Telegram antwortet nicht");
+  assert.deepEqual(mitFehler.ergebnisse.heil, { gesendet: 3 });
+  assert.deepEqual(mitFehler.offen, []);
+
+  // Ein Schritt mit "wenn" läuft nur, wenn die Bedingung zutrifft — und
+  // zählt dann auch nicht als liegen geblieben.
+  uhr = 0;
+  const bedingt = await laufeSchritte([
+    { name: "freitags", braucht: 1000, wenn: () => false, lauf: async () => ({ nie: true }) },
+  ], neuesBudget(10000, () => uhr));
+  assert.deepEqual(bedingt.ergebnisse, {});
+  assert.deepEqual(bedingt.offen, []);
 });
 
 test("Kursauswertung: nur der jüngste Versuch je Modul, und der Kurs gehört zum Schlüssel", async () => {

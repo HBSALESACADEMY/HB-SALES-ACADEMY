@@ -362,10 +362,18 @@ test("Ein alter Webhook ohne Knöpfe wird von selbst neu eingerichtet", async ()
   assert.equal((await stelleWebhookSicher({ token: "t", appUrl: "https://academy.example", geheimnis: "g", fetchFn: schonRichtig })).schonGesetzt, true);
 });
 
-test("Morgen-Briefing und Befehlsliste laufen im Morgenlauf mit", () => {
+test("Morgen-Briefing und Befehlsliste laufen in den Tagesläufen mit", () => {
+  // Das Briefing gehört in den Morgenlauf: Es ist an die Stunde gebunden.
   const lauf = lies("pages/api/cron/tagesbericht.js");
   assert.match(lauf, /briefingUmAcht\(admin\)/);
-  assert.match(lauf, /setzeBefehle\(BEFEHLE\)/);
+  // Die Befehlsliste NICHT: Sie ändert sich fast nie und kostete Sekunden,
+  // die am 25.09.2026 der Guten-Morgen-Nachricht fehlten — der Lauf starb
+  // um 9:49 im Timeout, bevor sie raus war. Sie liegt jetzt im Aufräumlauf,
+  // der Zeit über hat.
+  const aufraeumen = lies("pages/api/cron/cleanup-logs.js");
+  assert.match(aufraeumen, /setzeBefehle\(BEFEHLE\)/);
+  assert.match(aufraeumen, /briefingUmAcht\(admin\)/);
+  assert.ok(!/setzeBefehle/.test(lauf), "Die Befehlsliste hängt wieder im Morgenlauf");
   const einstellungen = lies("pages/api/telegram-verbindung.js");
   assert.match(einstellungen, /felder\.briefing = req\.body\.briefing/);
   assert.match(lies("supabase/migration_175_buddy_alltag.sql"), /add column if not exists briefing boolean not null default true/);
@@ -409,7 +417,10 @@ test("Ein liegen gebliebenes Rollenspiel wird im Morgenlauf gelöscht", () => {
   const stelle = befehle.indexOf("export async function raeumeRollenspieleAuf");
   assert.ok(stelle > 0);
   assert.match(befehle.slice(stelle, stelle + 600), /modus_daten: null/);
-  assert.match(lies("pages/api/cron/tagesbericht.js"), /raeumeRollenspieleAuf\(admin\)/);
+  // Im Aufräumlauf, nicht im Morgenlauf: Ein liegen gebliebenes Rollenspiel
+  // darf eine Stunde später aufgeräumt werden, eine Guten-Morgen-Nachricht
+  // nicht später kommen.
+  assert.match(lies("pages/api/cron/cleanup-logs.js"), /raeumeRollenspieleAuf\(admin\)/);
 });
 
 test("Der Briefing-Testknopf richtet die Knöpfe sofort ein", () => {
@@ -1186,7 +1197,9 @@ test("Die Erklärung geht einmal an alle — und an niemanden zweimal", async ()
   const begruessung = lies("lib/telegramBegruessung.js");
   assert.match(begruessung, /erklaerung_am: new Date\(\)\.toISOString\(\)/);
   // Und der Morgenlauf reicht sie nach.
-  assert.match(lies("pages/api/cron/tagesbericht.js"), /sendeErklaerungen\(admin\)/);
+  // Im Aufräumlauf: Eine einmalige Erklärung hat keine Uhrzeit, und im
+  // Morgenlauf kostete sie Zeit, die der Guten-Morgen-Nachricht fehlte.
+  assert.match(lies("pages/api/cron/cleanup-logs.js"), /sendeErklaerungen\(admin\)/);
   assert.match(lies("supabase/migration_176_buddy_erklaerung.sql"), /add column if not exists erklaerung_am timestamptz/);
 });
 

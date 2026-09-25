@@ -2,41 +2,51 @@ import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { baueTagesbericht } from "../../../lib/tagesbericht";
 import { sendeAlarm } from "../../../lib/alarm";
 import { erinnereAnNachfassen } from "../../../lib/nachfassErinnerung";
-import { raeumeAufnahmenAuf } from "../../../lib/aufnahmenAufraeumen";
 import { erinnereAnNachfassTermine } from "../../../lib/nachfassTermineErinnerung";
 import { erinnereAnBestaetigungen } from "../../../lib/bestaetigungErinnerung";
 import { sendeTagesauswertungen } from "../../../lib/tagesauswertungVersand";
 import { erinnereAnOnboarding } from "../../../lib/onboardingErinnerung";
 import { sendeWochenimpulse, holeAntworten, fasseWochenZusammen, schickeUebungen } from "../../../lib/buddy";
 import { istImpulsTag } from "../../../lib/wochenimpuls";
-import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
 import { sendeTeamlage } from "../../../lib/teamlageVersand";
 import { briefingUmAcht } from "../../../lib/buddyBriefing";
 import { berlinStunde, berlinHeute } from "../../../lib/woche";
 import { darfSenden } from "../../../lib/tagesLauf";
 import { letzterLauf, merkeLauf } from "../../../lib/tagesLaufSpeicher";
-import { setzeBefehle } from "../../../lib/telegramApi";
-import { sendeErklaerungen } from "../../../lib/buddyErklaerungVersand";
-import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
+import { neuesBudget, laufeSchritte } from "../../../lib/zeitbudget";
 
-// Täglicher Überblick um 9 Uhr per Telegram: was gestern in jeder
-// Kundenorganisation passiert ist, plus eine Zeile zum Systemzustand.
+// Der Morgenlauf: alles, was zwischen 8 und 9 Uhr deutscher Zeit raus muss.
 //
-// Erledigt zugleich die Systemprüfung und meldet Störungen — im
-// Vercel-Hobby-Tarif sind nur zwei Cron-Aufträge erlaubt, die je einmal
-// täglich laufen. Deshalb beides in einem Lauf statt getrennt.
-//
-// Zur Uhrzeit: Vercel garantiert im Hobby-Tarif die Stunde, nicht die
+// Zur Uhrzeit: Vercel garantiert im Hobby-Tarif nur die Stunde, nicht die
 // Minute. Der Auftrag "0 7 * * *" lief am 24.09.2026 um 7:49 UTC, die
-// Nachricht kam also um 9:49. Gesendet wird deshalb im Fenster zwischen 8
-// und 9 Uhr deutscher Zeit (lib/tagesLauf.js) — im Sommer trifft der Lauf
-// die 9, im Winter die 8, und ausserhalb dieses Fensters geht nichts raus.
+// Nachricht kam also um 9:49. Weil Vercel in UTC rechnet und Deutschland die
+// Uhr umstellt, trifft dieselbe Einstellung im Sommer die 9 und im Winter
+// die 8 — beide Stunden sind erlaubt (lib/tagesLauf.js).
 //
-// Die Sperre in cron_laeufe sorgt dafür, dass der Bericht auch bei einem
-// zweiten Aufruf nur einmal am Tag kommt — und sie macht im Systemstatus
-// sichtbar, wenn ein Lauf ganz ausgefallen ist.
+// ZUR REIHENFOLGE, und das ist der wichtigste Teil dieser Datei:
+//
+// Am 25.09.2026 starb dieser Lauf um 9:49 nach 60 Sekunden mit einem 504.
+// Die Guten-Morgen-Nachricht war da noch nicht raus — sie stand an fünfter
+// Stelle, hinter dem Bericht an den Betreiber und drei Erinnerungen. Am Tag
+// davor war sie um 9:49 gerade noch durchgekommen; der Lauf lag also längst
+// am Limit, und niemand konnte es sehen.
+//
+// Deshalb stehen die Schritte jetzt nach einer Frage sortiert: Wen trifft
+// es, wenn dieser Schritt ausfällt? Die Nachricht an zehn Vertriebler kommt
+// vor dem Bericht an den Betreiber. Und die Wartungsarbeit — Webhook,
+// Bot-Befehle, alte Rollenspiele, Aufnahmen — ist ganz aus diesem Lauf
+// heraus: Sie liegt im Aufräumlauf um 6 Uhr UTC, der Zeit über hat.
+//
+// Der Lauf hört ausserdem von selbst auf, bevor Vercel ihn abschneidet: Ein
+// geordneter Abbruch sagt in der Antwort und per Telegram, was offen blieb.
+// Ein 504 sagt nichts.
 export const config = { maxDuration: 60 };
 
+// Die Sperre gilt NUR für den Bericht an den Betreiber. Alles andere in
+// diesem Lauf merkt sich je Person, was schon raus ist (auswertung_fuer,
+// briefing_fuer) — diese Schritte dürfen und sollen ein zweites Mal laufen,
+// damit ein abgeschnittener Lauf nachgeholt werden kann. Eine Sperre über
+// den ganzen Lauf hätte genau das verhindert.
 const AUFTRAG = "tagesbericht";
 
 export default async function handler(req, res) {
@@ -46,157 +56,85 @@ export default async function handler(req, res) {
   }
 
   const admin = getAdminSupabase();
+  const budget = neuesBudget();
 
   // "force" erlaubt einen Testlauf ausserhalb der Morgenstunden.
   const force = req.query.force === "1";
   const stunde = berlinStunde();
   const heute = berlinHeute();
-  // Die Sperre darf den Lauf NIE aufhalten.
-  //
-  // Sie stand zuerst ungeschützt vor dem try-Block: Hätte der Zugriff auf
-  // cron_laeufe geworfen — fehlende Tabelle, fehlendes Recht, Aussetzer bei
-  // Supabase —, wäre die ganze Funktion mit einem Fehler gestorben, und mit
-  // ihr der Bericht, das Morgen-Briefing, die Nachfass-Erinnerungen und die
-  // Tagesauswertungen. Eine Vorsichtsmassnahme gegen doppelte Nachrichten
-  // darf nicht zur Ursache für gar keine werden.
-  //
-  // Im Zweifel wird gesendet: Eine Nachricht zweimal zu lesen ist ärgerlich,
-  // sie gar nicht zu bekommen ist schlimmer.
-  let letzterTag = null;
-  try {
-    letzterTag = (await letzterLauf(admin, AUFTRAG)).tag;
-  } catch (e) {
-    console.error("Cron-Sperre nicht lesbar, es wird trotzdem gesendet:", e.message);
-  }
-  const { senden, grund } = darfSenden({ stunde, heute, letzterTag, force });
+  const { senden, grund } = darfSenden({ stunde, heute, force });
   if (!senden) return res.status(200).json({ uebersprungen: true, grund });
 
-  // Der Vermerk kommt VOR dem Versand: Bricht der Lauf in der Mitte ab, ist
-  // ein Teil der Nachrichten schon raus — ein zweiter Lauf würde diesen Teil
-  // wiederholen. Ein Testlauf vermerkt nichts, sonst bliebe der echte
-  // Morgengruss aus.
-  if (!force) {
-    try {
-      await merkeLauf(admin, AUFTRAG, heute);
-    } catch (e) {
-      console.error("Cron-Lauf nicht vermerkt:", e.message);
-    }
-  }
+  // Kam der Bericht an den Betreiber heute schon raus? Der Zugriff darf den
+  // Lauf nie aufhalten: Eine Vorsichtsmassnahme gegen doppelte Nachrichten
+  // darf nicht zur Ursache für gar keine werden.
+  let berichtSchonRaus = false;
   try {
-    // Der Bericht selbst liegt in lib/tagesbericht.js — derselbe Text lässt
-    // sich damit auch von Hand auf der Statusseite auslösen.
-    const { text } = await baueTagesbericht(admin);
-    await sendeAlarm(text);
-
-    // Im selben Lauf: welche Marketing-Mails ohne Antwort liegen. Per Mail
-    // an die Person, der der Kontakt gehört — nicht an Telegram. Ein Fehler
-    // dabei darf den Bericht nicht nachträglich als gescheitert dastehen
-    // lassen.
-    let nachfassen = { erinnert: 0 };
-    try {
-      nachfassen = await erinnereAnNachfassen(admin);
-    } catch (e) {
-      console.error("Nachfass-Erinnerung fehlgeschlagen:", e.message);
-    }
-
-    // Und die eingetragenen Nachfass-Termine, die heute dran sind — per Mail
-    // an die zuständige Person. Sie stehen zwar im Kalender, aber wer
-    // morgens nicht hineinschaut, sieht sie erst abends.
-    let nachfassTermine = { erinnert: 0 };
-    try {
-      nachfassTermine = await erinnereAnNachfassTermine(admin);
-    } catch (e) {
-      console.error("Nachfass-Termine melden fehlgeschlagen:", e.message);
-    }
-
-    // Und die Termine von MORGEN, die noch keine Bestätigung haben. Morgen
-    // und nicht heute: wer erst am Terminmorgen erfährt, dass niemand
-    // bestätigt hat, kann nichts mehr retten.
-    let bestaetigungen = { gemeldet: 0 };
-    try {
-      bestaetigungen = await erinnereAnBestaetigungen(admin);
-    } catch (e) {
-      console.error("Bestätigungen melden fehlgeschlagen:", e.message);
-    }
-
-    // Die persönliche Auswertung vom letzten Arbeitstag — Montag bis
-    // Freitag, an alle mit verbundenem Telegram (lib/tagesauswertungVersand.js).
-    let tagesauswertungen = { gesendet: 0 };
-    try {
-      tagesauswertungen = await sendeTagesauswertungen(admin);
-    } catch (e) {
-      console.error("Tagesauswertungen fehlgeschlagen:", e.message);
-    }
-
-    // Das Morgen-Briefing soll um 8 Uhr da sein. Im Winter ist dieser Lauf
-    // um 8 — dann geht es hier raus. Im Sommer ist er um 9, und der
-    // Aufräum-Lauf hat es um 8 schon verschickt; hier kommt dann nur noch,
-    // was dort liegen blieb (lib/buddyBriefing.js, briefingUmAcht).
-    let briefings = { gesendet: 0 };
-    try {
-      briefings = await briefingUmAcht(admin);
-    } catch (e) {
-      console.error("Morgen-Briefing fehlgeschlagen:", e.message);
-    }
-
-    // Überfällige Onboarding-Schritte melden, fertige abschliessen
-    // (lib/onboardingErinnerung.js).
-    let onboarding = { erinnert: 0, fertig: 0 };
-    try {
-      onboarding = await erinnereAnOnboarding(admin);
-    } catch (e) {
-      console.error("Onboarding-Erinnerung fehlgeschlagen:", e.message);
-    }
-
-    // Freitags der Wochenimpuls des Vertriebsbuddys, und jeden Tag die
-    // Antworten aus Telegram abholen und beantworten (lib/buddy.js).
-    let buddy = { impulse: 0, antworten: 0 };
-    try {
-      // Sorgt dafür, dass Telegram von selbst meldet — auch wenn der Bot
-      // gewechselt wurde oder die Adresse der Academy sich geändert hat.
-      const webhook = await stelleWebhookSicher();
-      buddy.webhook = webhook.aktiv ? (webhook.gesetzt ? "neu eingerichtet" : "läuft") : webhook.grund;
-      // Die Kurzbefehle (/heute, /rollenspiel …) — falls sich die Liste geändert hat.
-      await setzeBefehle(BEFEHLE);
-      await raeumeRollenspieleAuf(admin);
-      // Einmalig: Wer schon verbunden war, bevor es den Buddy in dieser
-      // Form gab, bekommt seine Erklärung nachgereicht.
-      const erklaerungen = await sendeErklaerungen(admin);
-      buddy.erklaerungen = erklaerungen.gesendet || 0;
-      if (istImpulsTag()) {
-        // Erst das Gespräch der Woche auswerten, dann den neuen Impuls —
-        // so kann er an die Vorwoche anknüpfen.
-        const rueckblicke = await fasseWochenZusammen(admin);
-        buddy.rueckblicke = rueckblicke.erstellt || 0;
-        const impulse = await sendeWochenimpulse(admin);
-        buddy.impulse = impulse.gesendet || 0;
-        // Und für die Leitung die Lage im Team.
-        const lage = await sendeTeamlage(admin);
-        buddy.teamlage = lage.gesendet || 0;
-      }
-      // Die Übung kommt am Tag nach der Lektion — beides zusammen liest man
-      // wie einen Artikel und macht es nicht.
-      const uebungen = await schickeUebungen(admin);
-      buddy.uebungen = uebungen.verschickt || 0;
-      const antworten = await holeAntworten(admin, { erzwingen: true });
-      buddy.antworten = antworten.neu || 0;
-    } catch (e) {
-      console.error("Vertriebsbuddy fehlgeschlagen:", e.message);
-    }
-
-    // Fällige Aufnahmen entfernen. Auch das darf den Bericht nicht
-    // nachträglich als gescheitert dastehen lassen.
-    let aufgeraeumt = { geloescht: 0 };
-    try {
-      aufgeraeumt = await raeumeAufnahmenAuf(admin);
-    } catch (e) {
-      console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
-    }
-
-    return res.status(200).json({ ok: true, nachfassen, nachfassTermine, bestaetigungen, tagesauswertungen, briefings, onboarding, buddy, aufgeraeumt });
+    berichtSchonRaus = (await letzterLauf(admin, AUFTRAG)).tag === heute;
   } catch (e) {
-    console.error("Tagesbericht fehlgeschlagen:", e.message);
-    await sendeAlarm("⚠️ HB Sales Academy: Der Tagesbericht konnte nicht erstellt werden — " + e.message);
-    return res.status(500).json({ error: e.message });
+    console.error("Cron-Sperre nicht lesbar, der Bericht geht trotzdem raus:", e.message);
   }
+
+  const schritte = [
+    // 1. Die Guten-Morgen-Nachricht mit den Zahlen von gestern. Sie geht an
+    //    jede Person mit verbundenem Telegram und ist das, was am Morgen
+    //    tatsächlich gelesen wird.
+    { name: "tagesauswertungen", braucht: 12000, lauf: () => sendeTagesauswertungen(admin) },
+    // 2. Die Termine des Tages und die offenen Ergebnisse von gestern.
+    { name: "briefings", braucht: 10000, lauf: () => briefingUmAcht(admin) },
+    // 3. Die Termine von MORGEN ohne Bestätigung. Morgen und nicht heute:
+    //    wer erst am Terminmorgen erfährt, dass niemand bestätigt hat, kann
+    //    nichts mehr retten.
+    { name: "bestaetigungen", braucht: 6000, lauf: () => erinnereAnBestaetigungen(admin) },
+    // 4. Nachfass-Termine, die heute dran sind — per Mail an die zuständige
+    //    Person. Sie stehen im Kalender, aber wer morgens nicht hineinsieht,
+    //    findet sie erst abends.
+    { name: "nachfassTermine", braucht: 6000, lauf: () => erinnereAnNachfassTermine(admin) },
+    // 5. Freitags: Rückblick auf die Woche, neuer Impuls, Lage im Team. An
+    //    einen Tag gebunden — fällt es aus, ist es eine Woche weg.
+    {
+      name: "wochenimpuls", braucht: 14000, wenn: () => istImpulsTag(),
+      lauf: async () => {
+        // Erst die Woche auswerten, dann der neue Impuls: So kann er an die
+        // Vorwoche anknüpfen.
+        const rueckblicke = await fasseWochenZusammen(admin);
+        const impulse = await sendeWochenimpulse(admin);
+        const lage = await sendeTeamlage(admin);
+        return { rueckblicke: rueckblicke.erstellt || 0, impulse: impulse.gesendet || 0, teamlage: lage.gesendet || 0 };
+      },
+    },
+    // 6. Die Übung zur Lektion von gestern.
+    { name: "uebungen", braucht: 6000, lauf: () => schickeUebungen(admin) },
+    // 7. Welche Marketing-Mails ohne Antwort liegen.
+    { name: "nachfassen", braucht: 6000, lauf: () => erinnereAnNachfassen(admin) },
+    // 8. Der Bericht an den Betreiber. Erst hier, weil ihn eine Person liest
+    //    und die Vertriebsnachrichten zehn — und weil er sich jederzeit auf
+    //    der Statusseite von Hand auslösen lässt.
+    {
+      name: "tagesbericht", braucht: 8000, wenn: () => force || !berichtSchonRaus,
+      lauf: async () => {
+        const { text } = await baueTagesbericht(admin);
+        await sendeAlarm(text);
+        // Der Vermerk NACH dem Versand: Stirbt der Lauf davor, soll ein
+        // zweiter Aufruf den Bericht nachholen können.
+        if (!force) await merkeLauf(admin, AUFTRAG, heute);
+        return { gesendet: true };
+      },
+    },
+    // 9. Überfällige Onboarding-Schritte melden, fertige abschliessen.
+    { name: "onboarding", braucht: 5000, lauf: () => erinnereAnOnboarding(admin) },
+    // 10. Antworten aus Telegram nachholen. Im Normalfall kommen sie über
+    //     den Webhook sofort an — das hier ist nur die Sicherheitsleine.
+    { name: "antworten", braucht: 5000, lauf: () => holeAntworten(admin, { erzwingen: true }) },
+  ];
+
+  const { ergebnisse, offen, fehler, dauerMs } = await laufeSchritte(schritte, budget);
+
+  // Blieb etwas liegen, muss es gemeldet werden — sonst fällt ein Schritt
+  // wochenlang aus und niemand erfährt davon. Nicht bei einem Testlauf.
+  if (offen.length && !force) {
+    await sendeAlarm(`⚠️ Morgenlauf: Die Zeit reichte nicht für ${offen.join(", ")}. Gelaufen in ${Math.round(dauerMs / 1000)} s.`);
+  }
+
+  return res.status(200).json({ ok: true, dauerMs, offen, fehler, ...ergebnisse });
 }

@@ -1,5 +1,10 @@
 import { getAdminSupabase } from "../../../lib/supabaseAdmin";
 import { briefingUmAcht } from "../../../lib/buddyBriefing";
+import { stelleWebhookSicher } from "../../../lib/telegramWebhook";
+import { setzeBefehle } from "../../../lib/telegramApi";
+import { sendeErklaerungen } from "../../../lib/buddyErklaerungVersand";
+import { BEFEHLE, raeumeRollenspieleAuf } from "../../../lib/buddyBefehle";
+import { raeumeAufnahmenAuf } from "../../../lib/aufnahmenAufraeumen";
 
 // DSGVO-Datenminimierung: reine Protokoll-/Telemetriedaten haben keinen
 // dauerhaften Geschäftszweck (anders als z.B. Kundendaten/Leads, die aktiv
@@ -50,14 +55,45 @@ export default async function handler(req, res) {
 
     // Dieser Lauf ist um 6 Uhr UTC — im Sommer 8 Uhr in Berlin, die Zeit
     // fürs Morgen-Briefing. Im Winter ist es hier 7 Uhr, dann schickt
-    // briefingUmAcht nichts, und der Tagesbericht um 8 übernimmt.
+    // briefingUmAcht nichts, und der Morgenlauf um 8 übernimmt.
     let briefings = { gesendet: 0 };
     try {
       briefings = await briefingUmAcht(admin);
     } catch (e) {
       console.error("Morgen-Briefing fehlgeschlagen:", e.message);
     }
-    return res.status(200).json({ ok: true, deleted: results, briefings });
+
+    // Die Wartungsarbeit am Bot liegt seit dem 25.09.2026 hier statt im
+    // Morgenlauf. Dort hat sie Sekunden gekostet, die der Guten-Morgen-
+    // Nachricht fehlten: Der Lauf starb um 9:49 im Timeout, bevor sie raus
+    // war. Hier stört sie niemanden — dieser Lauf löscht alte Protokolle und
+    // hat Zeit über.
+    //
+    // Keine dieser Aufgaben ist an eine Minute gebunden: Der Webhook muss
+    // irgendwann am Tag geprüft werden, die Bot-Befehle ändern sich fast
+    // nie, und eine Aufnahme darf eine Stunde später gelöscht werden.
+    const wartung = {};
+    try {
+      const webhook = await stelleWebhookSicher();
+      wartung.webhook = webhook.aktiv ? (webhook.gesetzt ? "neu eingerichtet" : "läuft") : webhook.grund;
+      await setzeBefehle(BEFEHLE);
+      await raeumeRollenspieleAuf(admin);
+      const erklaerungen = await sendeErklaerungen(admin);
+      wartung.erklaerungen = erklaerungen.gesendet || 0;
+    } catch (e) {
+      console.error("Bot-Wartung fehlgeschlagen:", e.message);
+      wartung.fehler = e.message;
+    }
+
+    // Fällige Aufnahmen entfernen (DSGVO-Frist, lib/aufnahmenAufraeumen.js).
+    try {
+      const aufgeraeumt = await raeumeAufnahmenAuf(admin);
+      wartung.aufnahmen = aufgeraeumt.geloescht || 0;
+    } catch (e) {
+      console.error("Aufnahmen aufräumen fehlgeschlagen:", e.message);
+    }
+
+    return res.status(200).json({ ok: true, deleted: results, briefings, wartung });
   } catch (e) {
     console.error("cleanup-logs failed:", e.message);
     return res.status(500).json({ error: e.message, deleted: results });

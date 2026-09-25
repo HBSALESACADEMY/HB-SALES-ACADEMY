@@ -823,9 +823,12 @@ test("Der Telegram-Eingang ist ohne Geheimnis dicht und meldet nie einen Fehler 
 
 test("Die Sofort-Antworten brauchen keinen Knopf und keinen Plattform-Admin", () => {
   const lies = (pfad) => readFileSync(new URL(`../${pfad}`, import.meta.url), "utf8");
-  // Beim Verbinden und im Tageslauf richtet die Academy den Webhook selbst ein.
+  // Beim Verbinden und im Tageslauf richtet die Academy den Webhook selbst
+  // ein. Im Aufräumlauf und nicht im Morgenlauf: Der Webhook muss irgendwann
+  // am Tag geprüft werden, aber die Guten-Morgen-Nachricht muss um 9 raus —
+  // am 25.09.2026 starb der Morgenlauf im Timeout, bevor sie es war.
   assert.match(lies("pages/api/telegram-verbindung.js"), /const webhook = await stelleWebhookSicher\(\);/);
-  assert.match(lies("pages/api/cron/tagesbericht.js"), /await stelleWebhookSicher\(\)/);
+  assert.match(lies("pages/api/cron/cleanup-logs.js"), /await stelleWebhookSicher\(\)/);
 });
 
 test("Die Teamlage bekommt nur die Leitung, und auch sie ohne den Chat", () => {
