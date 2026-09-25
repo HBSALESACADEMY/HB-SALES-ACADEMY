@@ -6447,3 +6447,39 @@ test("Die Nutzerliste sagt, wer welche Termine sieht", async () => {
   assert.match(seite, /terminSicht\(u\)\.text/);
   assert.match(seite, /Zum Manager machen/);
 });
+
+test("Ausgefallene Morgennachrichten lassen sich nachholen", () => {
+  const route = readFileSync(new URL("../pages/api/admin/morgenlauf.js", import.meta.url), "utf8");
+  const seite = readFileSync(new URL("../pages/admin/status.js", import.meta.url), "utf8");
+
+  // Am 25.09.2026 starb der Morgenlauf im Timeout, und es gab keinen Weg,
+  // die Guten-Morgen-Nachricht nachzuholen: Der Knopf auf der Statusseite
+  // schickt nur den Bericht an den Betreiber.
+  assert.match(route, /sendeTagesauswertungen\(admin\)/);
+  assert.match(route, /briefingUmAcht\(admin\)/);
+  assert.match(route, /erinnereAnBestaetigungen\(admin\)/);
+
+  // Nur der Plattform-Betreiber: Der Aufruf schickt Nachrichten in alle
+  // Organisationen.
+  // Die Bedingung selbst, nicht nur das Wort: Ein Wächter, der "is_platform_admin"
+  // auch in der select-Abfrage findet, bleibt grün, wenn die Prüfung
+  // verschwindet. Genau das ist bei der ersten Fassung passiert.
+  assert.match(route, /if \(!me\?\.is_platform_admin\) \{[\s\S]{0,120}return res\.status\(403\)/);
+  assert.match(route, /Das darf nur der Plattform-Betreiber/);
+  assert.match(route, /req\.method !== "POST"/);
+
+  // Mit Zeitbudget, wie der Morgenlauf selbst — sonst stirbt auch dieser
+  // Aufruf im Timeout, und zwar still.
+  assert.match(route, /laufeSchritte\(\[/);
+  assert.match(route, /maxDuration: 60/);
+
+  // Der Grund gehört in die Antwort: "0 gesendet" kann bedeuten, dass alle
+  // ihre Nachricht schon haben, dass Wochenende ist oder dass niemand
+  // Telegram verbunden hat. Drei verschiedene Dinge, eine Zahl.
+  assert.match(route, /grund: ergebnisse\.tagesauswertungen\?\.grund \|\| null/);
+
+  // Und der Knopf dazu.
+  assert.match(seite, /apiPost\("\/api\/admin\/morgenlauf", \{\}\)/);
+  assert.match(seite, /Morgennachrichten nachschicken/);
+  assert.match(seite, /bekommt sie nicht zweimal/);
+});

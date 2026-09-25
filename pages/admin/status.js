@@ -85,6 +85,29 @@ export default function SystemStatus() {
     setBusy("");
   }
 
+  // Die Morgennachrichten nachschicken.
+  //
+  // Am 25.09.2026 starb der Morgenlauf um 9:49 im Timeout, und das Team
+  // bekam seine Guten-Morgen-Nachricht nicht. Nachholen war unmöglich — der
+  // Knopf daneben schickt nur den Bericht an den Betreiber. Einmal ausfallen
+  // kann immer etwas; dann muss es sich am selben Tag nachholen lassen.
+  async function morgenNachholen() {
+    setBusy("morgen");
+    setMeldung("");
+    try {
+      const r = await apiPost("/api/admin/morgenlauf", {});
+      const teile = [];
+      if (r.gesendet) teile.push(`${r.gesendet} ${r.gesendet === 1 ? "Nachricht" : "Nachrichten"} verschickt`);
+      // "0 verschickt" hat drei verschiedene Bedeutungen — die gehört dazu.
+      else teile.push(r.grund ? `Nichts verschickt: ${r.grund}` : "Nichts zu verschicken — alle haben ihre Nachricht schon");
+      if (r.offen?.length) teile.push(`offen geblieben: ${r.offen.join(", ")}`);
+      setMeldung(teile.join(" · "));
+    } catch (e) {
+      setMeldung(e.message || "Das Nachschicken ist fehlgeschlagen.");
+    }
+    setBusy("");
+  }
+
   // Beim Öffnen gleich prüfen: wer hierherkommt, sucht einen Fehler, und
   // das ist die erste Frage.
   //
@@ -179,6 +202,10 @@ export default function SystemStatus() {
         </button>
         <button onClick={() => pruefen(true)} disabled={!!busy} className="btn-ghost text-xs disabled:opacity-40">
           {busy === "senden" ? "Sendet..." : "📤 Bericht an Telegram senden"}
+        </button>
+        <button onClick={morgenNachholen} disabled={!!busy} className="btn-ghost text-xs disabled:opacity-40"
+          title="Schickt die Guten-Morgen-Nachricht, das Termin-Briefing und die Bestätigungs-Erinnerungen an alle, die sie heute noch nicht haben. Wer sie hat, bekommt sie nicht zweimal.">
+          {busy === "morgen" ? "Schickt..." : "☀️ Morgennachrichten nachschicken"}
         </button>
         {meldung && <span className="text-xs text-textMuted">{meldung}</span>}
         {/* Wann der Morgengruss zuletzt raus ist. Vercel garantiert im
