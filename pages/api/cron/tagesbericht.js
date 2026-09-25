@@ -51,15 +51,37 @@ export default async function handler(req, res) {
   const force = req.query.force === "1";
   const stunde = berlinStunde();
   const heute = berlinHeute();
-  const vorher = await letzterLauf(admin, AUFTRAG);
-  const { senden, grund } = darfSenden({ stunde, heute, letzterTag: vorher.tag, force });
+  // Die Sperre darf den Lauf NIE aufhalten.
+  //
+  // Sie stand zuerst ungeschützt vor dem try-Block: Hätte der Zugriff auf
+  // cron_laeufe geworfen — fehlende Tabelle, fehlendes Recht, Aussetzer bei
+  // Supabase —, wäre die ganze Funktion mit einem Fehler gestorben, und mit
+  // ihr der Bericht, das Morgen-Briefing, die Nachfass-Erinnerungen und die
+  // Tagesauswertungen. Eine Vorsichtsmassnahme gegen doppelte Nachrichten
+  // darf nicht zur Ursache für gar keine werden.
+  //
+  // Im Zweifel wird gesendet: Eine Nachricht zweimal zu lesen ist ärgerlich,
+  // sie gar nicht zu bekommen ist schlimmer.
+  let letzterTag = null;
+  try {
+    letzterTag = (await letzterLauf(admin, AUFTRAG)).tag;
+  } catch (e) {
+    console.error("Cron-Sperre nicht lesbar, es wird trotzdem gesendet:", e.message);
+  }
+  const { senden, grund } = darfSenden({ stunde, heute, letzterTag, force });
   if (!senden) return res.status(200).json({ uebersprungen: true, grund });
 
   // Der Vermerk kommt VOR dem Versand: Bricht der Lauf in der Mitte ab, ist
   // ein Teil der Nachrichten schon raus — ein zweiter Lauf würde diesen Teil
   // wiederholen. Ein Testlauf vermerkt nichts, sonst bliebe der echte
   // Morgengruss aus.
-  if (!force) await merkeLauf(admin, AUFTRAG, heute);
+  if (!force) {
+    try {
+      await merkeLauf(admin, AUFTRAG, heute);
+    } catch (e) {
+      console.error("Cron-Lauf nicht vermerkt:", e.message);
+    }
+  }
   try {
     // Der Bericht selbst liegt in lib/tagesbericht.js — derselbe Text lässt
     // sich damit auch von Hand auf der Statusseite auslösen.

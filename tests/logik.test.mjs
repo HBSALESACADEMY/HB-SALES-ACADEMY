@@ -5970,9 +5970,17 @@ test("Der Cron-Lauf fragt die Sperre, bevor er sendet", () => {
   assert.ok(beiMerken < beiSenden, "Der Lauf sendet, bevor er sich vermerkt");
   // Und die alte, feste Stundenprüfung ist weg — sie stand der 9 Uhr im Weg.
   assert.ok(!/stunde !== 8 && stunde !== 9/.test(quelle), "Die alte Stundenprüfung ist noch drin");
-  assert.match(quelle, /darfSenden\(\{ stunde, heute, letzterTag: vorher\.tag, force \}\)/);
+  assert.match(quelle, /darfSenden\(\{ stunde, heute, letzterTag, force \}\)/);
   // Ein Testlauf vermerkt nichts, sonst bleibt der echte Morgengruss aus.
-  assert.match(quelle, /if \(!force\) await merkeLauf/);
+  assert.match(quelle, /if \(!force\) \{\n\s+try \{\n\s+await merkeLauf/);
+
+  // Und die Sperre darf den Lauf nie aufhalten: Wirft der Zugriff auf
+  // cron_laeufe, stirbt sonst die ganze Funktion — mit ihr der Bericht, das
+  // Morgen-Briefing, die Nachfass-Erinnerungen und die Tagesauswertungen.
+  // Genau so stand es zuerst da, ungeschützt vor dem try-Block.
+  assert.match(quelle, /try \{\s*\n\s+letzterTag = \(await letzterLauf\(admin, AUFTRAG\)\)\.tag;/,
+    "Der Zugriff auf die Sperre steht ausserhalb eines try-Blocks");
+  assert.match(quelle, /Cron-Sperre nicht lesbar, es wird trotzdem gesendet/);
 });
 
 test("Kursauswertung: nur der jüngste Versuch je Modul, und der Kurs gehört zum Schlüssel", async () => {
