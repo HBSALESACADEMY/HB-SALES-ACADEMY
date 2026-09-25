@@ -5988,6 +5988,9 @@ test("Der Morgenlauf schickt die Nachrichten an Menschen zuerst", () => {
   assert.match(quelle, /laufeSchritte\(schritte, budget\)/);
   assert.match(quelle, /if \(offen\.length && !force\)/);
   assert.match(quelle, /Die Zeit reichte nicht für/);
+  // Die Meldung nennt den langsamsten Schritt — das ist die Spur zur
+  // Ursache, und ohne sie bleibt nur Raten.
+  assert.match(quelle, /am längsten brauchte \$\{langsamster\[0\]\}/);
 
   // Die Sperre gilt NUR für den Bericht an den Betreiber: Alles andere merkt
   // sich je Person, was raus ist, und muss nach einem abgeschnittenen Lauf
@@ -6056,6 +6059,32 @@ test("Das Zeitbudget bricht ab, bevor Vercel abschneidet", async () => {
   ], neuesBudget(10000, () => uhr));
   assert.deepEqual(bedingt.ergebnisse, {});
   assert.deepEqual(bedingt.offen, []);
+
+  // Jeder Schritt wird gemessen. Ohne diese Zahlen lässt sich nicht sagen,
+  // WARUM ein Lauf ins Timeout läuft — am 25.09.2026 wurde genau darüber
+  // geraten.
+  uhr = 0;
+  const gemessen = await laufeSchritte([
+    { name: "schnell", braucht: 1000, lauf: async () => { uhr += 400; return {}; } },
+    { name: "langsam", braucht: 1000, lauf: async () => { uhr += 7000; return {}; } },
+  ], neuesBudget(20000, () => uhr));
+  assert.equal(gemessen.dauern.schnell, 400);
+  assert.equal(gemessen.dauern.langsam, 7000);
+  // Auch ein gescheiterter Schritt wird gemessen: Gerade der, der in einen
+  // Fehler läuft, kann der langsame sein.
+  uhr = 0;
+  const mitZeit = await laufeSchritte([
+    { name: "kaputt", braucht: 1000, lauf: async () => { uhr += 3000; throw new Error("weg"); } },
+  ], neuesBudget(20000, () => uhr));
+  assert.equal(mitZeit.dauern.kaputt, 3000);
+  // Übersprungene Schritte tauchen NICHT in den Zeiten auf — sie haben
+  // keine gebraucht.
+  uhr = 0;
+  const uebersprungen = await laufeSchritte([
+    { name: "zuspaet", braucht: 9000, lauf: async () => ({}) },
+  ], neuesBudget(2000, () => uhr));
+  assert.deepEqual(uebersprungen.dauern, {});
+  assert.deepEqual(uebersprungen.offen, ["zuspaet"]);
 });
 
 test("Kursauswertung: nur der jüngste Versuch je Modul, und der Kurs gehört zum Schlüssel", async () => {

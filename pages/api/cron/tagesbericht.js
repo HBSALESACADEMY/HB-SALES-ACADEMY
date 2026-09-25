@@ -128,13 +128,16 @@ export default async function handler(req, res) {
     { name: "antworten", braucht: 5000, lauf: () => holeAntworten(admin, { erzwingen: true }) },
   ];
 
-  const { ergebnisse, offen, fehler, dauerMs } = await laufeSchritte(schritte, budget);
+  const { ergebnisse, offen, fehler, dauern, dauerMs } = await laufeSchritte(schritte, budget);
 
   // Blieb etwas liegen, muss es gemeldet werden — sonst fällt ein Schritt
   // wochenlang aus und niemand erfährt davon. Nicht bei einem Testlauf.
   if (offen.length && !force) {
-    await sendeAlarm(`⚠️ Morgenlauf: Die Zeit reichte nicht für ${offen.join(", ")}. Gelaufen in ${Math.round(dauerMs / 1000)} s.`);
+    const langsamster = Object.entries(dauern).sort((a, b) => b[1] - a[1])[0];
+    await sendeAlarm(`⚠️ Morgenlauf: Die Zeit reichte nicht für ${offen.join(", ")}. `
+      + `Gelaufen in ${Math.round(dauerMs / 1000)} s`
+      + (langsamster ? `, am längsten brauchte ${langsamster[0]} mit ${(langsamster[1] / 1000).toFixed(1)} s.` : "."));
   }
 
-  return res.status(200).json({ ok: true, dauerMs, offen, fehler, ...ergebnisse });
+  return res.status(200).json({ ok: true, dauerMs, dauern, offen, fehler, ...ergebnisse });
 }
