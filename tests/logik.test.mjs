@@ -6545,3 +6545,67 @@ test("Die Statusseite zeigt, wer seine Morgennachricht bekommen hat", () => {
   // Nur der Betreiber: Die Liste geht über Organisationen hinweg.
   assert.match(route, /if \(!me\?\.is_platform_admin\) \{[\s\S]{0,120}return res\.status\(403\)/);
 });
+
+test("Eine Antwort, die kein JSON ist, erklärt sich selbst", async () => {
+  const { liesAntwort } = await import("../lib/antwortLesen.js");
+  const { istMeldenswert } = await import("../lib/fehlerMeldung.js");
+
+  // Der Fall vom 25.09.2026: Beim Betreiber kam "The string did not match
+  // the expected pattern." aus der Tagesrangliste an — so formuliert Safari
+  // einen JSON-Fehler. Die Meldung sagt nicht, welche Anfrage es war, was
+  // der Server geantwortet hat oder was zu tun ist.
+  const seite = liesAntwort("<!DOCTYPE html><html><body>504 Gateway Timeout</body></html>", 504, "/api/tagesrangliste");
+  assert.equal(seite.daten, undefined);
+  assert.match(seite.fehler, /\/api\/tagesrangliste/, "Die Adresse fehlt — dann weiss niemand, welche Anfrage geplatzt ist");
+  assert.match(seite.fehler, /Fehlerseite/);
+  assert.match(seite.fehler, /504/);
+  // 502/503/504 sind Durchgangsprobleme und heilen von selbst.
+  assert.equal(seite.netz, true);
+
+  // Der Inhalt der Fehlerseite darf NICHT in die Meldung: Dort stehen
+  // gelegentlich Kennungen der Anfrage, und die Meldung geht in eine
+  // Telegram-Gruppe.
+  const mitGeheimnis = liesAntwort("<html>request-id: abc-123-geheim</html>", 500, "/api/x");
+  assert.ok(!mitGeheimnis.fehler.includes("abc-123-geheim"));
+  assert.ok(!mitGeheimnis.fehler.includes("request-id"));
+  assert.equal(mitGeheimnis.netz, false, "500 ist ein echter Fehler, kein Durchgangsproblem");
+
+  // Abbruch mitten in der Übertragung: leer, aber Status 200. Auf einem
+  // Handy zwischen zwei Funkzellen der Normalfall.
+  const abgebrochen = liesAntwort("", 200, "/api/tagesrangliste");
+  assert.match(abgebrochen.fehler, /Verbindung brach ab/);
+  assert.equal(abgebrochen.netz, true);
+  // Leer mit Fehlerstatus ist etwas anderes — das ist der Server.
+  const leerMitFehler = liesAntwort("", 500, "/api/x");
+  assert.match(leerMitFehler.fehler, /Status 500, ohne Inhalt/);
+  assert.equal(leerMitFehler.netz, false);
+
+  // Gültiges JSON kommt durch, auch bei einem Fehlerstatus: Der Server
+  // schickt seine eigene Meldung mit, und die ist besser als jede geratene.
+  assert.deepEqual(liesAntwort('{"liste":[]}', 200, "/api/x").daten, { liste: [] });
+  assert.deepEqual(liesAntwort('{"error":"Keine aktive Organisation"}', 400, "/api/x").daten,
+    { error: "Keine aktive Organisation" });
+  // Auch "null" und eine Zahl sind gültiges JSON — kein Fehler.
+  assert.equal(liesAntwort("null", 200, "/api/x").fehler, undefined);
+
+  // Und die Rohfassungen der Browser gelten nicht mehr als meldenswert:
+  // Ohne Kontext ist keine davon eine Information.
+  assert.equal(istMeldenswert("The string did not match the expected pattern."), false);
+  assert.equal(istMeldenswert("Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"), false);
+  assert.equal(istMeldenswert("JSON Parse error: Unexpected identifier"), false);
+  assert.equal(istMeldenswert("Die Verbindung brach ab, bevor die Antwort vollständig war."), false);
+  // Ein echter Serverfehler bleibt meldenswert.
+  assert.equal(istMeldenswert("Der Server schickte auf /api/x eine Fehlerseite statt Daten (Status 500)."), true);
+
+  // Die Tagesrangliste meldet einen Verbindungsabbruch nicht: Sie ist
+  // Beiwerk, und der Betreiber kann am Funknetz im Zug nichts ändern.
+  const tracker = readFileSync(new URL("../pages/call-tracker.js", import.meta.url), "utf8");
+  const stelle = tracker.indexOf('meldeStoerung("Call Tracker Tagesrangliste"');
+  assert.ok(stelle > 0);
+  assert.match(tracker.slice(stelle - 400, stelle), /if \(e\?\.netz\) return;/);
+
+  // Alle vier Wege nach draussen lesen die Antwort über dieselbe Stelle.
+  const klient = readFileSync(new URL("../lib/apiClient.js", import.meta.url), "utf8");
+  assert.equal((klient.match(/await liesJson\(res, path\)/g) || []).length, 4);
+  assert.match(klient, /e\.netz = !!netz;/);
+});

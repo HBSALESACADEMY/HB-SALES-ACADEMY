@@ -565,6 +565,13 @@ export default function CallTracker() {
       const antwort = await apiGet("/api/tagesrangliste");
       setRangliste(antwort.liste || []);
     } catch (e) {
+      // Die Rangliste ist Beiwerk: Wer sie gerade nicht sieht, kann
+      // weitertelefonieren, und beim nächsten Nachladen ist sie da. Ein
+      // Verbindungsabbruch auf dem Handy wird deshalb NICHT gemeldet —
+      // genau daraus entstand am 25.09.2026 die Störmeldung "The string did
+      // not match the expected pattern" beim Betreiber, der am Funknetz im
+      // Zug nichts ändern kann.
+      if (e?.netz) return;
       meldeStoerung("Call Tracker Tagesrangliste", e?.message || String(e));
     }
   }, [userId, prefix, reasons]);
