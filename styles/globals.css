@@ -78,6 +78,45 @@ input[type="checkbox"], input[type="radio"], input[type="range"] {
   border-radius: 999px;
   background: linear-gradient(90deg, var(--org-color-1, #4C5DC9) 0%, var(--org-accent, #CE3A5C) 55%, var(--org-color-3, #B2314F) 100%);
 }
+/* Die Fläche hinter der Anmeldung — ein Farbverlauf von unten nach oben.
+ *
+ * Bewusst nur hier: Ein Verlauf über jeder Seite ist Tapete. Die
+ * Anmeldeseite ist die einzige, die jemand sieht, bevor er zur Academy
+ * gehört, und sie trägt sonst nur ein Wappen, ein Zitat und ein Feld.
+ *
+ * Von unten, weil die Karte oben steht: Die Farbe sammelt sich unter ihr
+ * und trägt sie, statt hinter ihr zu leuchten.
+ *
+ * Fünf Haltepunkte statt zwei: Ein Verlauf von voller Deckkraft direkt nach
+ * durchsichtig zeigt auf einer bildschirmhohen Fläche sichtbare Streifen —
+ * je grösser die Fläche, desto eher.
+ *
+ * Die Farbe ist die der Organisation, sobald der Firmencode erkannt ist;
+ * bis dahin Karmesin.
+ */
+.anmelde-flaeche {
+  background-color: var(--org-bg, rgb(var(--theme-bg-rgb)));
+  background-image: linear-gradient(
+    to top,
+    rgb(var(--org-accent-rgb, 206 58 92) / .30) 0%,
+    rgb(var(--org-accent-rgb, 206 58 92) / .16) 18%,
+    rgb(var(--org-accent-rgb, 206 58 92) / .07) 38%,
+    rgb(var(--org-accent-rgb, 206 58 92) / .02) 60%,
+    transparent 80%
+  );
+}
+/* Im hellen Theme trägt dieselbe Deckkraft zu dick auf: Karmesin auf Weiss
+   ist kräftiger als Karmesin auf Anthrazit. */
+:root[data-theme="light"] .anmelde-flaeche {
+  background-image: linear-gradient(
+    to top,
+    rgb(var(--org-accent-rgb, 206 58 92) / .18) 0%,
+    rgb(var(--org-accent-rgb, 206 58 92) / .09) 22%,
+    rgb(var(--org-accent-rgb, 206 58 92) / .03) 48%,
+    transparent 75%
+  );
+}
+
 /* Überschriften einfarbig: Der Markenverlauf steht als Strich darunter
    (.brand-stripe) und im Logo — in jeder Überschrift wiederholt war er
    Dekoration, die das Lesen nicht leichter macht. Die Klasse bleibt, damit

@@ -6615,3 +6615,42 @@ test("Eine Antwort, die kein JSON ist, erklärt sich selbst", async () => {
   assert.equal((klient.match(/await liesJson\(res, path\)/g) || []).length, 4);
   assert.match(klient, /e\.netz = !!netz;/);
 });
+
+test("Die Anmeldeseite trägt einen Farbverlauf von unten nach oben", () => {
+  const css = readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8");
+  const seite = readFileSync(new URL("../pages/login.js", import.meta.url), "utf8");
+
+  const block = (name) => {
+    const stelle = css.indexOf(name);
+    assert.ok(stelle > -1, `${name} fehlt`);
+    return css.slice(stelle, css.indexOf("}", stelle));
+  };
+
+  // Von unten nach oben — "to top", nicht "to bottom". Die Farbe sammelt
+  // sich unter der Karte und trägt sie, statt hinter ihr zu leuchten.
+  const flaeche = block(".anmelde-flaeche {");
+  assert.match(flaeche, /linear-gradient\(\s*to top/);
+  // Die Farbe der Organisation, sobald der Firmencode erkannt ist.
+  assert.match(flaeche, /--org-accent-rgb/);
+  // Und eine Grundfarbe darunter: Ein Verlauf allein lässt die Fläche
+  // durchscheinen, wenn er ausläuft.
+  assert.match(flaeche, /background-color/);
+
+  // Fünf Haltepunkte statt zwei: Ein Sprung von voller Deckkraft direkt nach
+  // durchsichtig zeigt auf einer bildschirmhohen Fläche sichtbare Streifen.
+  const stopps = (flaeche.match(/\d+%/g) || []).length;
+  assert.ok(stopps >= 4, `Nur ${stopps} Haltepunkte — das streift sichtbar`);
+
+  // Das helle Theme braucht eine eigene Fassung: Karmesin auf Weiss ist
+  // kräftiger als Karmesin auf Anthrazit.
+  const hell = block(':root[data-theme="light"] .anmelde-flaeche {');
+  assert.match(hell, /linear-gradient\(\s*to top/);
+  const deckkraft = (t) => Number((t.match(/\/ \.(\d+)\) 0%/) || [])[1] || 0);
+  assert.ok(deckkraft(hell) < deckkraft(flaeche),
+    "Im hellen Theme muss der Verlauf zurückhaltender sein");
+
+  // Die Seite benutzt die Klasse — und trägt den Verlauf nicht mehr als
+  // Inline-Stil, wo fünf Haltepunkte und zwei Themes nicht hingehören.
+  assert.match(seite, /className="anmelde-flaeche min-h-screen/);
+  assert.ok(!/radial-gradient/.test(seite), "Der alte Inline-Verlauf ist zurück");
+});

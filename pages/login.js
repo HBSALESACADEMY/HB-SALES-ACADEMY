@@ -171,7 +171,10 @@ export default function Login() {
       <title>Anmelden · HB Sales Academy</title>
       <meta name="description" content="Zugang zur HB Sales Academy: Anrufe erfassen, Termine führen, nachfassen und im Vertrieb besser werden. Anmeldung mit dem Firmencode der eigenen Organisation." />
     </Head>
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{ background: "radial-gradient(700px 400px at 15% -10%, rgb(var(--org-color-1-rgb, 76 93 201) / .10), transparent), radial-gradient(600px 350px at 100% 100%, rgb(var(--org-color-3-rgb, 178 49 79) / .08), transparent), var(--org-bg, transparent)" }}>
+    {/* Der Verlauf steht im Stilblatt (.anmelde-flaeche), nicht hier als
+        Inline-Stil: Er hat fünf Haltepunkte und eine eigene Fassung fürs
+        helle Theme, und beides gehört nicht in eine Attributzeile. */}
+    <div className="anmelde-flaeche min-h-screen flex flex-col items-center justify-center px-4 py-10">
       <div className="card w-full max-w-sm overflow-hidden !p-0">
         <div className="brand-stripe !rounded-none" />
         <div className="p-6">
